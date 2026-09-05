@@ -1,0 +1,157 @@
+{
+  "meta": {
+    "project": "RUGLANDS",
+    "phase": "personal-mode MVP · Slice 1",
+    "version": "0.2",
+    "reference": "CoC EARLY GAME (a brand-new account's first days), heavily trimmed. Not endgame CoC.",
+    "curve": "value(L) = round(base * growth^(L-1)); times in seconds; production per hour",
+    "note": "Numeric source of truth, keyed by bible Keys. Content drips in via unlockAtKeep so a fresh player is not overwhelmed."
+  },
+
+  "global": {
+    "keepGatesEverything": true,
+    "buildingMaxLevel": 10,
+    "buildingLevelCappedByKeep": true,
+    "buildQueueSlots": 2,
+    "buildQueueSlotsNote": "2 = CoC's two builders; always something cooking. Extra slots via res.premium later.",
+
+    "combat": {
+      "note": "deterministic-ish, non-destructive. Buildings/keep are NEVER destroyed.",
+      "attackPower": "sum(troops * troop.attack) * marchBonus",
+      "defensePower": "sum(defenderTroops * troop.defense) + wall.defenseValue + keepDefenseBonus",
+      "winRatio": "AP / (AP + DP)",
+      "lootRate": 0.5,
+      "lootNote": "attacker takes up to lootRate of defender UNPROTECTED resources, capped by total troop load",
+      "casualtyScaling": 0.6,
+      "casualtyNote": "loserLossPct = casualtyScaling * (enemyPower/(ownPower+enemyPower)); winner loses ~half that",
+      "woundedRatio": 0.7,
+      "woundedNote": "70% of casualties are WOUNDED (go to hospital, healable, capped); 30% dead",
+      "keepDefenseBonusPerLevel": 40
+    },
+
+    "might": {
+      "note": "stat.might = sum(building power) + troops * troopPower (+ research later)",
+      "buildingPowerPerLevel": {
+        "building.keep": 30, "building.mine": 8, "building.farm": 8,
+        "building.storage": 6, "building.barracks": 10, "building.hospital": 6, "building.wall": 4
+      },
+      "troopPowerFrom": "troop.<id>.power"
+    },
+
+    "offline": {
+      "collectorCapHours": 12,
+      "note": "producers accumulate up to collectorCapHours of output, then sit full until collected; storage cap also applies. sys.offline_progress"
+    },
+
+    "shield": {
+      "protectedUntilKeepLevel": 10,
+      "breaksOnOffensiveAction": true,
+      "purchasable": { "durationsHours": [8, 24, 72], "priceIn": "res.premium", "priceNote": "tune later" },
+      "note": "sys.shield — new keeps protected until Townhall reaches L10, OR until the player attacks someone (shield then drops). Extra shields are purchasable (monetization)."
+    },
+
+    "player": {
+      "autoNamePattern": "Ruglord{7digits}",
+      "rename": { "firstFree": true, "subsequentCost": { "res.premium": 200 } },
+      "note": "sys.rename — auto-name on start; first rename free, then paid in gems"
+    },
+
+    "march": {
+      "capacityFractionOfMaxTroops": 1.0,
+      "baseTravelSecondsPerTile": 6,
+      "note": "sys.march_capacity — MVP lets you send up to maxTroops (from keep). travel time = tiles * baseTravelSecondsPerTile"
+    }
+  },
+
+  "resources": {
+    "res.build": { "produced": true, "producer": "building.mine", "usedFor": ["construction", "training"] },
+    "res.food":  { "produced": true, "producer": "building.farm", "usedFor": ["construction", "training", "healing"] },
+    "res.fuel":  { "produced": false, "gatheredOnly": true, "phase1Use": "low (scarce; used by marches/war in Phase 2)" },
+    "res.premium": { "produced": false, "note": "gem-like soft currency for sys.speedup / extra queue; earned slowly + monetization (Phase 2)" }
+  },
+
+  "startingLayout": {
+    "note": "what a brand-new account (new-server feel) starts with, before any upgrades",
+    "keep": 1,
+    "prebuilt": ["building.mine", "building.farm", "building.barracks"],
+    "startingResources": { "res.build": 500, "res.food": 500, "res.premium": 50 },
+    "startingTroops": 0
+  },
+
+  "buildings": {
+    "building.keep": {
+      "unlockAtKeep": 1, "maxLevel": 10,
+      "cost":  { "res.build": {"base":200,"growth":1.6}, "res.food": {"base":150,"growth":1.6} },
+      "time":  { "base":45, "growth":1.75 },
+      "grants": {
+        "maxTroops": {"base":150,"growth":1.35},
+        "unlocksBuildingMaxLevelEqualToKeep": true
+      }
+    },
+    "building.mine": {
+      "unlockAtKeep": 1, "maxLevel": 10, "produces": "res.build",
+      "productionPerHour": {"base":120,"growth":1.35},
+      "cost": { "res.build": {"base":100,"growth":1.5}, "res.food": {"base":60,"growth":1.5} },
+      "time": { "base":30, "growth":1.65 }
+    },
+    "building.farm": {
+      "unlockAtKeep": 1, "maxLevel": 10, "produces": "res.food",
+      "productionPerHour": {"base":120,"growth":1.35},
+      "cost": { "res.build": {"base":60,"growth":1.5}, "res.food": {"base":40,"growth":1.5} },
+      "time": { "base":30, "growth":1.65 }
+    },
+    "building.barracks": {
+      "unlockAtKeep": 1, "maxLevel": 10,
+      "trainSpeedMult": {"base":1.0,"perLevel":0.08},
+      "trainQueueSize": {"base":10,"growth":1.25},
+      "cost": { "res.build": {"base":150,"growth":1.55}, "res.food": {"base":100,"growth":1.55} },
+      "time": { "base":40, "growth":1.7 }
+    },
+    "building.storage": {
+      "unlockAtKeep": 2, "maxLevel": 10,
+      "capacityPerResource": {"base":3000,"growth":1.5},
+      "protectedFraction": 0.35,
+      "cost": { "res.build": {"base":120,"growth":1.5}, "res.food": {"base":90,"growth":1.5} },
+      "time": { "base":35, "growth":1.65 }
+    },
+    "building.wall": {
+      "unlockAtKeep": 2, "maxLevel": 10,
+      "defenseValue": {"base":100,"growth":1.5},
+      "cost": { "res.build": {"base":80,"growth":1.6} },
+      "time": { "base":20, "growth":1.6 }
+    },
+    "building.hospital": {
+      "unlockAtKeep": 3, "maxLevel": 10,
+      "woundedCapacity": {"base":100,"growth":1.4},
+      "healTimePerTroopSec": 2,
+      "healCostPerTroop": { "res.food": 3, "res.build": 2 },
+      "cost": { "res.build": {"base":130,"growth":1.5}, "res.food": {"base":90,"growth":1.5} },
+      "time": { "base":40, "growth":1.65 }
+    }
+  },
+
+  "troops": {
+    "troop.t1": {
+      "tier": 1, "unlockAtKeep": 1,
+      "cost": { "res.food": 12, "res.build": 8 },
+      "trainTimeSec": 6,
+      "attack": 5, "defense": 4, "power": 5,
+      "load": 10,
+      "marchSpeed": 1.0,
+      "note": "single MVP troop. Higher tiers later = same schema, stats * ~1.8 per tier, higher cost/time."
+    }
+  },
+
+  "map": {
+    "map.node": { "yields": ["res.build","res.food","res.fuel"], "gatherRatePerTroopPerHour": 40, "depletes": true },
+    "pve.monster": {
+      "levels": 5,
+      "power": {"base":300,"growth":1.6},
+      "reward": { "res.build": {"base":400,"growth":1.5}, "res.food": {"base":400,"growth":1.5}, "res.premium": 1 }
+    },
+    "pve.npc_keep": {
+      "note": "NPC rival keeps in Slice 1. Generated with a might band 0.5x-1.5x of the local player, non-destructive raid target.",
+      "lootBand": [0.5, 1.5]
+    }
+  }
+}
