@@ -195,3 +195,51 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
 .cta.sm{font-size:13px;padding:9px 16px}
 .training .tr-row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:7px}
 .worldsoon{text-align:center;font-size:12px;color:var(--ink3);margin-top:6px}
+
+/* ---- Admin / Numbers Tuning ---- */
+.admin{max-width:980px;margin:0 auto;padding:0 16px 60px;color:var(--ink)}
+.adm-toolbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:14px;
+  flex-wrap:wrap;padding:14px 16px;margin:0 -16px 0;background:rgba(11,16,32,.94);backdrop-filter:blur(6px);
+  border-bottom:1px solid var(--line)}
+.adm-toolbar-left{display:flex;flex-direction:column;gap:2px;min-width:0}
+.adm-title{font-family:var(--hud);font-weight:700;font-size:16px;letter-spacing:.04em}
+.adm-subtitle{font-size:10.5px;color:var(--ink3)}
+.adm-toolbar-right{display:flex;gap:8px;flex-wrap:wrap}
+.adm-btn{font-family:var(--hud);font-weight:600;font-size:11.5px;padding:8px 13px;border-radius:8px;
+  border:1px solid var(--line);background:var(--bg3);color:var(--ink2);cursor:pointer;transition:.14s}
+.adm-btn:hover{color:var(--ink);border-color:var(--gold2)}
+.adm-btn-primary{border-color:#f2c76e;background:linear-gradient(160deg,#f0bd5c,#d1902f);color:#231603}
+.adm-btn-primary:hover{filter:brightness(1.06);border-color:#f2c76e}
+.adm-btn-danger{color:var(--err);border-color:#7a2f22}
+.adm-btn-danger:hover{color:#f0917d;border-color:#a03d2c}
+
+.adm-status{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 4px;font-size:11px;color:var(--ink3)}
+.adm-badge{padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--bg2);color:var(--ink3)}
+.adm-badge.on{color:var(--gold);border-color:var(--gold2);background:rgba(232,178,76,.1)}
+.adm-leafcount{color:var(--ink2)}
+.adm-note{color:var(--ink3)}
+.adm-savednote{color:var(--ok)}
+
+.adm-body{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.adm-section{border:1px solid var(--line2);border-radius:12px;background:var(--bg2);overflow:hidden}
+.adm-section-head{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;background:transparent;
+  border:none;color:var(--ink);cursor:pointer;text-align:left;font-family:var(--hud)}
+.adm-section-head:hover{background:rgba(255,255,255,.02)}
+.adm-caret{color:var(--ink3);font-size:11px;width:10px}
+.adm-section-title{font-weight:600;font-size:13px;letter-spacing:.02em}
+.adm-section-sub{margin-left:auto;font-size:10px;color:var(--ink3)}
+.adm-section-body{padding:6px 14px 12px 30px;display:flex;flex-direction:column;gap:1px}
+
+.adm-object,.adm-array{display:flex;flex-direction:column;gap:1px}
+.adm-object + .adm-object,.adm-array + .adm-array{margin-top:4px}
+
+.adm-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:5px 6px;
+  border-bottom:1px solid var(--line2);font-size:12px}
+.adm-row:last-child{border-bottom:none}
+.adm-label{color:var(--ink2);overflow-wrap:anywhere}
+.adm-input{width:120px;padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);
+  color:var(--ink);font-size:12px;text-align:right}
+.adm-input:focus{outline:none;border-color:var(--gold2);box-shadow:0 0 0 2px rgba(232,178,76,.15)}
+.adm-checkbox{width:16px;height:16px;accent-color:var(--gold)}
+.adm-row-readonly .adm-label{color:var(--ink3)}
+.adm-string{color:var(--ink3);max-width:220px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

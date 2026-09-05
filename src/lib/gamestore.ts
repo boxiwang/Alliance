@@ -1,4 +1,5 @@
-import N from "../../docs/numbers.json";
+import { getN } from "./numbers";
+const N: any = getN();
 import type { GameState, BKey, ResKey, TroopKey } from "./game";
 import { BUILDING_ORDER, RES_ORDER, TROOP_ORDER } from "./game";
 

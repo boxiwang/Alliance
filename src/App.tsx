@@ -7,10 +7,15 @@ import { topFactions, pledgeableFrom } from "./lib/factions";
 import { loadProfile, saveProfile, clearProfile, autoName, Profile } from "./lib/profile";
 import { fromRaw, compact, usd, shortAddr } from "./lib/format";
 import Town from "./Town";
+import Admin from "./Admin";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "town";
 
 export default function App() {
+  if (new URLSearchParams(window.location.search).has("admin")) {
+    return <Admin />;
+  }
+
   const [detected, setDetected] = useState<Eip6963ProviderDetail[]>([]);
   const [provider, setProvider] = useState<Eip1193Provider | null>(null);
   const [address, setAddress] = useState<string>("");

@@ -1,6 +1,7 @@
 // Solo-mode game logic — PURE functions, keyed by bible Keys, driven by docs/numbers.json.
 // Render / persistence / identity are swappable around this. Times in seconds, prod per hour.
-import N from "../../docs/numbers.json";
+import { getN } from "./numbers";
+const N: any = getN(); // effective numbers (admin override or defaults), read at load
 
 export type ResKey = "cash" | "oil" | "power";
 export type TroopKey = "army" | "navy" | "air";
