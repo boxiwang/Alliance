@@ -23,11 +23,14 @@ for the *why*; this file is the *where we are right now*.
 
 ## 🔜 Next up (immediate)
 1. **Publish this repo to GitHub as `Alliance`** (see "Publishing" below — needs boxiwang auth).
-2. **The world/townhall itself** — after "found Townhall", the player currently hits a
-   placeholder. Build the personal-mode world: Townhall screen + build queue + resources +
-   offline progress, reading `docs/numbers.json`. (Phaser living-map is the world surface.)
-3. Wire the game logic as **pure functions keyed by bible Keys** (`resolveTick`, `computeMight`,
-   `canUpgrade`, `resolveRaid`), persistence via a swappable repository (localStorage now).
+2. **Solo Townhall** exists (`src/Town.tsx` + `src/lib/game.ts` + `gamestore.ts`): build/upgrade
+   queue, resource production, offline progress, training, might — data-driven from `docs/numbers.json`.
+   **Economy was just redefined (numbers.json v0.3): 3 resources (Cash/Oil/Power), 3 troop arms
+   (Army/Navy/Air), full city building set, Townhall→L30.** A refactor of game.ts/gamestore.ts/
+   Town.tsx to this new economy is IN PROGRESS (delegated to a Sonnet subagent).
+3. After that: verify the solo loop end-to-end, then the outside-city **world map** (explore/gather/raid).
+4. Building special-functions still placeholders: Academy research tree, Embassy reinforcement,
+   Milestone server-progress, Watchtower solo tasks (all defined in bible §20 / numbers, wired later).
 
 ## 🩹 Known issues / polish
 - `oldestSeen` (wallet age) reads null for contract addresses; tx-history endpoint shape

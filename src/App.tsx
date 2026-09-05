@@ -6,8 +6,9 @@ import { buildTasks, memeHoldings } from "./lib/tasks";
 import { topFactions, pledgeableFrom } from "./lib/factions";
 import { loadProfile, saveProfile, clearProfile, autoName, Profile } from "./lib/profile";
 import { fromRaw, compact, usd, shortAddr } from "./lib/format";
+import Town from "./Town";
 
-type Stage = "connect" | "start" | "resume" | "founded";
+type Stage = "connect" | "start" | "resume" | "founded" | "town";
 
 export default function App() {
   const [detected, setDetected] = useState<Eip6963ProviderDetail[]>([]);
@@ -181,7 +182,7 @@ export default function App() {
                 {profile.factionSymbol ? <>flying <b>${profile.factionSymbol}</b></> : "no banner (solo)"}
               </div>
             </div>
-            <button className="cta" onClick={() => setStage("founded")}>Enter the Frontier →</button>
+            <button className="cta" onClick={() => setStage("town")}>Enter the Frontier →</button>
           </div>
           {memes.length > 0 && (
             <div className="card">
@@ -273,6 +274,8 @@ export default function App() {
         </section>
       )}
 
+      {stage === "town" && profile && <Town address={address} profile={profile} />}
+
       {stage === "founded" && profile && (
         <section className="mid">
           <div className="card founded">
@@ -284,7 +287,8 @@ export default function App() {
               <div><span>Townhall</span><b>Lv.{profile.keepLevel}</b></div>
               <div><span>Protection</span><b>until Lv.10</b></div>
             </div>
-            <p className="soon">Your keep is being raised on the frontier… <b>the world map is the next build.</b></p>
+            <button className="cta big" onClick={() => setStage("town")}>Enter your Townhall →</button>
+            <p className="soon">The world map — explore, gather, raid — is the next build.</p>
             <button className="mini out" onClick={resetDev}>(dev) start over</button>
           </div>
         </section>

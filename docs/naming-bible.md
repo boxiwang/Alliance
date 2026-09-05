@@ -264,4 +264,49 @@
 
 ---
 
-*v0.4 — provisional. Edit the ✏️ column freely, keep Key + Concept, send it back. New keys since v0.1 are in §14–18; numeric tuning lives in the separate numbers file, not here. When you upload your edited copy I'll merge these in.*
+## 20 · City buildings, resources & troops — full Phase-1 roster (added v0.6)
+
+Owner-defined roster. **Supersedes** the earlier Phase-1 economy sketch: resources are now
+**Cash / Oil / Power** (was build/food/fuel); troop capacity lives on the **Barracks** (Army Camp dropped);
+Watchtower = solo-task board. Values live in `numbers.json`. In-city first; world-map later.
+
+**Resources** — all three are the base cost for upgrading everything; stored in the Warehouse:
+| Key | Concept (anchor) | Themed ✏️ | producer |
+|---|---|---|---|
+| `res.cash` | currency, "printed" | | `building.bank` |
+| `res.oil` | oil | | `building.oilwell` |
+| `res.power` | electricity | | `building.powerplant` |
+| `res.premium` | gem-like premium currency (shields / rename / speedups) | | — |
+
+**Buildings** — all max **Lv.30**, gated by Townhall level; unlock at the Townhall Lv shown:
+| Key | Concept / function | Themed ✏️ | unlock | max |
+|---|---|---|---|---|
+| `building.keep` | Townhall — gates & unlocks all; shield lifts at L10; progression to L30 | | start | 30 |
+| `building.bank` | produces Cash | | 1 | 30 |
+| `building.oilwell` | produces Oil | | 1 | 30 |
+| `building.powerplant` | produces Power | | 1 | 30 |
+| `building.storage` | Warehouse — stores the 3 resources + raid protection | | 2 | 30 |
+| `building.barracks` | trains troops (all arms) + sets max troop capacity | | 1 | 30 |
+| `building.hospital` | heals wounded troops | | 3 | 30 |
+| `building.embassy` | receives allied reinforcement troops (capacity) | | 5 | 30 |
+| `building.wall` | defense value in raids | | 2 | 30 |
+| `building.academy` | Research Institute — research Troops / Economy(RSS) / Development(storage cap, troop count, build speed…) | | 4 | 30 |
+| `building.watchtower` | issues solo (PvE) tasks/quests | | 3 | 30 |
+| `building.milestone` | Monument — shows server-wide progress + triggers server-wide rewards (display/meta) | | start | — |
+
+**Troops** — three arms (counter triangle later):
+| Key | Concept (anchor) | Themed ✏️ |
+|---|---|---|
+| `troop.army` | Ground force (陆军) | |
+| `troop.navy` | Naval force (海军) | |
+| `troop.air` | Air force (空军) | |
+
+*Defined-now / functional-later:* Academy research nodes (tech tree = Phase 2), Embassy reinforcement
+(needs multiplayer), Milestone server backend, Watchtower task content, outside-city world map.
+*(Retired from Phase-1 active use: `building.mine`/`building.farm` → replaced by bank/oilwell/powerplant;
+`building.camp` dropped, capacity on barracks; `res.build`/`res.food`/`res.fuel` → cash/oil/power.
+`troop.t1` → army/navy/air.)*
+
+---
+
+*v0.6 — provisional. Edit the ✏️ column freely, keep Key + Concept, send it back. New keys since v0.1 are in §14–20; numeric tuning lives in `numbers.json`, not here. When you upload your edited copy I'll merge these in.*
