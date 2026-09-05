@@ -49,6 +49,10 @@ the war. `war.isolation` (snapshot in, no write-back) is retention-critical.
   Shields are also **purchasable** (monetization) — `sys.shield`.
 - **Dual progress:** personal (permanent, survives selling) vs seasonal alliance progress.
 - **Auto-name at start** (e.g. `Ruglord0189374`); **first rename free, then paid** (`sys.rename`).
+- **Townhall prerequisites** (`numbers.json → townhallPrerequisites`): TH→L needs listed buildings ≥ L−1;
+  **Warehouse is the always-anchor**; count escalates 2/3/4 across L2–19 / 20–24 / 25–30; fixed & known (not random).
+- **F2P pacing targets**: Townhall L1→L10 in ~2–3 days (newbie), L1→L30 in ~4–5 months (no speedups).
+  First-version numbers reference real SLG curves (WoS/CoC/RoK), not guesses; `numbers.json → designTargets` holds the calibration.
 - **Read-only / non-custodial always.** We only read the wallet + one optional signature.
   Never a fund-moving transaction. (Consumer-facing copy — never spec-speak in the UI.)
 

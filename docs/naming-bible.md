@@ -309,4 +309,31 @@ Watchtower = solo-task board. Values live in `numbers.json`. In-city first; worl
 
 ---
 
-*v0.6 — provisional. Edit the ✏️ column freely, keep Key + Concept, send it back. New keys since v0.1 are in §14–20; numeric tuning lives in `numbers.json`, not here. When you upload your edited copy I'll merge these in.*
+## 21 · Townhall upgrade prerequisites & F2P pacing (added v0.7)
+
+**Prerequisite rule** (data in `numbers.json` → `townhallPrerequisites`): to upgrade the
+Townhall to level L, the listed buildings must be at **≥ L−1**. FIXED & known (NOT random) so
+players can plan. **Warehouse (`building.storage`) is the always-required anchor** from L3+
+(so storage keeps pace with rising costs; prevents resource-cap dead-ends). Count escalates:
+**2 buildings (L2–19) → 3 (L20–24) → 4 (L25–30)**. The non-anchor slots rotate through the
+producers / Barracks so everything grows; Wall/Embassy/Academy feature in the L25–30 band.
+L2 is trivial (prebuilt buildings) to keep the newbie funnel smooth. NOT random, NOT hidden —
+that was considered and rejected (hidden/re-roll prereqs = wasted resources = early churn;
+the "don't slack" pressure comes from a full build queue + the escalating count, not randomness).
+
+**Pacing targets** (data in `numbers.json` → `designTargets`):
+- Townhall **L1→L10 in ~2–3 days** (newbie funnel, guided/deterministic).
+- Townhall **L1→L30 in ~4–5 months** F2P (no speedups, 2 build slots) — driven by TH time +
+  prerequisites (must level ~11 buildings alongside) + resource waits. TH is the long pole;
+  other buildings ≈ 40–50% of TH time.
+- Troops: **T1–T10**, cost ×1.7/tier, time ×1.3/tier; counter **+10% atk**, air>ground>sea>air.
+- Loot & gather both capped by troop **load**; casualties → wounded (to Hospital cap) then dead.
+- First-version numbers are calibrated to REAL SLG curves (Whiteout Survival / CoC / RoK), not guessed.
+
+*Build note:* current `numbers.json` cost/time/production are still FORMULA placeholders.
+NEXT: migrate to explicit **per-level tables** baked to these targets + a **F2P pacing simulator**
+in the admin to verify 2–3 days to L10 and 4–5 months to L30.
+
+---
+
+*v0.7 — provisional. Edit the ✏️ column freely, keep Key + Concept, send it back. New keys since v0.1 are in §14–21; numeric tuning + prerequisites live in `numbers.json`, not here. When you upload your edited copy I'll merge these in.*

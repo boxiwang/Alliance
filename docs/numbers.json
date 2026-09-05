@@ -106,5 +106,60 @@
     "troop.army": { "arm": "ground", "unlockAtKeep": 1, "cost": { "res.cash": 15, "res.oil": 10 }, "trainTimeSec": 6,  "attack": 6,  "defense": 6, "power": 5, "load": 12 },
     "troop.navy": { "arm": "sea",    "unlockAtKeep": 1, "cost": { "res.cash": 20, "res.oil": 15 }, "trainTimeSec": 9,  "attack": 8,  "defense": 5, "power": 7, "load": 8 },
     "troop.air":  { "arm": "air",    "unlockAtKeep": 1, "cost": { "res.cash": 25, "res.power": 15 }, "trainTimeSec": 12, "attack": 10, "defense": 4, "power": 9, "load": 6 }
+  },
+
+  "townhallPrerequisites": {
+    "note": "To upgrade Townhall to level L, every listed building must be at >= L-1. FIXED & known (not random), so players can plan. Warehouse (building.storage) is the always-required anchor from L3+ (storage unlocks at TH2). Count escalates 2 (L2-19) / 3 (L20-24) / 4 (L25-30). The 'other' slots rotate through producers/barracks so all grow; Embassy/Wall/Academy featured in the late band. L2 is trivial (prebuilt L1 buildings) to keep the newbie funnel smooth.",
+    "requiresLevel": "L-1",
+    "bands": [
+      { "fromLevel": 2, "toLevel": 19, "count": 2 },
+      { "fromLevel": 20, "toLevel": 24, "count": 3 },
+      { "fromLevel": 25, "toLevel": 30, "count": 4 }
+    ],
+    "perLevel": {
+      "2":  ["building.bank", "building.powerplant"],
+      "3":  ["building.storage", "building.bank"],
+      "4":  ["building.storage", "building.oilwell"],
+      "5":  ["building.storage", "building.powerplant"],
+      "6":  ["building.storage", "building.bank"],
+      "7":  ["building.storage", "building.oilwell"],
+      "8":  ["building.storage", "building.powerplant"],
+      "9":  ["building.storage", "building.bank"],
+      "10": ["building.storage", "building.oilwell"],
+      "11": ["building.storage", "building.powerplant"],
+      "12": ["building.storage", "building.bank"],
+      "13": ["building.storage", "building.oilwell"],
+      "14": ["building.storage", "building.powerplant"],
+      "15": ["building.storage", "building.bank"],
+      "16": ["building.storage", "building.oilwell"],
+      "17": ["building.storage", "building.powerplant"],
+      "18": ["building.storage", "building.bank"],
+      "19": ["building.storage", "building.oilwell"],
+      "20": ["building.storage", "building.barracks", "building.powerplant"],
+      "21": ["building.storage", "building.barracks", "building.bank"],
+      "22": ["building.storage", "building.barracks", "building.oilwell"],
+      "23": ["building.storage", "building.barracks", "building.powerplant"],
+      "24": ["building.storage", "building.barracks", "building.bank"],
+      "25": ["building.storage", "building.barracks", "building.oilwell", "building.wall"],
+      "26": ["building.storage", "building.barracks", "building.powerplant", "building.embassy"],
+      "27": ["building.storage", "building.barracks", "building.bank", "building.wall"],
+      "28": ["building.storage", "building.barracks", "building.oilwell", "building.embassy"],
+      "29": ["building.storage", "building.barracks", "building.powerplant", "building.academy"],
+      "30": ["building.storage", "building.barracks", "building.bank", "building.embassy"]
+    }
+  },
+
+  "designTargets": {
+    "note": "Calibration targets the per-level tables must hit. The current cost/time/production values are FORMULA placeholders (base*growth^(L-1)); NEXT step is to migrate to explicit per-level tables baked to these targets and verify with a pacing simulator.",
+    "newbieToKeep10Days": "2-3 (Townhall L1->L10 is the newbie funnel; guided, deterministic)",
+    "f2pToKeep30Days": "120-150 (~4-5 months, no speedups, 2 build slots, driven by TH + prerequisites + resource waits)",
+    "curves": {
+      "buildingCostGrowthPerLevel": { "L1_10": 1.5, "L11_30": 1.65 },
+      "buildingTimeGrowthPerLevel": { "L1_10": 1.6, "L11_30": 1.37, "keepTimeBaseSec": 45 },
+      "productionUnit": "per-minute", "productionGrowthPerLevel": 1.3,
+      "otherBuildingsTimeVsKeep": "40-50% of Townhall time (TH is the long pole)"
+    },
+    "troops": { "tiers": 10, "costGrowthPerTier": 1.7, "timeGrowthPerTier": 1.3, "attackGrowthPerTier": 1.3, "defHpGrowthPerTier": 1.15, "counterBonusAtk": 0.10, "counter": "air>ground>sea>air" },
+    "combat": { "lootEqualsTroopLoad": true, "gatherEqualsTroopLoad": true, "woundedToHospitalCapThenDead": true, "woundedRatio": 0.7 }
   }
 }
