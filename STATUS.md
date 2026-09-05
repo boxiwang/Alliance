@@ -19,7 +19,12 @@ for the *why*; this file is the *where we are right now*.
 - Player-facing on-chain-activity/tasks **removed** (kept for backend only).
 - Dev telemetry sink `/__report` → `/tmp/ruglands-report.json` (lets us inspect the real
   local connect→read→analyze result without a screen).
-- Docs: `docs/DIRECTION.md`, naming bible, numbers.
+- **Solo Townhall** playable: 3 resources (Cash/Oil/Power) + 12 city buildings + 3 troop arms
+  (Army/Navy/Air), build queue, offline progress, training, might — data-driven from `docs/numbers.json`.
+- **Numbers admin** at `/?admin` (hidden): edit all ~199 values, Save & reload / Reset / Export
+  numbers.json. Game reads effective numbers via `src/lib/numbers.ts` (localStorage override or defaults).
+  **Tuning workflow:** tune in /?admin → Export → overwrite `docs/numbers.json` → commit (team-shared).
+- Docs: `docs/DIRECTION.md`, naming bible (§20 = full building/resource/troop roster), numbers v0.3.
 
 ## 🔜 Next up (immediate)
 1. **Publish this repo to GitHub as `Alliance`** (see "Publishing" below — needs boxiwang auth).
