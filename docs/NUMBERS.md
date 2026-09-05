@@ -1,95 +1,50 @@
-# RUGLANDS — Numbers (v0.2, "new-account" early game)
+# RUGLANDS — Numbers (human map of `numbers.json` v0.3)
 
-Companion to `numbers.json` (machine source of truth) + the naming bible (names).
-**Anchored to CoC's EARLY game — a brand-new account's first days**, not endgame CoC.
-(CoC has no server resets — it's global matchmaking — but the intent, "match the fresh-start content & pacing," is what we're building to.)
+`docs/numbers.json` is the machine **source of truth**. This file is the readable map +
+the **per-level tunable-field inventory** the per-level migration must cover.
+⚠️ Current cost/time/production values are **FORMULA placeholders** (`value(L)=round(base·growth^(L-1))`);
+NEXT step = bake explicit **per-level tables** to `designTargets`, verified by a pacing simulator.
 
-## The one formula
-```
-value(L) = round(base × growth^(L-1))     // times in seconds, production per hour
-```
-Change a curve = change `base` (level-1 value) or `growth`. That's the whole knob set. Code doesn't change.
+## Resources (3 + premium)
+`res.cash` (🏦 Bank) · `res.oil` (🛢️ Oil Well) · `res.power` (⚡ Power Plant) · `res.premium` (gems).
+All three are the base cost for upgrades/training; stored in the Warehouse (capped).
 
-## What a brand-new account starts with (`startingLayout`)
-- **Keep L1**, plus pre-built **Mine + Farm + Barracks** (L1).
-- **2 build slots** (CoC's two builders — always something cooking).
-- 500 build + 500 food + 50 gems. 0 troops. **48h newbie shield.**
-- Storage/Wall/Hospital are **not visible yet** — they drip in as you raise the Keep.
+## Buildings — 12, all max **Lv.30**, gated by Townhall level (unlock @ Townhall Lv)
+Every upgradable building has, **per level**: cost `{cash, oil, power}` · upgrade `time` · Might contribution.
+Building-specific per-level fields:
 
-## Content drip (`unlockAtKeep`) — the "new-server" feel
-| Keep level | unlocks |
-|--|--|
-| **L1 (start)** | Keep, Mine, Farm, Barracks, T1 troop, map/gathering/monsters |
-| **L2** | Storage, Wall |
-| **L3** | Hospital (wounded healing) |
-| L4–L10 | just deeper levels of the above (more content = Phase 2) |
+| Key | unlock | per-level fields (beyond cost/time) |
+|---|---|---|
+| `building.keep` (Townhall) | start | — (gates all; L10 lifts shield; → L30) |
+| `building.bank` / `oilwell` / `powerplant` | 1 | **production** (target: per-minute) |
+| `building.storage` (Warehouse) | 2 | **capacityPerResource**, **protectedFraction** (raid protection) |
+| `building.barracks` | 1 | **troopCapacity** (shared max troops), **trainSpeedMult**, **trainQueueSize** |
+| `building.hospital` | 3 | **woundedCapacity**, **healTimePerTroopSec**, **healCostPerTroop** |
+| `building.embassy` | 5 | **reinforcementCapacity** (allied troops) |
+| `building.wall` | 2 | **defenseValue** |
+| `building.academy` | 4 | **researchBranches** (troops/economy/development — nodes later) |
+| `building.watchtower` | 3 | **soloTaskSlots** |
+| `building.milestone` | start | none — **not upgradable** (server-progress display) |
 
-So the first session shows ~4 buildings, not 30. Buildings also cap at your current Keep level.
+## Troops — 3 arms × T1–T10
+`troop.army` (🪖) · `troop.navy` (⚓) · `troop.air` (✈️). Per (arm × tier): train time/troop,
+cost/troop `{cash,oil,power}`, attack, defense, power, load. Trained in Barracks (shared capacity).
+Counter **+10% attack**, **air > ground > sea > air**.
 
-## First 30 minutes (onboarding / pacing beat-sheet)
-1. Spawn at your Keep (random spot), 48h shield on, tutorial arrow.
-2. Mine + Farm already running. Start upgrading both (seconds) — both build slots busy.
-3. Train a handful of T1 troops (6s each) at the Barracks.
-4. March on a nearby **monster / NPC keep** → win → **first loot** + battle report.
-5. Collect → upgrade **Keep to L2** (~1.3 min) → **Storage + Wall unlock**.
-6. Keep upgrading (timers still tiny) → **Keep L3 unlocks Hospital**; a scripted raid hits you → you watch **wounded heal** → learn "nothing is ever destroyed."
-7. Log off → return → **offline resources waiting** (the hook).
+## Townhall prerequisites (`townhallPrerequisites`)
+To upgrade TH→L, listed buildings must be **≥ L−1**. Fixed & known (not random). **Warehouse anchor**
+from L3+. Count escalates **2** (L2–19) / **3** (L20–24) / **4** (L25–30). Full per-level list (L2–30) in JSON.
 
-## Keep (`building.keep`) — the gate  ·  cost 200/150 ×1.6 · time 45s ×1.75
-| L | build | food | time | maxTroops |
-|--|--|--|--|--|
-|1|200|150|45s|150|
-|2|320|240|~1.3m|203|
-|3|512|384|~2.3m|273|
-|5|1,311|983|~7m|498|
-|7|3,355|2,516|~21m|906|
-|10|13,744|10,308|~1.9h|2,296|
+## Design targets (`designTargets`) — first-version numbers reference real SLG (WoS/CoC/RoK)
+- Pacing: Townhall **L1→L10 in ~2–3 days** (newbie), **L1→L30 in ~4–5 months** F2P (no speedups, 2 slots).
+- Curves: building cost growth ~×1.5 (L1–10) / ~×1.65 (L11–30); time growth ~×1.6 / ~×1.37 tail (keep base 45s);
+  other buildings ≈ 40–50% of Townhall time. Production **per-minute**, ~×1.3/level.
+- Troops: cost ×1.7/tier, time ×1.3/tier, attack ×1.3/tier, def/hp ×1.15/tier; counter +10%.
+- Combat: **loot & gather = troop `load`**; casualties → wounded (to Hospital cap) then dead; `woundedRatio` 0.7.
+- Offline: 12h collector cap, auto-collect on login, no AFK/online mode.
 
-## Producers (`building.mine`→build, `building.farm`→food)  ·  prod 120/hr ×1.35 · time 30s ×1.65
-| L | prod/hr | upgrade time |
-|--|--|--|
-|1|120|30s|
-|3|~219|~1.4m|
-|5|~398|~3.7m|
-|10|~1,836|~46m|
-Offline: producers bank up to **12h**, then sit full until collected (also capped by storage).
+## Reconcile during migration
+- `productionPerHour` fields are still **per-hour**; `designTargets.productionUnit` is **per-minute** — convert.
+- Replace all `base/growth` curves with explicit per-level tables; game reads table lookup instead of the formula.
 
-## Storage (`building.storage`, unlock Keep L2)  ·  cap 3,000 ×1.5 · **protected 35%**
-| L | capacity | protected |
-|--|--|--|
-|1|3,000|1,050|
-|5|15,188|5,316|
-|10|115,330|40,365|
-
-## Barracks (`building.barracks`) · train ×(1+0.08·(L-1)) · queue 10 ×1.25 · time 40s ×1.7
-## Wall (`building.wall`, unlock L2) · defense 100 ×1.5 · time 20s ×1.6
-## Hospital (`building.hospital`, unlock L3) — the non-destructive keystone
-wounded cap 100 ×1.4 · heal 2s + (3 food/2 build) per troop.
-In a raid, **70% of casualties are WOUNDED** (healable, capped) and only **30% die**. No keep, no levels, ever lost.
-
-## Troop (`troop.t1`)
-12 food + 8 build · train 6s · atk 5 / def 4 / power 5 · load 10. (More tiers later: same fields, ×~1.8/tier.)
-
-## Raid math (non-destructive)
-```
-AP = Σ(atkTroops × attack) × marchBonus
-DP = Σ(defTroops × defense) + wallDefense + keepBonus(40/lvl)
-winRatio = AP / (AP + DP)
-loot     = min( Σ atkTroops × load , unprotectedResources × 0.5 )
-loserLoss% = 0.6 × (enemyPower / (ownPower + enemyPower)) ; winner ≈ half
-of losses: 70% wounded → hospital, 30% dead
-```
-
-## Might (`stat.might`)
-`Σ building power(per-level × L) + troops × 5`. Per-level: Keep 30, Barracks 10, Mine/Farm 8, Storage/Hospital 6, Wall 4.
-
-## Protection (`sys.shield`)
-newbie 48h · auto 4h shield if a raid takes >15% of resources.
-
-## Map
-`map.node` gather 40/troop/hr (depletes) · `pve.monster` L1–5 power 300 ×1.6, reward 400 ×1.5 + 1 gem · `pve.npc_keep` might band 0.5–1.5× local.
-
-## Tuning
-Edit `base`/`growth` in `numbers.json`. Rule of thumb: growth 1.3–1.4 = production (gentle), 1.5–1.6 = costs, 1.65–1.8 = times (late upgrades gate on time). Sanity-check the loop in Machinations.io before locking if you like.
-
-*v0.2 — starter defaults tuned to a fresh account. Retune after first playtest.*
+*v0.3 map — values are placeholders pending the per-level bake.*
