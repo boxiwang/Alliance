@@ -116,3 +116,11 @@ become the newcomer again. Guardrails (keep our pillars intact): an F2P **slow-l
 weight-class realm**; **anti-bully diminishing rewards** push veterans to graduate instead of camping
 newbies. Server-authoritative; sits on the `sys.expedition` engine (tasks 2+3). Not in the current
 no-UI logic MVP.
+
+**Outdoor mechanics (corrected to real SLG — see bible §23):** the world is a **coordinate map**,
+your city at a **random (x,y)** (you are NOT the center; camera opens on you; map pans/zooms); the
+fixed world **center = the Circle**. The outdoor view is reached **from the Town via a "World" button**.
+Dispatched troops are **account-bound** (your standing army; limited by single-march capacity +
+`marchQueueSlots`; out until they return). **Gather speed is an account-wide passive** from Academy
+research + heroes (`global.accountModifiers`), applied automatically — never chosen at a node.
+**Scouting is only for enemy cities/monsters**, never resource nodes.

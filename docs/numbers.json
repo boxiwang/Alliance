@@ -66,12 +66,22 @@
     "march": {
       "capacityFractionOfMaxTroops": 1,
       "baseTravelSecondsPerTile": 6,
-      "note": "sys.march_capacity — world-map phase"
+      "note": "sys.march_capacity — world-map phase",
+      "marchQueueSlots": 2,
+      "singleMarchCapacityNote": "capacityFractionOfMaxTroops = fraction of standing army one march may take; marchQueueSlots = simultaneous marches (scout march also consumes a slot)."
     },
     "display": {
       "resourceMultiplier": 1000,
       "troopMultiplier": 1000,
       "note": "Presentation denomination only: 1 internal resource/troop batch is shown as 1,000 units. Economy timing and queue math remain unchanged."
+    },
+    "accountModifiers": {
+      "note": "Passive, account-wide multipliers applied AUTOMATICALLY. Source = Academy research (Phase-2 nodes) + heroes (task 4). Not chosen per-action. 0 = no bonus.",
+      "gatherSpeedBonus": 0.0,
+      "marchSpeedBonus": 0.0,
+      "troopAttackBonus": 0.0,
+      "troopDefenseBonus": 0.0,
+      "loadBonus": 0.0
     }
   },
   "resources": {

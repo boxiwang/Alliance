@@ -5,8 +5,8 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-05 · **by:** Claude (data-balance pass, on Codex's build)
-**Current focus:** Phase 1 — personal-mode MVP (in-city). Data/balance verification & tuning.
+**Last updated:** 2026-09-05 · **by:** Claude (expedition engine + lab; outdoor model corrected → rework next)
+**Current focus:** Tasks 2+3 outdoor expedition. Engine done; outdoor UX/model being reworked to real SLG (see "Outdoor model CORRECTED" below).
 
 ### 🧮 Data-balance pass (this session, Claude)
 - **FIXED — per-building upgrade-time monotonicity:** every building's time dipped at L10→L11
@@ -36,6 +36,28 @@ for the *why*; this file is the *where we are right now*.
 - **DONE (Sonnet):** `src/lib/expedition.ts` + 19 tests (`npm run check` green, 40 tests total); `Admin.tsx` gained a **Gathering** tab editing `gatherNodes`.
 - **DONE (Claude):** `/?expedition` **Expedition Lab** (`src/ExpeditionLab.tsx`) — hidden points-and-lines test harness: concentric rings, labeled dots (node/monster/rival), pick force → Scout / Gather / Raid → numeric result + march line. Verified end-to-end in browser (combat/counter/wounded/loot all resolve on live numbers).
 - **Follow-up (minor):** `resolveCombat` returns `loot` even on a loss — should be gated to wins (or the caller/Lab should only show loot when `win`).
+
+### 🔧 Outdoor model CORRECTED → rework next (Claude)
+The first `/?expedition` lab was built on **wrong SLG assumptions** — it is now **superseded** (keep it as a
+dev harness only). Re-researched RoK / Last War / WoS; corrected model in **bible §23** + **DIRECTION §9**.
+The 5 corrections:
+1. **World is a coordinate map, not player-centric.** Your city is at a random (x,y); camera opens on you but
+   you're not the world center; map pans/zooms; fixed center = the Circle; distance-from-center gates level.
+2. **Enter the world from the Town** ("World" button) — not a standalone page.
+3. **Academy is a passive account-wide modifier** (`global.accountModifiers`), auto-applied. Gather speed comes
+   from it (+heroes), **never chosen at a node.** (Removed the node-side academy slider concept.)
+4. **Troops are account-bound**: dispatch only what you actually have; limited by single-march capacity +
+   `global.march.marchQueueSlots` (=2); out until return; losses/wounded apply.
+5. **Scout only on enemy cities/monsters**, never resource nodes.
+
+**Rework plan (next build):**
+- Replace the player-centric ring lab with a **coordinate world map** (pan/zoom, city at random (x,y), world-center = Circle, tiles/monsters/rivals at coords).
+- Add **Town → World navigation** (a "World" button; back to city).
+- **Account-bound troop allocation**: read standing army from game state; enforce single-march capacity + march-queue slots; reserve on dispatch, return (minus losses) on completion.
+- **Gather** = send troops; haul = load; **speed = base × `accountModifiers.gatherSpeedBonus`** (auto). No node-side academy.
+- **Scout** shown only on rival/monster targets.
+- Wire `accountModifiers` (gather/march speed, atk/def, load) as auto-applied hooks (sources: Academy research = Phase-2, heroes = task 4; default 0 now).
+- **Data added (numbers.json):** `global.march.marchQueueSlots=2`, `global.accountModifiers` (all 0). `npm run check` green.
 
 ## 🎯 Decisions locked (this session)
 - **No medieval theme.** Current leading visual exploration is **Degen Freeport**: a prosperous,

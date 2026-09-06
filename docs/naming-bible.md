@@ -361,4 +361,26 @@ visible; "discovery" = scouting a target for intel.
 
 ---
 
-*v0.8 — provisional. Edit the ✏️ column freely, keep Key + Concept, send it back. New keys since v0.1 are in §14–22; numeric tuning + prerequisites + gather/world data live in `numbers.json`, not here. When you upload your edited copy I'll merge these in.*
+## 23 · Outdoor model — CORRECTED to real SLG (added v0.9)
+
+Corrects §22's loose bits after re-researching RoK / Last War / WoS. The first `/?expedition`
+lab got these wrong; the rework below is the source of truth.
+
+| Key | Concept (anchor — don't change) | Themed ✏️ | Why / original |
+|---|---|---|---|
+| `world.coordinate` | World is ONE large **coordinate map**; your city sits at a **random (x,y)** — you are NOT the world center. Camera merely opens on your city; the map **pans + zooms**. The fixed **world center = the Circle** (endgame). Distance-from-center gates tile/monster level (outer = low, inner = high, opens later). Relocate via teleport items (later). | | corrects the player-centric ring lab |
+| `nav.town_world` | The outdoor world is entered from the **Town via a "World" button** and returns to the city — part of the game loop, not a standalone page | | point 2 |
+| `troops.account_bound` | Dispatched troops come from your account's **standing army** (trained in Army Camp / Naval Base / Airfield); you can only allocate what you actually have; they're **unavailable until the march returns**; losses/wounded apply on return | | point 4 |
+| `sys.march_queue` | Limited **simultaneous marches** (`numbers.global.march.marchQueueSlots`); a scout march also consumes a slot | | RoK march queue |
+| `sys.march_capacity` | A single march takes troops up to a cap (`capacityFractionOfMaxTroops` of standing army) | | (existing, clarified) |
+| `stat.gather_speed` | Account-wide **gather-speed bonus**, applied AUTOMATICALLY (`global.accountModifiers.gatherSpeedBonus`); comes from Academy research + heroes — **never chosen at a node** | | point 3 |
+| `stat.march_speed` | Account-wide march-speed bonus (`global.accountModifiers.marchSpeedBonus`) | | |
+| `building.academy` (clarified) | Passive research tree → **permanent account-wide modifiers** (`global.accountModifiers`: gather/march speed, troop atk/def, load), auto-applied. NOT a per-action choice | | point 3 |
+| `action.scout` (corrected) | Scout = intel recon **only on enemy cities / monsters** (reveal defense/troops/loot). **Never on resource nodes** (nothing hidden). Uses a march slot, travels faster | | point 5 |
+
+*Supersedes in §22:* the ring lab's "player-at-center" framing, the per-node Academy control, and
+Scout-on-nodes. Gather nodes keep their §22 data (`gatherNodes`); gather SPEED now = base × account bonus.
+
+---
+
+*v0.9 — provisional. Edit the ✏️ column freely, keep Key + Concept, send it back. New keys since v0.1 are in §14–23; numeric tuning + prerequisites + gather/world/march data live in `numbers.json`, not here. When you upload your edited copy I'll merge these in.*
