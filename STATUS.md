@@ -18,6 +18,21 @@ for the *why*; this file is the *where we are right now*.
   but L30 production is 38.5% / 30.8% / 30.8% → Cash demand/supply ≈ 607h vs Oil 447h / Power 391h.
   Cash is a ~1.5× harder pinch (oil/power will pile up). **Decide:** raise Bank output ~20% (or trim
   cash costs) to equalize, OR keep Cash as the intended primary pinch. Not yet changed.
+  (Verdict after benchmarking WoS/RoK/Last War: **model is genre-sound**; a primary pinch resource is
+  normal — WoS=iron, Last War=oil-late — so keeping Cash-lean is fine. Our L25≈5.2d/L30≈9.5d per-level
+  matches Last War L21–30 (5–7d). Endgame length beyond L30 = Phase-2 depth, not a flaw.)
+
+### 🌍 Tasks 2+3 — outdoor expedition engine (in progress, Claude + Sonnet)
+- Design locked (bible §22, DIRECTION §9): personal mode = **async single-player PvP**; concentric
+  **world rings** (edge spawn, center = the Circle); **NO fog** (scout = intel); leveled
+  **gather nodes 1–10**; combat counter **air>army>navy>air +10%**; loot & gather capped by troop load.
+- **Data landed in `numbers.json`:** `gatherNodes` (L1–10: ringZone/totalSupply/gatherRatePerHour +
+  academy-speed & hero-carry hooks), `world` (rings/spawn), `global.combat.counter` matrix. `npm run check` green.
+- **Endgame "the Circle"** (seniority cohort treadmill + guardrails) logged as Phase-2 in DIRECTION §9.
+- **Building now (delegated to Sonnet):** `src/lib/expedition.ts` (pure logic: marchTime, carry,
+  resolveScout/Gather/Combat, counter, wounded→hospital→dead, loot=load, shield check) + tests +
+  a `gatherNodes` editor section in `Admin.tsx`. No UI in Town (logic-only per task 2).
+- **Hooks left for later:** hero carry/combat bonus = 0 (task 4); real-player targets (NPC stub now); inner-ring opening (server, later).
 
 ## 🎯 Decisions locked (this session)
 - **No medieval theme.** Current leading visual exploration is **Degen Freeport**: a prosperous,

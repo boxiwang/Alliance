@@ -341,4 +341,24 @@ The local admin includes a deterministic F2P pacing simulator; see `STATUS.md` f
 
 ---
 
-*v0.7 — provisional. Edit the ✏️ column freely, keep Key + Concept, send it back. New keys since v0.1 are in §14–21; numeric tuning + prerequisites live in `numbers.json`, not here. When you upload your edited copy I'll merge these in.*
+## 22 · Outdoor expedition, world map & endgame (added v0.8)
+
+Personal mode is **async single-player PvP** (not offline): you find, scout, march on, and raid
+OTHER players (NPC/stub targets until the backend + real players exist). Tasks 2+3 build the
+**outdoor expedition engine** (logic-only, no UI). **No persistent fog-of-war** — the map is
+visible; "discovery" = scouting a target for intel.
+
+| Key | Concept (anchor — don't change) | Themed ✏️ | Why / original |
+|---|---|---|---|
+| `sys.expedition` | Send troops (+hero later) to a world target → march time by distance → resolve (scout / gather / combat) → return | | tasks 2+3 engine |
+| `world.rings` | Concentric world: ring 10 = outer edge (newbie spawn), ring 1 = center (the Circle); node/monster level ≈ 11−ring; inner rings open via server progression | | data in `numbers.json → world` |
+| `map.no_fog` | No persistent fog-of-war; map visible, discovery via scouting intel | | genre-standard (RoK/WoS/Last War) |
+| `action.scout` | Scout a target = intel recon (reveal level / garrison / supply), not fog-clearing | | (was §? — reframed) |
+| `map.gather_node` | Leveled outdoor resource nodes 1–10 (data `numbers.json → gatherNodes`); each yields ONE resource; carry = Σ troop.load (+ hero); high difficulty, **Academy research speeds gathering** | | task 3 |
+| `combat.counter` | air > army, army > navy, navy > air; winner arm +10% atk (data `global.combat.counter`) | | |
+| `hero.carry` | Hero carry / expedition-bonus hook (0 until the hero system, task 4) | | |
+| `endgame.circle` | Center = **the Circle**: hold your center position for cumulative time → graduate/teleport to the next map; beaten out of the circle bumps you outward. **Seniority cohort treadmill** — time (not just money) earns a dominance window over newer entrants. Guardrails: an F2P slow-lane always advances (no hard wall); stakes = circle-time/position, never permanent loss; per weight-class realm; anti-bully diminishing rewards push graduation. Phase-2, server-authoritative, sits on `sys.expedition`. | | PUBG-circle × SLG, reframed |
+
+---
+
+*v0.8 — provisional. Edit the ✏️ column freely, keep Key + Concept, send it back. New keys since v0.1 are in §14–22; numeric tuning + prerequisites + gather/world data live in `numbers.json`, not here. When you upload your edited copy I'll merge these in.*

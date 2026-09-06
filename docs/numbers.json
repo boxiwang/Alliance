@@ -1,7 +1,7 @@
 {
   "meta": {
     "project": "RUGLANDS",
-    "phase": "personal-mode MVP \u00b7 Slice 1 \u00b7 in-city",
+    "phase": "personal-mode MVP · Slice 1 · in-city",
     "version": "0.6",
     "reference": "CoC-early pacing; economy redefined to Cash/Oil/Power + Navy/Army/Air per owner spec",
     "curve": "Explicit per-level tables. Times are seconds; production is per hour.",
@@ -22,12 +22,19 @@
       "casualtyScaling": 0.6,
       "woundedRatio": 0.7,
       "woundedNote": "70% of casualties wounded (hospital, healable, capped); 30% dead",
-      "keepDefenseBonusPerLevel": 40
+      "keepDefenseBonusPerLevel": 40,
+      "counter": {
+        "air": "army",
+        "army": "navy",
+        "navy": "air"
+      },
+      "counterBonusAtk": 0.1,
+      "counterNote": "X beats Y: air>army, army>navy, navy>air. Winner arm gets +counterBonusAtk attack vs the arm it beats."
     },
     "might": {
       "note": "Total Might = permanent Infrastructure Might + fielded Troop Might. Building rows store cumulative power. Troop power can later fall through losses; buildings never do.",
       "targetAtMatureCity": "At roughly 60% of max troop capacity: 20-30% infrastructure, 70-80% troops before hero/research/gear systems exist.",
-      "buildingSeedFormula": "buildingWeight \u00d7 level^4 \u00d7 60, baked into explicit per-level rows; tune rows directly after this seed."
+      "buildingSeedFormula": "buildingWeight × level^4 × 60, baked into explicit per-level rows; tune rows directly after this seed."
     },
     "offline": {
       "collectorCapHours": 12,
@@ -45,7 +52,7 @@
         "priceIn": "res.premium",
         "priceNote": "tune later"
       },
-      "note": "sys.shield \u2014 new keeps protected until Townhall L10, OR until the player attacks (shield drops). Extra shields purchasable."
+      "note": "sys.shield — new keeps protected until Townhall L10, OR until the player attacks (shield drops). Extra shields purchasable."
     },
     "player": {
       "autoNamePattern": "Ruglord{7digits}",
@@ -59,7 +66,7 @@
     "march": {
       "capacityFractionOfMaxTroops": 1,
       "baseTravelSecondsPerTile": 6,
-      "note": "sys.march_capacity \u2014 world-map phase"
+      "note": "sys.march_capacity — world-map phase"
     },
     "display": {
       "resourceMultiplier": 1000,
@@ -3605,7 +3612,7 @@
         "economy",
         "development"
       ],
-      "role": "Research Institute: Troops / Economy(RSS) / Development(storage cap, troop count, build speed\u2026). Research nodes = Phase 2.",
+      "role": "Research Institute: Troops / Economy(RSS) / Development(storage cap, troop count, build speed…). Research nodes = Phase 2.",
       "levels": {
         "1": {
           "cost": {
@@ -4190,7 +4197,7 @@
       "unlockAtKeep": 1,
       "special": "server_progress",
       "upgradable": false,
-      "role": "Monument \u2014 shows server-wide progress and triggers server-wide rewards. Display/meta, not a resource-upgrade building. Backend-driven, later."
+      "role": "Monument — shows server-wide progress and triggers server-wide rewards. Display/meta, not a resource-upgrade building. Backend-driven, later."
     }
   },
   "troops": {
@@ -4772,6 +4779,70 @@
       "earlyGame": "Infrastructure dominates while troop queues are still filling.",
       "matureNoHeroSystems": "At ~60% troop-cap fill, target ~25% infrastructure / ~75% troop Might.",
       "warning": "Might is a progression/status score, not the combat formula. Combat uses attack/defense, counters, march composition and later buffs."
+    }
+  },
+  "world": {
+    "rings": 10,
+    "spawnRing": 10,
+    "note": "Concentric world: ring 10 = outer edge (newbie spawn), ring 1 = center (the Circle). Node/monster level ~ (11-ring). Inner rings open via server progression (stub now).",
+    "centerOpensBy": "server_progression"
+  },
+  "gatherNodes": {
+    "note": "Leveled outdoor resource nodes 1-10. A node yields ONE resource (assigned per instance). carry = sum(troop.load) + hero carry. Haul/trip = min(carry, node remaining). Trip time = carry / (gatherRatePerHour * academySpeedMult). Difficulty is intentionally high so Academy gather-speed research is the main lever. Node depletes by totalSupply.",
+    "carryFromTroopLoad": true,
+    "heroCarryBonus": 0,
+    "academyGatherSpeedMaxBonus": 1.5,
+    "levels": {
+      "1": {
+        "ringZone": 10,
+        "totalSupply": 1000,
+        "gatherRatePerHour": 100
+      },
+      "2": {
+        "ringZone": 9,
+        "totalSupply": 2000,
+        "gatherRatePerHour": 135
+      },
+      "3": {
+        "ringZone": 8,
+        "totalSupply": 4000,
+        "gatherRatePerHour": 182
+      },
+      "4": {
+        "ringZone": 7,
+        "totalSupply": 8000,
+        "gatherRatePerHour": 246
+      },
+      "5": {
+        "ringZone": 6,
+        "totalSupply": 16000,
+        "gatherRatePerHour": 332
+      },
+      "6": {
+        "ringZone": 5,
+        "totalSupply": 32000,
+        "gatherRatePerHour": 448
+      },
+      "7": {
+        "ringZone": 4,
+        "totalSupply": 64000,
+        "gatherRatePerHour": 605
+      },
+      "8": {
+        "ringZone": 3,
+        "totalSupply": 128000,
+        "gatherRatePerHour": 817
+      },
+      "9": {
+        "ringZone": 2,
+        "totalSupply": 256000,
+        "gatherRatePerHour": 1103
+      },
+      "10": {
+        "ringZone": 1,
+        "totalSupply": 512000,
+        "gatherRatePerHour": 1489
+      }
     }
   }
 }

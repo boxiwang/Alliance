@@ -101,3 +101,18 @@ mobile/WalletConnect wallets.
 - Three-mode concept mock: https://claude.ai/code/artifact/fa365a02-6f90-4a78-b04f-4daf73d467fc
 - Phaser living-map: https://claude.ai/code/artifact/620b7d2e-2b4b-4161-81a3-979551ebdaed
 - **The real beta lives in this repo** (`/src`) — wallet connect + read + start screen.
+
+## 9. World map & endgame — "the Circle" (candidate, Phase-2)
+Personal mode is **async single-player PvP** on a shared **concentric world**: ring 10 = outer edge
+(newbie spawn), ring 1 = center. Node/monster level rises toward the center; inner rings open via
+server progression. **No fog-of-war** — the map is visible; scouting = intel on a target.
+
+**The Circle (endgame progression loop):** the center is a PUBG-style circle. Hold your center
+position for cumulative time → **graduate/teleport to the next map**; being beaten out bumps you
+outward. It's a **seniority cohort treadmill** — the longer you stay on a map the stronger you are
+vs newer entrants, so **time (not just money) earns a "whale moment"** before you graduate and
+become the newcomer again. Guardrails (keep our pillars intact): an F2P **slow-lane always advances**
+(no hard wall); stakes = **circle-time/position, never permanent loss** (non-destructive); **per
+weight-class realm**; **anti-bully diminishing rewards** push veterans to graduate instead of camping
+newbies. Server-authoritative; sits on the `sys.expedition` engine (tasks 2+3). Not in the current
+no-UI logic MVP.
