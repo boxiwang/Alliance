@@ -9,13 +9,18 @@ import { fromRaw, compact, usd, shortAddr } from "./lib/format";
 import Town from "./Town";
 import Admin from "./Admin";
 import AlliancePicker from "./AlliancePicker";
+import ExpeditionLab from "./ExpeditionLab";
 import { grantLocalGm, localGmRequested } from "./lib/gm";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "town";
 
 export default function App() {
-  if (new URLSearchParams(window.location.search).has("admin")) {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("admin")) {
     return <Admin />;
+  }
+  if (params.has("expedition")) {
+    return <ExpeditionLab />;
   }
 
   const [detected, setDetected] = useState<Eip6963ProviderDetail[]>([]);

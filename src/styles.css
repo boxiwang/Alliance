@@ -396,3 +396,24 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
 @media(max-width:700px){.gm-panel{align-items:flex-start;flex-direction:column}.gm-actions{justify-content:flex-start}}
 @media(max-width:620px){.solo-option{align-items:flex-start;flex-direction:column}.solo-button,.solo-status{align-self:flex-start}}
 @media(max-width:500px){.trainer-grid{grid-template-columns:1fr}.trainer-head{flex-direction:column;gap:0}}
+
+/* ---- Expedition Lab (/?expedition, debug) ---- */
+.exp{max-width:1100px;margin:0 auto;padding:14px 18px}
+.exp-head{font-family:var(--hud);font-size:16px;padding:6px 2px 14px}
+.exp-dim{color:var(--ink3);font-weight:400;font-size:11.5px;font-family:var(--mono)}
+.exp-body{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+.exp-map{width:100%;background:radial-gradient(circle at 50% 50%,#0e1630,#0b1020);border:1px solid var(--line);border-radius:14px}
+.exp-panel{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px;position:sticky;top:14px}
+.exp-t{font-family:var(--hud);font-weight:700;font-size:15px;margin-bottom:10px}
+.exp-sec{font-family:var(--hud);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:12px 0 6px}
+.exp-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0}
+.exp-row label{font-size:13px;color:var(--ink2)}
+.exp-row input[type=number],.exp-row select{width:90px;background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:6px 8px;font-family:var(--mono)}
+.exp-row input[type=range]{width:150px}
+.exp-btns{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap}
+.exp-btns button{font-family:var(--hud);font-weight:600;font-size:13px;padding:9px 14px;border-radius:8px;border:1px solid var(--gold2);background:var(--bg3);color:var(--ink);cursor:pointer}
+.exp-btns button:hover{background:var(--raise,#1b2540);border-color:var(--gold)}
+.exp-res{margin-top:12px;border-top:1px solid var(--line2);padding-top:10px}
+.exp-res>b{font-family:var(--hud);font-size:14px}
+.exp-line{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line2)}
+.exp-line span{color:var(--ink3)} .exp-line b{font-family:var(--mono);color:var(--ink)}

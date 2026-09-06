@@ -33,6 +33,9 @@ for the *why*; this file is the *where we are right now*.
   resolveScout/Gather/Combat, counter, wounded→hospital→dead, loot=load, shield check) + tests +
   a `gatherNodes` editor section in `Admin.tsx`. No UI in Town (logic-only per task 2).
 - **Hooks left for later:** hero carry/combat bonus = 0 (task 4); real-player targets (NPC stub now); inner-ring opening (server, later).
+- **DONE (Sonnet):** `src/lib/expedition.ts` + 19 tests (`npm run check` green, 40 tests total); `Admin.tsx` gained a **Gathering** tab editing `gatherNodes`.
+- **DONE (Claude):** `/?expedition` **Expedition Lab** (`src/ExpeditionLab.tsx`) — hidden points-and-lines test harness: concentric rings, labeled dots (node/monster/rival), pick force → Scout / Gather / Raid → numeric result + march line. Verified end-to-end in browser (combat/counter/wounded/loot all resolve on live numbers).
+- **Follow-up (minor):** `resolveCombat` returns `loot` even on a loss — should be gated to wins (or the caller/Lab should only show loot when `win`).
 
 ## 🎯 Decisions locked (this session)
 - **No medieval theme.** Current leading visual exploration is **Degen Freeport**: a prosperous,

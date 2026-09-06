@@ -4,7 +4,7 @@ import { simulateProgression } from "./lib/simulator";
 import { validateNumbers, ValidationIssue } from "./lib/validation";
 
 type Path = (string | number)[];
-type View = "overview" | "buildings" | "troops" | "rules" | "advanced";
+type View = "overview" | "buildings" | "troops" | "gathering" | "rules" | "advanced";
 
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
@@ -90,8 +90,15 @@ const TROOP_COLUMNS: Column[] = [
   { key: "load", label: "Carry load", group: "Combat" },
 ];
 
-function columnsFor(rows: Record<string, any>, kind: "building" | "troop"): Column[] {
+const GATHER_COLUMNS: Column[] = [
+  { key: "ringZone", label: "Ring zone", group: "World" },
+  { key: "totalSupply", label: "Total supply", group: "Supply" },
+  { key: "gatherRatePerHour", label: "Gather rate / hour", group: "Supply" },
+];
+
+function columnsFor(rows: Record<string, any>, kind: "building" | "troop" | "gather"): Column[] {
   if (kind === "troop") return TROOP_COLUMNS;
+  if (kind === "gather") return GATHER_COLUMNS;
   const fields = Array.from(new Set(Object.values(rows ?? {}).flatMap((row: any) =>
     Object.keys(row ?? {}).filter((key) => key !== "cost"),
   )));
@@ -107,7 +114,7 @@ function LevelTable({ title, path, rows, kind, onChange }: {
   title: string;
   path: Path;
   rows: Record<string, any>;
-  kind: "building" | "troop";
+  kind: "building" | "troop" | "gather";
   onChange: (path: Path, value: any) => void;
 }) {
   const levels = Object.keys(rows ?? {}).sort((a, b) => Number(a) - Number(b));
@@ -344,6 +351,30 @@ function TroopWorkspace({ numbers, selected, setSelected, onChange }: { numbers:
   );
 }
 
+function GatheringWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: Path, value: any) => void }) {
+  const p = (path: Path) => ({ path, numbers, onChange });
+  const gather = numbers.gatherNodes;
+  return (
+    <div>
+      <div className="adm-view-intro">
+        <div>
+          <span className="adm-eyebrow">OUTDOOR GATHERING</span>
+          <h2>Leveled resource nodes (sys.expedition — task 3)</h2>
+          <p>Nodes are deliberately hard to empty by hand; Academy gather-speed research is meant to be the main lever, not raw troop count.</p>
+        </div>
+      </div>
+      <div className="adm-rule-grid">
+        <RuleGroup icon="🧭" title="Gather mechanics" description="Carry capacity, hero hooks and the Academy speed ceiling that apply to every node.">
+          <ToggleSetting {...p(["gatherNodes", "carryFromTroopLoad"])} label="Carry derives from troop load" help="Expedition carry capacity is the sum of every sent troop's load stat." />
+          <NumberSetting {...p(["gatherNodes", "heroCarryBonus"])} label="Hero carry bonus" help="Flat carry added on top of troop load once heroes exist (0 for now)." />
+          <NumberSetting {...p(["gatherNodes", "academyGatherSpeedMaxBonus"])} label="Academy gather-speed cap" help="Maximum extra multiplier Academy research can grant to gather speed." suffix="× additional" step={0.1} />
+        </RuleGroup>
+      </div>
+      <LevelTable title="Gather nodes" path={["gatherNodes", "levels"]} rows={gather.levels} kind="gather" onChange={onChange} />
+    </div>
+  );
+}
+
 function RulesWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: Path, value: any) => void }) {
   const p = (path: Path) => ({ path, numbers, onChange });
   return (
@@ -456,6 +487,7 @@ export default function Admin() {
     { key: "overview", label: "Pacing", icon: "◴" },
     { key: "buildings", label: "Buildings", icon: "▦" },
     { key: "troops", label: "Troops", icon: "⚔" },
+    { key: "gathering", label: "Gathering", icon: "🌾" },
     { key: "rules", label: "Game rules", icon: "⚙" },
     { key: "advanced", label: "Advanced", icon: "⋯" },
   ];
@@ -472,6 +504,7 @@ export default function Admin() {
         {view === "overview" && <><ValidationPanel issues={validationIssues} /><PaceSimulator numbers={working} /></>}
         {view === "buildings" && <BuildingWorkspace numbers={working} selected={selectedBuilding} setSelected={setSelectedBuilding} onChange={handleChange} />}
         {view === "troops" && <TroopWorkspace numbers={working} selected={selectedTroop} setSelected={setSelectedTroop} onChange={handleChange} />}
+        {view === "gathering" && <GatheringWorkspace numbers={working} onChange={handleChange} />}
         {view === "rules" && <RulesWorkspace numbers={working} onChange={handleChange} />}
         {view === "advanced" && <div><div className="adm-view-intro"><div><span className="adm-eyebrow">ADVANCED</span><h2>Raw configuration</h2><p>Technical keys and internal notes live here. Most balancing work should happen in the other four pages.</p></div></div><Section title="Open raw configuration" subtitle="For uncommon fields only" defaultOpen={false}><RawNode path={[]} value={working} onChange={handleChange} /></Section></div>}
       </main>
