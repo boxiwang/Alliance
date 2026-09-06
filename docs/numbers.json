@@ -1,7 +1,7 @@
 {
   "meta": {
     "project": "RUGLANDS",
-    "phase": "personal-mode MVP · Slice 1 · in-city",
+    "phase": "personal-mode MVP \u00b7 Slice 1 \u00b7 in-city",
     "version": "0.6",
     "reference": "CoC-early pacing; economy redefined to Cash/Oil/Power + Navy/Army/Air per owner spec",
     "curve": "Explicit per-level tables. Times are seconds; production is per hour.",
@@ -27,7 +27,7 @@
     "might": {
       "note": "Total Might = permanent Infrastructure Might + fielded Troop Might. Building rows store cumulative power. Troop power can later fall through losses; buildings never do.",
       "targetAtMatureCity": "At roughly 60% of max troop capacity: 20-30% infrastructure, 70-80% troops before hero/research/gear systems exist.",
-      "buildingSeedFormula": "buildingWeight × level^4 × 60, baked into explicit per-level rows; tune rows directly after this seed."
+      "buildingSeedFormula": "buildingWeight \u00d7 level^4 \u00d7 60, baked into explicit per-level rows; tune rows directly after this seed."
     },
     "offline": {
       "collectorCapHours": 12,
@@ -45,7 +45,7 @@
         "priceIn": "res.premium",
         "priceNote": "tune later"
       },
-      "note": "sys.shield — new keeps protected until Townhall L10, OR until the player attacks (shield drops). Extra shields purchasable."
+      "note": "sys.shield \u2014 new keeps protected until Townhall L10, OR until the player attacks (shield drops). Extra shields purchasable."
     },
     "player": {
       "autoNamePattern": "Ruglord{7digits}",
@@ -59,7 +59,7 @@
     "march": {
       "capacityFractionOfMaxTroops": 1,
       "baseTravelSecondsPerTile": 6,
-      "note": "sys.march_capacity — world-map phase"
+      "note": "sys.march_capacity \u2014 world-map phase"
     },
     "display": {
       "resourceMultiplier": 1000,
@@ -226,7 +226,7 @@
             "res.oil": 16000,
             "res.power": 16000
           },
-          "timeSec": 32400,
+          "timeSec": 81943,
           "might": 35138400
         },
         "12": {
@@ -235,7 +235,7 @@
             "res.oil": 23000,
             "res.power": 23000
           },
-          "timeSec": 43200,
+          "timeSec": 92519,
           "might": 49766400
         },
         "13": {
@@ -244,7 +244,7 @@
             "res.oil": 32000,
             "res.power": 32000
           },
-          "timeSec": 54000,
+          "timeSec": 104459,
           "might": 68546400
         },
         "14": {
@@ -253,7 +253,7 @@
             "res.oil": 44000,
             "res.power": 44000
           },
-          "timeSec": 72000,
+          "timeSec": 117940,
           "might": 92198400
         },
         "15": {
@@ -262,7 +262,7 @@
             "res.oil": 62000,
             "res.power": 62000
           },
-          "timeSec": 93600,
+          "timeSec": 133162,
           "might": 121500000
         },
         "16": {
@@ -271,7 +271,7 @@
             "res.oil": 87000,
             "res.power": 87000
           },
-          "timeSec": 118800,
+          "timeSec": 150349,
           "might": 157286400
         },
         "17": {
@@ -280,7 +280,7 @@
             "res.oil": 120000,
             "res.power": 120000
           },
-          "timeSec": 151200,
+          "timeSec": 169753,
           "might": 200450400
         },
         "18": {
@@ -289,7 +289,7 @@
             "res.oil": 170000,
             "res.power": 170000
           },
-          "timeSec": 194400,
+          "timeSec": 191662,
           "might": 251942400
         },
         "19": {
@@ -298,7 +298,7 @@
             "res.oil": 240000,
             "res.power": 240000
           },
-          "timeSec": 237600,
+          "timeSec": 216399,
           "might": 312770400
         },
         "20": {
@@ -307,7 +307,7 @@
             "res.oil": 330000,
             "res.power": 330000
           },
-          "timeSec": 280800,
+          "timeSec": 244327,
           "might": 384000000
         },
         "21": {
@@ -316,7 +316,7 @@
             "res.oil": 470000,
             "res.power": 470000
           },
-          "timeSec": 324000,
+          "timeSec": 275860,
           "might": 466754400
         },
         "22": {
@@ -325,7 +325,7 @@
             "res.oil": 650000,
             "res.power": 650000
           },
-          "timeSec": 367200,
+          "timeSec": 311464,
           "might": 562214400
         },
         "23": {
@@ -334,7 +334,7 @@
             "res.oil": 920000,
             "res.power": 920000
           },
-          "timeSec": 410400,
+          "timeSec": 351662,
           "might": 671618400
         },
         "24": {
@@ -343,7 +343,7 @@
             "res.oil": 1300000,
             "res.power": 1300000
           },
-          "timeSec": 453600,
+          "timeSec": 397048,
           "might": 796262400
         },
         "25": {
@@ -352,7 +352,7 @@
             "res.oil": 1800000,
             "res.power": 1800000
           },
-          "timeSec": 496800,
+          "timeSec": 448292,
           "might": 937500000
         },
         "26": {
@@ -361,7 +361,7 @@
             "res.oil": 2500000,
             "res.power": 2500000
           },
-          "timeSec": 540000,
+          "timeSec": 506150,
           "might": 1096742400
         },
         "27": {
@@ -370,7 +370,7 @@
             "res.oil": 3500000,
             "res.power": 3500000
           },
-          "timeSec": 583200,
+          "timeSec": 571474,
           "might": 1275458400
         },
         "28": {
@@ -379,7 +379,7 @@
             "res.oil": 4900000,
             "res.power": 4900000
           },
-          "timeSec": 626400,
+          "timeSec": 645231,
           "might": 1475174400
         },
         "29": {
@@ -388,7 +388,7 @@
             "res.oil": 6900000,
             "res.power": 6900000
           },
-          "timeSec": 669600,
+          "timeSec": 728505,
           "might": 1697474400
         },
         "30": {
@@ -397,7 +397,7 @@
             "res.oil": 9600000,
             "res.power": 9600000
           },
-          "timeSec": 734400,
+          "timeSec": 822528,
           "might": 1944000000
         }
       }
@@ -513,7 +513,7 @@
             "res.oil": 3200,
             "res.power": 2200
           },
-          "timeSec": 7128,
+          "timeSec": 18028,
           "productionPerHour": 8550,
           "might": 7027680
         },
@@ -523,7 +523,7 @@
             "res.oil": 4500,
             "res.power": 3000
           },
-          "timeSec": 9504,
+          "timeSec": 20354,
           "productionPerHour": 10800,
           "might": 9953280
         },
@@ -533,7 +533,7 @@
             "res.oil": 6300,
             "res.power": 4200
           },
-          "timeSec": 11880,
+          "timeSec": 22981,
           "productionPerHour": 13050,
           "might": 13709280
         },
@@ -543,7 +543,7 @@
             "res.oil": 8900,
             "res.power": 5900
           },
-          "timeSec": 15840,
+          "timeSec": 25947,
           "productionPerHour": 15750,
           "might": 18439680
         },
@@ -553,7 +553,7 @@
             "res.oil": 12000,
             "res.power": 8300
           },
-          "timeSec": 20592,
+          "timeSec": 29296,
           "productionPerHour": 19350,
           "might": 24300000
         },
@@ -563,7 +563,7 @@
             "res.oil": 17000,
             "res.power": 12000
           },
-          "timeSec": 26136,
+          "timeSec": 33077,
           "productionPerHour": 23400,
           "might": 31457280
         },
@@ -573,7 +573,7 @@
             "res.oil": 24000,
             "res.power": 16000
           },
-          "timeSec": 33264,
+          "timeSec": 37345,
           "productionPerHour": 28800,
           "might": 40090080
         },
@@ -583,7 +583,7 @@
             "res.oil": 34000,
             "res.power": 23000
           },
-          "timeSec": 42768,
+          "timeSec": 42166,
           "productionPerHour": 35100,
           "might": 50388480
         },
@@ -593,7 +593,7 @@
             "res.oil": 48000,
             "res.power": 32000
           },
-          "timeSec": 52272,
+          "timeSec": 47608,
           "productionPerHour": 42750,
           "might": 62554080
         },
@@ -603,7 +603,7 @@
             "res.oil": 67000,
             "res.power": 44000
           },
-          "timeSec": 61776,
+          "timeSec": 53752,
           "productionPerHour": 54000,
           "might": 76800000
         },
@@ -613,7 +613,7 @@
             "res.oil": 93000,
             "res.power": 62000
           },
-          "timeSec": 71280,
+          "timeSec": 60689,
           "productionPerHour": 63000,
           "might": 93350880
         },
@@ -623,7 +623,7 @@
             "res.oil": 130000,
             "res.power": 87000
           },
-          "timeSec": 80784,
+          "timeSec": 68522,
           "productionPerHour": 76500,
           "might": 112442880
         },
@@ -633,7 +633,7 @@
             "res.oil": 180000,
             "res.power": 120000
           },
-          "timeSec": 90288,
+          "timeSec": 77365,
           "productionPerHour": 94500,
           "might": 134323680
         },
@@ -643,7 +643,7 @@
             "res.oil": 260000,
             "res.power": 170000
           },
-          "timeSec": 99792,
+          "timeSec": 87351,
           "productionPerHour": 117000,
           "might": 159252480
         },
@@ -653,7 +653,7 @@
             "res.oil": 360000,
             "res.power": 240000
           },
-          "timeSec": 109296,
+          "timeSec": 98624,
           "productionPerHour": 139500,
           "might": 187500000
         },
@@ -663,7 +663,7 @@
             "res.oil": 500000,
             "res.power": 330000
           },
-          "timeSec": 118800,
+          "timeSec": 111353,
           "productionPerHour": 171000,
           "might": 219348480
         },
@@ -673,7 +673,7 @@
             "res.oil": 700000,
             "res.power": 470000
           },
-          "timeSec": 128304,
+          "timeSec": 125724,
           "productionPerHour": 211500,
           "might": 255091680
         },
@@ -683,7 +683,7 @@
             "res.oil": 980000,
             "res.power": 660000
           },
-          "timeSec": 137808,
+          "timeSec": 141951,
           "productionPerHour": 256500,
           "might": 295034880
         },
@@ -693,7 +693,7 @@
             "res.oil": 1400000,
             "res.power": 920000
           },
-          "timeSec": 147312,
+          "timeSec": 160271,
           "productionPerHour": 315000,
           "might": 339494880
         },
@@ -703,7 +703,7 @@
             "res.oil": 1900000,
             "res.power": 1300000
           },
-          "timeSec": 161568,
+          "timeSec": 180956,
           "productionPerHour": 382500,
           "might": 388800000
         }
@@ -809,7 +809,7 @@
             "res.cash": 6500,
             "res.power": 3200
           },
-          "timeSec": 7128,
+          "timeSec": 18028,
           "productionPerHour": 7200,
           "might": 7027680
         },
@@ -818,7 +818,7 @@
             "res.cash": 9000,
             "res.power": 4500
           },
-          "timeSec": 9504,
+          "timeSec": 20354,
           "productionPerHour": 8550,
           "might": 9953280
         },
@@ -827,7 +827,7 @@
             "res.cash": 13000,
             "res.power": 6300
           },
-          "timeSec": 11880,
+          "timeSec": 22981,
           "productionPerHour": 10350,
           "might": 13709280
         },
@@ -836,7 +836,7 @@
             "res.cash": 18000,
             "res.power": 8900
           },
-          "timeSec": 15840,
+          "timeSec": 25947,
           "productionPerHour": 12600,
           "might": 18439680
         },
@@ -845,7 +845,7 @@
             "res.cash": 25000,
             "res.power": 12000
           },
-          "timeSec": 20592,
+          "timeSec": 29296,
           "productionPerHour": 15300,
           "might": 24300000
         },
@@ -854,7 +854,7 @@
             "res.cash": 35000,
             "res.power": 17000
           },
-          "timeSec": 26136,
+          "timeSec": 33077,
           "productionPerHour": 18900,
           "might": 31457280
         },
@@ -863,7 +863,7 @@
             "res.cash": 49000,
             "res.power": 24000
           },
-          "timeSec": 33264,
+          "timeSec": 37345,
           "productionPerHour": 22950,
           "might": 40090080
         },
@@ -872,7 +872,7 @@
             "res.cash": 68000,
             "res.power": 34000
           },
-          "timeSec": 42768,
+          "timeSec": 42166,
           "productionPerHour": 27900,
           "might": 50388480
         },
@@ -881,7 +881,7 @@
             "res.cash": 95000,
             "res.power": 48000
           },
-          "timeSec": 52272,
+          "timeSec": 47608,
           "productionPerHour": 34200,
           "might": 62554080
         },
@@ -890,7 +890,7 @@
             "res.cash": 130000,
             "res.power": 67000
           },
-          "timeSec": 61776,
+          "timeSec": 53752,
           "productionPerHour": 41850,
           "might": 76800000
         },
@@ -899,7 +899,7 @@
             "res.cash": 190000,
             "res.power": 93000
           },
-          "timeSec": 71280,
+          "timeSec": 60689,
           "productionPerHour": 49500,
           "might": 93350880
         },
@@ -908,7 +908,7 @@
             "res.cash": 260000,
             "res.power": 130000
           },
-          "timeSec": 80784,
+          "timeSec": 68522,
           "productionPerHour": 63000,
           "might": 112442880
         },
@@ -917,7 +917,7 @@
             "res.cash": 370000,
             "res.power": 180000
           },
-          "timeSec": 90288,
+          "timeSec": 77365,
           "productionPerHour": 76500,
           "might": 134323680
         },
@@ -926,7 +926,7 @@
             "res.cash": 510000,
             "res.power": 260000
           },
-          "timeSec": 99792,
+          "timeSec": 87351,
           "productionPerHour": 94500,
           "might": 159252480
         },
@@ -935,7 +935,7 @@
             "res.cash": 720000,
             "res.power": 360000
           },
-          "timeSec": 109296,
+          "timeSec": 98624,
           "productionPerHour": 112500,
           "might": 187500000
         },
@@ -944,7 +944,7 @@
             "res.cash": 1000000,
             "res.power": 500000
           },
-          "timeSec": 118800,
+          "timeSec": 111353,
           "productionPerHour": 139500,
           "might": 219348480
         },
@@ -953,7 +953,7 @@
             "res.cash": 1400000,
             "res.power": 700000
           },
-          "timeSec": 128304,
+          "timeSec": 125724,
           "productionPerHour": 166500,
           "might": 255091680
         },
@@ -962,7 +962,7 @@
             "res.cash": 2000000,
             "res.power": 980000
           },
-          "timeSec": 137808,
+          "timeSec": 141951,
           "productionPerHour": 207000,
           "might": 295034880
         },
@@ -971,7 +971,7 @@
             "res.cash": 2800000,
             "res.power": 1400000
           },
-          "timeSec": 147312,
+          "timeSec": 160271,
           "productionPerHour": 252000,
           "might": 339494880
         },
@@ -980,7 +980,7 @@
             "res.cash": 3900000,
             "res.power": 1900000
           },
-          "timeSec": 161568,
+          "timeSec": 180956,
           "productionPerHour": 306000,
           "might": 388800000
         }
@@ -1086,7 +1086,7 @@
             "res.cash": 6500,
             "res.oil": 3200
           },
-          "timeSec": 7128,
+          "timeSec": 18028,
           "productionPerHour": 7200,
           "might": 7027680
         },
@@ -1095,7 +1095,7 @@
             "res.cash": 9000,
             "res.oil": 4500
           },
-          "timeSec": 9504,
+          "timeSec": 20354,
           "productionPerHour": 8550,
           "might": 9953280
         },
@@ -1104,7 +1104,7 @@
             "res.cash": 13000,
             "res.oil": 6300
           },
-          "timeSec": 11880,
+          "timeSec": 22981,
           "productionPerHour": 10350,
           "might": 13709280
         },
@@ -1113,7 +1113,7 @@
             "res.cash": 18000,
             "res.oil": 8900
           },
-          "timeSec": 15840,
+          "timeSec": 25947,
           "productionPerHour": 12600,
           "might": 18439680
         },
@@ -1122,7 +1122,7 @@
             "res.cash": 25000,
             "res.oil": 12000
           },
-          "timeSec": 20592,
+          "timeSec": 29296,
           "productionPerHour": 15300,
           "might": 24300000
         },
@@ -1131,7 +1131,7 @@
             "res.cash": 35000,
             "res.oil": 17000
           },
-          "timeSec": 26136,
+          "timeSec": 33077,
           "productionPerHour": 18900,
           "might": 31457280
         },
@@ -1140,7 +1140,7 @@
             "res.cash": 49000,
             "res.oil": 24000
           },
-          "timeSec": 33264,
+          "timeSec": 37345,
           "productionPerHour": 22950,
           "might": 40090080
         },
@@ -1149,7 +1149,7 @@
             "res.cash": 68000,
             "res.oil": 34000
           },
-          "timeSec": 42768,
+          "timeSec": 42166,
           "productionPerHour": 27900,
           "might": 50388480
         },
@@ -1158,7 +1158,7 @@
             "res.cash": 95000,
             "res.oil": 48000
           },
-          "timeSec": 52272,
+          "timeSec": 47608,
           "productionPerHour": 34200,
           "might": 62554080
         },
@@ -1167,7 +1167,7 @@
             "res.cash": 130000,
             "res.oil": 67000
           },
-          "timeSec": 61776,
+          "timeSec": 53752,
           "productionPerHour": 41850,
           "might": 76800000
         },
@@ -1176,7 +1176,7 @@
             "res.cash": 190000,
             "res.oil": 93000
           },
-          "timeSec": 71280,
+          "timeSec": 60689,
           "productionPerHour": 49500,
           "might": 93350880
         },
@@ -1185,7 +1185,7 @@
             "res.cash": 260000,
             "res.oil": 130000
           },
-          "timeSec": 80784,
+          "timeSec": 68522,
           "productionPerHour": 63000,
           "might": 112442880
         },
@@ -1194,7 +1194,7 @@
             "res.cash": 370000,
             "res.oil": 180000
           },
-          "timeSec": 90288,
+          "timeSec": 77365,
           "productionPerHour": 76500,
           "might": 134323680
         },
@@ -1203,7 +1203,7 @@
             "res.cash": 510000,
             "res.oil": 260000
           },
-          "timeSec": 99792,
+          "timeSec": 87351,
           "productionPerHour": 94500,
           "might": 159252480
         },
@@ -1212,7 +1212,7 @@
             "res.cash": 720000,
             "res.oil": 360000
           },
-          "timeSec": 109296,
+          "timeSec": 98624,
           "productionPerHour": 112500,
           "might": 187500000
         },
@@ -1221,7 +1221,7 @@
             "res.cash": 1000000,
             "res.oil": 500000
           },
-          "timeSec": 118800,
+          "timeSec": 111353,
           "productionPerHour": 139500,
           "might": 219348480
         },
@@ -1230,7 +1230,7 @@
             "res.cash": 1400000,
             "res.oil": 700000
           },
-          "timeSec": 128304,
+          "timeSec": 125724,
           "productionPerHour": 166500,
           "might": 255091680
         },
@@ -1239,7 +1239,7 @@
             "res.cash": 2000000,
             "res.oil": 980000
           },
-          "timeSec": 137808,
+          "timeSec": 141951,
           "productionPerHour": 207000,
           "might": 295034880
         },
@@ -1248,7 +1248,7 @@
             "res.cash": 2800000,
             "res.oil": 1400000
           },
-          "timeSec": 147312,
+          "timeSec": 160271,
           "productionPerHour": 252000,
           "might": 339494880
         },
@@ -1257,7 +1257,7 @@
             "res.cash": 3900000,
             "res.oil": 1900000
           },
-          "timeSec": 161568,
+          "timeSec": 180956,
           "productionPerHour": 306000,
           "might": 388800000
         }
@@ -1374,7 +1374,7 @@
             "res.oil": 4300,
             "res.power": 4300
           },
-          "timeSec": 6480,
+          "timeSec": 16389,
           "capacityPerResource": 140000,
           "might": 5270760
         },
@@ -1384,7 +1384,7 @@
             "res.oil": 6000,
             "res.power": 6000
           },
-          "timeSec": 8640,
+          "timeSec": 18504,
           "capacityPerResource": 180000,
           "might": 7464960
         },
@@ -1394,7 +1394,7 @@
             "res.oil": 8400,
             "res.power": 8400
           },
-          "timeSec": 10800,
+          "timeSec": 20891,
           "capacityPerResource": 240000,
           "might": 10281960
         },
@@ -1404,7 +1404,7 @@
             "res.oil": 12000,
             "res.power": 12000
           },
-          "timeSec": 14400,
+          "timeSec": 23588,
           "capacityPerResource": 310000,
           "might": 13829760
         },
@@ -1414,7 +1414,7 @@
             "res.oil": 17000,
             "res.power": 17000
           },
-          "timeSec": 18720,
+          "timeSec": 26632,
           "capacityPerResource": 410000,
           "might": 18225000
         },
@@ -1424,7 +1424,7 @@
             "res.oil": 23000,
             "res.power": 23000
           },
-          "timeSec": 23760,
+          "timeSec": 30070,
           "capacityPerResource": 550000,
           "might": 23592960
         },
@@ -1434,7 +1434,7 @@
             "res.oil": 32000,
             "res.power": 32000
           },
-          "timeSec": 30240,
+          "timeSec": 33951,
           "capacityPerResource": 720000,
           "might": 30067560
         },
@@ -1444,7 +1444,7 @@
             "res.oil": 45000,
             "res.power": 45000
           },
-          "timeSec": 38880,
+          "timeSec": 38332,
           "capacityPerResource": 950000,
           "might": 37791360
         },
@@ -1454,7 +1454,7 @@
             "res.oil": 64000,
             "res.power": 64000
           },
-          "timeSec": 47520,
+          "timeSec": 43280,
           "capacityPerResource": 1300000,
           "might": 46915560
         },
@@ -1464,7 +1464,7 @@
             "res.oil": 89000,
             "res.power": 89000
           },
-          "timeSec": 56160,
+          "timeSec": 48866,
           "capacityPerResource": 1700000,
           "might": 57600000
         },
@@ -1474,7 +1474,7 @@
             "res.oil": 120000,
             "res.power": 120000
           },
-          "timeSec": 64800,
+          "timeSec": 55172,
           "capacityPerResource": 2200000,
           "might": 70013160
         },
@@ -1484,7 +1484,7 @@
             "res.oil": 170000,
             "res.power": 170000
           },
-          "timeSec": 73440,
+          "timeSec": 62293,
           "capacityPerResource": 2900000,
           "might": 84332160
         },
@@ -1494,7 +1494,7 @@
             "res.oil": 240000,
             "res.power": 240000
           },
-          "timeSec": 82080,
+          "timeSec": 70333,
           "capacityPerResource": 3800000,
           "might": 100742760
         },
@@ -1504,7 +1504,7 @@
             "res.oil": 340000,
             "res.power": 340000
           },
-          "timeSec": 90720,
+          "timeSec": 79409,
           "capacityPerResource": 5000000,
           "might": 119439360
         },
@@ -1514,7 +1514,7 @@
             "res.oil": 480000,
             "res.power": 480000
           },
-          "timeSec": 99360,
+          "timeSec": 89658,
           "capacityPerResource": 6600000,
           "might": 140625000
         },
@@ -1524,7 +1524,7 @@
             "res.oil": 670000,
             "res.power": 670000
           },
-          "timeSec": 108000,
+          "timeSec": 101230,
           "capacityPerResource": 8800000,
           "might": 164511360
         },
@@ -1534,7 +1534,7 @@
             "res.oil": 940000,
             "res.power": 940000
           },
-          "timeSec": 116640,
+          "timeSec": 114295,
           "capacityPerResource": 12000000,
           "might": 191318760
         },
@@ -1544,7 +1544,7 @@
             "res.oil": 1300000,
             "res.power": 1300000
           },
-          "timeSec": 125280,
+          "timeSec": 129046,
           "capacityPerResource": 15000000,
           "might": 221276160
         },
@@ -1554,7 +1554,7 @@
             "res.oil": 1800000,
             "res.power": 1800000
           },
-          "timeSec": 133920,
+          "timeSec": 145701,
           "capacityPerResource": 20000000,
           "might": 254621160
         },
@@ -1564,7 +1564,7 @@
             "res.oil": 2600000,
             "res.power": 2600000
           },
-          "timeSec": 146880,
+          "timeSec": 164506,
           "capacityPerResource": 27000000,
           "might": 291600000
         }
@@ -1701,7 +1701,7 @@
             "res.oil": 3575,
             "res.power": 2640
           },
-          "timeSec": 6318,
+          "timeSec": 15979,
           "troopCapacity": 800,
           "trainQueueSize": 120,
           "trainSpeedMult": 1.5,
@@ -1713,7 +1713,7 @@
             "res.oil": 4950,
             "res.power": 3740
           },
-          "timeSec": 8424,
+          "timeSec": 18041,
           "troopCapacity": 1000,
           "trainQueueSize": 150,
           "trainSpeedMult": 1.55,
@@ -1725,7 +1725,7 @@
             "res.oil": 7150,
             "res.power": 5225
           },
-          "timeSec": 10530,
+          "timeSec": 20369,
           "troopCapacity": 1300,
           "trainQueueSize": 180,
           "trainSpeedMult": 1.6,
@@ -1737,7 +1737,7 @@
             "res.oil": 9900,
             "res.power": 7150
           },
-          "timeSec": 14040,
+          "timeSec": 22998,
           "troopCapacity": 1667,
           "trainQueueSize": 210,
           "trainSpeedMult": 1.65,
@@ -1749,7 +1749,7 @@
             "res.oil": 13750,
             "res.power": 10450
           },
-          "timeSec": 18252,
+          "timeSec": 25967,
           "troopCapacity": 2100,
           "trainQueueSize": 260,
           "trainSpeedMult": 1.7,
@@ -1761,7 +1761,7 @@
             "res.oil": 19250,
             "res.power": 14300
           },
-          "timeSec": 23166,
+          "timeSec": 29318,
           "troopCapacity": 2700,
           "trainQueueSize": 310,
           "trainSpeedMult": 1.75,
@@ -1773,7 +1773,7 @@
             "res.oil": 26950,
             "res.power": 19800
           },
-          "timeSec": 29484,
+          "timeSec": 33102,
           "troopCapacity": 3334,
           "trainQueueSize": 370,
           "trainSpeedMult": 1.8,
@@ -1785,7 +1785,7 @@
             "res.oil": 37400,
             "res.power": 28050
           },
-          "timeSec": 37908,
+          "timeSec": 37374,
           "troopCapacity": 4334,
           "trainQueueSize": 440,
           "trainSpeedMult": 1.85,
@@ -1797,7 +1797,7 @@
             "res.oil": 52250,
             "res.power": 39050
           },
-          "timeSec": 46332,
+          "timeSec": 42198,
           "troopCapacity": 5667,
           "trainQueueSize": 530,
           "trainSpeedMult": 1.9,
@@ -1809,7 +1809,7 @@
             "res.oil": 71500,
             "res.power": 55000
           },
-          "timeSec": 54756,
+          "timeSec": 47644,
           "troopCapacity": 7334,
           "trainQueueSize": 640,
           "trainSpeedMult": 1.95,
@@ -1821,7 +1821,7 @@
             "res.oil": 104500,
             "res.power": 77000
           },
-          "timeSec": 63180,
+          "timeSec": 53792,
           "troopCapacity": 9334,
           "trainQueueSize": 770,
           "trainSpeedMult": 2,
@@ -1833,7 +1833,7 @@
             "res.oil": 143000,
             "res.power": 110000
           },
-          "timeSec": 71604,
+          "timeSec": 60735,
           "troopCapacity": 12000,
           "trainQueueSize": 920,
           "trainSpeedMult": 2.05,
@@ -1845,7 +1845,7 @@
             "res.oil": 203500,
             "res.power": 148500
           },
-          "timeSec": 80028,
+          "timeSec": 68574,
           "troopCapacity": 15334,
           "trainQueueSize": 1100,
           "trainSpeedMult": 2.1,
@@ -1857,7 +1857,7 @@
             "res.oil": 280500,
             "res.power": 209000
           },
-          "timeSec": 88452,
+          "timeSec": 77424,
           "troopCapacity": 19334,
           "trainQueueSize": 1300,
           "trainSpeedMult": 2.15,
@@ -1869,7 +1869,7 @@
             "res.oil": 396000,
             "res.power": 297000
           },
-          "timeSec": 96876,
+          "timeSec": 87417,
           "troopCapacity": 25000,
           "trainQueueSize": 1600,
           "trainSpeedMult": 2.2,
@@ -1881,7 +1881,7 @@
             "res.oil": 550000,
             "res.power": 412500
           },
-          "timeSec": 105300,
+          "timeSec": 98699,
           "troopCapacity": 32000,
           "trainQueueSize": 1900,
           "trainSpeedMult": 2.25,
@@ -1893,7 +1893,7 @@
             "res.oil": 770000,
             "res.power": 605000
           },
-          "timeSec": 113724,
+          "timeSec": 111438,
           "troopCapacity": 40000,
           "trainQueueSize": 2300,
           "trainSpeedMult": 2.3,
@@ -1905,7 +1905,7 @@
             "res.oil": 1100000,
             "res.power": 825000
           },
-          "timeSec": 122148,
+          "timeSec": 125820,
           "troopCapacity": 53334,
           "trainQueueSize": 2700,
           "trainSpeedMult": 2.35,
@@ -1917,7 +1917,7 @@
             "res.oil": 1540000,
             "res.power": 1155000
           },
-          "timeSec": 130572,
+          "timeSec": 142059,
           "troopCapacity": 66667,
           "trainQueueSize": 3300,
           "trainSpeedMult": 2.4,
@@ -1929,7 +1929,7 @@
             "res.oil": 2145000,
             "res.power": 1595000
           },
-          "timeSec": 143208,
+          "timeSec": 160393,
           "troopCapacity": 86667,
           "trainQueueSize": 4000,
           "trainSpeedMult": 2.45,
@@ -2069,7 +2069,7 @@
             "res.oil": 3900,
             "res.power": 2880
           },
-          "timeSec": 7290,
+          "timeSec": 18437,
           "troopCapacity": 800,
           "trainQueueSize": 120,
           "trainSpeedMult": 1.5,
@@ -2081,7 +2081,7 @@
             "res.oil": 5400,
             "res.power": 4080
           },
-          "timeSec": 9720,
+          "timeSec": 20816,
           "troopCapacity": 1000,
           "trainQueueSize": 150,
           "trainSpeedMult": 1.55,
@@ -2093,7 +2093,7 @@
             "res.oil": 7800,
             "res.power": 5700
           },
-          "timeSec": 12150,
+          "timeSec": 23503,
           "troopCapacity": 1300,
           "trainQueueSize": 180,
           "trainSpeedMult": 1.6,
@@ -2105,7 +2105,7 @@
             "res.oil": 10800,
             "res.power": 7800
           },
-          "timeSec": 16200,
+          "timeSec": 26536,
           "troopCapacity": 1667,
           "trainQueueSize": 210,
           "trainSpeedMult": 1.65,
@@ -2117,7 +2117,7 @@
             "res.oil": 15000,
             "res.power": 11400
           },
-          "timeSec": 21060,
+          "timeSec": 29961,
           "troopCapacity": 2100,
           "trainQueueSize": 260,
           "trainSpeedMult": 1.7,
@@ -2129,7 +2129,7 @@
             "res.oil": 21000,
             "res.power": 15600
           },
-          "timeSec": 26730,
+          "timeSec": 33828,
           "troopCapacity": 2700,
           "trainQueueSize": 310,
           "trainSpeedMult": 1.75,
@@ -2141,7 +2141,7 @@
             "res.oil": 29400,
             "res.power": 21600
           },
-          "timeSec": 34020,
+          "timeSec": 38194,
           "troopCapacity": 3334,
           "trainQueueSize": 370,
           "trainSpeedMult": 1.8,
@@ -2153,7 +2153,7 @@
             "res.oil": 40800,
             "res.power": 30600
           },
-          "timeSec": 43740,
+          "timeSec": 43124,
           "troopCapacity": 4334,
           "trainQueueSize": 440,
           "trainSpeedMult": 1.85,
@@ -2165,7 +2165,7 @@
             "res.oil": 57000,
             "res.power": 42600
           },
-          "timeSec": 53460,
+          "timeSec": 48690,
           "troopCapacity": 5667,
           "trainQueueSize": 530,
           "trainSpeedMult": 1.9,
@@ -2177,7 +2177,7 @@
             "res.oil": 78000,
             "res.power": 60000
           },
-          "timeSec": 63180,
+          "timeSec": 54974,
           "troopCapacity": 7334,
           "trainQueueSize": 640,
           "trainSpeedMult": 1.95,
@@ -2189,7 +2189,7 @@
             "res.oil": 114000,
             "res.power": 84000
           },
-          "timeSec": 72900,
+          "timeSec": 62068,
           "troopCapacity": 9334,
           "trainQueueSize": 770,
           "trainSpeedMult": 2,
@@ -2201,7 +2201,7 @@
             "res.oil": 156000,
             "res.power": 120000
           },
-          "timeSec": 82620,
+          "timeSec": 70080,
           "troopCapacity": 12000,
           "trainQueueSize": 920,
           "trainSpeedMult": 2.05,
@@ -2213,7 +2213,7 @@
             "res.oil": 222000,
             "res.power": 162000
           },
-          "timeSec": 92340,
+          "timeSec": 79124,
           "troopCapacity": 15334,
           "trainQueueSize": 1100,
           "trainSpeedMult": 2.1,
@@ -2225,7 +2225,7 @@
             "res.oil": 306000,
             "res.power": 228000
           },
-          "timeSec": 102060,
+          "timeSec": 89336,
           "troopCapacity": 19334,
           "trainQueueSize": 1300,
           "trainSpeedMult": 2.15,
@@ -2237,7 +2237,7 @@
             "res.oil": 432000,
             "res.power": 324000
           },
-          "timeSec": 111780,
+          "timeSec": 100866,
           "troopCapacity": 25000,
           "trainQueueSize": 1600,
           "trainSpeedMult": 2.2,
@@ -2249,7 +2249,7 @@
             "res.oil": 600000,
             "res.power": 450000
           },
-          "timeSec": 121500,
+          "timeSec": 113884,
           "troopCapacity": 32000,
           "trainQueueSize": 1900,
           "trainSpeedMult": 2.25,
@@ -2261,7 +2261,7 @@
             "res.oil": 840000,
             "res.power": 660000
           },
-          "timeSec": 131220,
+          "timeSec": 128582,
           "troopCapacity": 40000,
           "trainQueueSize": 2300,
           "trainSpeedMult": 2.3,
@@ -2273,7 +2273,7 @@
             "res.oil": 1200000,
             "res.power": 900000
           },
-          "timeSec": 140940,
+          "timeSec": 145177,
           "troopCapacity": 53334,
           "trainQueueSize": 2700,
           "trainSpeedMult": 2.35,
@@ -2285,7 +2285,7 @@
             "res.oil": 1680000,
             "res.power": 1260000
           },
-          "timeSec": 150660,
+          "timeSec": 163914,
           "troopCapacity": 66667,
           "trainQueueSize": 3300,
           "trainSpeedMult": 2.4,
@@ -2297,7 +2297,7 @@
             "res.oil": 2340000,
             "res.power": 1740000
           },
-          "timeSec": 165240,
+          "timeSec": 185069,
           "troopCapacity": 86667,
           "trainQueueSize": 4000,
           "trainSpeedMult": 2.45,
@@ -2437,7 +2437,7 @@
             "res.oil": 4225,
             "res.power": 3120
           },
-          "timeSec": 8262,
+          "timeSec": 20896,
           "troopCapacity": 800,
           "trainQueueSize": 120,
           "trainSpeedMult": 1.5,
@@ -2449,7 +2449,7 @@
             "res.oil": 5850,
             "res.power": 4420
           },
-          "timeSec": 11016,
+          "timeSec": 23592,
           "troopCapacity": 1000,
           "trainQueueSize": 150,
           "trainSpeedMult": 1.55,
@@ -2461,7 +2461,7 @@
             "res.oil": 8450,
             "res.power": 6175
           },
-          "timeSec": 13770,
+          "timeSec": 26637,
           "troopCapacity": 1300,
           "trainQueueSize": 180,
           "trainSpeedMult": 1.6,
@@ -2473,7 +2473,7 @@
             "res.oil": 11700,
             "res.power": 8450
           },
-          "timeSec": 18360,
+          "timeSec": 30075,
           "troopCapacity": 1667,
           "trainQueueSize": 210,
           "trainSpeedMult": 1.65,
@@ -2485,7 +2485,7 @@
             "res.oil": 16250,
             "res.power": 12350
           },
-          "timeSec": 23868,
+          "timeSec": 33956,
           "troopCapacity": 2100,
           "trainQueueSize": 260,
           "trainSpeedMult": 1.7,
@@ -2497,7 +2497,7 @@
             "res.oil": 22750,
             "res.power": 16900
           },
-          "timeSec": 30294,
+          "timeSec": 38339,
           "troopCapacity": 2700,
           "trainQueueSize": 310,
           "trainSpeedMult": 1.75,
@@ -2509,7 +2509,7 @@
             "res.oil": 31850,
             "res.power": 23400
           },
-          "timeSec": 38556,
+          "timeSec": 43287,
           "troopCapacity": 3334,
           "trainQueueSize": 370,
           "trainSpeedMult": 1.8,
@@ -2521,7 +2521,7 @@
             "res.oil": 44200,
             "res.power": 33150
           },
-          "timeSec": 49572,
+          "timeSec": 48873,
           "troopCapacity": 4334,
           "trainQueueSize": 440,
           "trainSpeedMult": 1.85,
@@ -2533,7 +2533,7 @@
             "res.oil": 61750,
             "res.power": 46150
           },
-          "timeSec": 60588,
+          "timeSec": 55181,
           "troopCapacity": 5667,
           "trainQueueSize": 530,
           "trainSpeedMult": 1.9,
@@ -2545,7 +2545,7 @@
             "res.oil": 84500,
             "res.power": 65000
           },
-          "timeSec": 71604,
+          "timeSec": 62303,
           "troopCapacity": 7334,
           "trainQueueSize": 640,
           "trainSpeedMult": 1.95,
@@ -2557,7 +2557,7 @@
             "res.oil": 123500,
             "res.power": 91000
           },
-          "timeSec": 82620,
+          "timeSec": 70345,
           "troopCapacity": 9334,
           "trainQueueSize": 770,
           "trainSpeedMult": 2,
@@ -2569,7 +2569,7 @@
             "res.oil": 169000,
             "res.power": 130000
           },
-          "timeSec": 93636,
+          "timeSec": 79424,
           "troopCapacity": 12000,
           "trainQueueSize": 920,
           "trainSpeedMult": 2.05,
@@ -2581,7 +2581,7 @@
             "res.oil": 240500,
             "res.power": 175500
           },
-          "timeSec": 104652,
+          "timeSec": 89674,
           "troopCapacity": 15334,
           "trainQueueSize": 1100,
           "trainSpeedMult": 2.1,
@@ -2593,7 +2593,7 @@
             "res.oil": 331500,
             "res.power": 247000
           },
-          "timeSec": 115668,
+          "timeSec": 101247,
           "troopCapacity": 19334,
           "trainQueueSize": 1300,
           "trainSpeedMult": 2.15,
@@ -2605,7 +2605,7 @@
             "res.oil": 468000,
             "res.power": 351000
           },
-          "timeSec": 126684,
+          "timeSec": 114315,
           "troopCapacity": 25000,
           "trainQueueSize": 1600,
           "trainSpeedMult": 2.2,
@@ -2617,7 +2617,7 @@
             "res.oil": 650000,
             "res.power": 487500
           },
-          "timeSec": 137700,
+          "timeSec": 129068,
           "troopCapacity": 32000,
           "trainQueueSize": 1900,
           "trainSpeedMult": 2.25,
@@ -2629,7 +2629,7 @@
             "res.oil": 910000,
             "res.power": 715000
           },
-          "timeSec": 148716,
+          "timeSec": 145727,
           "troopCapacity": 40000,
           "trainQueueSize": 2300,
           "trainSpeedMult": 2.3,
@@ -2641,7 +2641,7 @@
             "res.oil": 1300000,
             "res.power": 975000
           },
-          "timeSec": 159732,
+          "timeSec": 164534,
           "troopCapacity": 53334,
           "trainQueueSize": 2700,
           "trainSpeedMult": 2.35,
@@ -2653,7 +2653,7 @@
             "res.oil": 1820000,
             "res.power": 1365000
           },
-          "timeSec": 170748,
+          "timeSec": 185769,
           "troopCapacity": 66667,
           "trainQueueSize": 3300,
           "trainSpeedMult": 2.4,
@@ -2665,7 +2665,7 @@
             "res.oil": 2535000,
             "res.power": 1885000
           },
-          "timeSec": 187272,
+          "timeSec": 209745,
           "troopCapacity": 86667,
           "trainQueueSize": 4000,
           "trainSpeedMult": 2.45,
@@ -2788,7 +2788,7 @@
             "res.oil": 5400,
             "res.power": 4800
           },
-          "timeSec": 4536,
+          "timeSec": 11472,
           "woundedCapacity": 4300,
           "might": 5270760
         },
@@ -2798,7 +2798,7 @@
             "res.oil": 7500,
             "res.power": 6800
           },
-          "timeSec": 6048,
+          "timeSec": 12953,
           "woundedCapacity": 6100,
           "might": 7464960
         },
@@ -2808,7 +2808,7 @@
             "res.oil": 11000,
             "res.power": 9500
           },
-          "timeSec": 7560,
+          "timeSec": 14624,
           "woundedCapacity": 8500,
           "might": 10281960
         },
@@ -2818,7 +2818,7 @@
             "res.oil": 15000,
             "res.power": 13000
           },
-          "timeSec": 10080,
+          "timeSec": 16512,
           "woundedCapacity": 12000,
           "might": 13829760
         },
@@ -2828,7 +2828,7 @@
             "res.oil": 21000,
             "res.power": 19000
           },
-          "timeSec": 13104,
+          "timeSec": 18642,
           "woundedCapacity": 17000,
           "might": 18225000
         },
@@ -2838,7 +2838,7 @@
             "res.oil": 29000,
             "res.power": 26000
           },
-          "timeSec": 16632,
+          "timeSec": 21049,
           "woundedCapacity": 23000,
           "might": 23592960
         },
@@ -2848,7 +2848,7 @@
             "res.oil": 41000,
             "res.power": 36000
           },
-          "timeSec": 21168,
+          "timeSec": 23765,
           "woundedCapacity": 33000,
           "might": 30067560
         },
@@ -2858,7 +2858,7 @@
             "res.oil": 57000,
             "res.power": 51000
           },
-          "timeSec": 27216,
+          "timeSec": 26833,
           "woundedCapacity": 46000,
           "might": 37791360
         },
@@ -2868,7 +2868,7 @@
             "res.oil": 79000,
             "res.power": 71000
           },
-          "timeSec": 33264,
+          "timeSec": 30296,
           "woundedCapacity": 64000,
           "might": 46915560
         },
@@ -2878,7 +2878,7 @@
             "res.oil": 110000,
             "res.power": 100000
           },
-          "timeSec": 39312,
+          "timeSec": 34206,
           "woundedCapacity": 90000,
           "might": 57600000
         },
@@ -2888,7 +2888,7 @@
             "res.oil": 160000,
             "res.power": 140000
           },
-          "timeSec": 45360,
+          "timeSec": 38621,
           "woundedCapacity": 130000,
           "might": 70013160
         },
@@ -2898,7 +2898,7 @@
             "res.oil": 220000,
             "res.power": 200000
           },
-          "timeSec": 51408,
+          "timeSec": 43605,
           "woundedCapacity": 180000,
           "might": 84332160
         },
@@ -2908,7 +2908,7 @@
             "res.oil": 310000,
             "res.power": 270000
           },
-          "timeSec": 57456,
+          "timeSec": 49233,
           "woundedCapacity": 250000,
           "might": 100742760
         },
@@ -2918,7 +2918,7 @@
             "res.oil": 430000,
             "res.power": 380000
           },
-          "timeSec": 63504,
+          "timeSec": 55587,
           "woundedCapacity": 340000,
           "might": 119439360
         },
@@ -2928,7 +2928,7 @@
             "res.oil": 600000,
             "res.power": 540000
           },
-          "timeSec": 69552,
+          "timeSec": 62761,
           "woundedCapacity": 480000,
           "might": 140625000
         },
@@ -2938,7 +2938,7 @@
             "res.oil": 840000,
             "res.power": 750000
           },
-          "timeSec": 75600,
+          "timeSec": 70861,
           "woundedCapacity": 670000,
           "might": 164511360
         },
@@ -2948,7 +2948,7 @@
             "res.oil": 1200000,
             "res.power": 1100000
           },
-          "timeSec": 81648,
+          "timeSec": 80006,
           "woundedCapacity": 940000,
           "might": 191318760
         },
@@ -2958,7 +2958,7 @@
             "res.oil": 1600000,
             "res.power": 1500000
           },
-          "timeSec": 87696,
+          "timeSec": 90332,
           "woundedCapacity": 1300000,
           "might": 221276160
         },
@@ -2968,7 +2968,7 @@
             "res.oil": 2300000,
             "res.power": 2100000
           },
-          "timeSec": 93744,
+          "timeSec": 101991,
           "woundedCapacity": 1900000,
           "might": 254621160
         },
@@ -2978,7 +2978,7 @@
             "res.oil": 3200000,
             "res.power": 2900000
           },
-          "timeSec": 102816,
+          "timeSec": 115154,
           "woundedCapacity": 2600000,
           "might": 291600000
         }
@@ -3095,7 +3095,7 @@
             "res.oil": 5400,
             "res.power": 4300
           },
-          "timeSec": 4536,
+          "timeSec": 11472,
           "reinforcementCapacity": 1400,
           "might": 5270760
         },
@@ -3105,7 +3105,7 @@
             "res.oil": 7500,
             "res.power": 6000
           },
-          "timeSec": 6048,
+          "timeSec": 12953,
           "reinforcementCapacity": 1800,
           "might": 7464960
         },
@@ -3115,7 +3115,7 @@
             "res.oil": 11000,
             "res.power": 8400
           },
-          "timeSec": 7560,
+          "timeSec": 14624,
           "reinforcementCapacity": 2300,
           "might": 10281960
         },
@@ -3125,7 +3125,7 @@
             "res.oil": 15000,
             "res.power": 12000
           },
-          "timeSec": 10080,
+          "timeSec": 16512,
           "reinforcementCapacity": 3000,
           "might": 13829760
         },
@@ -3135,7 +3135,7 @@
             "res.oil": 21000,
             "res.power": 17000
           },
-          "timeSec": 13104,
+          "timeSec": 18642,
           "reinforcementCapacity": 3900,
           "might": 18225000
         },
@@ -3145,7 +3145,7 @@
             "res.oil": 29000,
             "res.power": 23000
           },
-          "timeSec": 16632,
+          "timeSec": 21049,
           "reinforcementCapacity": 5100,
           "might": 23592960
         },
@@ -3155,7 +3155,7 @@
             "res.oil": 41000,
             "res.power": 32000
           },
-          "timeSec": 21168,
+          "timeSec": 23765,
           "reinforcementCapacity": 6700,
           "might": 30067560
         },
@@ -3165,7 +3165,7 @@
             "res.oil": 57000,
             "res.power": 45000
           },
-          "timeSec": 27216,
+          "timeSec": 26833,
           "reinforcementCapacity": 8700,
           "might": 37791360
         },
@@ -3175,7 +3175,7 @@
             "res.oil": 79000,
             "res.power": 64000
           },
-          "timeSec": 33264,
+          "timeSec": 30296,
           "reinforcementCapacity": 11000,
           "might": 46915560
         },
@@ -3185,7 +3185,7 @@
             "res.oil": 110000,
             "res.power": 89000
           },
-          "timeSec": 39312,
+          "timeSec": 34206,
           "reinforcementCapacity": 15000,
           "might": 57600000
         },
@@ -3195,7 +3195,7 @@
             "res.oil": 160000,
             "res.power": 120000
           },
-          "timeSec": 45360,
+          "timeSec": 38621,
           "reinforcementCapacity": 19000,
           "might": 70013160
         },
@@ -3205,7 +3205,7 @@
             "res.oil": 220000,
             "res.power": 170000
           },
-          "timeSec": 51408,
+          "timeSec": 43605,
           "reinforcementCapacity": 25000,
           "might": 84332160
         },
@@ -3215,7 +3215,7 @@
             "res.oil": 310000,
             "res.power": 240000
           },
-          "timeSec": 57456,
+          "timeSec": 49233,
           "reinforcementCapacity": 32000,
           "might": 100742760
         },
@@ -3225,7 +3225,7 @@
             "res.oil": 430000,
             "res.power": 340000
           },
-          "timeSec": 63504,
+          "timeSec": 55587,
           "reinforcementCapacity": 42000,
           "might": 119439360
         },
@@ -3235,7 +3235,7 @@
             "res.oil": 600000,
             "res.power": 480000
           },
-          "timeSec": 69552,
+          "timeSec": 62761,
           "reinforcementCapacity": 54000,
           "might": 140625000
         },
@@ -3245,7 +3245,7 @@
             "res.oil": 840000,
             "res.power": 670000
           },
-          "timeSec": 75600,
+          "timeSec": 70861,
           "reinforcementCapacity": 71000,
           "might": 164511360
         },
@@ -3255,7 +3255,7 @@
             "res.oil": 1200000,
             "res.power": 940000
           },
-          "timeSec": 81648,
+          "timeSec": 80006,
           "reinforcementCapacity": 92000,
           "might": 191318760
         },
@@ -3265,7 +3265,7 @@
             "res.oil": 1600000,
             "res.power": 1300000
           },
-          "timeSec": 87696,
+          "timeSec": 90332,
           "reinforcementCapacity": 120000,
           "might": 221276160
         },
@@ -3275,7 +3275,7 @@
             "res.oil": 2300000,
             "res.power": 1800000
           },
-          "timeSec": 93744,
+          "timeSec": 101991,
           "reinforcementCapacity": 160000,
           "might": 254621160
         },
@@ -3285,7 +3285,7 @@
             "res.oil": 3200000,
             "res.power": 2600000
           },
-          "timeSec": 102816,
+          "timeSec": 115154,
           "reinforcementCapacity": 200000,
           "might": 291600000
         }
@@ -3401,7 +3401,7 @@
             "res.oil": 4300,
             "res.power": 3200
           },
-          "timeSec": 5184,
+          "timeSec": 13111,
           "defenseValue": 12000,
           "might": 4392300
         },
@@ -3411,7 +3411,7 @@
             "res.oil": 6000,
             "res.power": 4500
           },
-          "timeSec": 6912,
+          "timeSec": 14803,
           "defenseValue": 17000,
           "might": 6220800
         },
@@ -3421,7 +3421,7 @@
             "res.oil": 8400,
             "res.power": 6300
           },
-          "timeSec": 8640,
+          "timeSec": 16714,
           "defenseValue": 26000,
           "might": 8568300
         },
@@ -3431,7 +3431,7 @@
             "res.oil": 12000,
             "res.power": 8900
           },
-          "timeSec": 11520,
+          "timeSec": 18871,
           "defenseValue": 39000,
           "might": 11524800
         },
@@ -3441,7 +3441,7 @@
             "res.oil": 17000,
             "res.power": 12000
           },
-          "timeSec": 14976,
+          "timeSec": 21306,
           "defenseValue": 58000,
           "might": 15187500
         },
@@ -3451,7 +3451,7 @@
             "res.oil": 23000,
             "res.power": 17000
           },
-          "timeSec": 19008,
+          "timeSec": 24055,
           "defenseValue": 88000,
           "might": 19660800
         },
@@ -3461,7 +3461,7 @@
             "res.oil": 32000,
             "res.power": 24000
           },
-          "timeSec": 24192,
+          "timeSec": 27160,
           "defenseValue": 130000,
           "might": 25056300
         },
@@ -3471,7 +3471,7 @@
             "res.oil": 45000,
             "res.power": 34000
           },
-          "timeSec": 31104,
+          "timeSec": 30666,
           "defenseValue": 200000,
           "might": 31492800
         },
@@ -3481,7 +3481,7 @@
             "res.oil": 64000,
             "res.power": 48000
           },
-          "timeSec": 38016,
+          "timeSec": 34624,
           "defenseValue": 300000,
           "might": 39096300
         },
@@ -3491,7 +3491,7 @@
             "res.oil": 89000,
             "res.power": 67000
           },
-          "timeSec": 44928,
+          "timeSec": 39092,
           "defenseValue": 440000,
           "might": 48000000
         },
@@ -3501,7 +3501,7 @@
             "res.oil": 120000,
             "res.power": 93000
           },
-          "timeSec": 51840,
+          "timeSec": 44138,
           "defenseValue": 670000,
           "might": 58344300
         },
@@ -3511,7 +3511,7 @@
             "res.oil": 170000,
             "res.power": 130000
           },
-          "timeSec": 58752,
+          "timeSec": 49834,
           "defenseValue": 1000000,
           "might": 70276800
         },
@@ -3521,7 +3521,7 @@
             "res.oil": 240000,
             "res.power": 180000
           },
-          "timeSec": 65664,
+          "timeSec": 56265,
           "defenseValue": 1500000,
           "might": 83952300
         },
@@ -3531,7 +3531,7 @@
             "res.oil": 340000,
             "res.power": 260000
           },
-          "timeSec": 72576,
+          "timeSec": 63528,
           "defenseValue": 2200000,
           "might": 99532800
         },
@@ -3541,7 +3541,7 @@
             "res.oil": 480000,
             "res.power": 360000
           },
-          "timeSec": 79488,
+          "timeSec": 71727,
           "defenseValue": 3400000,
           "might": 117187500
         },
@@ -3551,7 +3551,7 @@
             "res.oil": 670000,
             "res.power": 500000
           },
-          "timeSec": 86400,
+          "timeSec": 80984,
           "defenseValue": 5100000,
           "might": 137092800
         },
@@ -3561,7 +3561,7 @@
             "res.oil": 940000,
             "res.power": 700000
           },
-          "timeSec": 93312,
+          "timeSec": 91436,
           "defenseValue": 7600000,
           "might": 159432300
         },
@@ -3571,7 +3571,7 @@
             "res.oil": 1300000,
             "res.power": 980000
           },
-          "timeSec": 100224,
+          "timeSec": 103237,
           "defenseValue": 11000000,
           "might": 184396800
         },
@@ -3581,7 +3581,7 @@
             "res.oil": 1800000,
             "res.power": 1400000
           },
-          "timeSec": 107136,
+          "timeSec": 116561,
           "defenseValue": 17000000,
           "might": 212184300
         },
@@ -3591,7 +3591,7 @@
             "res.oil": 2600000,
             "res.power": 1900000
           },
-          "timeSec": 117504,
+          "timeSec": 131604,
           "defenseValue": 26000000,
           "might": 243000000
         }
@@ -3605,7 +3605,7 @@
         "economy",
         "development"
       ],
-      "role": "Research Institute: Troops / Economy(RSS) / Development(storage cap, troop count, build speed…). Research nodes = Phase 2.",
+      "role": "Research Institute: Troops / Economy(RSS) / Development(storage cap, troop count, build speed\u2026). Research nodes = Phase 2.",
       "levels": {
         "1": {
           "cost": {
@@ -3703,7 +3703,7 @@
             "res.oil": 7500,
             "res.power": 6500
           },
-          "timeSec": 8424,
+          "timeSec": 21305,
           "might": 8784600
         },
         "12": {
@@ -3712,7 +3712,7 @@
             "res.oil": 11000,
             "res.power": 9000
           },
-          "timeSec": 11232,
+          "timeSec": 24055,
           "might": 12441600
         },
         "13": {
@@ -3721,7 +3721,7 @@
             "res.oil": 15000,
             "res.power": 13000
           },
-          "timeSec": 14040,
+          "timeSec": 27159,
           "might": 17136600
         },
         "14": {
@@ -3730,7 +3730,7 @@
             "res.oil": 21000,
             "res.power": 18000
           },
-          "timeSec": 18720,
+          "timeSec": 30664,
           "might": 23049600
         },
         "15": {
@@ -3739,7 +3739,7 @@
             "res.oil": 29000,
             "res.power": 25000
           },
-          "timeSec": 24336,
+          "timeSec": 34623,
           "might": 30375000
         },
         "16": {
@@ -3748,7 +3748,7 @@
             "res.oil": 41000,
             "res.power": 35000
           },
-          "timeSec": 30888,
+          "timeSec": 39090,
           "might": 39321600
         },
         "17": {
@@ -3757,7 +3757,7 @@
             "res.oil": 57000,
             "res.power": 49000
           },
-          "timeSec": 39312,
+          "timeSec": 44136,
           "might": 50112600
         },
         "18": {
@@ -3766,7 +3766,7 @@
             "res.oil": 79000,
             "res.power": 68000
           },
-          "timeSec": 50544,
+          "timeSec": 49832,
           "might": 62985600
         },
         "19": {
@@ -3775,7 +3775,7 @@
             "res.oil": 110000,
             "res.power": 95000
           },
-          "timeSec": 61776,
+          "timeSec": 56263,
           "might": 78192600
         },
         "20": {
@@ -3784,7 +3784,7 @@
             "res.oil": 160000,
             "res.power": 130000
           },
-          "timeSec": 73008,
+          "timeSec": 63525,
           "might": 96000000
         },
         "21": {
@@ -3793,7 +3793,7 @@
             "res.oil": 220000,
             "res.power": 190000
           },
-          "timeSec": 84240,
+          "timeSec": 71724,
           "might": 116688600
         },
         "22": {
@@ -3802,7 +3802,7 @@
             "res.oil": 310000,
             "res.power": 260000
           },
-          "timeSec": 95472,
+          "timeSec": 80980,
           "might": 140553600
         },
         "23": {
@@ -3811,7 +3811,7 @@
             "res.oil": 430000,
             "res.power": 370000
           },
-          "timeSec": 106704,
+          "timeSec": 91432,
           "might": 167904600
         },
         "24": {
@@ -3820,7 +3820,7 @@
             "res.oil": 600000,
             "res.power": 510000
           },
-          "timeSec": 117936,
+          "timeSec": 103233,
           "might": 199065600
         },
         "25": {
@@ -3829,7 +3829,7 @@
             "res.oil": 840000,
             "res.power": 720000
           },
-          "timeSec": 129168,
+          "timeSec": 116556,
           "might": 234375000
         },
         "26": {
@@ -3838,7 +3838,7 @@
             "res.oil": 1200000,
             "res.power": 1000000
           },
-          "timeSec": 140400,
+          "timeSec": 131599,
           "might": 274185600
         },
         "27": {
@@ -3847,7 +3847,7 @@
             "res.oil": 1600000,
             "res.power": 1400000
           },
-          "timeSec": 151632,
+          "timeSec": 148584,
           "might": 318864600
         },
         "28": {
@@ -3856,7 +3856,7 @@
             "res.oil": 2300000,
             "res.power": 2000000
           },
-          "timeSec": 162864,
+          "timeSec": 167760,
           "might": 368793600
         },
         "29": {
@@ -3865,7 +3865,7 @@
             "res.oil": 3200000,
             "res.power": 2800000
           },
-          "timeSec": 174096,
+          "timeSec": 189411,
           "might": 424368600
         },
         "30": {
@@ -3874,7 +3874,7 @@
             "res.oil": 4500000,
             "res.power": 3900000
           },
-          "timeSec": 190944,
+          "timeSec": 213857,
           "might": 486000000
         }
       }
@@ -3990,7 +3990,7 @@
             "res.oil": 4300,
             "res.power": 3800
           },
-          "timeSec": 3888,
+          "timeSec": 9834,
           "soloTaskSlots": 6,
           "might": 4392300
         },
@@ -4000,7 +4000,7 @@
             "res.oil": 6000,
             "res.power": 5300
           },
-          "timeSec": 5184,
+          "timeSec": 11103,
           "soloTaskSlots": 7,
           "might": 6220800
         },
@@ -4010,7 +4010,7 @@
             "res.oil": 8400,
             "res.power": 7400
           },
-          "timeSec": 6480,
+          "timeSec": 12535,
           "soloTaskSlots": 8,
           "might": 8568300
         },
@@ -4020,7 +4020,7 @@
             "res.oil": 12000,
             "res.power": 10000
           },
-          "timeSec": 8640,
+          "timeSec": 14153,
           "soloTaskSlots": 9,
           "might": 11524800
         },
@@ -4030,7 +4030,7 @@
             "res.oil": 17000,
             "res.power": 14000
           },
-          "timeSec": 11232,
+          "timeSec": 15979,
           "soloTaskSlots": 10,
           "might": 15187500
         },
@@ -4040,7 +4040,7 @@
             "res.oil": 23000,
             "res.power": 20000
           },
-          "timeSec": 14256,
+          "timeSec": 18042,
           "soloTaskSlots": 11,
           "might": 19660800
         },
@@ -4050,7 +4050,7 @@
             "res.oil": 32000,
             "res.power": 28000
           },
-          "timeSec": 18144,
+          "timeSec": 20371,
           "soloTaskSlots": 12,
           "might": 25056300
         },
@@ -4060,7 +4060,7 @@
             "res.oil": 45000,
             "res.power": 40000
           },
-          "timeSec": 23328,
+          "timeSec": 22999,
           "soloTaskSlots": 14,
           "might": 31492800
         },
@@ -4070,7 +4070,7 @@
             "res.oil": 64000,
             "res.power": 56000
           },
-          "timeSec": 28512,
+          "timeSec": 25968,
           "soloTaskSlots": 15,
           "might": 39096300
         },
@@ -4080,7 +4080,7 @@
             "res.oil": 89000,
             "res.power": 78000
           },
-          "timeSec": 33696,
+          "timeSec": 29319,
           "soloTaskSlots": 17,
           "might": 48000000
         },
@@ -4090,7 +4090,7 @@
             "res.oil": 120000,
             "res.power": 110000
           },
-          "timeSec": 38880,
+          "timeSec": 33103,
           "soloTaskSlots": 19,
           "might": 58344300
         },
@@ -4100,7 +4100,7 @@
             "res.oil": 170000,
             "res.power": 150000
           },
-          "timeSec": 44064,
+          "timeSec": 37376,
           "soloTaskSlots": 22,
           "might": 70276800
         },
@@ -4110,7 +4110,7 @@
             "res.oil": 240000,
             "res.power": 210000
           },
-          "timeSec": 49248,
+          "timeSec": 42199,
           "soloTaskSlots": 24,
           "might": 83952300
         },
@@ -4120,7 +4120,7 @@
             "res.oil": 340000,
             "res.power": 300000
           },
-          "timeSec": 54432,
+          "timeSec": 47646,
           "soloTaskSlots": 27,
           "might": 99532800
         },
@@ -4130,7 +4130,7 @@
             "res.oil": 480000,
             "res.power": 420000
           },
-          "timeSec": 59616,
+          "timeSec": 53795,
           "soloTaskSlots": 30,
           "might": 117187500
         },
@@ -4140,7 +4140,7 @@
             "res.oil": 670000,
             "res.power": 590000
           },
-          "timeSec": 64800,
+          "timeSec": 60738,
           "soloTaskSlots": 34,
           "might": 137092800
         },
@@ -4150,7 +4150,7 @@
             "res.oil": 940000,
             "res.power": 820000
           },
-          "timeSec": 69984,
+          "timeSec": 68576,
           "soloTaskSlots": 38,
           "might": 159432300
         },
@@ -4160,7 +4160,7 @@
             "res.oil": 1300000,
             "res.power": 1100000
           },
-          "timeSec": 75168,
+          "timeSec": 77428,
           "soloTaskSlots": 43,
           "might": 184396800
         },
@@ -4170,7 +4170,7 @@
             "res.oil": 1800000,
             "res.power": 1600000
           },
-          "timeSec": 80352,
+          "timeSec": 87420,
           "soloTaskSlots": 48,
           "might": 212184300
         },
@@ -4180,7 +4180,7 @@
             "res.oil": 2600000,
             "res.power": 2300000
           },
-          "timeSec": 88128,
+          "timeSec": 98703,
           "soloTaskSlots": 53,
           "might": 243000000
         }
@@ -4190,7 +4190,7 @@
       "unlockAtKeep": 1,
       "special": "server_progress",
       "upgradable": false,
-      "role": "Monument — shows server-wide progress and triggers server-wide rewards. Display/meta, not a resource-upgrade building. Backend-driven, later."
+      "role": "Monument \u2014 shows server-wide progress and triggers server-wide rewards. Display/meta, not a resource-upgrade building. Backend-driven, later."
     }
   },
   "troops": {

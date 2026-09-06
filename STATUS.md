@@ -5,8 +5,19 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-05 · **by:** Codex (with boxiwang)
-**Current focus:** Phase 1 — personal-mode MVP (in-city). Mechanics and balance tooling are live locally; 2.5D art direction is documented but not implemented.
+**Last updated:** 2026-09-05 · **by:** Claude (data-balance pass, on Codex's build)
+**Current focus:** Phase 1 — personal-mode MVP (in-city). Data/balance verification & tuning.
+
+### 🧮 Data-balance pass (this session, Claude)
+- **FIXED — per-building upgrade-time monotonicity:** every building's time dipped at L10→L11
+  (L11 upgrade was *faster* than L10; a piecewise-curve seam). Re-sloped L11–30 as a smooth
+  monotonic ramp; 0 non-monotonic steps remain. Re-verified via the headless simulator:
+  **TH10 ≈ 3.0d, TH30 ≈ 123.5d (~4.1 mo)** — still on the 4–5-month target. Only `timeSec`
+  values changed. (Ran the sim in Node: `node --experimental-strip-types` against `simulator.ts`.)
+- **OPEN — resource mix (Cash-lean):** total sink demand is Cash 47.5% / Oil 28% / Power 24.5%,
+  but L30 production is 38.5% / 30.8% / 30.8% → Cash demand/supply ≈ 607h vs Oil 447h / Power 391h.
+  Cash is a ~1.5× harder pinch (oil/power will pile up). **Decide:** raise Bank output ~20% (or trim
+  cash costs) to equalize, OR keep Cash as the intended primary pinch. Not yet changed.
 
 ## 🎯 Decisions locked (this session)
 - **No medieval theme.** Current leading visual exploration is **Degen Freeport**: a prosperous,
