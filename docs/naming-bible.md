@@ -184,7 +184,7 @@
 |---|---|---|---|
 | `base.level` | Personal main-base level (Town Center / TC equivalent) | | classic-SLG TC level; the Bunker has a level |
 | `unit.tier` | Troop/soldier level tiers (T1/T2/T3…) | | |
-| `stat.might` | Personal power score / 战力 (base + troops + tech) | | keep gameplay-driven, NOT buy-to-win |
+| `stat.might` | Personal progression/status score / 战力 = permanent Infrastructure Might + fielded Troop Might; not the combat formula | | keep gameplay-driven, NOT buy-to-win |
 | `spawn.random` | Player spawns at a random map location (not near their faction) | | needs newbie-protection ring |
 | `discovery.same_faction` | Exploring can reveal same-faction members nearby | | |
 | `action.relocate` | Paid relocation to move near others (optional; monetization hook) | | classic SLG teleport |
@@ -221,7 +221,9 @@
 | Key | Concept (anchor — don't change) | Themed Name ✏️ | Why / original |
 |---|---|---|---|
 | `building.keep` | Main keep/TC building; upgrading it (`base.level`) raises capacity & unlocks other buildings | | |
-| `building.barracks` | Building that trains troops over time | | |
+| `building.armyCamp` | Army training building; its level unlocks Army tiers | | |
+| `building.navalBase` | Navy training building; its level unlocks Navy tiers | | |
+| `building.airfield` | Air training building; its level unlocks Air tiers | | |
 | `building.farm` | Building that generates the upkeep resource (`res.food`) | | |
 | `building.mine` | Building that generates the build resource (`res.build`) | | |
 | `sys.build_queue` | Timed construction/upgrade queue (1+ slots) | | |
@@ -267,7 +269,7 @@
 ## 20 · City buildings, resources & troops — full Phase-1 roster (added v0.6)
 
 Owner-defined roster. **Supersedes** the earlier Phase-1 economy sketch: resources are now
-**Cash / Oil / Power** (was build/food/fuel); troop capacity lives on the **Barracks** (Army Camp dropped);
+**Cash / Oil / Power** (was build/food/fuel); each troop arm has its own training building, capacity and queue;
 Watchtower = solo-task board. Values live in `numbers.json`. In-city first; world-map later.
 
 **Resources** — all three are the base cost for upgrading everything; stored in the Warehouse:
@@ -286,7 +288,9 @@ Watchtower = solo-task board. Values live in `numbers.json`. In-city first; worl
 | `building.oilwell` | produces Oil | | 1 | 30 |
 | `building.powerplant` | produces Power | | 1 | 30 |
 | `building.storage` | Warehouse — stores the 3 resources + raid protection | | 2 | 30 |
-| `building.barracks` | trains troops (all arms) + sets max troop capacity | | 1 | 30 |
+| `building.armyCamp` | trains Army; level unlocks Army tiers; Army capacity + queue | | 1 | 30 |
+| `building.navalBase` | trains Navy; level unlocks Navy tiers; Navy capacity + queue | | 2 | 30 |
+| `building.airfield` | trains Air; level unlocks Air tiers; Air capacity + queue | | 4 | 30 |
 | `building.hospital` | heals wounded troops | | 3 | 30 |
 | `building.embassy` | receives allied reinforcement troops (capacity) | | 5 | 30 |
 | `building.wall` | defense value in raids | | 2 | 30 |
@@ -304,7 +308,7 @@ Watchtower = solo-task board. Values live in `numbers.json`. In-city first; worl
 *Defined-now / functional-later:* Academy research nodes (tech tree = Phase 2), Embassy reinforcement
 (needs multiplayer), Milestone server backend, Watchtower task content, outside-city world map.
 *(Retired from Phase-1 active use: `building.mine`/`building.farm` → replaced by bank/oilwell/powerplant;
-`building.camp` dropped, capacity on barracks; `res.build`/`res.food`/`res.fuel` → cash/oil/power.
+the single `building.barracks` split into Army Camp / Naval Base / Airfield; `res.build`/`res.food`/`res.fuel` → cash/oil/power.
 `troop.t1` → army/navy/air.)*
 
 ---
@@ -316,7 +320,8 @@ Townhall to level L, the listed buildings must be at **≥ L−1**. FIXED & know
 players can plan. **Warehouse (`building.storage`) is the always-required anchor** from L3+
 (so storage keeps pace with rising costs; prevents resource-cap dead-ends). Count escalates:
 **2 buildings (L2–19) → 3 (L20–24) → 4 (L25–30)**. The non-anchor slots rotate through the
-producers / Barracks so everything grows; Wall/Embassy/Academy feature in the L25–30 band.
+producers / defense/support buildings. Training buildings are elective specialization branches and are
+not forced as Townhall prerequisites; their own level gates troop tiers.
 L2 is trivial (prebuilt buildings) to keep the newbie funnel smooth. NOT random, NOT hidden —
 that was considered and rejected (hidden/re-roll prereqs = wasted resources = early churn;
 the "don't slack" pressure comes from a full build queue + the escalating count, not randomness).
@@ -324,15 +329,15 @@ the "don't slack" pressure comes from a full build queue + the escalating count,
 **Pacing targets** (data in `numbers.json` → `designTargets`):
 - Townhall **L1→L10 in ~2–3 days** (newbie funnel, guided/deterministic).
 - Townhall **L1→L30 in ~4–5 months** F2P (no speedups, 2 build slots) — driven by TH time +
-  prerequisites (must level ~11 buildings alongside) + resource waits. TH is the long pole;
-  other buildings ≈ 40–50% of TH time.
-- Troops: **T1–T10**, cost ×1.7/tier, time ×1.3/tier; counter **+10% atk**, air>ground>sea>air.
+  prerequisites (must level multiple buildings alongside) + resource waits. Building families use
+  distinct time curves rather than one global side-building ratio.
+- Troops: **T1–T10**, unlocked by the corresponding Army Camp / Naval Base / Airfield level;
+  cost ×1.7/tier, time ×1.3/tier; counter **+10% atk**, air>ground>sea>air.
 - Loot & gather both capped by troop **load**; casualties → wounded (to Hospital cap) then dead.
 - First-version numbers are calibrated to REAL SLG curves (Whiteout Survival / CoC / RoK), not guessed.
 
-*Build note:* current `numbers.json` cost/time/production are still FORMULA placeholders.
-NEXT: migrate to explicit **per-level tables** baked to these targets + a **F2P pacing simulator**
-in the admin to verify 2–3 days to L10 and 4–5 months to L30.
+*Build note:* `numbers.json` now uses explicit building Lv.1–30 and troop T1–T10 tables.
+The local admin includes a deterministic F2P pacing simulator; see `STATUS.md` for the current calibration and next tests.
 
 ---
 

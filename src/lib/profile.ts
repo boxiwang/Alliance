@@ -2,7 +2,7 @@
 export interface Profile {
   address: string;
   name: string;
-  faction: string | null; // token contract address (CA), or null = solo
+  faction: string | null; // alliance token contract address (CA), or null = no alliance
   factionSymbol: string | null;
   keepLevel: number;
   createdAt: string;

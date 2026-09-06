@@ -2,19 +2,17 @@
   "meta": {
     "project": "RUGLANDS",
     "phase": "personal-mode MVP · Slice 1 · in-city",
-    "version": "0.3",
+    "version": "0.6",
     "reference": "CoC-early pacing; economy redefined to Cash/Oil/Power + Navy/Army/Air per owner spec",
-    "curve": "value(L) = round(base * growth^(L-1)); times in seconds; production per hour",
-    "note": "Numeric source of truth, keyed by bible Keys (see docs/naming-bible.md §20). Townhall to L30; shield lifts at L10. Outside-city/world-map is a later phase."
+    "curve": "Explicit per-level tables. Times are seconds; production is per hour.",
+    "note": "Explicit tables. Three training buildings independently gate troop tiers. RSS and troop counts use x1,000 display denominations; Might splits permanent infrastructure from troop power."
   },
-
   "global": {
     "keepGatesEverything": true,
     "buildingMaxLevel": 30,
     "buildingLevelCappedByKeep": true,
     "buildQueueSlots": 2,
     "buildQueueSlotsNote": "2 builders; extra via res.premium later",
-
     "combat": {
       "note": "deterministic-ish, non-destructive. Buildings/keep NEVER destroyed.",
       "attackPower": "sum(troops * troop.attack) * marchBonus",
@@ -26,140 +24,4754 @@
       "woundedNote": "70% of casualties wounded (hospital, healable, capped); 30% dead",
       "keepDefenseBonusPerLevel": 40
     },
-
     "might": {
-      "note": "stat.might = sum(building power per-level * level) + sum(troops * troop.power)",
-      "buildingPowerPerLevel": {
-        "building.keep": 40, "building.bank": 8, "building.oilwell": 8, "building.powerplant": 8,
-        "building.storage": 6, "building.barracks": 12, "building.hospital": 6, "building.embassy": 6,
-        "building.wall": 5, "building.academy": 10, "building.watchtower": 5, "building.milestone": 0
-      }
+      "note": "Total Might = permanent Infrastructure Might + fielded Troop Might. Building rows store cumulative power. Troop power can later fall through losses; buildings never do.",
+      "targetAtMatureCity": "At roughly 60% of max troop capacity: 20-30% infrastructure, 70-80% troops before hero/research/gear systems exist.",
+      "buildingSeedFormula": "buildingWeight × level^4 × 60, baked into explicit per-level rows; tune rows directly after this seed."
     },
-
-    "offline": { "collectorCapHours": 12, "note": "producers bank up to 12h then sit full until collected; storage cap also applies" },
-
+    "offline": {
+      "collectorCapHours": 12,
+      "note": "producers bank up to 12h then sit full until collected; storage cap also applies"
+    },
     "shield": {
       "protectedUntilKeepLevel": 10,
       "breaksOnOffensiveAction": true,
-      "purchasable": { "durationsHours": [8, 24, 72], "priceIn": "res.premium", "priceNote": "tune later" },
+      "purchasable": {
+        "durationsHours": [
+          8,
+          24,
+          72
+        ],
+        "priceIn": "res.premium",
+        "priceNote": "tune later"
+      },
       "note": "sys.shield — new keeps protected until Townhall L10, OR until the player attacks (shield drops). Extra shields purchasable."
     },
-
     "player": {
       "autoNamePattern": "Ruglord{7digits}",
-      "rename": { "firstFree": true, "subsequentCost": { "res.premium": 200 } }
+      "rename": {
+        "firstFree": true,
+        "subsequentCost": {
+          "res.premium": 200
+        }
+      }
     },
-
-    "march": { "capacityFractionOfMaxTroops": 1.0, "baseTravelSecondsPerTile": 6, "note": "sys.march_capacity — world-map phase" }
-  },
-
-  "resources": {
-    "res.cash":  { "produced": true, "producer": "building.bank",       "label": "Cash",  "usedFor": ["construction", "training", "research"] },
-    "res.oil":   { "produced": true, "producer": "building.oilwell",    "label": "Oil",   "usedFor": ["construction", "training", "research"] },
-    "res.power": { "produced": true, "producer": "building.powerplant", "label": "Power", "usedFor": ["construction", "training", "research"] },
-    "res.premium": { "produced": false, "label": "Gems", "note": "premium currency: shields / rename / speedups (monetization)" }
-  },
-
-  "startingLayout": {
-    "keep": 1,
-    "prebuilt": ["building.bank", "building.oilwell", "building.powerplant", "building.barracks"],
-    "startingResources": { "res.cash": 800, "res.oil": 500, "res.power": 500, "res.premium": 50 },
-    "startingTroops": { "troop.army": 0, "troop.navy": 0, "troop.air": 0 }
-  },
-
-  "buildings": {
-    "building.keep": {
-      "unlockAtKeep": 1, "maxLevel": 30,
-      "cost": { "res.cash": {"base":500,"growth":1.45}, "res.oil": {"base":300,"growth":1.45}, "res.power": {"base":300,"growth":1.45} },
-      "time": { "base":60, "growth":1.6 },
-      "role": "Gates everything, unlocks buildings. Shield lifts at L10. Progression to L30."
+    "march": {
+      "capacityFractionOfMaxTroops": 1,
+      "baseTravelSecondsPerTile": 6,
+      "note": "sys.march_capacity — world-map phase"
     },
-    "building.bank":       { "unlockAtKeep": 1, "maxLevel": 30, "produces": "res.cash",  "productionPerHour": {"base":150,"growth":1.35},
-      "cost": { "res.cash": {"base":120,"growth":1.4}, "res.oil": {"base":60,"growth":1.4}, "res.power": {"base":40,"growth":1.4} }, "time": {"base":30,"growth":1.55} },
-    "building.oilwell":    { "unlockAtKeep": 1, "maxLevel": 30, "produces": "res.oil",   "productionPerHour": {"base":120,"growth":1.35},
-      "cost": { "res.cash": {"base":120,"growth":1.4}, "res.power": {"base":60,"growth":1.4} }, "time": {"base":30,"growth":1.55} },
-    "building.powerplant": { "unlockAtKeep": 1, "maxLevel": 30, "produces": "res.power", "productionPerHour": {"base":120,"growth":1.35},
-      "cost": { "res.cash": {"base":120,"growth":1.4}, "res.oil": {"base":60,"growth":1.4} }, "time": {"base":30,"growth":1.55} },
-    "building.storage":    { "unlockAtKeep": 2, "maxLevel": 30, "capacityPerResource": {"base":5000,"growth":1.45}, "protectedFraction": 0.35,
-      "cost": { "res.cash": {"base":140,"growth":1.45}, "res.oil": {"base":80,"growth":1.45}, "res.power": {"base":80,"growth":1.45} }, "time": {"base":40,"growth":1.6} },
-    "building.barracks":   { "unlockAtKeep": 1, "maxLevel": 30, "troopCapacity": {"base":200,"growth":1.28}, "trainSpeedMult": {"base":1.0,"perLevel":0.05}, "trainQueueSize": {"base":20,"growth":1.2},
-      "cost": { "res.cash": {"base":180,"growth":1.5}, "res.oil": {"base":120,"growth":1.5}, "res.power": {"base":90,"growth":1.5} }, "time": {"base":45,"growth":1.6},
-      "role": "Trains all troop types; sets max troop capacity." },
-    "building.hospital":   { "unlockAtKeep": 3, "maxLevel": 30, "woundedCapacity": {"base":150,"growth":1.4}, "healTimePerTroopSec": 2, "healCostPerTroop": { "res.cash": 4 },
-      "cost": { "res.cash": {"base":160,"growth":1.45}, "res.oil": {"base":100,"growth":1.45}, "res.power": {"base":90,"growth":1.45} }, "time": {"base":45,"growth":1.6} },
-    "building.embassy":    { "unlockAtKeep": 5, "maxLevel": 30, "reinforcementCapacity": {"base":100,"growth":1.3},
-      "cost": { "res.cash": {"base":150,"growth":1.4}, "res.oil": {"base":100,"growth":1.4}, "res.power": {"base":80,"growth":1.4} }, "time": {"base":50,"growth":1.6},
-      "role": "Receives allied reinforcement troops (capacity). Reinforcement mechanic = Phase 2." },
-    "building.wall":       { "unlockAtKeep": 2, "maxLevel": 30, "defenseValue": {"base":200,"growth":1.5},
-      "cost": { "res.cash": {"base":100,"growth":1.5}, "res.oil": {"base":80,"growth":1.5}, "res.power": {"base":60,"growth":1.5} }, "time": {"base":35,"growth":1.55} },
-    "building.academy":    { "unlockAtKeep": 4, "maxLevel": 30, "researchBranches": ["troops", "economy", "development"],
-      "cost": { "res.cash": {"base":200,"growth":1.5}, "res.oil": {"base":140,"growth":1.5}, "res.power": {"base":120,"growth":1.5} }, "time": {"base":60,"growth":1.65},
-      "role": "Research Institute: Troops / Economy(RSS) / Development(storage cap, troop count, build speed…). Research nodes = Phase 2." },
-    "building.watchtower": { "unlockAtKeep": 3, "maxLevel": 30, "soloTaskSlots": {"base":2,"growth":1.12},
-      "cost": { "res.cash": {"base":130,"growth":1.4}, "res.oil": {"base":80,"growth":1.4}, "res.power": {"base":70,"growth":1.4} }, "time": {"base":40,"growth":1.55},
-      "role": "Issues solo (PvE) tasks/quests. Task content = later." },
-    "building.milestone":  { "unlockAtKeep": 1, "special": "server_progress", "upgradable": false,
-      "role": "Monument — shows server-wide progress and triggers server-wide rewards. Display/meta, not a resource-upgrade building. Backend-driven, later." }
-  },
-
-  "troops": {
-    "troop.army": { "arm": "ground", "unlockAtKeep": 1, "cost": { "res.cash": 15, "res.oil": 10 }, "trainTimeSec": 6,  "attack": 6,  "defense": 6, "power": 5, "load": 12 },
-    "troop.navy": { "arm": "sea",    "unlockAtKeep": 1, "cost": { "res.cash": 20, "res.oil": 15 }, "trainTimeSec": 9,  "attack": 8,  "defense": 5, "power": 7, "load": 8 },
-    "troop.air":  { "arm": "air",    "unlockAtKeep": 1, "cost": { "res.cash": 25, "res.power": 15 }, "trainTimeSec": 12, "attack": 10, "defense": 4, "power": 9, "load": 6 }
-  },
-
-  "townhallPrerequisites": {
-    "note": "To upgrade Townhall to level L, every listed building must be at >= L-1. FIXED & known (not random), so players can plan. Warehouse (building.storage) is the always-required anchor from L3+ (storage unlocks at TH2). Count escalates 2 (L2-19) / 3 (L20-24) / 4 (L25-30). The 'other' slots rotate through producers/barracks so all grow; Embassy/Wall/Academy featured in the late band. L2 is trivial (prebuilt L1 buildings) to keep the newbie funnel smooth.",
-    "requiresLevel": "L-1",
-    "bands": [
-      { "fromLevel": 2, "toLevel": 19, "count": 2 },
-      { "fromLevel": 20, "toLevel": 24, "count": 3 },
-      { "fromLevel": 25, "toLevel": 30, "count": 4 }
-    ],
-    "perLevel": {
-      "2":  ["building.bank", "building.powerplant"],
-      "3":  ["building.storage", "building.bank"],
-      "4":  ["building.storage", "building.oilwell"],
-      "5":  ["building.storage", "building.powerplant"],
-      "6":  ["building.storage", "building.bank"],
-      "7":  ["building.storage", "building.oilwell"],
-      "8":  ["building.storage", "building.powerplant"],
-      "9":  ["building.storage", "building.bank"],
-      "10": ["building.storage", "building.oilwell"],
-      "11": ["building.storage", "building.powerplant"],
-      "12": ["building.storage", "building.bank"],
-      "13": ["building.storage", "building.oilwell"],
-      "14": ["building.storage", "building.powerplant"],
-      "15": ["building.storage", "building.bank"],
-      "16": ["building.storage", "building.oilwell"],
-      "17": ["building.storage", "building.powerplant"],
-      "18": ["building.storage", "building.bank"],
-      "19": ["building.storage", "building.oilwell"],
-      "20": ["building.storage", "building.barracks", "building.powerplant"],
-      "21": ["building.storage", "building.barracks", "building.bank"],
-      "22": ["building.storage", "building.barracks", "building.oilwell"],
-      "23": ["building.storage", "building.barracks", "building.powerplant"],
-      "24": ["building.storage", "building.barracks", "building.bank"],
-      "25": ["building.storage", "building.barracks", "building.oilwell", "building.wall"],
-      "26": ["building.storage", "building.barracks", "building.powerplant", "building.embassy"],
-      "27": ["building.storage", "building.barracks", "building.bank", "building.wall"],
-      "28": ["building.storage", "building.barracks", "building.oilwell", "building.embassy"],
-      "29": ["building.storage", "building.barracks", "building.powerplant", "building.academy"],
-      "30": ["building.storage", "building.barracks", "building.bank", "building.embassy"]
+    "display": {
+      "resourceMultiplier": 1000,
+      "troopMultiplier": 1000,
+      "note": "Presentation denomination only: 1 internal resource/troop batch is shown as 1,000 units. Economy timing and queue math remain unchanged."
     }
   },
-
+  "resources": {
+    "res.cash": {
+      "produced": true,
+      "producer": "building.bank",
+      "label": "Cash",
+      "usedFor": [
+        "construction",
+        "training",
+        "research"
+      ]
+    },
+    "res.oil": {
+      "produced": true,
+      "producer": "building.oilwell",
+      "label": "Oil",
+      "usedFor": [
+        "construction",
+        "training",
+        "research"
+      ]
+    },
+    "res.power": {
+      "produced": true,
+      "producer": "building.powerplant",
+      "label": "Power",
+      "usedFor": [
+        "construction",
+        "training",
+        "research"
+      ]
+    },
+    "res.premium": {
+      "produced": false,
+      "label": "Gems",
+      "note": "premium currency: shields / rename / speedups (monetization)"
+    }
+  },
+  "startingLayout": {
+    "keep": 1,
+    "prebuilt": [
+      "building.bank",
+      "building.oilwell",
+      "building.powerplant",
+      "building.armyCamp"
+    ],
+    "startingResources": {
+      "res.cash": 2000,
+      "res.oil": 1500,
+      "res.power": 1500,
+      "res.premium": 50
+    },
+    "startingTroops": {
+      "troop.army": 0,
+      "troop.navy": 0,
+      "troop.air": 0
+    }
+  },
+  "buildings": {
+    "building.keep": {
+      "unlockAtKeep": 1,
+      "maxLevel": 30,
+      "role": "Gates everything, unlocks buildings. Shield lifts at L10. Progression to L30.",
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 500,
+            "res.oil": 300,
+            "res.power": 300
+          },
+          "timeSec": 0,
+          "might": 2400
+        },
+        "2": {
+          "cost": {
+            "res.cash": 750,
+            "res.oil": 450,
+            "res.power": 450
+          },
+          "timeSec": 60,
+          "might": 38400
+        },
+        "3": {
+          "cost": {
+            "res.cash": 1100,
+            "res.oil": 680,
+            "res.power": 680
+          },
+          "timeSec": 300,
+          "might": 194400
+        },
+        "4": {
+          "cost": {
+            "res.cash": 1700,
+            "res.oil": 1000,
+            "res.power": 1000
+          },
+          "timeSec": 900,
+          "might": 614400
+        },
+        "5": {
+          "cost": {
+            "res.cash": 2500,
+            "res.oil": 1500,
+            "res.power": 1500
+          },
+          "timeSec": 2700,
+          "might": 1500000
+        },
+        "6": {
+          "cost": {
+            "res.cash": 3800,
+            "res.oil": 2300,
+            "res.power": 2300
+          },
+          "timeSec": 7200,
+          "might": 3110400
+        },
+        "7": {
+          "cost": {
+            "res.cash": 5700,
+            "res.oil": 3400,
+            "res.power": 3400
+          },
+          "timeSec": 14400,
+          "might": 5762400
+        },
+        "8": {
+          "cost": {
+            "res.cash": 8500,
+            "res.oil": 5100,
+            "res.power": 5100
+          },
+          "timeSec": 28800,
+          "might": 9830400
+        },
+        "9": {
+          "cost": {
+            "res.cash": 13000,
+            "res.oil": 7700,
+            "res.power": 7700
+          },
+          "timeSec": 43200,
+          "might": 15746400
+        },
+        "10": {
+          "cost": {
+            "res.cash": 19000,
+            "res.oil": 12000,
+            "res.power": 12000
+          },
+          "timeSec": 64800,
+          "might": 24000000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 27000,
+            "res.oil": 16000,
+            "res.power": 16000
+          },
+          "timeSec": 32400,
+          "might": 35138400
+        },
+        "12": {
+          "cost": {
+            "res.cash": 38000,
+            "res.oil": 23000,
+            "res.power": 23000
+          },
+          "timeSec": 43200,
+          "might": 49766400
+        },
+        "13": {
+          "cost": {
+            "res.cash": 53000,
+            "res.oil": 32000,
+            "res.power": 32000
+          },
+          "timeSec": 54000,
+          "might": 68546400
+        },
+        "14": {
+          "cost": {
+            "res.cash": 74000,
+            "res.oil": 44000,
+            "res.power": 44000
+          },
+          "timeSec": 72000,
+          "might": 92198400
+        },
+        "15": {
+          "cost": {
+            "res.cash": 100000,
+            "res.oil": 62000,
+            "res.power": 62000
+          },
+          "timeSec": 93600,
+          "might": 121500000
+        },
+        "16": {
+          "cost": {
+            "res.cash": 140000,
+            "res.oil": 87000,
+            "res.power": 87000
+          },
+          "timeSec": 118800,
+          "might": 157286400
+        },
+        "17": {
+          "cost": {
+            "res.cash": 200000,
+            "res.oil": 120000,
+            "res.power": 120000
+          },
+          "timeSec": 151200,
+          "might": 200450400
+        },
+        "18": {
+          "cost": {
+            "res.cash": 280000,
+            "res.oil": 170000,
+            "res.power": 170000
+          },
+          "timeSec": 194400,
+          "might": 251942400
+        },
+        "19": {
+          "cost": {
+            "res.cash": 400000,
+            "res.oil": 240000,
+            "res.power": 240000
+          },
+          "timeSec": 237600,
+          "might": 312770400
+        },
+        "20": {
+          "cost": {
+            "res.cash": 560000,
+            "res.oil": 330000,
+            "res.power": 330000
+          },
+          "timeSec": 280800,
+          "might": 384000000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 780000,
+            "res.oil": 470000,
+            "res.power": 470000
+          },
+          "timeSec": 324000,
+          "might": 466754400
+        },
+        "22": {
+          "cost": {
+            "res.cash": 1100000,
+            "res.oil": 650000,
+            "res.power": 650000
+          },
+          "timeSec": 367200,
+          "might": 562214400
+        },
+        "23": {
+          "cost": {
+            "res.cash": 1500000,
+            "res.oil": 920000,
+            "res.power": 920000
+          },
+          "timeSec": 410400,
+          "might": 671618400
+        },
+        "24": {
+          "cost": {
+            "res.cash": 2100000,
+            "res.oil": 1300000,
+            "res.power": 1300000
+          },
+          "timeSec": 453600,
+          "might": 796262400
+        },
+        "25": {
+          "cost": {
+            "res.cash": 3000000,
+            "res.oil": 1800000,
+            "res.power": 1800000
+          },
+          "timeSec": 496800,
+          "might": 937500000
+        },
+        "26": {
+          "cost": {
+            "res.cash": 4200000,
+            "res.oil": 2500000,
+            "res.power": 2500000
+          },
+          "timeSec": 540000,
+          "might": 1096742400
+        },
+        "27": {
+          "cost": {
+            "res.cash": 5900000,
+            "res.oil": 3500000,
+            "res.power": 3500000
+          },
+          "timeSec": 583200,
+          "might": 1275458400
+        },
+        "28": {
+          "cost": {
+            "res.cash": 8200000,
+            "res.oil": 4900000,
+            "res.power": 4900000
+          },
+          "timeSec": 626400,
+          "might": 1475174400
+        },
+        "29": {
+          "cost": {
+            "res.cash": 11000000,
+            "res.oil": 6900000,
+            "res.power": 6900000
+          },
+          "timeSec": 669600,
+          "might": 1697474400
+        },
+        "30": {
+          "cost": {
+            "res.cash": 16000000,
+            "res.oil": 9600000,
+            "res.power": 9600000
+          },
+          "timeSec": 734400,
+          "might": 1944000000
+        }
+      }
+    },
+    "building.bank": {
+      "unlockAtKeep": 1,
+      "maxLevel": 30,
+      "produces": "res.cash",
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 120,
+            "res.oil": 60,
+            "res.power": 40
+          },
+          "timeSec": 0,
+          "productionPerHour": 675,
+          "might": 480
+        },
+        "2": {
+          "cost": {
+            "res.cash": 180,
+            "res.oil": 90,
+            "res.power": 60
+          },
+          "timeSec": 13,
+          "productionPerHour": 900,
+          "might": 7680
+        },
+        "3": {
+          "cost": {
+            "res.cash": 270,
+            "res.oil": 140,
+            "res.power": 90
+          },
+          "timeSec": 66,
+          "productionPerHour": 1125,
+          "might": 38880
+        },
+        "4": {
+          "cost": {
+            "res.cash": 410,
+            "res.oil": 200,
+            "res.power": 140
+          },
+          "timeSec": 198,
+          "productionPerHour": 1485,
+          "might": 122880
+        },
+        "5": {
+          "cost": {
+            "res.cash": 610,
+            "res.oil": 300,
+            "res.power": 200
+          },
+          "timeSec": 594,
+          "productionPerHour": 1935,
+          "might": 300000
+        },
+        "6": {
+          "cost": {
+            "res.cash": 910,
+            "res.oil": 460,
+            "res.power": 300
+          },
+          "timeSec": 1584,
+          "productionPerHour": 2520,
+          "might": 622080
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1400,
+            "res.oil": 680,
+            "res.power": 460
+          },
+          "timeSec": 3168,
+          "productionPerHour": 3240,
+          "might": 1152480
+        },
+        "8": {
+          "cost": {
+            "res.cash": 2100,
+            "res.oil": 1000,
+            "res.power": 680
+          },
+          "timeSec": 6336,
+          "productionPerHour": 4230,
+          "might": 1966080
+        },
+        "9": {
+          "cost": {
+            "res.cash": 3100,
+            "res.oil": 1500,
+            "res.power": 1000
+          },
+          "timeSec": 9504,
+          "productionPerHour": 5400,
+          "might": 3149280
+        },
+        "10": {
+          "cost": {
+            "res.cash": 4600,
+            "res.oil": 2300,
+            "res.power": 1500
+          },
+          "timeSec": 14256,
+          "productionPerHour": 7200,
+          "might": 4800000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 6500,
+            "res.oil": 3200,
+            "res.power": 2200
+          },
+          "timeSec": 7128,
+          "productionPerHour": 8550,
+          "might": 7027680
+        },
+        "12": {
+          "cost": {
+            "res.cash": 9000,
+            "res.oil": 4500,
+            "res.power": 3000
+          },
+          "timeSec": 9504,
+          "productionPerHour": 10800,
+          "might": 9953280
+        },
+        "13": {
+          "cost": {
+            "res.cash": 13000,
+            "res.oil": 6300,
+            "res.power": 4200
+          },
+          "timeSec": 11880,
+          "productionPerHour": 13050,
+          "might": 13709280
+        },
+        "14": {
+          "cost": {
+            "res.cash": 18000,
+            "res.oil": 8900,
+            "res.power": 5900
+          },
+          "timeSec": 15840,
+          "productionPerHour": 15750,
+          "might": 18439680
+        },
+        "15": {
+          "cost": {
+            "res.cash": 25000,
+            "res.oil": 12000,
+            "res.power": 8300
+          },
+          "timeSec": 20592,
+          "productionPerHour": 19350,
+          "might": 24300000
+        },
+        "16": {
+          "cost": {
+            "res.cash": 35000,
+            "res.oil": 17000,
+            "res.power": 12000
+          },
+          "timeSec": 26136,
+          "productionPerHour": 23400,
+          "might": 31457280
+        },
+        "17": {
+          "cost": {
+            "res.cash": 49000,
+            "res.oil": 24000,
+            "res.power": 16000
+          },
+          "timeSec": 33264,
+          "productionPerHour": 28800,
+          "might": 40090080
+        },
+        "18": {
+          "cost": {
+            "res.cash": 68000,
+            "res.oil": 34000,
+            "res.power": 23000
+          },
+          "timeSec": 42768,
+          "productionPerHour": 35100,
+          "might": 50388480
+        },
+        "19": {
+          "cost": {
+            "res.cash": 95000,
+            "res.oil": 48000,
+            "res.power": 32000
+          },
+          "timeSec": 52272,
+          "productionPerHour": 42750,
+          "might": 62554080
+        },
+        "20": {
+          "cost": {
+            "res.cash": 130000,
+            "res.oil": 67000,
+            "res.power": 44000
+          },
+          "timeSec": 61776,
+          "productionPerHour": 54000,
+          "might": 76800000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 190000,
+            "res.oil": 93000,
+            "res.power": 62000
+          },
+          "timeSec": 71280,
+          "productionPerHour": 63000,
+          "might": 93350880
+        },
+        "22": {
+          "cost": {
+            "res.cash": 260000,
+            "res.oil": 130000,
+            "res.power": 87000
+          },
+          "timeSec": 80784,
+          "productionPerHour": 76500,
+          "might": 112442880
+        },
+        "23": {
+          "cost": {
+            "res.cash": 370000,
+            "res.oil": 180000,
+            "res.power": 120000
+          },
+          "timeSec": 90288,
+          "productionPerHour": 94500,
+          "might": 134323680
+        },
+        "24": {
+          "cost": {
+            "res.cash": 510000,
+            "res.oil": 260000,
+            "res.power": 170000
+          },
+          "timeSec": 99792,
+          "productionPerHour": 117000,
+          "might": 159252480
+        },
+        "25": {
+          "cost": {
+            "res.cash": 720000,
+            "res.oil": 360000,
+            "res.power": 240000
+          },
+          "timeSec": 109296,
+          "productionPerHour": 139500,
+          "might": 187500000
+        },
+        "26": {
+          "cost": {
+            "res.cash": 1000000,
+            "res.oil": 500000,
+            "res.power": 330000
+          },
+          "timeSec": 118800,
+          "productionPerHour": 171000,
+          "might": 219348480
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1400000,
+            "res.oil": 700000,
+            "res.power": 470000
+          },
+          "timeSec": 128304,
+          "productionPerHour": 211500,
+          "might": 255091680
+        },
+        "28": {
+          "cost": {
+            "res.cash": 2000000,
+            "res.oil": 980000,
+            "res.power": 660000
+          },
+          "timeSec": 137808,
+          "productionPerHour": 256500,
+          "might": 295034880
+        },
+        "29": {
+          "cost": {
+            "res.cash": 2800000,
+            "res.oil": 1400000,
+            "res.power": 920000
+          },
+          "timeSec": 147312,
+          "productionPerHour": 315000,
+          "might": 339494880
+        },
+        "30": {
+          "cost": {
+            "res.cash": 3900000,
+            "res.oil": 1900000,
+            "res.power": 1300000
+          },
+          "timeSec": 161568,
+          "productionPerHour": 382500,
+          "might": 388800000
+        }
+      }
+    },
+    "building.oilwell": {
+      "unlockAtKeep": 1,
+      "maxLevel": 30,
+      "produces": "res.oil",
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 120,
+            "res.power": 60
+          },
+          "timeSec": 0,
+          "productionPerHour": 540,
+          "might": 480
+        },
+        "2": {
+          "cost": {
+            "res.cash": 180,
+            "res.power": 90
+          },
+          "timeSec": 13,
+          "productionPerHour": 720,
+          "might": 7680
+        },
+        "3": {
+          "cost": {
+            "res.cash": 270,
+            "res.power": 140
+          },
+          "timeSec": 66,
+          "productionPerHour": 900,
+          "might": 38880
+        },
+        "4": {
+          "cost": {
+            "res.cash": 410,
+            "res.power": 200
+          },
+          "timeSec": 198,
+          "productionPerHour": 1170,
+          "might": 122880
+        },
+        "5": {
+          "cost": {
+            "res.cash": 610,
+            "res.power": 300
+          },
+          "timeSec": 594,
+          "productionPerHour": 1530,
+          "might": 300000
+        },
+        "6": {
+          "cost": {
+            "res.cash": 910,
+            "res.power": 460
+          },
+          "timeSec": 1584,
+          "productionPerHour": 2025,
+          "might": 622080
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1400,
+            "res.power": 680
+          },
+          "timeSec": 3168,
+          "productionPerHour": 2610,
+          "might": 1152480
+        },
+        "8": {
+          "cost": {
+            "res.cash": 2100,
+            "res.power": 1000
+          },
+          "timeSec": 6336,
+          "productionPerHour": 3375,
+          "might": 1966080
+        },
+        "9": {
+          "cost": {
+            "res.cash": 3100,
+            "res.power": 1500
+          },
+          "timeSec": 9504,
+          "productionPerHour": 4410,
+          "might": 3149280
+        },
+        "10": {
+          "cost": {
+            "res.cash": 4600,
+            "res.power": 2300
+          },
+          "timeSec": 14256,
+          "productionPerHour": 5850,
+          "might": 4800000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 6500,
+            "res.power": 3200
+          },
+          "timeSec": 7128,
+          "productionPerHour": 7200,
+          "might": 7027680
+        },
+        "12": {
+          "cost": {
+            "res.cash": 9000,
+            "res.power": 4500
+          },
+          "timeSec": 9504,
+          "productionPerHour": 8550,
+          "might": 9953280
+        },
+        "13": {
+          "cost": {
+            "res.cash": 13000,
+            "res.power": 6300
+          },
+          "timeSec": 11880,
+          "productionPerHour": 10350,
+          "might": 13709280
+        },
+        "14": {
+          "cost": {
+            "res.cash": 18000,
+            "res.power": 8900
+          },
+          "timeSec": 15840,
+          "productionPerHour": 12600,
+          "might": 18439680
+        },
+        "15": {
+          "cost": {
+            "res.cash": 25000,
+            "res.power": 12000
+          },
+          "timeSec": 20592,
+          "productionPerHour": 15300,
+          "might": 24300000
+        },
+        "16": {
+          "cost": {
+            "res.cash": 35000,
+            "res.power": 17000
+          },
+          "timeSec": 26136,
+          "productionPerHour": 18900,
+          "might": 31457280
+        },
+        "17": {
+          "cost": {
+            "res.cash": 49000,
+            "res.power": 24000
+          },
+          "timeSec": 33264,
+          "productionPerHour": 22950,
+          "might": 40090080
+        },
+        "18": {
+          "cost": {
+            "res.cash": 68000,
+            "res.power": 34000
+          },
+          "timeSec": 42768,
+          "productionPerHour": 27900,
+          "might": 50388480
+        },
+        "19": {
+          "cost": {
+            "res.cash": 95000,
+            "res.power": 48000
+          },
+          "timeSec": 52272,
+          "productionPerHour": 34200,
+          "might": 62554080
+        },
+        "20": {
+          "cost": {
+            "res.cash": 130000,
+            "res.power": 67000
+          },
+          "timeSec": 61776,
+          "productionPerHour": 41850,
+          "might": 76800000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 190000,
+            "res.power": 93000
+          },
+          "timeSec": 71280,
+          "productionPerHour": 49500,
+          "might": 93350880
+        },
+        "22": {
+          "cost": {
+            "res.cash": 260000,
+            "res.power": 130000
+          },
+          "timeSec": 80784,
+          "productionPerHour": 63000,
+          "might": 112442880
+        },
+        "23": {
+          "cost": {
+            "res.cash": 370000,
+            "res.power": 180000
+          },
+          "timeSec": 90288,
+          "productionPerHour": 76500,
+          "might": 134323680
+        },
+        "24": {
+          "cost": {
+            "res.cash": 510000,
+            "res.power": 260000
+          },
+          "timeSec": 99792,
+          "productionPerHour": 94500,
+          "might": 159252480
+        },
+        "25": {
+          "cost": {
+            "res.cash": 720000,
+            "res.power": 360000
+          },
+          "timeSec": 109296,
+          "productionPerHour": 112500,
+          "might": 187500000
+        },
+        "26": {
+          "cost": {
+            "res.cash": 1000000,
+            "res.power": 500000
+          },
+          "timeSec": 118800,
+          "productionPerHour": 139500,
+          "might": 219348480
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1400000,
+            "res.power": 700000
+          },
+          "timeSec": 128304,
+          "productionPerHour": 166500,
+          "might": 255091680
+        },
+        "28": {
+          "cost": {
+            "res.cash": 2000000,
+            "res.power": 980000
+          },
+          "timeSec": 137808,
+          "productionPerHour": 207000,
+          "might": 295034880
+        },
+        "29": {
+          "cost": {
+            "res.cash": 2800000,
+            "res.power": 1400000
+          },
+          "timeSec": 147312,
+          "productionPerHour": 252000,
+          "might": 339494880
+        },
+        "30": {
+          "cost": {
+            "res.cash": 3900000,
+            "res.power": 1900000
+          },
+          "timeSec": 161568,
+          "productionPerHour": 306000,
+          "might": 388800000
+        }
+      }
+    },
+    "building.powerplant": {
+      "unlockAtKeep": 1,
+      "maxLevel": 30,
+      "produces": "res.power",
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 120,
+            "res.oil": 60
+          },
+          "timeSec": 0,
+          "productionPerHour": 540,
+          "might": 480
+        },
+        "2": {
+          "cost": {
+            "res.cash": 180,
+            "res.oil": 90
+          },
+          "timeSec": 13,
+          "productionPerHour": 720,
+          "might": 7680
+        },
+        "3": {
+          "cost": {
+            "res.cash": 270,
+            "res.oil": 140
+          },
+          "timeSec": 66,
+          "productionPerHour": 900,
+          "might": 38880
+        },
+        "4": {
+          "cost": {
+            "res.cash": 410,
+            "res.oil": 200
+          },
+          "timeSec": 198,
+          "productionPerHour": 1170,
+          "might": 122880
+        },
+        "5": {
+          "cost": {
+            "res.cash": 610,
+            "res.oil": 300
+          },
+          "timeSec": 594,
+          "productionPerHour": 1530,
+          "might": 300000
+        },
+        "6": {
+          "cost": {
+            "res.cash": 910,
+            "res.oil": 460
+          },
+          "timeSec": 1584,
+          "productionPerHour": 2025,
+          "might": 622080
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1400,
+            "res.oil": 680
+          },
+          "timeSec": 3168,
+          "productionPerHour": 2610,
+          "might": 1152480
+        },
+        "8": {
+          "cost": {
+            "res.cash": 2100,
+            "res.oil": 1000
+          },
+          "timeSec": 6336,
+          "productionPerHour": 3375,
+          "might": 1966080
+        },
+        "9": {
+          "cost": {
+            "res.cash": 3100,
+            "res.oil": 1500
+          },
+          "timeSec": 9504,
+          "productionPerHour": 4410,
+          "might": 3149280
+        },
+        "10": {
+          "cost": {
+            "res.cash": 4600,
+            "res.oil": 2300
+          },
+          "timeSec": 14256,
+          "productionPerHour": 5850,
+          "might": 4800000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 6500,
+            "res.oil": 3200
+          },
+          "timeSec": 7128,
+          "productionPerHour": 7200,
+          "might": 7027680
+        },
+        "12": {
+          "cost": {
+            "res.cash": 9000,
+            "res.oil": 4500
+          },
+          "timeSec": 9504,
+          "productionPerHour": 8550,
+          "might": 9953280
+        },
+        "13": {
+          "cost": {
+            "res.cash": 13000,
+            "res.oil": 6300
+          },
+          "timeSec": 11880,
+          "productionPerHour": 10350,
+          "might": 13709280
+        },
+        "14": {
+          "cost": {
+            "res.cash": 18000,
+            "res.oil": 8900
+          },
+          "timeSec": 15840,
+          "productionPerHour": 12600,
+          "might": 18439680
+        },
+        "15": {
+          "cost": {
+            "res.cash": 25000,
+            "res.oil": 12000
+          },
+          "timeSec": 20592,
+          "productionPerHour": 15300,
+          "might": 24300000
+        },
+        "16": {
+          "cost": {
+            "res.cash": 35000,
+            "res.oil": 17000
+          },
+          "timeSec": 26136,
+          "productionPerHour": 18900,
+          "might": 31457280
+        },
+        "17": {
+          "cost": {
+            "res.cash": 49000,
+            "res.oil": 24000
+          },
+          "timeSec": 33264,
+          "productionPerHour": 22950,
+          "might": 40090080
+        },
+        "18": {
+          "cost": {
+            "res.cash": 68000,
+            "res.oil": 34000
+          },
+          "timeSec": 42768,
+          "productionPerHour": 27900,
+          "might": 50388480
+        },
+        "19": {
+          "cost": {
+            "res.cash": 95000,
+            "res.oil": 48000
+          },
+          "timeSec": 52272,
+          "productionPerHour": 34200,
+          "might": 62554080
+        },
+        "20": {
+          "cost": {
+            "res.cash": 130000,
+            "res.oil": 67000
+          },
+          "timeSec": 61776,
+          "productionPerHour": 41850,
+          "might": 76800000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 190000,
+            "res.oil": 93000
+          },
+          "timeSec": 71280,
+          "productionPerHour": 49500,
+          "might": 93350880
+        },
+        "22": {
+          "cost": {
+            "res.cash": 260000,
+            "res.oil": 130000
+          },
+          "timeSec": 80784,
+          "productionPerHour": 63000,
+          "might": 112442880
+        },
+        "23": {
+          "cost": {
+            "res.cash": 370000,
+            "res.oil": 180000
+          },
+          "timeSec": 90288,
+          "productionPerHour": 76500,
+          "might": 134323680
+        },
+        "24": {
+          "cost": {
+            "res.cash": 510000,
+            "res.oil": 260000
+          },
+          "timeSec": 99792,
+          "productionPerHour": 94500,
+          "might": 159252480
+        },
+        "25": {
+          "cost": {
+            "res.cash": 720000,
+            "res.oil": 360000
+          },
+          "timeSec": 109296,
+          "productionPerHour": 112500,
+          "might": 187500000
+        },
+        "26": {
+          "cost": {
+            "res.cash": 1000000,
+            "res.oil": 500000
+          },
+          "timeSec": 118800,
+          "productionPerHour": 139500,
+          "might": 219348480
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1400000,
+            "res.oil": 700000
+          },
+          "timeSec": 128304,
+          "productionPerHour": 166500,
+          "might": 255091680
+        },
+        "28": {
+          "cost": {
+            "res.cash": 2000000,
+            "res.oil": 980000
+          },
+          "timeSec": 137808,
+          "productionPerHour": 207000,
+          "might": 295034880
+        },
+        "29": {
+          "cost": {
+            "res.cash": 2800000,
+            "res.oil": 1400000
+          },
+          "timeSec": 147312,
+          "productionPerHour": 252000,
+          "might": 339494880
+        },
+        "30": {
+          "cost": {
+            "res.cash": 3900000,
+            "res.oil": 1900000
+          },
+          "timeSec": 161568,
+          "productionPerHour": 306000,
+          "might": 388800000
+        }
+      }
+    },
+    "building.storage": {
+      "unlockAtKeep": 2,
+      "maxLevel": 30,
+      "protectedFraction": 0.35,
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 140,
+            "res.oil": 80,
+            "res.power": 80
+          },
+          "timeSec": 0,
+          "capacityPerResource": 5000,
+          "might": 360
+        },
+        "2": {
+          "cost": {
+            "res.cash": 210,
+            "res.oil": 120,
+            "res.power": 120
+          },
+          "timeSec": 12,
+          "capacityPerResource": 7000,
+          "might": 5760
+        },
+        "3": {
+          "cost": {
+            "res.cash": 320,
+            "res.oil": 180,
+            "res.power": 180
+          },
+          "timeSec": 60,
+          "capacityPerResource": 9800,
+          "might": 29160
+        },
+        "4": {
+          "cost": {
+            "res.cash": 470,
+            "res.oil": 270,
+            "res.power": 270
+          },
+          "timeSec": 180,
+          "capacityPerResource": 14000,
+          "might": 92160
+        },
+        "5": {
+          "cost": {
+            "res.cash": 710,
+            "res.oil": 410,
+            "res.power": 410
+          },
+          "timeSec": 540,
+          "capacityPerResource": 19000,
+          "might": 225000
+        },
+        "6": {
+          "cost": {
+            "res.cash": 1100,
+            "res.oil": 610,
+            "res.power": 610
+          },
+          "timeSec": 1440,
+          "capacityPerResource": 27000,
+          "might": 466560
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1600,
+            "res.oil": 910,
+            "res.power": 910
+          },
+          "timeSec": 2880,
+          "capacityPerResource": 38000,
+          "might": 864360
+        },
+        "8": {
+          "cost": {
+            "res.cash": 2400,
+            "res.oil": 1400,
+            "res.power": 1400
+          },
+          "timeSec": 5760,
+          "capacityPerResource": 53000,
+          "might": 1474560
+        },
+        "9": {
+          "cost": {
+            "res.cash": 3600,
+            "res.oil": 2100,
+            "res.power": 2100
+          },
+          "timeSec": 8640,
+          "capacityPerResource": 74000,
+          "might": 2361960
+        },
+        "10": {
+          "cost": {
+            "res.cash": 5400,
+            "res.oil": 3100,
+            "res.power": 3100
+          },
+          "timeSec": 12960,
+          "capacityPerResource": 100000,
+          "might": 3600000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 7500,
+            "res.oil": 4300,
+            "res.power": 4300
+          },
+          "timeSec": 6480,
+          "capacityPerResource": 140000,
+          "might": 5270760
+        },
+        "12": {
+          "cost": {
+            "res.cash": 11000,
+            "res.oil": 6000,
+            "res.power": 6000
+          },
+          "timeSec": 8640,
+          "capacityPerResource": 180000,
+          "might": 7464960
+        },
+        "13": {
+          "cost": {
+            "res.cash": 15000,
+            "res.oil": 8400,
+            "res.power": 8400
+          },
+          "timeSec": 10800,
+          "capacityPerResource": 240000,
+          "might": 10281960
+        },
+        "14": {
+          "cost": {
+            "res.cash": 21000,
+            "res.oil": 12000,
+            "res.power": 12000
+          },
+          "timeSec": 14400,
+          "capacityPerResource": 310000,
+          "might": 13829760
+        },
+        "15": {
+          "cost": {
+            "res.cash": 29000,
+            "res.oil": 17000,
+            "res.power": 17000
+          },
+          "timeSec": 18720,
+          "capacityPerResource": 410000,
+          "might": 18225000
+        },
+        "16": {
+          "cost": {
+            "res.cash": 41000,
+            "res.oil": 23000,
+            "res.power": 23000
+          },
+          "timeSec": 23760,
+          "capacityPerResource": 550000,
+          "might": 23592960
+        },
+        "17": {
+          "cost": {
+            "res.cash": 57000,
+            "res.oil": 32000,
+            "res.power": 32000
+          },
+          "timeSec": 30240,
+          "capacityPerResource": 720000,
+          "might": 30067560
+        },
+        "18": {
+          "cost": {
+            "res.cash": 79000,
+            "res.oil": 45000,
+            "res.power": 45000
+          },
+          "timeSec": 38880,
+          "capacityPerResource": 950000,
+          "might": 37791360
+        },
+        "19": {
+          "cost": {
+            "res.cash": 110000,
+            "res.oil": 64000,
+            "res.power": 64000
+          },
+          "timeSec": 47520,
+          "capacityPerResource": 1300000,
+          "might": 46915560
+        },
+        "20": {
+          "cost": {
+            "res.cash": 160000,
+            "res.oil": 89000,
+            "res.power": 89000
+          },
+          "timeSec": 56160,
+          "capacityPerResource": 1700000,
+          "might": 57600000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 220000,
+            "res.oil": 120000,
+            "res.power": 120000
+          },
+          "timeSec": 64800,
+          "capacityPerResource": 2200000,
+          "might": 70013160
+        },
+        "22": {
+          "cost": {
+            "res.cash": 310000,
+            "res.oil": 170000,
+            "res.power": 170000
+          },
+          "timeSec": 73440,
+          "capacityPerResource": 2900000,
+          "might": 84332160
+        },
+        "23": {
+          "cost": {
+            "res.cash": 430000,
+            "res.oil": 240000,
+            "res.power": 240000
+          },
+          "timeSec": 82080,
+          "capacityPerResource": 3800000,
+          "might": 100742760
+        },
+        "24": {
+          "cost": {
+            "res.cash": 600000,
+            "res.oil": 340000,
+            "res.power": 340000
+          },
+          "timeSec": 90720,
+          "capacityPerResource": 5000000,
+          "might": 119439360
+        },
+        "25": {
+          "cost": {
+            "res.cash": 840000,
+            "res.oil": 480000,
+            "res.power": 480000
+          },
+          "timeSec": 99360,
+          "capacityPerResource": 6600000,
+          "might": 140625000
+        },
+        "26": {
+          "cost": {
+            "res.cash": 1200000,
+            "res.oil": 670000,
+            "res.power": 670000
+          },
+          "timeSec": 108000,
+          "capacityPerResource": 8800000,
+          "might": 164511360
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1600000,
+            "res.oil": 940000,
+            "res.power": 940000
+          },
+          "timeSec": 116640,
+          "capacityPerResource": 12000000,
+          "might": 191318760
+        },
+        "28": {
+          "cost": {
+            "res.cash": 2300000,
+            "res.oil": 1300000,
+            "res.power": 1300000
+          },
+          "timeSec": 125280,
+          "capacityPerResource": 15000000,
+          "might": 221276160
+        },
+        "29": {
+          "cost": {
+            "res.cash": 3200000,
+            "res.oil": 1800000,
+            "res.power": 1800000
+          },
+          "timeSec": 133920,
+          "capacityPerResource": 20000000,
+          "might": 254621160
+        },
+        "30": {
+          "cost": {
+            "res.cash": 4500000,
+            "res.oil": 2600000,
+            "res.power": 2600000
+          },
+          "timeSec": 146880,
+          "capacityPerResource": 27000000,
+          "might": 291600000
+        }
+      }
+    },
+    "building.armyCamp": {
+      "unlockAtKeep": 1,
+      "maxLevel": 30,
+      "role": "Trains Army units. Its level unlocks Army tiers and raises Army capacity and training throughput.",
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 99,
+            "res.oil": 66,
+            "res.power": 50
+          },
+          "timeSec": 0,
+          "troopCapacity": 67,
+          "trainQueueSize": 20,
+          "trainSpeedMult": 1,
+          "might": 480
+        },
+        "2": {
+          "cost": {
+            "res.cash": 149,
+            "res.oil": 99,
+            "res.power": 77
+          },
+          "timeSec": 12,
+          "troopCapacity": 87,
+          "trainQueueSize": 24,
+          "trainSpeedMult": 1.05,
+          "might": 7680
+        },
+        "3": {
+          "cost": {
+            "res.cash": 226,
+            "res.oil": 149,
+            "res.power": 110
+          },
+          "timeSec": 59,
+          "troopCapacity": 110,
+          "trainQueueSize": 29,
+          "trainSpeedMult": 1.1,
+          "might": 38880
+        },
+        "4": {
+          "cost": {
+            "res.cash": 336,
+            "res.oil": 226,
+            "res.power": 165
+          },
+          "timeSec": 176,
+          "troopCapacity": 140,
+          "trainQueueSize": 35,
+          "trainSpeedMult": 1.15,
+          "might": 122880
+        },
+        "5": {
+          "cost": {
+            "res.cash": 501,
+            "res.oil": 336,
+            "res.power": 253
+          },
+          "timeSec": 527,
+          "troopCapacity": 180,
+          "trainQueueSize": 41,
+          "trainSpeedMult": 1.2,
+          "might": 300000
+        },
+        "6": {
+          "cost": {
+            "res.cash": 770,
+            "res.oil": 501,
+            "res.power": 374
+          },
+          "timeSec": 1404,
+          "troopCapacity": 230,
+          "trainQueueSize": 50,
+          "trainSpeedMult": 1.25,
+          "might": 622080
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1155,
+            "res.oil": 770,
+            "res.power": 550
+          },
+          "timeSec": 2808,
+          "troopCapacity": 294,
+          "trainQueueSize": 60,
+          "trainSpeedMult": 1.3,
+          "might": 1152480
+        },
+        "8": {
+          "cost": {
+            "res.cash": 1705,
+            "res.oil": 1155,
+            "res.power": 825
+          },
+          "timeSec": 5616,
+          "troopCapacity": 367,
+          "trainQueueSize": 72,
+          "trainSpeedMult": 1.35,
+          "might": 1966080
+        },
+        "9": {
+          "cost": {
+            "res.cash": 2530,
+            "res.oil": 1705,
+            "res.power": 1265
+          },
+          "timeSec": 8424,
+          "troopCapacity": 467,
+          "trainQueueSize": 86,
+          "trainSpeedMult": 1.4,
+          "might": 3149280
+        },
+        "10": {
+          "cost": {
+            "res.cash": 3795,
+            "res.oil": 2530,
+            "res.power": 1925
+          },
+          "timeSec": 12636,
+          "troopCapacity": 600,
+          "trainQueueSize": 100,
+          "trainSpeedMult": 1.45,
+          "might": 4800000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 5335,
+            "res.oil": 3575,
+            "res.power": 2640
+          },
+          "timeSec": 6318,
+          "troopCapacity": 800,
+          "trainQueueSize": 120,
+          "trainSpeedMult": 1.5,
+          "might": 7027680
+        },
+        "12": {
+          "cost": {
+            "res.cash": 7700,
+            "res.oil": 4950,
+            "res.power": 3740
+          },
+          "timeSec": 8424,
+          "troopCapacity": 1000,
+          "trainQueueSize": 150,
+          "trainSpeedMult": 1.55,
+          "might": 9953280
+        },
+        "13": {
+          "cost": {
+            "res.cash": 10450,
+            "res.oil": 7150,
+            "res.power": 5225
+          },
+          "timeSec": 10530,
+          "troopCapacity": 1300,
+          "trainQueueSize": 180,
+          "trainSpeedMult": 1.6,
+          "might": 13709280
+        },
+        "14": {
+          "cost": {
+            "res.cash": 14850,
+            "res.oil": 9900,
+            "res.power": 7150
+          },
+          "timeSec": 14040,
+          "troopCapacity": 1667,
+          "trainQueueSize": 210,
+          "trainSpeedMult": 1.65,
+          "might": 18439680
+        },
+        "15": {
+          "cost": {
+            "res.cash": 20350,
+            "res.oil": 13750,
+            "res.power": 10450
+          },
+          "timeSec": 18252,
+          "troopCapacity": 2100,
+          "trainQueueSize": 260,
+          "trainSpeedMult": 1.7,
+          "might": 24300000
+        },
+        "16": {
+          "cost": {
+            "res.cash": 28600,
+            "res.oil": 19250,
+            "res.power": 14300
+          },
+          "timeSec": 23166,
+          "troopCapacity": 2700,
+          "trainQueueSize": 310,
+          "trainSpeedMult": 1.75,
+          "might": 31457280
+        },
+        "17": {
+          "cost": {
+            "res.cash": 40150,
+            "res.oil": 26950,
+            "res.power": 19800
+          },
+          "timeSec": 29484,
+          "troopCapacity": 3334,
+          "trainQueueSize": 370,
+          "trainSpeedMult": 1.8,
+          "might": 40090080
+        },
+        "18": {
+          "cost": {
+            "res.cash": 55000,
+            "res.oil": 37400,
+            "res.power": 28050
+          },
+          "timeSec": 37908,
+          "troopCapacity": 4334,
+          "trainQueueSize": 440,
+          "trainSpeedMult": 1.85,
+          "might": 50388480
+        },
+        "19": {
+          "cost": {
+            "res.cash": 77000,
+            "res.oil": 52250,
+            "res.power": 39050
+          },
+          "timeSec": 46332,
+          "troopCapacity": 5667,
+          "trainQueueSize": 530,
+          "trainSpeedMult": 1.9,
+          "might": 62554080
+        },
+        "20": {
+          "cost": {
+            "res.cash": 110000,
+            "res.oil": 71500,
+            "res.power": 55000
+          },
+          "timeSec": 54756,
+          "troopCapacity": 7334,
+          "trainQueueSize": 640,
+          "trainSpeedMult": 1.95,
+          "might": 76800000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 154000,
+            "res.oil": 104500,
+            "res.power": 77000
+          },
+          "timeSec": 63180,
+          "troopCapacity": 9334,
+          "trainQueueSize": 770,
+          "trainSpeedMult": 2,
+          "might": 93350880
+        },
+        "22": {
+          "cost": {
+            "res.cash": 214500,
+            "res.oil": 143000,
+            "res.power": 110000
+          },
+          "timeSec": 71604,
+          "troopCapacity": 12000,
+          "trainQueueSize": 920,
+          "trainSpeedMult": 2.05,
+          "might": 112442880
+        },
+        "23": {
+          "cost": {
+            "res.cash": 302500,
+            "res.oil": 203500,
+            "res.power": 148500
+          },
+          "timeSec": 80028,
+          "troopCapacity": 15334,
+          "trainQueueSize": 1100,
+          "trainSpeedMult": 2.1,
+          "might": 134323680
+        },
+        "24": {
+          "cost": {
+            "res.cash": 423500,
+            "res.oil": 280500,
+            "res.power": 209000
+          },
+          "timeSec": 88452,
+          "troopCapacity": 19334,
+          "trainQueueSize": 1300,
+          "trainSpeedMult": 2.15,
+          "might": 159252480
+        },
+        "25": {
+          "cost": {
+            "res.cash": 605000,
+            "res.oil": 396000,
+            "res.power": 297000
+          },
+          "timeSec": 96876,
+          "troopCapacity": 25000,
+          "trainQueueSize": 1600,
+          "trainSpeedMult": 2.2,
+          "might": 187500000
+        },
+        "26": {
+          "cost": {
+            "res.cash": 825000,
+            "res.oil": 550000,
+            "res.power": 412500
+          },
+          "timeSec": 105300,
+          "troopCapacity": 32000,
+          "trainQueueSize": 1900,
+          "trainSpeedMult": 2.25,
+          "might": 219348480
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1155000,
+            "res.oil": 770000,
+            "res.power": 605000
+          },
+          "timeSec": 113724,
+          "troopCapacity": 40000,
+          "trainQueueSize": 2300,
+          "trainSpeedMult": 2.3,
+          "might": 255091680
+        },
+        "28": {
+          "cost": {
+            "res.cash": 1650000,
+            "res.oil": 1100000,
+            "res.power": 825000
+          },
+          "timeSec": 122148,
+          "troopCapacity": 53334,
+          "trainQueueSize": 2700,
+          "trainSpeedMult": 2.35,
+          "might": 295034880
+        },
+        "29": {
+          "cost": {
+            "res.cash": 2255000,
+            "res.oil": 1540000,
+            "res.power": 1155000
+          },
+          "timeSec": 130572,
+          "troopCapacity": 66667,
+          "trainQueueSize": 3300,
+          "trainSpeedMult": 2.4,
+          "might": 339494880
+        },
+        "30": {
+          "cost": {
+            "res.cash": 3190000,
+            "res.oil": 2145000,
+            "res.power": 1595000
+          },
+          "timeSec": 143208,
+          "troopCapacity": 86667,
+          "trainQueueSize": 4000,
+          "trainSpeedMult": 2.45,
+          "might": 388800000
+        }
+      },
+      "trains": "troop.army"
+    },
+    "building.navalBase": {
+      "unlockAtKeep": 2,
+      "maxLevel": 30,
+      "role": "Trains Navy units. Its level unlocks Navy tiers and raises Navy capacity and training throughput.",
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 108,
+            "res.oil": 72,
+            "res.power": 54
+          },
+          "timeSec": 0,
+          "troopCapacity": 67,
+          "trainQueueSize": 20,
+          "trainSpeedMult": 1,
+          "might": 540
+        },
+        "2": {
+          "cost": {
+            "res.cash": 162,
+            "res.oil": 108,
+            "res.power": 84
+          },
+          "timeSec": 14,
+          "troopCapacity": 87,
+          "trainQueueSize": 24,
+          "trainSpeedMult": 1.05,
+          "might": 8640
+        },
+        "3": {
+          "cost": {
+            "res.cash": 246,
+            "res.oil": 162,
+            "res.power": 120
+          },
+          "timeSec": 68,
+          "troopCapacity": 110,
+          "trainQueueSize": 29,
+          "trainSpeedMult": 1.1,
+          "might": 43740
+        },
+        "4": {
+          "cost": {
+            "res.cash": 366,
+            "res.oil": 246,
+            "res.power": 180
+          },
+          "timeSec": 203,
+          "troopCapacity": 140,
+          "trainQueueSize": 35,
+          "trainSpeedMult": 1.15,
+          "might": 138240
+        },
+        "5": {
+          "cost": {
+            "res.cash": 546,
+            "res.oil": 366,
+            "res.power": 276
+          },
+          "timeSec": 608,
+          "troopCapacity": 180,
+          "trainQueueSize": 41,
+          "trainSpeedMult": 1.2,
+          "might": 337500
+        },
+        "6": {
+          "cost": {
+            "res.cash": 840,
+            "res.oil": 546,
+            "res.power": 408
+          },
+          "timeSec": 1620,
+          "troopCapacity": 230,
+          "trainQueueSize": 50,
+          "trainSpeedMult": 1.25,
+          "might": 699840
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1260,
+            "res.oil": 840,
+            "res.power": 600
+          },
+          "timeSec": 3240,
+          "troopCapacity": 294,
+          "trainQueueSize": 60,
+          "trainSpeedMult": 1.3,
+          "might": 1296540
+        },
+        "8": {
+          "cost": {
+            "res.cash": 1860,
+            "res.oil": 1260,
+            "res.power": 900
+          },
+          "timeSec": 6480,
+          "troopCapacity": 367,
+          "trainQueueSize": 72,
+          "trainSpeedMult": 1.35,
+          "might": 2211840
+        },
+        "9": {
+          "cost": {
+            "res.cash": 2760,
+            "res.oil": 1860,
+            "res.power": 1380
+          },
+          "timeSec": 9720,
+          "troopCapacity": 467,
+          "trainQueueSize": 86,
+          "trainSpeedMult": 1.4,
+          "might": 3542940
+        },
+        "10": {
+          "cost": {
+            "res.cash": 4140,
+            "res.oil": 2760,
+            "res.power": 2100
+          },
+          "timeSec": 14580,
+          "troopCapacity": 600,
+          "trainQueueSize": 100,
+          "trainSpeedMult": 1.45,
+          "might": 5400000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 5820,
+            "res.oil": 3900,
+            "res.power": 2880
+          },
+          "timeSec": 7290,
+          "troopCapacity": 800,
+          "trainQueueSize": 120,
+          "trainSpeedMult": 1.5,
+          "might": 7906140
+        },
+        "12": {
+          "cost": {
+            "res.cash": 8400,
+            "res.oil": 5400,
+            "res.power": 4080
+          },
+          "timeSec": 9720,
+          "troopCapacity": 1000,
+          "trainQueueSize": 150,
+          "trainSpeedMult": 1.55,
+          "might": 11197440
+        },
+        "13": {
+          "cost": {
+            "res.cash": 11400,
+            "res.oil": 7800,
+            "res.power": 5700
+          },
+          "timeSec": 12150,
+          "troopCapacity": 1300,
+          "trainQueueSize": 180,
+          "trainSpeedMult": 1.6,
+          "might": 15422940
+        },
+        "14": {
+          "cost": {
+            "res.cash": 16200,
+            "res.oil": 10800,
+            "res.power": 7800
+          },
+          "timeSec": 16200,
+          "troopCapacity": 1667,
+          "trainQueueSize": 210,
+          "trainSpeedMult": 1.65,
+          "might": 20744640
+        },
+        "15": {
+          "cost": {
+            "res.cash": 22200,
+            "res.oil": 15000,
+            "res.power": 11400
+          },
+          "timeSec": 21060,
+          "troopCapacity": 2100,
+          "trainQueueSize": 260,
+          "trainSpeedMult": 1.7,
+          "might": 27337500
+        },
+        "16": {
+          "cost": {
+            "res.cash": 31200,
+            "res.oil": 21000,
+            "res.power": 15600
+          },
+          "timeSec": 26730,
+          "troopCapacity": 2700,
+          "trainQueueSize": 310,
+          "trainSpeedMult": 1.75,
+          "might": 35389440
+        },
+        "17": {
+          "cost": {
+            "res.cash": 43800,
+            "res.oil": 29400,
+            "res.power": 21600
+          },
+          "timeSec": 34020,
+          "troopCapacity": 3334,
+          "trainQueueSize": 370,
+          "trainSpeedMult": 1.8,
+          "might": 45101340
+        },
+        "18": {
+          "cost": {
+            "res.cash": 60000,
+            "res.oil": 40800,
+            "res.power": 30600
+          },
+          "timeSec": 43740,
+          "troopCapacity": 4334,
+          "trainQueueSize": 440,
+          "trainSpeedMult": 1.85,
+          "might": 56687040
+        },
+        "19": {
+          "cost": {
+            "res.cash": 84000,
+            "res.oil": 57000,
+            "res.power": 42600
+          },
+          "timeSec": 53460,
+          "troopCapacity": 5667,
+          "trainQueueSize": 530,
+          "trainSpeedMult": 1.9,
+          "might": 70373340
+        },
+        "20": {
+          "cost": {
+            "res.cash": 120000,
+            "res.oil": 78000,
+            "res.power": 60000
+          },
+          "timeSec": 63180,
+          "troopCapacity": 7334,
+          "trainQueueSize": 640,
+          "trainSpeedMult": 1.95,
+          "might": 86400000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 168000,
+            "res.oil": 114000,
+            "res.power": 84000
+          },
+          "timeSec": 72900,
+          "troopCapacity": 9334,
+          "trainQueueSize": 770,
+          "trainSpeedMult": 2,
+          "might": 105019740
+        },
+        "22": {
+          "cost": {
+            "res.cash": 234000,
+            "res.oil": 156000,
+            "res.power": 120000
+          },
+          "timeSec": 82620,
+          "troopCapacity": 12000,
+          "trainQueueSize": 920,
+          "trainSpeedMult": 2.05,
+          "might": 126498240
+        },
+        "23": {
+          "cost": {
+            "res.cash": 330000,
+            "res.oil": 222000,
+            "res.power": 162000
+          },
+          "timeSec": 92340,
+          "troopCapacity": 15334,
+          "trainQueueSize": 1100,
+          "trainSpeedMult": 2.1,
+          "might": 151114140
+        },
+        "24": {
+          "cost": {
+            "res.cash": 462000,
+            "res.oil": 306000,
+            "res.power": 228000
+          },
+          "timeSec": 102060,
+          "troopCapacity": 19334,
+          "trainQueueSize": 1300,
+          "trainSpeedMult": 2.15,
+          "might": 179159040
+        },
+        "25": {
+          "cost": {
+            "res.cash": 660000,
+            "res.oil": 432000,
+            "res.power": 324000
+          },
+          "timeSec": 111780,
+          "troopCapacity": 25000,
+          "trainQueueSize": 1600,
+          "trainSpeedMult": 2.2,
+          "might": 210937500
+        },
+        "26": {
+          "cost": {
+            "res.cash": 900000,
+            "res.oil": 600000,
+            "res.power": 450000
+          },
+          "timeSec": 121500,
+          "troopCapacity": 32000,
+          "trainQueueSize": 1900,
+          "trainSpeedMult": 2.25,
+          "might": 246767040
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1260000,
+            "res.oil": 840000,
+            "res.power": 660000
+          },
+          "timeSec": 131220,
+          "troopCapacity": 40000,
+          "trainQueueSize": 2300,
+          "trainSpeedMult": 2.3,
+          "might": 286978140
+        },
+        "28": {
+          "cost": {
+            "res.cash": 1800000,
+            "res.oil": 1200000,
+            "res.power": 900000
+          },
+          "timeSec": 140940,
+          "troopCapacity": 53334,
+          "trainQueueSize": 2700,
+          "trainSpeedMult": 2.35,
+          "might": 331914240
+        },
+        "29": {
+          "cost": {
+            "res.cash": 2460000,
+            "res.oil": 1680000,
+            "res.power": 1260000
+          },
+          "timeSec": 150660,
+          "troopCapacity": 66667,
+          "trainQueueSize": 3300,
+          "trainSpeedMult": 2.4,
+          "might": 381931740
+        },
+        "30": {
+          "cost": {
+            "res.cash": 3480000,
+            "res.oil": 2340000,
+            "res.power": 1740000
+          },
+          "timeSec": 165240,
+          "troopCapacity": 86667,
+          "trainQueueSize": 4000,
+          "trainSpeedMult": 2.45,
+          "might": 437400000
+        }
+      },
+      "trains": "troop.navy"
+    },
+    "building.airfield": {
+      "unlockAtKeep": 4,
+      "maxLevel": 30,
+      "role": "Trains Air units. Its level unlocks Air tiers and raises Air capacity and training throughput.",
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 117,
+            "res.oil": 78,
+            "res.power": 59
+          },
+          "timeSec": 0,
+          "troopCapacity": 67,
+          "trainQueueSize": 20,
+          "trainSpeedMult": 1,
+          "might": 600
+        },
+        "2": {
+          "cost": {
+            "res.cash": 176,
+            "res.oil": 117,
+            "res.power": 91
+          },
+          "timeSec": 15,
+          "troopCapacity": 87,
+          "trainQueueSize": 24,
+          "trainSpeedMult": 1.05,
+          "might": 9600
+        },
+        "3": {
+          "cost": {
+            "res.cash": 267,
+            "res.oil": 176,
+            "res.power": 130
+          },
+          "timeSec": 77,
+          "troopCapacity": 110,
+          "trainQueueSize": 29,
+          "trainSpeedMult": 1.1,
+          "might": 48600
+        },
+        "4": {
+          "cost": {
+            "res.cash": 397,
+            "res.oil": 267,
+            "res.power": 195
+          },
+          "timeSec": 230,
+          "troopCapacity": 140,
+          "trainQueueSize": 35,
+          "trainSpeedMult": 1.15,
+          "might": 153600
+        },
+        "5": {
+          "cost": {
+            "res.cash": 592,
+            "res.oil": 397,
+            "res.power": 299
+          },
+          "timeSec": 689,
+          "troopCapacity": 180,
+          "trainQueueSize": 41,
+          "trainSpeedMult": 1.2,
+          "might": 375000
+        },
+        "6": {
+          "cost": {
+            "res.cash": 910,
+            "res.oil": 592,
+            "res.power": 442
+          },
+          "timeSec": 1836,
+          "troopCapacity": 230,
+          "trainQueueSize": 50,
+          "trainSpeedMult": 1.25,
+          "might": 777600
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1365,
+            "res.oil": 910,
+            "res.power": 650
+          },
+          "timeSec": 3672,
+          "troopCapacity": 294,
+          "trainQueueSize": 60,
+          "trainSpeedMult": 1.3,
+          "might": 1440600
+        },
+        "8": {
+          "cost": {
+            "res.cash": 2015,
+            "res.oil": 1365,
+            "res.power": 975
+          },
+          "timeSec": 7344,
+          "troopCapacity": 367,
+          "trainQueueSize": 72,
+          "trainSpeedMult": 1.35,
+          "might": 2457600
+        },
+        "9": {
+          "cost": {
+            "res.cash": 2990,
+            "res.oil": 2015,
+            "res.power": 1495
+          },
+          "timeSec": 11016,
+          "troopCapacity": 467,
+          "trainQueueSize": 86,
+          "trainSpeedMult": 1.4,
+          "might": 3936600
+        },
+        "10": {
+          "cost": {
+            "res.cash": 4485,
+            "res.oil": 2990,
+            "res.power": 2275
+          },
+          "timeSec": 16524,
+          "troopCapacity": 600,
+          "trainQueueSize": 100,
+          "trainSpeedMult": 1.45,
+          "might": 6000000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 6305,
+            "res.oil": 4225,
+            "res.power": 3120
+          },
+          "timeSec": 8262,
+          "troopCapacity": 800,
+          "trainQueueSize": 120,
+          "trainSpeedMult": 1.5,
+          "might": 8784600
+        },
+        "12": {
+          "cost": {
+            "res.cash": 9100,
+            "res.oil": 5850,
+            "res.power": 4420
+          },
+          "timeSec": 11016,
+          "troopCapacity": 1000,
+          "trainQueueSize": 150,
+          "trainSpeedMult": 1.55,
+          "might": 12441600
+        },
+        "13": {
+          "cost": {
+            "res.cash": 12350,
+            "res.oil": 8450,
+            "res.power": 6175
+          },
+          "timeSec": 13770,
+          "troopCapacity": 1300,
+          "trainQueueSize": 180,
+          "trainSpeedMult": 1.6,
+          "might": 17136600
+        },
+        "14": {
+          "cost": {
+            "res.cash": 17550,
+            "res.oil": 11700,
+            "res.power": 8450
+          },
+          "timeSec": 18360,
+          "troopCapacity": 1667,
+          "trainQueueSize": 210,
+          "trainSpeedMult": 1.65,
+          "might": 23049600
+        },
+        "15": {
+          "cost": {
+            "res.cash": 24050,
+            "res.oil": 16250,
+            "res.power": 12350
+          },
+          "timeSec": 23868,
+          "troopCapacity": 2100,
+          "trainQueueSize": 260,
+          "trainSpeedMult": 1.7,
+          "might": 30375000
+        },
+        "16": {
+          "cost": {
+            "res.cash": 33800,
+            "res.oil": 22750,
+            "res.power": 16900
+          },
+          "timeSec": 30294,
+          "troopCapacity": 2700,
+          "trainQueueSize": 310,
+          "trainSpeedMult": 1.75,
+          "might": 39321600
+        },
+        "17": {
+          "cost": {
+            "res.cash": 47450,
+            "res.oil": 31850,
+            "res.power": 23400
+          },
+          "timeSec": 38556,
+          "troopCapacity": 3334,
+          "trainQueueSize": 370,
+          "trainSpeedMult": 1.8,
+          "might": 50112600
+        },
+        "18": {
+          "cost": {
+            "res.cash": 65000,
+            "res.oil": 44200,
+            "res.power": 33150
+          },
+          "timeSec": 49572,
+          "troopCapacity": 4334,
+          "trainQueueSize": 440,
+          "trainSpeedMult": 1.85,
+          "might": 62985600
+        },
+        "19": {
+          "cost": {
+            "res.cash": 91000,
+            "res.oil": 61750,
+            "res.power": 46150
+          },
+          "timeSec": 60588,
+          "troopCapacity": 5667,
+          "trainQueueSize": 530,
+          "trainSpeedMult": 1.9,
+          "might": 78192600
+        },
+        "20": {
+          "cost": {
+            "res.cash": 130000,
+            "res.oil": 84500,
+            "res.power": 65000
+          },
+          "timeSec": 71604,
+          "troopCapacity": 7334,
+          "trainQueueSize": 640,
+          "trainSpeedMult": 1.95,
+          "might": 96000000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 182000,
+            "res.oil": 123500,
+            "res.power": 91000
+          },
+          "timeSec": 82620,
+          "troopCapacity": 9334,
+          "trainQueueSize": 770,
+          "trainSpeedMult": 2,
+          "might": 116688600
+        },
+        "22": {
+          "cost": {
+            "res.cash": 253500,
+            "res.oil": 169000,
+            "res.power": 130000
+          },
+          "timeSec": 93636,
+          "troopCapacity": 12000,
+          "trainQueueSize": 920,
+          "trainSpeedMult": 2.05,
+          "might": 140553600
+        },
+        "23": {
+          "cost": {
+            "res.cash": 357500,
+            "res.oil": 240500,
+            "res.power": 175500
+          },
+          "timeSec": 104652,
+          "troopCapacity": 15334,
+          "trainQueueSize": 1100,
+          "trainSpeedMult": 2.1,
+          "might": 167904600
+        },
+        "24": {
+          "cost": {
+            "res.cash": 500500,
+            "res.oil": 331500,
+            "res.power": 247000
+          },
+          "timeSec": 115668,
+          "troopCapacity": 19334,
+          "trainQueueSize": 1300,
+          "trainSpeedMult": 2.15,
+          "might": 199065600
+        },
+        "25": {
+          "cost": {
+            "res.cash": 715000,
+            "res.oil": 468000,
+            "res.power": 351000
+          },
+          "timeSec": 126684,
+          "troopCapacity": 25000,
+          "trainQueueSize": 1600,
+          "trainSpeedMult": 2.2,
+          "might": 234375000
+        },
+        "26": {
+          "cost": {
+            "res.cash": 975000,
+            "res.oil": 650000,
+            "res.power": 487500
+          },
+          "timeSec": 137700,
+          "troopCapacity": 32000,
+          "trainQueueSize": 1900,
+          "trainSpeedMult": 2.25,
+          "might": 274185600
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1365000,
+            "res.oil": 910000,
+            "res.power": 715000
+          },
+          "timeSec": 148716,
+          "troopCapacity": 40000,
+          "trainQueueSize": 2300,
+          "trainSpeedMult": 2.3,
+          "might": 318864600
+        },
+        "28": {
+          "cost": {
+            "res.cash": 1950000,
+            "res.oil": 1300000,
+            "res.power": 975000
+          },
+          "timeSec": 159732,
+          "troopCapacity": 53334,
+          "trainQueueSize": 2700,
+          "trainSpeedMult": 2.35,
+          "might": 368793600
+        },
+        "29": {
+          "cost": {
+            "res.cash": 2665000,
+            "res.oil": 1820000,
+            "res.power": 1365000
+          },
+          "timeSec": 170748,
+          "troopCapacity": 66667,
+          "trainQueueSize": 3300,
+          "trainSpeedMult": 2.4,
+          "might": 424368600
+        },
+        "30": {
+          "cost": {
+            "res.cash": 3770000,
+            "res.oil": 2535000,
+            "res.power": 1885000
+          },
+          "timeSec": 187272,
+          "troopCapacity": 86667,
+          "trainQueueSize": 4000,
+          "trainSpeedMult": 2.45,
+          "might": 486000000
+        }
+      },
+      "trains": "troop.air"
+    },
+    "building.hospital": {
+      "unlockAtKeep": 3,
+      "maxLevel": 30,
+      "healTimePerTroopSec": 2,
+      "healCostPerTroop": {
+        "res.cash": 4
+      },
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 160,
+            "res.oil": 100,
+            "res.power": 90
+          },
+          "timeSec": 0,
+          "woundedCapacity": 150,
+          "might": 360
+        },
+        "2": {
+          "cost": {
+            "res.cash": 240,
+            "res.oil": 150,
+            "res.power": 140
+          },
+          "timeSec": 8,
+          "woundedCapacity": 210,
+          "might": 5760
+        },
+        "3": {
+          "cost": {
+            "res.cash": 360,
+            "res.oil": 230,
+            "res.power": 200
+          },
+          "timeSec": 42,
+          "woundedCapacity": 290,
+          "might": 29160
+        },
+        "4": {
+          "cost": {
+            "res.cash": 540,
+            "res.oil": 340,
+            "res.power": 300
+          },
+          "timeSec": 126,
+          "woundedCapacity": 410,
+          "might": 92160
+        },
+        "5": {
+          "cost": {
+            "res.cash": 810,
+            "res.oil": 510,
+            "res.power": 460
+          },
+          "timeSec": 378,
+          "woundedCapacity": 580,
+          "might": 225000
+        },
+        "6": {
+          "cost": {
+            "res.cash": 1200,
+            "res.oil": 760,
+            "res.power": 680
+          },
+          "timeSec": 1008,
+          "woundedCapacity": 810,
+          "might": 466560
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1800,
+            "res.oil": 1100,
+            "res.power": 1000
+          },
+          "timeSec": 2016,
+          "woundedCapacity": 1100,
+          "might": 864360
+        },
+        "8": {
+          "cost": {
+            "res.cash": 2700,
+            "res.oil": 1700,
+            "res.power": 1500
+          },
+          "timeSec": 4032,
+          "woundedCapacity": 1600,
+          "might": 1474560
+        },
+        "9": {
+          "cost": {
+            "res.cash": 4100,
+            "res.oil": 2600,
+            "res.power": 2300
+          },
+          "timeSec": 6048,
+          "woundedCapacity": 2200,
+          "might": 2361960
+        },
+        "10": {
+          "cost": {
+            "res.cash": 6200,
+            "res.oil": 3800,
+            "res.power": 3500
+          },
+          "timeSec": 9072,
+          "woundedCapacity": 3100,
+          "might": 3600000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 8600,
+            "res.oil": 5400,
+            "res.power": 4800
+          },
+          "timeSec": 4536,
+          "woundedCapacity": 4300,
+          "might": 5270760
+        },
+        "12": {
+          "cost": {
+            "res.cash": 12000,
+            "res.oil": 7500,
+            "res.power": 6800
+          },
+          "timeSec": 6048,
+          "woundedCapacity": 6100,
+          "might": 7464960
+        },
+        "13": {
+          "cost": {
+            "res.cash": 17000,
+            "res.oil": 11000,
+            "res.power": 9500
+          },
+          "timeSec": 7560,
+          "woundedCapacity": 8500,
+          "might": 10281960
+        },
+        "14": {
+          "cost": {
+            "res.cash": 24000,
+            "res.oil": 15000,
+            "res.power": 13000
+          },
+          "timeSec": 10080,
+          "woundedCapacity": 12000,
+          "might": 13829760
+        },
+        "15": {
+          "cost": {
+            "res.cash": 33000,
+            "res.oil": 21000,
+            "res.power": 19000
+          },
+          "timeSec": 13104,
+          "woundedCapacity": 17000,
+          "might": 18225000
+        },
+        "16": {
+          "cost": {
+            "res.cash": 46000,
+            "res.oil": 29000,
+            "res.power": 26000
+          },
+          "timeSec": 16632,
+          "woundedCapacity": 23000,
+          "might": 23592960
+        },
+        "17": {
+          "cost": {
+            "res.cash": 65000,
+            "res.oil": 41000,
+            "res.power": 36000
+          },
+          "timeSec": 21168,
+          "woundedCapacity": 33000,
+          "might": 30067560
+        },
+        "18": {
+          "cost": {
+            "res.cash": 91000,
+            "res.oil": 57000,
+            "res.power": 51000
+          },
+          "timeSec": 27216,
+          "woundedCapacity": 46000,
+          "might": 37791360
+        },
+        "19": {
+          "cost": {
+            "res.cash": 130000,
+            "res.oil": 79000,
+            "res.power": 71000
+          },
+          "timeSec": 33264,
+          "woundedCapacity": 64000,
+          "might": 46915560
+        },
+        "20": {
+          "cost": {
+            "res.cash": 180000,
+            "res.oil": 110000,
+            "res.power": 100000
+          },
+          "timeSec": 39312,
+          "woundedCapacity": 90000,
+          "might": 57600000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 250000,
+            "res.oil": 160000,
+            "res.power": 140000
+          },
+          "timeSec": 45360,
+          "woundedCapacity": 130000,
+          "might": 70013160
+        },
+        "22": {
+          "cost": {
+            "res.cash": 350000,
+            "res.oil": 220000,
+            "res.power": 200000
+          },
+          "timeSec": 51408,
+          "woundedCapacity": 180000,
+          "might": 84332160
+        },
+        "23": {
+          "cost": {
+            "res.cash": 490000,
+            "res.oil": 310000,
+            "res.power": 270000
+          },
+          "timeSec": 57456,
+          "woundedCapacity": 250000,
+          "might": 100742760
+        },
+        "24": {
+          "cost": {
+            "res.cash": 680000,
+            "res.oil": 430000,
+            "res.power": 380000
+          },
+          "timeSec": 63504,
+          "woundedCapacity": 340000,
+          "might": 119439360
+        },
+        "25": {
+          "cost": {
+            "res.cash": 960000,
+            "res.oil": 600000,
+            "res.power": 540000
+          },
+          "timeSec": 69552,
+          "woundedCapacity": 480000,
+          "might": 140625000
+        },
+        "26": {
+          "cost": {
+            "res.cash": 1300000,
+            "res.oil": 840000,
+            "res.power": 750000
+          },
+          "timeSec": 75600,
+          "woundedCapacity": 670000,
+          "might": 164511360
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1900000,
+            "res.oil": 1200000,
+            "res.power": 1100000
+          },
+          "timeSec": 81648,
+          "woundedCapacity": 940000,
+          "might": 191318760
+        },
+        "28": {
+          "cost": {
+            "res.cash": 2600000,
+            "res.oil": 1600000,
+            "res.power": 1500000
+          },
+          "timeSec": 87696,
+          "woundedCapacity": 1300000,
+          "might": 221276160
+        },
+        "29": {
+          "cost": {
+            "res.cash": 3700000,
+            "res.oil": 2300000,
+            "res.power": 2100000
+          },
+          "timeSec": 93744,
+          "woundedCapacity": 1900000,
+          "might": 254621160
+        },
+        "30": {
+          "cost": {
+            "res.cash": 5100000,
+            "res.oil": 3200000,
+            "res.power": 2900000
+          },
+          "timeSec": 102816,
+          "woundedCapacity": 2600000,
+          "might": 291600000
+        }
+      }
+    },
+    "building.embassy": {
+      "unlockAtKeep": 5,
+      "maxLevel": 30,
+      "role": "Receives allied reinforcement troops (capacity). Reinforcement mechanic = Phase 2.",
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 150,
+            "res.oil": 100,
+            "res.power": 80
+          },
+          "timeSec": 0,
+          "reinforcementCapacity": 100,
+          "might": 360
+        },
+        "2": {
+          "cost": {
+            "res.cash": 230,
+            "res.oil": 150,
+            "res.power": 120
+          },
+          "timeSec": 8,
+          "reinforcementCapacity": 130,
+          "might": 5760
+        },
+        "3": {
+          "cost": {
+            "res.cash": 340,
+            "res.oil": 230,
+            "res.power": 180
+          },
+          "timeSec": 42,
+          "reinforcementCapacity": 170,
+          "might": 29160
+        },
+        "4": {
+          "cost": {
+            "res.cash": 510,
+            "res.oil": 340,
+            "res.power": 270
+          },
+          "timeSec": 126,
+          "reinforcementCapacity": 220,
+          "might": 92160
+        },
+        "5": {
+          "cost": {
+            "res.cash": 760,
+            "res.oil": 510,
+            "res.power": 410
+          },
+          "timeSec": 378,
+          "reinforcementCapacity": 290,
+          "might": 225000
+        },
+        "6": {
+          "cost": {
+            "res.cash": 1100,
+            "res.oil": 760,
+            "res.power": 610
+          },
+          "timeSec": 1008,
+          "reinforcementCapacity": 370,
+          "might": 466560
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1700,
+            "res.oil": 1100,
+            "res.power": 910
+          },
+          "timeSec": 2016,
+          "reinforcementCapacity": 480,
+          "might": 864360
+        },
+        "8": {
+          "cost": {
+            "res.cash": 2600,
+            "res.oil": 1700,
+            "res.power": 1400
+          },
+          "timeSec": 4032,
+          "reinforcementCapacity": 630,
+          "might": 1474560
+        },
+        "9": {
+          "cost": {
+            "res.cash": 3800,
+            "res.oil": 2600,
+            "res.power": 2100
+          },
+          "timeSec": 6048,
+          "reinforcementCapacity": 820,
+          "might": 2361960
+        },
+        "10": {
+          "cost": {
+            "res.cash": 5800,
+            "res.oil": 3800,
+            "res.power": 3100
+          },
+          "timeSec": 9072,
+          "reinforcementCapacity": 1100,
+          "might": 3600000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 8100,
+            "res.oil": 5400,
+            "res.power": 4300
+          },
+          "timeSec": 4536,
+          "reinforcementCapacity": 1400,
+          "might": 5270760
+        },
+        "12": {
+          "cost": {
+            "res.cash": 11000,
+            "res.oil": 7500,
+            "res.power": 6000
+          },
+          "timeSec": 6048,
+          "reinforcementCapacity": 1800,
+          "might": 7464960
+        },
+        "13": {
+          "cost": {
+            "res.cash": 16000,
+            "res.oil": 11000,
+            "res.power": 8400
+          },
+          "timeSec": 7560,
+          "reinforcementCapacity": 2300,
+          "might": 10281960
+        },
+        "14": {
+          "cost": {
+            "res.cash": 22000,
+            "res.oil": 15000,
+            "res.power": 12000
+          },
+          "timeSec": 10080,
+          "reinforcementCapacity": 3000,
+          "might": 13829760
+        },
+        "15": {
+          "cost": {
+            "res.cash": 31000,
+            "res.oil": 21000,
+            "res.power": 17000
+          },
+          "timeSec": 13104,
+          "reinforcementCapacity": 3900,
+          "might": 18225000
+        },
+        "16": {
+          "cost": {
+            "res.cash": 43000,
+            "res.oil": 29000,
+            "res.power": 23000
+          },
+          "timeSec": 16632,
+          "reinforcementCapacity": 5100,
+          "might": 23592960
+        },
+        "17": {
+          "cost": {
+            "res.cash": 61000,
+            "res.oil": 41000,
+            "res.power": 32000
+          },
+          "timeSec": 21168,
+          "reinforcementCapacity": 6700,
+          "might": 30067560
+        },
+        "18": {
+          "cost": {
+            "res.cash": 85000,
+            "res.oil": 57000,
+            "res.power": 45000
+          },
+          "timeSec": 27216,
+          "reinforcementCapacity": 8700,
+          "might": 37791360
+        },
+        "19": {
+          "cost": {
+            "res.cash": 120000,
+            "res.oil": 79000,
+            "res.power": 64000
+          },
+          "timeSec": 33264,
+          "reinforcementCapacity": 11000,
+          "might": 46915560
+        },
+        "20": {
+          "cost": {
+            "res.cash": 170000,
+            "res.oil": 110000,
+            "res.power": 89000
+          },
+          "timeSec": 39312,
+          "reinforcementCapacity": 15000,
+          "might": 57600000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 230000,
+            "res.oil": 160000,
+            "res.power": 120000
+          },
+          "timeSec": 45360,
+          "reinforcementCapacity": 19000,
+          "might": 70013160
+        },
+        "22": {
+          "cost": {
+            "res.cash": 330000,
+            "res.oil": 220000,
+            "res.power": 170000
+          },
+          "timeSec": 51408,
+          "reinforcementCapacity": 25000,
+          "might": 84332160
+        },
+        "23": {
+          "cost": {
+            "res.cash": 460000,
+            "res.oil": 310000,
+            "res.power": 240000
+          },
+          "timeSec": 57456,
+          "reinforcementCapacity": 32000,
+          "might": 100742760
+        },
+        "24": {
+          "cost": {
+            "res.cash": 640000,
+            "res.oil": 430000,
+            "res.power": 340000
+          },
+          "timeSec": 63504,
+          "reinforcementCapacity": 42000,
+          "might": 119439360
+        },
+        "25": {
+          "cost": {
+            "res.cash": 900000,
+            "res.oil": 600000,
+            "res.power": 480000
+          },
+          "timeSec": 69552,
+          "reinforcementCapacity": 54000,
+          "might": 140625000
+        },
+        "26": {
+          "cost": {
+            "res.cash": 1300000,
+            "res.oil": 840000,
+            "res.power": 670000
+          },
+          "timeSec": 75600,
+          "reinforcementCapacity": 71000,
+          "might": 164511360
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1800000,
+            "res.oil": 1200000,
+            "res.power": 940000
+          },
+          "timeSec": 81648,
+          "reinforcementCapacity": 92000,
+          "might": 191318760
+        },
+        "28": {
+          "cost": {
+            "res.cash": 2500000,
+            "res.oil": 1600000,
+            "res.power": 1300000
+          },
+          "timeSec": 87696,
+          "reinforcementCapacity": 120000,
+          "might": 221276160
+        },
+        "29": {
+          "cost": {
+            "res.cash": 3400000,
+            "res.oil": 2300000,
+            "res.power": 1800000
+          },
+          "timeSec": 93744,
+          "reinforcementCapacity": 160000,
+          "might": 254621160
+        },
+        "30": {
+          "cost": {
+            "res.cash": 4800000,
+            "res.oil": 3200000,
+            "res.power": 2600000
+          },
+          "timeSec": 102816,
+          "reinforcementCapacity": 200000,
+          "might": 291600000
+        }
+      }
+    },
+    "building.wall": {
+      "unlockAtKeep": 2,
+      "maxLevel": 30,
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 100,
+            "res.oil": 80,
+            "res.power": 60
+          },
+          "timeSec": 0,
+          "defenseValue": 200,
+          "might": 300
+        },
+        "2": {
+          "cost": {
+            "res.cash": 150,
+            "res.oil": 120,
+            "res.power": 90
+          },
+          "timeSec": 10,
+          "defenseValue": 300,
+          "might": 4800
+        },
+        "3": {
+          "cost": {
+            "res.cash": 230,
+            "res.oil": 180,
+            "res.power": 140
+          },
+          "timeSec": 48,
+          "defenseValue": 450,
+          "might": 24300
+        },
+        "4": {
+          "cost": {
+            "res.cash": 340,
+            "res.oil": 270,
+            "res.power": 200
+          },
+          "timeSec": 144,
+          "defenseValue": 680,
+          "might": 76800
+        },
+        "5": {
+          "cost": {
+            "res.cash": 510,
+            "res.oil": 410,
+            "res.power": 300
+          },
+          "timeSec": 432,
+          "defenseValue": 1000,
+          "might": 187500
+        },
+        "6": {
+          "cost": {
+            "res.cash": 760,
+            "res.oil": 610,
+            "res.power": 460
+          },
+          "timeSec": 1152,
+          "defenseValue": 1500,
+          "might": 388800
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1100,
+            "res.oil": 910,
+            "res.power": 680
+          },
+          "timeSec": 2304,
+          "defenseValue": 2300,
+          "might": 720300
+        },
+        "8": {
+          "cost": {
+            "res.cash": 1700,
+            "res.oil": 1400,
+            "res.power": 1000
+          },
+          "timeSec": 4608,
+          "defenseValue": 3400,
+          "might": 1228800
+        },
+        "9": {
+          "cost": {
+            "res.cash": 2600,
+            "res.oil": 2100,
+            "res.power": 1500
+          },
+          "timeSec": 6912,
+          "defenseValue": 5100,
+          "might": 1968300
+        },
+        "10": {
+          "cost": {
+            "res.cash": 3800,
+            "res.oil": 3100,
+            "res.power": 2300
+          },
+          "timeSec": 10368,
+          "defenseValue": 7700,
+          "might": 3000000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 5400,
+            "res.oil": 4300,
+            "res.power": 3200
+          },
+          "timeSec": 5184,
+          "defenseValue": 12000,
+          "might": 4392300
+        },
+        "12": {
+          "cost": {
+            "res.cash": 7500,
+            "res.oil": 6000,
+            "res.power": 4500
+          },
+          "timeSec": 6912,
+          "defenseValue": 17000,
+          "might": 6220800
+        },
+        "13": {
+          "cost": {
+            "res.cash": 11000,
+            "res.oil": 8400,
+            "res.power": 6300
+          },
+          "timeSec": 8640,
+          "defenseValue": 26000,
+          "might": 8568300
+        },
+        "14": {
+          "cost": {
+            "res.cash": 15000,
+            "res.oil": 12000,
+            "res.power": 8900
+          },
+          "timeSec": 11520,
+          "defenseValue": 39000,
+          "might": 11524800
+        },
+        "15": {
+          "cost": {
+            "res.cash": 21000,
+            "res.oil": 17000,
+            "res.power": 12000
+          },
+          "timeSec": 14976,
+          "defenseValue": 58000,
+          "might": 15187500
+        },
+        "16": {
+          "cost": {
+            "res.cash": 29000,
+            "res.oil": 23000,
+            "res.power": 17000
+          },
+          "timeSec": 19008,
+          "defenseValue": 88000,
+          "might": 19660800
+        },
+        "17": {
+          "cost": {
+            "res.cash": 41000,
+            "res.oil": 32000,
+            "res.power": 24000
+          },
+          "timeSec": 24192,
+          "defenseValue": 130000,
+          "might": 25056300
+        },
+        "18": {
+          "cost": {
+            "res.cash": 57000,
+            "res.oil": 45000,
+            "res.power": 34000
+          },
+          "timeSec": 31104,
+          "defenseValue": 200000,
+          "might": 31492800
+        },
+        "19": {
+          "cost": {
+            "res.cash": 79000,
+            "res.oil": 64000,
+            "res.power": 48000
+          },
+          "timeSec": 38016,
+          "defenseValue": 300000,
+          "might": 39096300
+        },
+        "20": {
+          "cost": {
+            "res.cash": 110000,
+            "res.oil": 89000,
+            "res.power": 67000
+          },
+          "timeSec": 44928,
+          "defenseValue": 440000,
+          "might": 48000000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 160000,
+            "res.oil": 120000,
+            "res.power": 93000
+          },
+          "timeSec": 51840,
+          "defenseValue": 670000,
+          "might": 58344300
+        },
+        "22": {
+          "cost": {
+            "res.cash": 220000,
+            "res.oil": 170000,
+            "res.power": 130000
+          },
+          "timeSec": 58752,
+          "defenseValue": 1000000,
+          "might": 70276800
+        },
+        "23": {
+          "cost": {
+            "res.cash": 310000,
+            "res.oil": 240000,
+            "res.power": 180000
+          },
+          "timeSec": 65664,
+          "defenseValue": 1500000,
+          "might": 83952300
+        },
+        "24": {
+          "cost": {
+            "res.cash": 430000,
+            "res.oil": 340000,
+            "res.power": 260000
+          },
+          "timeSec": 72576,
+          "defenseValue": 2200000,
+          "might": 99532800
+        },
+        "25": {
+          "cost": {
+            "res.cash": 600000,
+            "res.oil": 480000,
+            "res.power": 360000
+          },
+          "timeSec": 79488,
+          "defenseValue": 3400000,
+          "might": 117187500
+        },
+        "26": {
+          "cost": {
+            "res.cash": 840000,
+            "res.oil": 670000,
+            "res.power": 500000
+          },
+          "timeSec": 86400,
+          "defenseValue": 5100000,
+          "might": 137092800
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1200000,
+            "res.oil": 940000,
+            "res.power": 700000
+          },
+          "timeSec": 93312,
+          "defenseValue": 7600000,
+          "might": 159432300
+        },
+        "28": {
+          "cost": {
+            "res.cash": 1600000,
+            "res.oil": 1300000,
+            "res.power": 980000
+          },
+          "timeSec": 100224,
+          "defenseValue": 11000000,
+          "might": 184396800
+        },
+        "29": {
+          "cost": {
+            "res.cash": 2300000,
+            "res.oil": 1800000,
+            "res.power": 1400000
+          },
+          "timeSec": 107136,
+          "defenseValue": 17000000,
+          "might": 212184300
+        },
+        "30": {
+          "cost": {
+            "res.cash": 3200000,
+            "res.oil": 2600000,
+            "res.power": 1900000
+          },
+          "timeSec": 117504,
+          "defenseValue": 26000000,
+          "might": 243000000
+        }
+      }
+    },
+    "building.academy": {
+      "unlockAtKeep": 4,
+      "maxLevel": 30,
+      "researchBranches": [
+        "troops",
+        "economy",
+        "development"
+      ],
+      "role": "Research Institute: Troops / Economy(RSS) / Development(storage cap, troop count, build speed…). Research nodes = Phase 2.",
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 200,
+            "res.oil": 140,
+            "res.power": 120
+          },
+          "timeSec": 0,
+          "might": 600
+        },
+        "2": {
+          "cost": {
+            "res.cash": 300,
+            "res.oil": 210,
+            "res.power": 180
+          },
+          "timeSec": 16,
+          "might": 9600
+        },
+        "3": {
+          "cost": {
+            "res.cash": 450,
+            "res.oil": 320,
+            "res.power": 270
+          },
+          "timeSec": 78,
+          "might": 48600
+        },
+        "4": {
+          "cost": {
+            "res.cash": 680,
+            "res.oil": 470,
+            "res.power": 410
+          },
+          "timeSec": 234,
+          "might": 153600
+        },
+        "5": {
+          "cost": {
+            "res.cash": 1000,
+            "res.oil": 710,
+            "res.power": 610
+          },
+          "timeSec": 702,
+          "might": 375000
+        },
+        "6": {
+          "cost": {
+            "res.cash": 1500,
+            "res.oil": 1100,
+            "res.power": 910
+          },
+          "timeSec": 1872,
+          "might": 777600
+        },
+        "7": {
+          "cost": {
+            "res.cash": 2300,
+            "res.oil": 1600,
+            "res.power": 1400
+          },
+          "timeSec": 3744,
+          "might": 1440600
+        },
+        "8": {
+          "cost": {
+            "res.cash": 3400,
+            "res.oil": 2400,
+            "res.power": 2100
+          },
+          "timeSec": 7488,
+          "might": 2457600
+        },
+        "9": {
+          "cost": {
+            "res.cash": 5100,
+            "res.oil": 3600,
+            "res.power": 3100
+          },
+          "timeSec": 11232,
+          "might": 3936600
+        },
+        "10": {
+          "cost": {
+            "res.cash": 7700,
+            "res.oil": 5400,
+            "res.power": 4600
+          },
+          "timeSec": 16848,
+          "might": 6000000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 11000,
+            "res.oil": 7500,
+            "res.power": 6500
+          },
+          "timeSec": 8424,
+          "might": 8784600
+        },
+        "12": {
+          "cost": {
+            "res.cash": 15000,
+            "res.oil": 11000,
+            "res.power": 9000
+          },
+          "timeSec": 11232,
+          "might": 12441600
+        },
+        "13": {
+          "cost": {
+            "res.cash": 21000,
+            "res.oil": 15000,
+            "res.power": 13000
+          },
+          "timeSec": 14040,
+          "might": 17136600
+        },
+        "14": {
+          "cost": {
+            "res.cash": 30000,
+            "res.oil": 21000,
+            "res.power": 18000
+          },
+          "timeSec": 18720,
+          "might": 23049600
+        },
+        "15": {
+          "cost": {
+            "res.cash": 41000,
+            "res.oil": 29000,
+            "res.power": 25000
+          },
+          "timeSec": 24336,
+          "might": 30375000
+        },
+        "16": {
+          "cost": {
+            "res.cash": 58000,
+            "res.oil": 41000,
+            "res.power": 35000
+          },
+          "timeSec": 30888,
+          "might": 39321600
+        },
+        "17": {
+          "cost": {
+            "res.cash": 81000,
+            "res.oil": 57000,
+            "res.power": 49000
+          },
+          "timeSec": 39312,
+          "might": 50112600
+        },
+        "18": {
+          "cost": {
+            "res.cash": 110000,
+            "res.oil": 79000,
+            "res.power": 68000
+          },
+          "timeSec": 50544,
+          "might": 62985600
+        },
+        "19": {
+          "cost": {
+            "res.cash": 160000,
+            "res.oil": 110000,
+            "res.power": 95000
+          },
+          "timeSec": 61776,
+          "might": 78192600
+        },
+        "20": {
+          "cost": {
+            "res.cash": 220000,
+            "res.oil": 160000,
+            "res.power": 130000
+          },
+          "timeSec": 73008,
+          "might": 96000000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 310000,
+            "res.oil": 220000,
+            "res.power": 190000
+          },
+          "timeSec": 84240,
+          "might": 116688600
+        },
+        "22": {
+          "cost": {
+            "res.cash": 440000,
+            "res.oil": 310000,
+            "res.power": 260000
+          },
+          "timeSec": 95472,
+          "might": 140553600
+        },
+        "23": {
+          "cost": {
+            "res.cash": 610000,
+            "res.oil": 430000,
+            "res.power": 370000
+          },
+          "timeSec": 106704,
+          "might": 167904600
+        },
+        "24": {
+          "cost": {
+            "res.cash": 850000,
+            "res.oil": 600000,
+            "res.power": 510000
+          },
+          "timeSec": 117936,
+          "might": 199065600
+        },
+        "25": {
+          "cost": {
+            "res.cash": 1200000,
+            "res.oil": 840000,
+            "res.power": 720000
+          },
+          "timeSec": 129168,
+          "might": 234375000
+        },
+        "26": {
+          "cost": {
+            "res.cash": 1700000,
+            "res.oil": 1200000,
+            "res.power": 1000000
+          },
+          "timeSec": 140400,
+          "might": 274185600
+        },
+        "27": {
+          "cost": {
+            "res.cash": 2300000,
+            "res.oil": 1600000,
+            "res.power": 1400000
+          },
+          "timeSec": 151632,
+          "might": 318864600
+        },
+        "28": {
+          "cost": {
+            "res.cash": 3300000,
+            "res.oil": 2300000,
+            "res.power": 2000000
+          },
+          "timeSec": 162864,
+          "might": 368793600
+        },
+        "29": {
+          "cost": {
+            "res.cash": 4600000,
+            "res.oil": 3200000,
+            "res.power": 2800000
+          },
+          "timeSec": 174096,
+          "might": 424368600
+        },
+        "30": {
+          "cost": {
+            "res.cash": 6400000,
+            "res.oil": 4500000,
+            "res.power": 3900000
+          },
+          "timeSec": 190944,
+          "might": 486000000
+        }
+      }
+    },
+    "building.watchtower": {
+      "unlockAtKeep": 3,
+      "maxLevel": 30,
+      "role": "Issues solo (PvE) tasks/quests. Task content = later.",
+      "levels": {
+        "1": {
+          "cost": {
+            "res.cash": 130,
+            "res.oil": 80,
+            "res.power": 70
+          },
+          "timeSec": 0,
+          "soloTaskSlots": 2,
+          "might": 300
+        },
+        "2": {
+          "cost": {
+            "res.cash": 200,
+            "res.oil": 120,
+            "res.power": 110
+          },
+          "timeSec": 7,
+          "soloTaskSlots": 2,
+          "might": 4800
+        },
+        "3": {
+          "cost": {
+            "res.cash": 290,
+            "res.oil": 180,
+            "res.power": 160
+          },
+          "timeSec": 36,
+          "soloTaskSlots": 3,
+          "might": 24300
+        },
+        "4": {
+          "cost": {
+            "res.cash": 440,
+            "res.oil": 270,
+            "res.power": 240
+          },
+          "timeSec": 108,
+          "soloTaskSlots": 3,
+          "might": 76800
+        },
+        "5": {
+          "cost": {
+            "res.cash": 660,
+            "res.oil": 410,
+            "res.power": 350
+          },
+          "timeSec": 324,
+          "soloTaskSlots": 3,
+          "might": 187500
+        },
+        "6": {
+          "cost": {
+            "res.cash": 990,
+            "res.oil": 610,
+            "res.power": 530
+          },
+          "timeSec": 864,
+          "soloTaskSlots": 4,
+          "might": 388800
+        },
+        "7": {
+          "cost": {
+            "res.cash": 1500,
+            "res.oil": 910,
+            "res.power": 800
+          },
+          "timeSec": 1728,
+          "soloTaskSlots": 4,
+          "might": 720300
+        },
+        "8": {
+          "cost": {
+            "res.cash": 2200,
+            "res.oil": 1400,
+            "res.power": 1200
+          },
+          "timeSec": 3456,
+          "soloTaskSlots": 4,
+          "might": 1228800
+        },
+        "9": {
+          "cost": {
+            "res.cash": 3300,
+            "res.oil": 2100,
+            "res.power": 1800
+          },
+          "timeSec": 5184,
+          "soloTaskSlots": 5,
+          "might": 1968300
+        },
+        "10": {
+          "cost": {
+            "res.cash": 5000,
+            "res.oil": 3100,
+            "res.power": 2700
+          },
+          "timeSec": 7776,
+          "soloTaskSlots": 6,
+          "might": 3000000
+        },
+        "11": {
+          "cost": {
+            "res.cash": 7000,
+            "res.oil": 4300,
+            "res.power": 3800
+          },
+          "timeSec": 3888,
+          "soloTaskSlots": 6,
+          "might": 4392300
+        },
+        "12": {
+          "cost": {
+            "res.cash": 9800,
+            "res.oil": 6000,
+            "res.power": 5300
+          },
+          "timeSec": 5184,
+          "soloTaskSlots": 7,
+          "might": 6220800
+        },
+        "13": {
+          "cost": {
+            "res.cash": 14000,
+            "res.oil": 8400,
+            "res.power": 7400
+          },
+          "timeSec": 6480,
+          "soloTaskSlots": 8,
+          "might": 8568300
+        },
+        "14": {
+          "cost": {
+            "res.cash": 19000,
+            "res.oil": 12000,
+            "res.power": 10000
+          },
+          "timeSec": 8640,
+          "soloTaskSlots": 9,
+          "might": 11524800
+        },
+        "15": {
+          "cost": {
+            "res.cash": 27000,
+            "res.oil": 17000,
+            "res.power": 14000
+          },
+          "timeSec": 11232,
+          "soloTaskSlots": 10,
+          "might": 15187500
+        },
+        "16": {
+          "cost": {
+            "res.cash": 38000,
+            "res.oil": 23000,
+            "res.power": 20000
+          },
+          "timeSec": 14256,
+          "soloTaskSlots": 11,
+          "might": 19660800
+        },
+        "17": {
+          "cost": {
+            "res.cash": 53000,
+            "res.oil": 32000,
+            "res.power": 28000
+          },
+          "timeSec": 18144,
+          "soloTaskSlots": 12,
+          "might": 25056300
+        },
+        "18": {
+          "cost": {
+            "res.cash": 74000,
+            "res.oil": 45000,
+            "res.power": 40000
+          },
+          "timeSec": 23328,
+          "soloTaskSlots": 14,
+          "might": 31492800
+        },
+        "19": {
+          "cost": {
+            "res.cash": 100000,
+            "res.oil": 64000,
+            "res.power": 56000
+          },
+          "timeSec": 28512,
+          "soloTaskSlots": 15,
+          "might": 39096300
+        },
+        "20": {
+          "cost": {
+            "res.cash": 140000,
+            "res.oil": 89000,
+            "res.power": 78000
+          },
+          "timeSec": 33696,
+          "soloTaskSlots": 17,
+          "might": 48000000
+        },
+        "21": {
+          "cost": {
+            "res.cash": 200000,
+            "res.oil": 120000,
+            "res.power": 110000
+          },
+          "timeSec": 38880,
+          "soloTaskSlots": 19,
+          "might": 58344300
+        },
+        "22": {
+          "cost": {
+            "res.cash": 280000,
+            "res.oil": 170000,
+            "res.power": 150000
+          },
+          "timeSec": 44064,
+          "soloTaskSlots": 22,
+          "might": 70276800
+        },
+        "23": {
+          "cost": {
+            "res.cash": 400000,
+            "res.oil": 240000,
+            "res.power": 210000
+          },
+          "timeSec": 49248,
+          "soloTaskSlots": 24,
+          "might": 83952300
+        },
+        "24": {
+          "cost": {
+            "res.cash": 560000,
+            "res.oil": 340000,
+            "res.power": 300000
+          },
+          "timeSec": 54432,
+          "soloTaskSlots": 27,
+          "might": 99532800
+        },
+        "25": {
+          "cost": {
+            "res.cash": 780000,
+            "res.oil": 480000,
+            "res.power": 420000
+          },
+          "timeSec": 59616,
+          "soloTaskSlots": 30,
+          "might": 117187500
+        },
+        "26": {
+          "cost": {
+            "res.cash": 1100000,
+            "res.oil": 670000,
+            "res.power": 590000
+          },
+          "timeSec": 64800,
+          "soloTaskSlots": 34,
+          "might": 137092800
+        },
+        "27": {
+          "cost": {
+            "res.cash": 1500000,
+            "res.oil": 940000,
+            "res.power": 820000
+          },
+          "timeSec": 69984,
+          "soloTaskSlots": 38,
+          "might": 159432300
+        },
+        "28": {
+          "cost": {
+            "res.cash": 2100000,
+            "res.oil": 1300000,
+            "res.power": 1100000
+          },
+          "timeSec": 75168,
+          "soloTaskSlots": 43,
+          "might": 184396800
+        },
+        "29": {
+          "cost": {
+            "res.cash": 3000000,
+            "res.oil": 1800000,
+            "res.power": 1600000
+          },
+          "timeSec": 80352,
+          "soloTaskSlots": 48,
+          "might": 212184300
+        },
+        "30": {
+          "cost": {
+            "res.cash": 4200000,
+            "res.oil": 2600000,
+            "res.power": 2300000
+          },
+          "timeSec": 88128,
+          "soloTaskSlots": 53,
+          "might": 243000000
+        }
+      }
+    },
+    "building.milestone": {
+      "unlockAtKeep": 1,
+      "special": "server_progress",
+      "upgradable": false,
+      "role": "Monument — shows server-wide progress and triggers server-wide rewards. Display/meta, not a resource-upgrade building. Backend-driven, later."
+    }
+  },
+  "troops": {
+    "troop.army": {
+      "arm": "ground",
+      "tiers": {
+        "1": {
+          "cost": {
+            "res.cash": 15,
+            "res.oil": 10
+          },
+          "trainTimeSec": 6,
+          "attack": 6,
+          "defense": 6,
+          "power": 2,
+          "load": 12,
+          "unlockAtTrainingBuilding": 1
+        },
+        "2": {
+          "cost": {
+            "res.cash": 26,
+            "res.oil": 17
+          },
+          "trainTimeSec": 8,
+          "attack": 8,
+          "defense": 7,
+          "power": 4,
+          "load": 13,
+          "unlockAtTrainingBuilding": 3
+        },
+        "3": {
+          "cost": {
+            "res.cash": 43,
+            "res.oil": 29
+          },
+          "trainTimeSec": 10,
+          "attack": 10,
+          "defense": 8,
+          "power": 8,
+          "load": 15,
+          "unlockAtTrainingBuilding": 6
+        },
+        "4": {
+          "cost": {
+            "res.cash": 74,
+            "res.oil": 49
+          },
+          "trainTimeSec": 13,
+          "attack": 13,
+          "defense": 9,
+          "power": 16,
+          "load": 17,
+          "unlockAtTrainingBuilding": 9
+        },
+        "5": {
+          "cost": {
+            "res.cash": 130,
+            "res.oil": 84
+          },
+          "trainTimeSec": 17,
+          "attack": 17,
+          "defense": 10,
+          "power": 24,
+          "load": 19,
+          "unlockAtTrainingBuilding": 12
+        },
+        "6": {
+          "cost": {
+            "res.cash": 210,
+            "res.oil": 140
+          },
+          "trainTimeSec": 22,
+          "attack": 22,
+          "defense": 12,
+          "power": 36,
+          "load": 21,
+          "unlockAtTrainingBuilding": 15
+        },
+        "7": {
+          "cost": {
+            "res.cash": 360,
+            "res.oil": 240
+          },
+          "trainTimeSec": 29,
+          "attack": 29,
+          "defense": 14,
+          "power": 52,
+          "load": 24,
+          "unlockAtTrainingBuilding": 18
+        },
+        "8": {
+          "cost": {
+            "res.cash": 620,
+            "res.oil": 410
+          },
+          "trainTimeSec": 38,
+          "attack": 38,
+          "defense": 16,
+          "power": 72,
+          "load": 27,
+          "unlockAtTrainingBuilding": 22
+        },
+        "9": {
+          "cost": {
+            "res.cash": 1000,
+            "res.oil": 700
+          },
+          "trainTimeSec": 49,
+          "attack": 49,
+          "defense": 18,
+          "power": 96,
+          "load": 30,
+          "unlockAtTrainingBuilding": 26
+        },
+        "10": {
+          "cost": {
+            "res.cash": 1800,
+            "res.oil": 1200
+          },
+          "trainTimeSec": 64,
+          "attack": 64,
+          "defense": 21,
+          "power": 128,
+          "load": 33,
+          "unlockAtTrainingBuilding": 30
+        }
+      }
+    },
+    "troop.navy": {
+      "arm": "sea",
+      "tiers": {
+        "1": {
+          "cost": {
+            "res.cash": 20,
+            "res.oil": 15
+          },
+          "trainTimeSec": 9,
+          "attack": 8,
+          "defense": 5,
+          "power": 2,
+          "load": 8,
+          "unlockAtTrainingBuilding": 1
+        },
+        "2": {
+          "cost": {
+            "res.cash": 34,
+            "res.oil": 26
+          },
+          "trainTimeSec": 12,
+          "attack": 10,
+          "defense": 6,
+          "power": 4,
+          "load": 9,
+          "unlockAtTrainingBuilding": 3
+        },
+        "3": {
+          "cost": {
+            "res.cash": 58,
+            "res.oil": 43
+          },
+          "trainTimeSec": 15,
+          "attack": 14,
+          "defense": 7,
+          "power": 8,
+          "load": 10,
+          "unlockAtTrainingBuilding": 6
+        },
+        "4": {
+          "cost": {
+            "res.cash": 98,
+            "res.oil": 74
+          },
+          "trainTimeSec": 20,
+          "attack": 18,
+          "defense": 8,
+          "power": 16,
+          "load": 11,
+          "unlockAtTrainingBuilding": 9
+        },
+        "5": {
+          "cost": {
+            "res.cash": 170,
+            "res.oil": 130
+          },
+          "trainTimeSec": 26,
+          "attack": 23,
+          "defense": 9,
+          "power": 24,
+          "load": 13,
+          "unlockAtTrainingBuilding": 12
+        },
+        "6": {
+          "cost": {
+            "res.cash": 280,
+            "res.oil": 210
+          },
+          "trainTimeSec": 33,
+          "attack": 30,
+          "defense": 10,
+          "power": 36,
+          "load": 14,
+          "unlockAtTrainingBuilding": 15
+        },
+        "7": {
+          "cost": {
+            "res.cash": 480,
+            "res.oil": 360
+          },
+          "trainTimeSec": 43,
+          "attack": 39,
+          "defense": 12,
+          "power": 52,
+          "load": 16,
+          "unlockAtTrainingBuilding": 18
+        },
+        "8": {
+          "cost": {
+            "res.cash": 820,
+            "res.oil": 620
+          },
+          "trainTimeSec": 56,
+          "attack": 50,
+          "defense": 13,
+          "power": 72,
+          "load": 18,
+          "unlockAtTrainingBuilding": 22
+        },
+        "9": {
+          "cost": {
+            "res.cash": 1400,
+            "res.oil": 1000
+          },
+          "trainTimeSec": 73,
+          "attack": 65,
+          "defense": 15,
+          "power": 96,
+          "load": 20,
+          "unlockAtTrainingBuilding": 26
+        },
+        "10": {
+          "cost": {
+            "res.cash": 2400,
+            "res.oil": 1800
+          },
+          "trainTimeSec": 95,
+          "attack": 85,
+          "defense": 18,
+          "power": 128,
+          "load": 22,
+          "unlockAtTrainingBuilding": 30
+        }
+      }
+    },
+    "troop.air": {
+      "arm": "air",
+      "tiers": {
+        "1": {
+          "cost": {
+            "res.cash": 25,
+            "res.power": 15
+          },
+          "trainTimeSec": 12,
+          "attack": 10,
+          "defense": 4,
+          "power": 2,
+          "load": 6,
+          "unlockAtTrainingBuilding": 1
+        },
+        "2": {
+          "cost": {
+            "res.cash": 43,
+            "res.power": 26
+          },
+          "trainTimeSec": 16,
+          "attack": 13,
+          "defense": 5,
+          "power": 4,
+          "load": 7,
+          "unlockAtTrainingBuilding": 3
+        },
+        "3": {
+          "cost": {
+            "res.cash": 72,
+            "res.power": 43
+          },
+          "trainTimeSec": 20,
+          "attack": 17,
+          "defense": 5,
+          "power": 8,
+          "load": 8,
+          "unlockAtTrainingBuilding": 6
+        },
+        "4": {
+          "cost": {
+            "res.cash": 120,
+            "res.power": 74
+          },
+          "trainTimeSec": 26,
+          "attack": 22,
+          "defense": 6,
+          "power": 16,
+          "load": 8,
+          "unlockAtTrainingBuilding": 9
+        },
+        "5": {
+          "cost": {
+            "res.cash": 210,
+            "res.power": 130
+          },
+          "trainTimeSec": 34,
+          "attack": 29,
+          "defense": 7,
+          "power": 24,
+          "load": 9,
+          "unlockAtTrainingBuilding": 12
+        },
+        "6": {
+          "cost": {
+            "res.cash": 350,
+            "res.power": 210
+          },
+          "trainTimeSec": 45,
+          "attack": 37,
+          "defense": 8,
+          "power": 36,
+          "load": 11,
+          "unlockAtTrainingBuilding": 15
+        },
+        "7": {
+          "cost": {
+            "res.cash": 600,
+            "res.power": 360
+          },
+          "trainTimeSec": 58,
+          "attack": 48,
+          "defense": 9,
+          "power": 52,
+          "load": 12,
+          "unlockAtTrainingBuilding": 18
+        },
+        "8": {
+          "cost": {
+            "res.cash": 1000,
+            "res.power": 620
+          },
+          "trainTimeSec": 75,
+          "attack": 63,
+          "defense": 11,
+          "power": 72,
+          "load": 13,
+          "unlockAtTrainingBuilding": 22
+        },
+        "9": {
+          "cost": {
+            "res.cash": 1700,
+            "res.power": 1000
+          },
+          "trainTimeSec": 98,
+          "attack": 82,
+          "defense": 12,
+          "power": 96,
+          "load": 15,
+          "unlockAtTrainingBuilding": 26
+        },
+        "10": {
+          "cost": {
+            "res.cash": 3000,
+            "res.power": 1800
+          },
+          "trainTimeSec": 127,
+          "attack": 106,
+          "defense": 14,
+          "power": 128,
+          "load": 17,
+          "unlockAtTrainingBuilding": 30
+        }
+      }
+    }
+  },
+  "townhallPrerequisites": {
+    "note": "To upgrade Townhall to level L, every listed building must be at >= L-1. FIXED & known (not random), so players can plan. Warehouse is the anchor from L3+. Count escalates 2/3/4. Specialized training buildings are elective branches and are intentionally not Townhall prerequisites.",
+    "requiresLevel": "L-1",
+    "bands": [
+      {
+        "fromLevel": 2,
+        "toLevel": 19,
+        "count": 2
+      },
+      {
+        "fromLevel": 20,
+        "toLevel": 24,
+        "count": 3
+      },
+      {
+        "fromLevel": 25,
+        "toLevel": 30,
+        "count": 4
+      }
+    ],
+    "perLevel": {
+      "2": [
+        "building.bank",
+        "building.powerplant"
+      ],
+      "3": [
+        "building.storage",
+        "building.bank"
+      ],
+      "4": [
+        "building.storage",
+        "building.oilwell"
+      ],
+      "5": [
+        "building.storage",
+        "building.powerplant"
+      ],
+      "6": [
+        "building.storage",
+        "building.bank"
+      ],
+      "7": [
+        "building.storage",
+        "building.oilwell"
+      ],
+      "8": [
+        "building.storage",
+        "building.powerplant"
+      ],
+      "9": [
+        "building.storage",
+        "building.bank"
+      ],
+      "10": [
+        "building.storage",
+        "building.oilwell"
+      ],
+      "11": [
+        "building.storage",
+        "building.powerplant"
+      ],
+      "12": [
+        "building.storage",
+        "building.bank"
+      ],
+      "13": [
+        "building.storage",
+        "building.oilwell"
+      ],
+      "14": [
+        "building.storage",
+        "building.powerplant"
+      ],
+      "15": [
+        "building.storage",
+        "building.bank"
+      ],
+      "16": [
+        "building.storage",
+        "building.oilwell"
+      ],
+      "17": [
+        "building.storage",
+        "building.powerplant"
+      ],
+      "18": [
+        "building.storage",
+        "building.bank"
+      ],
+      "19": [
+        "building.storage",
+        "building.oilwell"
+      ],
+      "20": [
+        "building.storage",
+        "building.wall",
+        "building.powerplant"
+      ],
+      "21": [
+        "building.storage",
+        "building.academy",
+        "building.bank"
+      ],
+      "22": [
+        "building.storage",
+        "building.wall",
+        "building.oilwell"
+      ],
+      "23": [
+        "building.storage",
+        "building.academy",
+        "building.powerplant"
+      ],
+      "24": [
+        "building.storage",
+        "building.wall",
+        "building.bank"
+      ],
+      "25": [
+        "building.storage",
+        "building.academy",
+        "building.oilwell",
+        "building.wall"
+      ],
+      "26": [
+        "building.storage",
+        "building.wall",
+        "building.powerplant",
+        "building.embassy"
+      ],
+      "27": [
+        "building.storage",
+        "building.academy",
+        "building.bank",
+        "building.wall"
+      ],
+      "28": [
+        "building.storage",
+        "building.wall",
+        "building.oilwell",
+        "building.embassy"
+      ],
+      "29": [
+        "building.storage",
+        "building.wall",
+        "building.powerplant",
+        "building.academy"
+      ],
+      "30": [
+        "building.storage",
+        "building.wall",
+        "building.bank",
+        "building.embassy"
+      ]
+    }
+  },
   "designTargets": {
-    "note": "Calibration targets the per-level tables must hit. The current cost/time/production values are FORMULA placeholders (base*growth^(L-1)); NEXT step is to migrate to explicit per-level tables baked to these targets and verify with a pacing simulator.",
+    "note": "Calibration targets for the explicit level tables and local pacing simulator.",
     "newbieToKeep10Days": "2-3 (Townhall L1->L10 is the newbie funnel; guided, deterministic)",
     "f2pToKeep30Days": "120-150 (~4-5 months, no speedups, 2 build slots, driven by TH + prerequisites + resource waits)",
     "curves": {
-      "buildingCostGrowthPerLevel": { "L1_10": 1.5, "L11_30": 1.65 },
-      "buildingTimeGrowthPerLevel": { "L1_10": 1.6, "L11_30": 1.37, "keepTimeBaseSec": 45 },
-      "productionUnit": "per-minute", "productionGrowthPerLevel": 1.3,
-      "otherBuildingsTimeVsKeep": "40-50% of Townhall time (TH is the long pole)"
+      "buildingCosts": "piecewise benchmark seed: x1.50 through L10, x1.40 after L10; tune individual rows",
+      "buildingTimes": "explicit by building family; Townhall is the long pole",
+      "productionUnit": "per-hour",
+      "production": "piecewise benchmark seed: x1.30 through L10, x1.22 after L10"
     },
-    "troops": { "tiers": 10, "costGrowthPerTier": 1.7, "timeGrowthPerTier": 1.3, "attackGrowthPerTier": 1.3, "defHpGrowthPerTier": 1.15, "counterBonusAtk": 0.10, "counter": "air>ground>sea>air" },
-    "combat": { "lootEqualsTroopLoad": true, "gatherEqualsTroopLoad": true, "woundedToHospitalCapThenDead": true, "woundedRatio": 0.7 }
+    "troops": {
+      "tiers": 10,
+      "costGrowthPerTier": 1.7,
+      "timeGrowthPerTier": 1.3,
+      "attackGrowthPerTier": 1.3,
+      "defHpGrowthPerTier": 1.15,
+      "counterBonusAtk": 0.1,
+      "counter": "air>ground>sea>air",
+      "tierUnlockSource": "corresponding training-building level"
+    },
+    "combat": {
+      "lootEqualsTroopLoad": true,
+      "gatherEqualsTroopLoad": true,
+      "woundedToHospitalCapThenDead": true,
+      "woundedRatio": 0.7
+    },
+    "calibration": {
+      "model": "3 sessions/day, 85% build-queue uptime, 12h collector cap",
+      "includedFaucets": [
+        "starting resources",
+        "passive city production"
+      ],
+      "excludedFaucets": [
+        "tutorial rewards",
+        "daily tasks",
+        "gathering",
+        "PvE",
+        "events",
+        "paid speedups"
+      ],
+      "note": "Early producer output is intentionally generous while outside-city faucets are absent. Rebalance producer output downward when those faucets ship. Initial explicit-table calibration: 4.5x the old placeholder production; post-L10 build times: 0.5x the first bake."
+    },
+    "might": {
+      "earlyGame": "Infrastructure dominates while troop queues are still filling.",
+      "matureNoHeroSystems": "At ~60% troop-cap fill, target ~25% infrastructure / ~75% troop Might.",
+      "warning": "Might is a progression/status score, not the combat formula. Combat uses attack/defense, counters, march composition and later buffs."
+    }
   }
 }

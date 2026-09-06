@@ -53,6 +53,9 @@ the war. `war.isolation` (snapshot in, no write-back) is retention-critical.
   **Warehouse is the always-anchor**; count escalates 2/3/4 across L2–19 / 20–24 / 25–30; fixed & known (not random).
 - **F2P pacing targets**: Townhall L1→L10 in ~2–3 days (newbie), L1→L30 in ~4–5 months (no speedups).
   First-version numbers reference real SLG curves (WoS/CoC/RoK), not guesses; `numbers.json → designTargets` holds the calibration.
+- **Might is status, not battle outcome:** it is the sum of permanent Infrastructure Might and
+  fielded Troop Might. Current mature-city calibration targets roughly 20–30% infrastructure and
+  70–80% troops; actual combat uses troop stats/counters and defensive modifiers.
 - **Read-only / non-custodial always.** We only read the wallet + one optional signature.
   Never a fund-moving transaction. (Consumer-facing copy — never spec-speak in the UI.)
 
@@ -60,8 +63,8 @@ the war. `war.isolation` (snapshot in, no write-back) is retention-critical.
 - **`docs/naming-bible.md`** — every game feature has a stable `Key` + `Concept` (the anchor)
   + an editable Themed Name. **All code references the `Key`, never the themed name.**
   New features: ADD `Key`+`Concept`, leave the themed name for the product owner. Package (themed copy) LAST.
-- **`docs/numbers.json`** (+ human-readable `docs/NUMBERS.md`) — the numeric source of truth,
-  CoC-early-game-tuned, formula-driven (`value(L)=base*growth^(L-1)`). Tune curves, not code.
+- **`docs/numbers.json`** (+ human-readable `docs/NUMBERS.md`) — the numeric source of truth.
+  Buildings use explicit Lv.1–30 rows and troop arms use explicit T1–T10 rows, so every level can be tuned without code changes.
 
 ## 6. Tech decisions
 - **Standalone repo (Alliance)**, separate from Blockwick.
@@ -83,7 +86,7 @@ the war. `war.isolation` (snapshot in, no write-back) is retention-critical.
 
 ## 7. Roadmap
 **Phase 1 — Personal-mode MVP** (current). Scope:
-Townhall(Keep) leveling + build queue · 3 resources + storage/protection · barracks/troops ·
+Townhall(Keep) leveling + build queue · 3 resources + storage/protection · three specialized training buildings/troops ·
 hospital (wounded) · wall · living world map (explore/gather/PvE monsters/raid NPC keeps) ·
 might · offline progress · shields · start screen (connect → holdings → optional pledge →
 found Townhall) · local persistence + stub-then-real identity.

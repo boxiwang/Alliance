@@ -5,13 +5,14 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-05 · **by:** Claude (with boxiwang) · **← HANDOFF POINT**
-**Current focus:** Phase 1 — personal-mode MVP (in-city). Design locked; next is the per-level data migration.
+**Last updated:** 2026-09-05 · **by:** Codex (with boxiwang)
+**Current focus:** Phase 1 — personal-mode MVP (in-city). Mechanics and balance tooling are live locally; 2.5D art direction is documented but not implemented.
 
 ## 🎯 Decisions locked (this session)
-- Theme: **Degen Wasteland** functions, BUT the economy reads as modern-military (Bank/Oil/Power, Navy/Army/Air)
-  — **OPEN: confirm setting = modern-military vs re-skin to wasteland** (build-by-key, so functions are unaffected).
-- Economy: 3 resources **Cash / Oil / Power**; 12 city buildings (see bible §20); troops **Army/Navy/Air, T1–T10**.
+- **No medieval theme.** Current leading visual exploration is **Degen Freeport**: a prosperous,
+  dangerous Crypto industrial port in a readable chibi 2.5D SLG style. The V3 concept is preferred
+  for exploration, but still needs an explicit production lock; see `docs/ART-DIRECTION.md`.
+- Economy: 3 resources **Cash / Oil / Power**; 14 city buildings (see bible §20); troops **Army/Navy/Air, T1–T10**.
 - **Townhall → L30**; shield lifts at L10; all buildings unlock by TH10.
 - **Prerequisites** (numbers.json → townhallPrerequisites): TH→L needs buildings ≥ L−1, **Warehouse anchor**,
   count **2/3/4** across L2–19 / 20–24 / 25–30, fixed & known (not random).
@@ -30,24 +31,35 @@ for the *why*; this file is the *where we are right now*.
 - Player-facing on-chain-activity/tasks **removed** (kept for backend only).
 - Dev telemetry sink `/__report` → `/tmp/ruglands-report.json` (lets us inspect the real
   local connect→read→analyze result without a screen).
-- **Solo Townhall** playable: 3 resources (Cash/Oil/Power) + 12 city buildings + 3 troop arms
+- **Solo Townhall** playable: 3 resources (Cash/Oil/Power) + 14 city buildings + 3 troop arms
   (Army/Navy/Air), build queue, offline progress, training, might — data-driven from `docs/numbers.json`.
-- **Numbers admin** at `/?admin` (hidden): edit all ~199 values, Save & reload / Reset / Export
+- **Numbers admin** at `/?admin` (hidden): edit ~1,900 explicit values, Save & reload / Reset / Export
   numbers.json. Game reads effective numbers via `src/lib/numbers.ts` (localStorage override or defaults).
   **Tuning workflow:** tune in /?admin → Export → overwrite `docs/numbers.json` → commit (team-shared).
-- Docs: `docs/DIRECTION.md`, naming bible (§20 = full building/resource/troop roster), numbers v0.3.
+- Docs: `docs/DIRECTION.md`, naming bible (§20 = full building/resource/troop roster), numbers v0.6.
+- **Explicit number tables (v0.6):** every building has editable Lv.1–30 rows; every troop arm has editable T1–T10 rows. Runtime building values are table lookups (no `base × growth`).
+- **Townhall prerequisites enforced:** `startUpgrade` blocks invalid upgrades and Town UI lists the exact building/level requirements.
+- **Local pacing simulator:** `/?admin` models prerequisites, 2 builders, starting resources, production, storage, 12h collection behavior and queue uptime. Default 3 sessions/day + 85% uptime baseline: **TH10 ≈ 3.0d, TH30 ≈ 122d**.
+- **Per-level admin tables:** building and troop rows are directly editable; simulator recalculates immediately before save/export.
+- **Config validation:** Admin checks missing/negative rows, troop unlock order, prerequisite bands, impossible unlocks, Warehouse/TH capacity deadlocks and pacing drift. Errors block Save.
+- **Playable T1–T10 training:** Town UI exposes tier unlocks; training cost/time, completion and Might use the selected tier's row. Old numeric troop saves migrate safely to T1.
+- **Three specialized training branches:** Army Camp / Naval Base / Airfield each owns its levels, troop capacity, speed, batch limit and simultaneous queue. Tiers unlock from the matching building level rather than Townhall; old Barracks saves migrate without losing levels or active training.
+- **Human-readable Balance Lab:** `/?admin` is organized into Pacing / Buildings / Troops / Game rules / Advanced. Buildings are grouped by purpose; table columns are grouped by cost, timing, output, unlock, training and combat. System keys/notes stay out of the normal workflow.
+- **Wallet-bound local GM mode:** open `/?gm` in the Vite dev server and connect the test wallet once. Town gets Fill resources / Finish queues / Selected building +1 / Townhall +1 / Reset city / Disable GM controls. Reset creates a clean but playable TH1 save with zero resources/troops. The grant is stored only for that browser + wallet, no address is committed, and production builds ignore `?gm`.
+- **Large-number denomination:** the UI presents resources and troop headcount at ×1,000. Costs, capacity and production use the same display denomination, so pacing and queue timing do not change. Both multipliers are editable under Admin → Game rules.
+- **Might v0.6:** total Might is split into permanent Infrastructure Might + fielded Troop Might. Building rows carry explicit cumulative Might; troop Might is displayed headcount × tier power. With all buildings Lv.30 and each arm at 60% capacity in T10, the current baseline is **23.9% infrastructure / 76.1% troops**. Might is a progression/status score, not the battle formula.
+- **Alliance/Solo onboarding separation:** wallet-held memecoins are the only cards in the Alliance picker. Solo is a separate Personal Mode path and is stored/displayed as “no alliance,” never as a synthetic alliance or banner.
+- **Local test suite:** `npm run check` runs TypeScript, 21 tests and the production build. Dependency audit is clean (0 vulnerabilities).
+- **Art-direction exploration (concept only):** three desktop SLG concepts are saved under
+  `docs/art/concepts/`. V1 establishes Degen Freeport, V2 broadens the audience with civic life and
+  NFT identity, and V3 converts it to a chunkier, more readable chibi 2.5D toy-diorama style.
 
 ## 🔜 Next up (immediate — for whoever picks this up)
-1. **Publish this repo to GitHub as `Alliance`** (see "Publishing" below — needs boxiwang auth).
-2. **Per-level data migration**: `numbers.json` cost/time/production are still FORMULA placeholders
-   (base·growth). Migrate to explicit **per-level tables** baked to `designTargets` (the agreed curves),
-   so every level is an editable value. Then game.ts reads table lookups instead of the formula.
-3. **F2P pacing simulator** (in the admin): compute time-to-TH10 and time-to-TH30 from current tables +
-   prerequisites + resource production; tune curves until L10 ≈ 2–3 days and TH30 ≈ 4–5 months.
-4. **Enforce prerequisites** in game logic (`startUpgrade`): block a TH upgrade until
-   `townhallPrerequisites[L]` buildings are ≥ L−1; surface the requirement in the Town UI.
-5. **Per-level admin dashboard**: extend `/?admin` so each building/troop opens a Lv-by-Lv table (editable rows).
-6. Then: outside-city **world map** (explore / gather / raid), and building special-functions
+1. Product owner: explicitly lock or revise the V3 chibi Degen Freeport direction before producing assets.
+2. Build one art vertical slice (Townhall/Exchange + Army Camp + Bank + terrain + core HUD) before commissioning or generating the full 14-building set.
+3. Add resource source/sink breakdown to the pacing simulator.
+4. Playtest the full L1→L10 city loop locally and tune individual rows from observed stalls/click cadence.
+5. Then: outside-city **world map** (explore / gather / raid), and building special-functions
    (Academy research tree, Embassy reinforcement, Milestone server-progress, Watchtower tasks) — all
    defined in bible §20–21 / numbers, wired later.
 
@@ -61,36 +73,30 @@ for the *why*; this file is the *where we are right now*.
 - Backend stack final call (leaning Cloudflare Workers + D1 + DO alarms).
 - When to move persistence local → D1, and identity stub → real SIWE/EIP-1271.
 - Faction "official registry" (which CAs are canonical factions) vs. any-held-memecoin.
+- Lock V3 chibi Degen Freeport as the production art direction, or request one more visual iteration.
+- NFT avatar scope: Robinhood Chain only for MVP, or later multi-chain discovery (Ethereum/Base/etc.).
 
 ## ▶️ Run
 ```bash
 npm install
 npm run dev            # http://localhost:5173  (open in a browser WITH a wallet extension)
+# For local GM tools, use http://localhost:5173/?gm once with the test wallet.
 ```
 Read what the local app actually connected to & read:
 ```bash
 cat /tmp/ruglands-report.json
 ```
 
-## 🚀 Publishing to GitHub (repo: Alliance)
-`gh` isn't installed on this machine and there's no token available, so this must be run by
-boxiwang. Everything is committed locally and ready:
-```bash
-# option A — GitHub CLI (after: brew install gh && gh auth login)
-gh repo create Alliance --private --source=. --push
-
-# option B — create an empty private "Alliance" repo on github.com, then:
-git remote add origin https://github.com/boxiwang/Alliance.git
-git push -u origin main
-```
-
 ## 🗂 Where things live
 - `docs/DIRECTION.md` — vision, structure, rules, tech, roadmap.
 - `docs/naming-bible.md` — feature Keys + concepts + themed names (**build by Key**).
 - `docs/numbers.json` / `docs/NUMBERS.md` — numeric source of truth.
+- `docs/ART-DIRECTION.md` / `docs/art/concepts/` — visual proposal, constraints and concept images.
 - `src/lib/wallet.ts` — EIP-6963 connect / chain switch / sign.
 - `src/lib/blockscout.ts` — read-only chain records.
 - `src/lib/profile.ts` — per-wallet save (localStorage), auto-name.
+- `src/lib/gm.ts` — localhost-only, wallet-bound GM grant and test helpers.
+- `src/lib/simulator.ts` — pure local build/resource pacing model used by Admin.
 - `src/lib/factions.ts` — pledgeable-from-holdings + seed top-factions.
 - `src/lib/tasks.ts` — derive signals from records (backend/telemetry only for now).
 - `src/App.tsx` — start-screen stage machine.

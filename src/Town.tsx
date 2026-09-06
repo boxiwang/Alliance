@@ -3,9 +3,16 @@ import {
   GameState, BKey, TroopKey, BUILDINGS, BUILDING_ORDER, RES, RES_ORDER, TROOPS_META, TROOP_ORDER,
   project, startUpgrade, startTrain, upgradeCost, upgradeTimeSec,
   isUnlocked, isUpgradable, unlockAtKeep, capForLevel, capacity, prodPerHour, maxTroops, totalTroops,
-  might, TROOPS,
+  mightBreakdown, troopStats, troopBatchCost, troopCountByType, maxTroopsForType, trainQueueSize, TRAINING_BUILDING,
+  displayResource, displayTroops,
+  townhallRequirements, missingTownhallPrerequisites,
 } from "./lib/game";
 import { loadGame, saveGame, initGame } from "./lib/gamestore";
+import {
+  gmFillResources, gmFinishQueues, gmRaiseTownhall,
+  gmRaiseBuilding, gmResetProgress,
+  grantLocalGm, hasLocalGm, localGmRequested, revokeLocalGm,
+} from "./lib/gm";
 import { Profile } from "./lib/profile";
 import { compact } from "./lib/format";
 
@@ -22,8 +29,10 @@ export default function Town({ address, profile }: { address: string; profile: P
   const [now, setNow] = useState(Date.now());
   const [msg, setMsg] = useState<string>("");
   const [away, setAway] = useState<{ cash: number; oil: number; power: number } | null>(null);
-  const [trainQty, setTrainQty] = useState(10);
-  const [trainType, setTrainType] = useState<TroopKey>("army");
+  const [trainQty, setTrainQty] = useState<Record<TroopKey, number>>({ army: 10, navy: 10, air: 10 });
+  const [trainTier, setTrainTier] = useState<Record<TroopKey, number>>({ army: 1, navy: 1, air: 1 });
+  const [gm, setGm] = useState(() => hasLocalGm(address));
+  const [gmBuilding, setGmBuilding] = useState<BKey>("keep");
   const savedOnce = useRef(false);
 
   // Offline progress on entry (once).
@@ -41,6 +50,13 @@ export default function Town({ address, profile }: { address: string; profile: P
     savedOnce.current = true;
   }, [address]);
 
+  // Local testing only: visiting localhost/?gm grants this connected wallet a
+  // browser-local GM flag. import.meta.env.DEV makes the path inert in builds.
+  useEffect(() => {
+    if (localGmRequested()) grantLocalGm(address);
+    setGm(hasLocalGm(address));
+  }, [address]);
+
   // Heartbeat: re-render every second; commit when something finishes.
   useEffect(() => {
     const id = setInterval(() => {
@@ -49,7 +65,7 @@ export default function Town({ address, profile }: { address: string; profile: P
       setGame((g) => {
         const anyDone =
           BUILDING_ORDER.some((k) => g.buildings[k].finishAt > 0 && t >= g.buildings[k].finishAt) ||
-          (g.train.finishAt > 0 && t >= g.train.finishAt);
+          TROOP_ORDER.some((type) => g.training[type].finishAt > 0 && t >= g.training[type].finishAt);
         if (anyDone) { const ng = project(g, t); saveGame(ng); return ng; }
         return g;
       });
@@ -62,6 +78,7 @@ export default function Town({ address, profile }: { address: string; profile: P
   const cap = capacity(view);
   const mt = maxTroops(view);
   const troopsTotal = totalTroops(view);
+  const mightScore = mightBreakdown(view);
 
   function act(fn: () => { state: GameState; ok: boolean; reason?: string }) {
     const r = fn();
@@ -69,7 +86,14 @@ export default function Town({ address, profile }: { address: string; profile: P
     else setMsg(r.reason || "Can't do that");
   }
 
-  const banner = profile.factionSymbol ? "$" + profile.factionSymbol : "Solo";
+  function gmAct(fn: (state: GameState) => GameState, message: string) {
+    const next = fn(game);
+    setGame(next);
+    saveGame(next);
+    setMsg(message);
+  }
+
+  const alliance = profile.factionSymbol ? "$" + profile.factionSymbol : "No alliance";
 
   return (
     <section className="town">
@@ -77,13 +101,41 @@ export default function Town({ address, profile }: { address: string; profile: P
       <div className="card cmdbar">
         <div className="cb-id">
           <span className="cb-name">{profile.name}</span>
-          <span className="cb-banner">{banner}</span>
+          <span className="cb-banner">{alliance}</span>
         </div>
         <div className="cb-stats">
-          <div className="cbs"><span>Might</span><b className="mono">{compact(might(view))}</b></div>
-          <div className="cbs"><span>Troops</span><b className="mono">{troopsTotal}/{mt}</b></div>
+          {gm && <div className="gm-badge">GM</div>}
+          <div className="cbs"><span>Might</span><b className="mono">{compact(mightScore.total)}</b><small className="mono">{compact(mightScore.infrastructure)} base · {compact(mightScore.troops)} troops</small></div>
+          <div className="cbs"><span>Troops</span><b className="mono">{compact(displayTroops(troopsTotal))}/{compact(displayTroops(mt))}</b></div>
         </div>
       </div>
+
+
+      {gm && (
+        <div className="gm-panel">
+          <div className="gm-panel-copy"><b>Local GM tools</b><span>Only this browser + wallet on localhost. Never active in production.</span></div>
+          <div className="gm-actions">
+            <button onClick={() => gmAct(gmFillResources, "GM: resources filled to Warehouse capacity.")}>Fill resources</button>
+            <button onClick={() => gmAct(gmFinishQueues, "GM: active build and training queues completed.")}>Finish queues</button>
+            <span className="gm-building-stepper">
+              <select aria-label="GM building" value={gmBuilding} onChange={(event) => setGmBuilding(event.target.value as BKey)}>
+                {BUILDING_ORDER.filter(isUpgradable).map((building) => <option value={building} key={building}>{BUILDINGS[building].label} · Lv.{view.buildings[building].lvl}</option>)}
+              </select>
+              <button disabled={view.buildings[gmBuilding].lvl >= 30} onClick={() => gmAct((state) => gmRaiseBuilding(state, gmBuilding), `GM: ${BUILDINGS[gmBuilding].label} raised by one level.`)}>Selected building +1</button>
+            </span>
+            <button disabled={view.buildings.keep.lvl >= 30} onClick={() => gmAct(gmRaiseTownhall, "GM: Townhall raised by one level.")}>Townhall +1</button>
+            <button className="gm-reset" onClick={() => {
+              if (!window.confirm("Reset this wallet's city? Buildings, resources, troops and queues will be cleared. Townhall returns to Lv.1.")) return;
+              const next = gmResetProgress(address);
+              setAway(null);
+              setGame(next);
+              saveGame(next);
+              setMsg("GM: city reset to a blank Townhall Lv.1 test state.");
+            }}>Reset city</button>
+            <button className="gm-off" onClick={() => { revokeLocalGm(address); setGm(false); setMsg(""); }}>Disable GM</button>
+          </div>
+        </div>
+      )}
 
       {/* resources */}
       <div className="resbar">
@@ -92,19 +144,19 @@ export default function Town({ address, profile }: { address: string; profile: P
           return (
             <div className="resbox" key={r}>
               <div className="rhead"><span>{RES[r].emoji} {RES[r].label}</span>
-                <span className="mono">{compact(cur)}<span className="cap">/{compact(cap)}</span></span></div>
+                <span className="mono">{compact(displayResource(cur))}<span className="cap">/{compact(displayResource(cap))}</span></span></div>
               <div className="rmeter"><i style={{ width: pct + "%" }} className={cur >= cap ? "full" : ""} /></div>
-              <div className="rrate mono">+{compact(rate[r])}/hr</div>
+              <div className="rrate mono">+{compact(displayResource(rate[r]))}/hr</div>
             </div>
           );
         })}
       </div>
 
       {away && (away.cash > 0 || away.oil > 0 || away.power > 0) && (
-        <div className="awaynote">🌙 While you were away: <b>+{compact(away.cash)} Cash</b>, <b>+{compact(away.oil)} Oil</b>, <b>+{compact(away.power)} Power</b>
+        <div className="awaynote">🌙 While you were away: <b>+{compact(displayResource(away.cash))} Cash</b>, <b>+{compact(displayResource(away.oil))} Oil</b>, <b>+{compact(displayResource(away.power))} Power</b>
           <button className="mini" onClick={() => setAway(null)}>collect</button></div>
       )}
-      {msg && <div className="gmsg">{msg}</div>}
+      {msg && <div className={"gmsg" + (msg.startsWith("GM:") ? " gmmsg" : "")}>{msg}</div>}
 
       {/* buildings */}
       <div className="ct town-ct">Your keep</div>
@@ -112,47 +164,74 @@ export default function Town({ address, profile }: { address: string; profile: P
         {BUILDING_ORDER.map((k) => renderBuilding(k))}
       </div>
 
-      {/* barracks / training */}
-      {view.buildings.barracks.lvl >= 1 && (
-        <div className="card trainer">
-          <div className="ct">Muster troops <span className="from">{fmtSec(TROOPS[trainType].trainTimeSec)} base</span></div>
-          {view.train.finishAt > 0 ? (
-            <div className="training">
-              <div className="tr-row"><span>Training {view.train.qty} {TROOPS_META[view.train.type].label}</span><span className="mono">{fmtMs(view.train.finishAt - now)}</span></div>
-              <div className="rmeter"><i style={{ width: trainPct(view, now) + "%" }} /></div>
-            </div>
-          ) : (
-            <div className="trainctl">
-              <div className="qty">
-                {TROOP_ORDER.map((t) => (
-                  <button key={t} className={"chip" + (trainType === t ? " on" : "")} onClick={() => setTrainType(t)}>
-                    {TROOPS_META[t].emoji} {TROOPS_META[t].label}
-                  </button>
-                ))}
-              </div>
-              <div className="qty">
-                {[10, 50].map((q) => <button key={q} className={"chip" + (trainQty === q ? " on" : "")} onClick={() => setTrainQty(q)}>{q}</button>)}
-                <button className={"chip" + (trainQty === -1 ? " on" : "")} onClick={() => setTrainQty(-1)}>max</button>
-              </div>
-              <div className="bcost mono">
-                {RES_ORDER.map((r) => TROOPS[trainType].cost[r] ? `${TROOPS[trainType].cost[r]}${RES[r].emoji} ` : "").join("")}each
-              </div>
-              <button className="cta sm" onClick={() => act(() => startTrain(game, trainType, trainQty === -1 ? mt - troopsTotal : trainQty))}>
-                Train {trainQty === -1 ? Math.max(0, mt - troopsTotal) : trainQty}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Each troop arm has its own building, tier ladder and training queue. */}
+      <div className="ct town-ct">Training grounds <span className="from">upgrade each building to unlock that arm's higher tiers</span></div>
+      <div className="trainer-grid">
+        {TROOP_ORDER.filter((type) => view.buildings[TRAINING_BUILDING[type]].lvl >= 1).map(renderTrainer)}
+      </div>
 
       <div className="worldsoon">🗺️ The world map — explore, gather, raid — is the next build.</div>
     </section>
   );
 
-  function trainPct(v: GameState, t: number) {
-    const total = v.train.per * v.train.qty * 1000;
+  function trainPct(v: GameState, type: TroopKey, t: number) {
+    const queue = v.training[type];
+    const total = queue.per * queue.qty * 1000;
     if (total <= 0) return 0;
-    return Math.min(100, ((total - (v.train.finishAt - t)) / total) * 100);
+    return Math.min(100, ((total - (queue.finishAt - t)) / total) * 100);
+  }
+
+  function renderTrainer(type: TroopKey) {
+    const buildingKey = TRAINING_BUILDING[type];
+    const building = view.buildings[buildingKey];
+    const queue = view.training[type];
+    const tier = trainTier[type];
+    const quantityChoice = trainQty[type];
+    const stats = troopStats(type, tier)!;
+    const armCount = troopCountByType(view, type);
+    const armCapacity = maxTroopsForType(view, type);
+    const queueCapacity = trainQueueSize(view, type);
+    const maxQuantity = Math.max(0, Math.min(armCapacity - armCount, queueCapacity));
+    const quantity = Math.max(0, Math.min(quantityChoice === -1 ? maxQuantity : quantityChoice, maxQuantity));
+    const batchCost = troopBatchCost(type, tier, quantity);
+
+    return (
+      <div className="card trainer" key={type}>
+        <div className="trainer-head">
+          <div className="ct">{TROOPS_META[type].emoji} {BUILDINGS[buildingKey].label} <span className="from">Lv.{building.lvl}</span></div>
+          <span className="trainer-cap mono">{compact(displayTroops(armCount))}/{compact(displayTroops(armCapacity))} · batch {compact(displayTroops(queueCapacity))}</span>
+        </div>
+        {queue.finishAt > 0 ? (
+          <div className="training">
+            <div className="tr-row"><span>Training {compact(displayTroops(queue.qty))} T{queue.tier} {TROOPS_META[type].label}</span><span className="mono">{fmtMs(queue.finishAt - now)}</span></div>
+            <div className="rmeter"><i style={{ width: trainPct(view, type, now) + "%" }} /></div>
+          </div>
+        ) : (
+          <div className="trainctl">
+            <div className="train-section">
+              <span className="train-label">TIER</span>
+              <div className="qty tier-row">
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((candidate) => {
+                  const candidateStats = troopStats(type, candidate)!;
+                  const requiredLevel = candidateStats.unlockAtTrainingBuilding;
+                  const unlocked = requiredLevel <= building.lvl;
+                  return <button key={candidate} disabled={!unlocked} title={unlocked ? `T${candidate}` : `Requires ${BUILDINGS[buildingKey].label} Lv.${requiredLevel}`} className={"chip tier-chip" + (tier === candidate ? " on" : "")} onClick={() => setTrainTier((current) => ({ ...current, [type]: candidate }))}>T{candidate}</button>;
+                })}
+              </div>
+            </div>
+            <div className="train-section train-bottom">
+              <div className="qty">
+                {[10, 50].map((q) => <button key={q} className={"chip" + (quantityChoice === q ? " on" : "")} onClick={() => setTrainQty((current) => ({ ...current, [type]: q }))}>{compact(displayTroops(q))}</button>)}
+                <button className={"chip" + (quantityChoice === -1 ? " on" : "")} onClick={() => setTrainQty((current) => ({ ...current, [type]: -1 }))}>max</button>
+              </div>
+              <div className="troop-stats mono">T{tier} · ATK {stats.attack} · DEF {stats.defense} · MIGHT {stats.power}</div>
+              <div className="bcost mono">Batch: {RES_ORDER.map((r) => batchCost[r] ? `${compact(displayResource(batchCost[r]!))}${RES[r].emoji} ` : "").join("")}· {fmtSec(stats.trainTimeSec)} / {compact(displayTroops(1))}</div>
+              <button className="cta sm" disabled={quantity <= 0} onClick={() => act(() => startTrain(game, type, tier, quantity))}>Train {compact(displayTroops(quantity))} T{tier}</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   }
 
   function renderBuilding(k: BKey) {
@@ -165,6 +244,8 @@ export default function Town({ address, profile }: { address: string; profile: P
     const atCap = !locked && b.lvl >= capForLevel(view, k);
     const cost = upgradable ? upgradeCost(k, target) : {};
     const time = upgradable ? upgradeTimeSec(k, target) : 0;
+    const requirements = k === "keep" ? townhallRequirements(target) : [];
+    const missingRequirements = k === "keep" ? missingTownhallPrerequisites(view, target) : [];
 
     return (
       <div className={"bcard" + (locked ? " locked" : "")} key={k}>
@@ -188,12 +269,17 @@ export default function Town({ address, profile }: { address: string; profile: P
           ) : atCap ? (
             <div className="bgate">Raise Townhall to upgrade</div>
           ) : (
-            <button className="bupg" onClick={() => act(() => startUpgrade(game, k))}>
+            <button className="bupg" disabled={missingRequirements.length > 0} onClick={() => act(() => startUpgrade(game, k))}>
               <span>{b.lvl === 0 ? "Build" : "Upgrade → Lv." + target}</span>
               <span className="bcost mono">
-                {RES_ORDER.map((r) => cost[r] ? `${compact(cost[r]!)}${RES[r].emoji} ` : "").join("")}· {fmtSec(time)}
+                {RES_ORDER.map((r) => cost[r] ? `${compact(displayResource(cost[r]!))}${RES[r].emoji} ` : "").join("")}· {fmtSec(time)}
               </span>
             </button>
+          )}
+          {!locked && !upgrading && k === "keep" && requirements.length > 0 && (
+            <div className={"breqs" + (missingRequirements.length > 0 ? " missing" : " met")}>
+              Requires {requirements.map((req) => `${BUILDINGS[req].label} Lv.${target - 1}`).join(" · ")}
+            </div>
           )}
         </div>
       </div>

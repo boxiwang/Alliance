@@ -8,6 +8,8 @@ import { loadProfile, saveProfile, clearProfile, autoName, Profile } from "./lib
 import { fromRaw, compact, usd, shortAddr } from "./lib/format";
 import Town from "./Town";
 import Admin from "./Admin";
+import AlliancePicker from "./AlliancePicker";
+import { grantLocalGm, localGmRequested } from "./lib/gm";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "town";
 
@@ -29,6 +31,9 @@ export default function App() {
   const [error, setError] = useState<string>("");
 
   useEffect(() => subscribeProviders(setDetected), []);
+  useEffect(() => {
+    if (address && localGmRequested()) grantLocalGm(address);
+  }, [address]);
   const wallets = useMemo(() => resolveWallets(detected), [detected]);
 
   const memes = records ? memeHoldings(records) : [];
@@ -55,8 +60,9 @@ export default function App() {
       setRecords(recs);
       const existing = loadProfile(res.address);
       setProfile(existing);
-      setStage(existing ? "resume" : "start");
-      report(recs, { wallet: w.name, chainOk: res.chainOk, stage: existing ? "resume" : "start", profile: existing });
+      const nextStage = existing ? (localGmRequested() ? "town" : "resume") : "start";
+      setStage(nextStage);
+      report(recs, { wallet: w.name, chainOk: res.chainOk, stage: nextStage, profile: existing });
     } catch (e: any) {
       setError(e?.message || "Couldn't connect. Try again?");
     } finally {
@@ -64,9 +70,9 @@ export default function App() {
     }
   }
 
-  function found() {
+  function found(factionCA: string | null) {
     if (!records) return;
-    const chosen = memes.find((m) => m.address === selectedCA) || null;
+    const chosen = memes.find((m) => m.address === factionCA) || null;
     const p: Profile = {
       address,
       name: autoName(address),
@@ -78,7 +84,7 @@ export default function App() {
     };
     saveProfile(p);
     setProfile(p);
-    setStage("founded");
+    setStage(localGmRequested() ? "town" : "founded");
     report(records, { wallet: walletName, chainOk, stage: "founded", profile: p });
   }
 
@@ -146,6 +152,11 @@ export default function App() {
       </header>
 
       {error && <div className="banner err">{error}</div>}
+      {localGmRequested() && stage !== "town" && (
+        <div className="banner gm-notice">
+          🧪 GM test mode — connect your test wallet to enter its Town with Fill resources, Finish queues and Townhall +1.
+        </div>
+      )}
 
       {stage === "connect" && (
         <section className="connect">
@@ -183,28 +194,34 @@ export default function App() {
               <div className="k">Welcome back</div>
               <div className="pname">{profile.name}</div>
               <div className="psub">
-                Townhall Lv.{profile.keepLevel} ·{" "}
-                {profile.factionSymbol ? <>flying <b>${profile.factionSymbol}</b></> : "no banner (solo)"}
+                Personal Mode · Townhall Lv.{profile.keepLevel} ·{" "}
+                {profile.factionSymbol ? <>Alliance <b>${profile.factionSymbol}</b></> : "No alliance"}
               </div>
             </div>
             <button className="cta" onClick={() => setStage("town")}>Enter the Frontier →</button>
           </div>
           {memes.length > 0 && (
             <div className="card">
-              <div className="ct">Change your banner <span className="from">hold the coin, fly the flag — switch anytime</span></div>
-              <div className="fgrid">
-                <button className={"fcard" + (!profile.faction ? " sel" : "")} onClick={() => switchFaction(null, null)}>
-                  <span className="femoji">🏳️</span><span className="fsym">Solo</span><span className="fname">no banner</span>
-                </button>
-                {pledgeable.map((f) => (
-                  <button key={f.ca} className={"fcard" + (profile.faction === f.ca ? " sel" : "")} onClick={() => switchFaction(f.ca, f.symbol)}>
-                    {f.icon ? <img className="ficon" src={f.icon} alt="" /> : <span className="femoji">🏴</span>}
-                    <span className="fsym">${f.symbol}</span><span className="fname">{f.name}</span>
-                  </button>
-                ))}
-              </div>
+              <div className="ct">Choose an alliance <span className="from">only alliances whose token you currently hold</span></div>
+              <AlliancePicker
+                alliances={pledgeable}
+                selectedCA={profile.faction}
+                onSelect={(alliance) => switchFaction(alliance.ca, alliance.symbol)}
+              />
             </div>
           )}
+          <div className={"solo-option" + (!profile.faction ? " active" : "")}>
+            <div className="solo-copy">
+              <span className="mode-label">PERSONAL MODE</span>
+              <b>{profile.faction ? "Leave your alliance" : "Playing without an alliance"}</b>
+              <span>Solo keeps your city progression and open-world play separate from alliance membership.</span>
+            </div>
+            {profile.faction ? (
+              <button className="solo-button" onClick={() => switchFaction(null, null)}>Leave alliance</button>
+            ) : (
+              <span className="solo-status">Active</span>
+            )}
+          </div>
           <button className="mini out center" onClick={resetDev}>(dev) start over</button>
         </section>
       )}
@@ -213,7 +230,7 @@ export default function App() {
         <section className="mid">
           <div className="lede">
             <h1>Found your Townhall</h1>
-            <p>You’ll enter as <b>{autoName(address)}</b>. Pick a banner from a memecoin you hold — or start solo and choose one later.</p>
+            <p>You’ll enter Personal Mode as <b>{autoName(address)}</b>. Alliance membership is optional and can be changed later.</p>
           </div>
 
           {/* holdings summary */}
@@ -224,29 +241,41 @@ export default function App() {
             <b className="mono">{memes.length} memecoin{memes.length === 1 ? "" : "s"}</b>
           </div>
 
-          {/* banner pick */}
+          {/* Alliance membership: this list contains alliances only. */}
           <div className="card">
-            <div className="ct">Fly a banner <span className="from">optional — switch anytime you hold another coin</span></div>
+            <div className="ct">Choose an alliance <span className="from">select one whose token you hold</span></div>
             {memes.length === 0 ? (
               <div className="buyjoin">
-                <p>You don’t hold a memecoin yet — you need one to march under its banner.
-                  Grab any coin below to join its faction, or start solo for now.</p>
+                <p>You don’t currently hold an alliance token. You can still build in Personal Mode and join an alliance later.</p>
               </div>
             ) : (
-              <div className="fgrid">
-                {pledgeable.map((f) => (
-                  <button
-                    key={f.ca}
-                    className={"fcard" + (selectedCA === f.ca ? " sel" : "")}
-                    onClick={() => setSelectedCA(selectedCA === f.ca ? null : f.ca)}
-                  >
-                    {f.icon ? <img className="ficon" src={f.icon} alt="" /> : <span className="femoji">🏴</span>}
-                    <span className="fsym">${f.symbol}</span>
-                    <span className="fname">{f.name}</span>
-                  </button>
-                ))}
-              </div>
+              <AlliancePicker
+                alliances={pledgeable}
+                selectedCA={selectedCA}
+                onSelect={(alliance) => setSelectedCA(selectedCA === alliance.ca ? null : alliance.ca)}
+              />
             )}
+          </div>
+
+          {selectedCA ? (
+            <div className="ctarow alliance-cta">
+              <button className="cta big" onClick={() => found(selectedCA)}>
+                Join ${memes.find((m) => m.address === selectedCA)?.symbol} alliance &amp; found Townhall →
+              </button>
+              <div className="shieldnote">Alliance membership adds a shared layer; your Townhall remains your permanent personal progression.</div>
+            </div>
+          ) : (
+            <div className="alliance-prompt">Select an alliance above to join it.</div>
+          )}
+
+          {/* Solo is a personal play path, never an alliance card. */}
+          <div className="solo-option">
+            <div className="solo-copy">
+              <span className="mode-label">PERSONAL MODE</span>
+              <b>Build without an alliance</b>
+              <span>Found your city, grow your troops and explore independently. You can join an alliance later without restarting.</span>
+            </div>
+            <button className="solo-button" onClick={() => found(null)}>Start Solo →</button>
           </div>
 
           {/* top factions */}
@@ -268,12 +297,7 @@ export default function App() {
             <div className="note">Bigger factions pull more players — holding their coin is your ticket in. (Standings are illustrative during beta.)</div>
           </div>
 
-          <div className="ctarow">
-            <button className="cta big" onClick={found}>
-              {selectedCA
-                ? `Pledge $${memes.find((m) => m.address === selectedCA)?.symbol} & found Townhall →`
-                : "Start solo & found Townhall →"}
-            </button>
+          <div className="ctarow protection-row">
             <div className="shieldnote">🛡️ New keeps stay protected until Townhall Lv.10 — or until you throw the first punch.</div>
           </div>
         </section>
@@ -288,7 +312,8 @@ export default function App() {
             <h1>Townhall founded</h1>
             <div className="fsummary">
               <div><span>Commander</span><b>{profile.name}</b></div>
-              <div><span>Banner</span><b>{profile.factionSymbol ? "$" + profile.factionSymbol : "Solo — no banner"}</b></div>
+              <div><span>Mode</span><b>Personal</b></div>
+              <div><span>Alliance</span><b>{profile.factionSymbol ? "$" + profile.factionSymbol : "None"}</b></div>
               <div><span>Townhall</span><b>Lv.{profile.keepLevel}</b></div>
               <div><span>Protection</span><b>until Lv.10</b></div>
             </div>

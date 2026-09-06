@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 export {};
 
 export interface Eip1193Provider {
