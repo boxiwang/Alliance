@@ -80,11 +80,9 @@ export default function ExpeditionLab() {
   const [selId, setSelId] = useState<string | null>(null);
   const [tier, setTier] = useState(1);
   const [counts, setCounts] = useState<Record<TroopKey, number>>({ army: 100, navy: 0, air: 0 });
-  const [academy, setAcademy] = useState(1);
   const [result, setResult] = useState<any>(null);
   const [line, setLine] = useState<Placed | null>(null);
 
-  const maxAcademy = 1 + (N.gatherNodes?.academyGatherSpeedMaxBonus ?? 0);
   const sel = targets.find((t) => t.id === selId) || null;
 
   const force: Force = {
@@ -101,9 +99,9 @@ export default function ExpeditionLab() {
   function run(kind: string) {
     if (!sel) return;
     setLine(sel);
-    if (kind === "scout") setResult({ type: "scout", data: resolveScout(sel.target, N) });
+    if (kind === "scout" && sel.target.kind !== "node") setResult({ type: "scout", data: resolveScout(sel.target, N) });
     else if (kind === "gather" && sel.target.kind === "node")
-      setResult({ type: "gather", data: resolveGather(sel.target, carry, academy, N) });
+      setResult({ type: "gather", data: resolveGather(sel.target, carry, N) });
     else if (kind === "raid")
       setResult({ type: "combat", data: resolveCombat(force, sel.target, N) });
   }
@@ -161,16 +159,8 @@ export default function ExpeditionLab() {
                 </div>
               ))}
 
-              {sel.target.kind === "node" && (
-                <div className="exp-row">
-                  <label>Academy ×{academy.toFixed(2)}</label>
-                  <input type="range" min={1} max={maxAcademy} step={0.05} value={academy}
-                    onChange={(e) => setAcademy(Number(e.target.value))} />
-                </div>
-              )}
-
               <div className="exp-btns">
-                <button onClick={() => run("scout")}>🔭 Scout</button>
+                {sel.target.kind !== "node" && <button onClick={() => run("scout")}>🔭 Scout</button>}
                 {sel.target.kind === "node" && <button onClick={() => run("gather")}>⛏️ Gather</button>}
                 {(sel.target.kind === "monster" || sel.target.kind === "rival") && <button onClick={() => run("raid")}>⚔️ Raid</button>}
               </div>

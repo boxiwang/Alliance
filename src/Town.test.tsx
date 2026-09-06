@@ -9,6 +9,7 @@ describe("Town troop training UI", () => {
     const html = renderToStaticMarkup(
       <Town
         address="0xrender"
+        onWorld={() => {}}
         profile={{
           address: "0xrender",
           name: "Ruglord0000001",
@@ -36,6 +37,7 @@ describe("Town troop training UI", () => {
     const html = renderToStaticMarkup(
       <Town
         address="0xrender"
+        onWorld={() => {}}
         profile={{
           address: "0xrender",
           name: "Ruglord0000001",
@@ -50,6 +52,7 @@ describe("Town troop training UI", () => {
 
     expect(html).toContain("Local GM tools");
     expect(html).toContain("Fill resources");
+    expect(html).toContain("Fill troops");
     expect(html).toContain("Finish queues");
     expect(html).toContain("Townhall +1");
     expect(html).toContain("Selected building +1");

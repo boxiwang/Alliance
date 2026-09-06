@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initGame } from "./gamestore";
 import { capacity, totalTroops } from "./game";
 import {
-  gmFillResources, gmFinishQueues, gmRaiseBuilding, gmRaiseTownhall, gmResetProgress,
+  gmFillResources, gmFillTroops, gmFinishQueues, gmRaiseBuilding, gmRaiseTownhall, gmResetProgress,
   grantLocalGm, hasLocalGm, localGmAvailable, localGmRequested, revokeLocalGm,
 } from "./gm";
 
@@ -58,6 +58,18 @@ describe("local GM tools", () => {
     expect(finished.buildings.bank.finishAt).toBe(0);
     expect(finished.troops.army["2"]).toBe(12);
     expect(finished.training.army.finishAt).toBe(0);
+  });
+
+  it("fills each unlocked troop arm to its own capacity", () => {
+    const game = initGame("0xgm");
+    game.buildings.armyCamp.lvl = 3;
+    game.buildings.navalBase.lvl = 2;
+    game.buildings.airfield.lvl = 1;
+    const filled = gmFillTroops(game);
+    expect(totalTroops(filled)).toBeGreaterThan(0);
+    expect(Object.values(filled.troops.army).reduce((sum, qty) => sum + qty, 0)).toBeGreaterThan(0);
+    expect(Object.values(filled.troops.navy).reduce((sum, qty) => sum + qty, 0)).toBeGreaterThan(0);
+    expect(Object.values(filled.troops.air).reduce((sum, qty) => sum + qty, 0)).toBeGreaterThan(0);
   });
 
   it("raises Townhall instantly but never beyond level 30", () => {

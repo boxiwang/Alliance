@@ -7,7 +7,7 @@
 // Follows simulator.ts's style: every exported function takes a `numbers: any` parameter
 // (default = the live getN()) so tests/UI can inject a fixture or an admin-tuned override.
 import { getN } from "./numbers";
-import { TroopKey, TROOP_ORDER, troopTierRow, buildingLevelRow } from "./game";
+import { TroopKey, TROOP_ORDER } from "./game";
 
 export type TargetKind = "monster" | "node" | "rival";
 export type ResKey = "cash" | "oil" | "power";
@@ -42,6 +42,7 @@ export interface MonsterTarget {
 }
 
 export type Target = RivalTarget | NodeTarget | MonsterTarget;
+export type ScoutableTarget = RivalTarget | MonsterTarget;
 
 /** The troops (+ future hero hooks) a player sends out on an expedition. */
 export interface Force {
@@ -79,10 +80,23 @@ function sumTroopCounts(troops: Record<TroopKey, Record<string, number>> | undef
   return TROOP_ORDER.reduce((sum, arm) => sum + Object.values(troops[arm] ?? {}).reduce((s, n) => s + (n || 0), 0), 0);
 }
 
+function troopRow(arm: TroopKey, tier: number, numbers: any): any {
+  return numbers.troops?.[`troop.${arm}`]?.tiers?.[String(tier)] ?? null;
+}
+
+function buildingRow(key: string, level: number, numbers: any): any {
+  return numbers.buildings?.[`building.${key}`]?.levels?.[String(level)] ?? null;
+}
+
+function accountBonus(key: string, numbers: any): number {
+  return Math.max(0, Number(numbers.global?.accountModifiers?.[key]) || 0);
+}
+
 // --- march -------------------------------------------------------------
 
 export function marchTimeSec(distanceTiles: number, numbers: any = getN()): number {
-  return distanceTiles * numbers.global.march.baseTravelSecondsPerTile;
+  const speed = 1 + accountBonus("marchSpeedBonus", numbers);
+  return Math.max(0, distanceTiles) * numbers.global.march.baseTravelSecondsPerTile / speed;
 }
 
 // --- carry / world helpers ----------------------------------------------
@@ -92,11 +106,12 @@ export function carryCapacity(force: Force, numbers: any = getN()): number {
   TROOP_ORDER.forEach((arm) => {
     const tiers = force.troops?.[arm] ?? {};
     for (const [tierText, count] of Object.entries(tiers)) {
-      const row = troopTierRow(arm, Number(tierText));
+      const row = troopRow(arm, Number(tierText), numbers);
       load += (count || 0) * (row?.load ?? 0);
     }
   });
-  return load + (force.heroCarry ?? 0) + (numbers.gatherNodes?.heroCarryBonus ?? 0);
+  const base = load + (force.heroCarry ?? 0) + (numbers.gatherNodes?.heroCarryBonus ?? 0);
+  return base * (1 + accountBonus("loadBonus", numbers));
 }
 
 /** Concentric world: ring 10 = outer edge, ring 1 = center. Node/monster level ~= (rings+1-ring). */
@@ -111,20 +126,18 @@ export function gatherNodeLevelRow(level: number, numbers: any = getN()): any {
 // --- gathering (task 3) ---------------------------------------------------
 
 /**
- * academySpeedMult is clamped to [1, 1 + academyGatherSpeedMaxBonus] — Academy research is the
- * lever for gather speed (bible §22 / gatherNodes.note), so it can only ever help, never hurt.
+ * Gather speed is an account-wide passive. The player never chooses an Academy multiplier at
+ * the node: research/heroes write global.accountModifiers and every dispatch receives it.
  */
 export function resolveGather(
   node: NodeTarget,
   carry: number,
-  academySpeedMult = 1,
   numbers: any = getN(),
 ): GatherResult {
-  const maxBonus = numbers.gatherNodes?.academyGatherSpeedMaxBonus ?? 0;
-  const clampedMult = Math.min(1 + maxBonus, Math.max(1, academySpeedMult));
+  const speedMult = 1 + accountBonus("gatherSpeedBonus", numbers);
   const rate = gatherNodeLevelRow(node.level, numbers)?.gatherRatePerHour ?? 0;
   const hauled = Math.max(0, Math.min(carry, node.remaining));
-  const tripTimeSec = rate > 0 ? (carry / (rate * clampedMult)) * 3600 : Number.POSITIVE_INFINITY;
+  const tripTimeSec = rate > 0 ? (hauled / (rate * speedMult)) * 3600 : Number.POSITIVE_INFINITY;
   return {
     hauled,
     tripTimeSec,
@@ -138,13 +151,13 @@ function defenderUnprotectedTotal(defender: RivalTarget, numbers: any): number {
   if (!defender.resources) return 0;
   const protectedFraction = defender.protectedFraction ?? numbers.buildings?.["building.storage"]?.protectedFraction ?? 0;
   const storageCap = defender.storageLevel != null
-    ? (buildingLevelRow("storage", defender.storageLevel)?.capacityPerResource ?? 0)
+    ? (buildingRow("storage", defender.storageLevel, numbers)?.capacityPerResource ?? 0)
     : 0;
   const protectedPerResource = storageCap * protectedFraction;
   return Object.values(defender.resources).reduce((sum, amount) => sum + Math.max(0, (amount ?? 0) - protectedPerResource), 0);
 }
 
-export function resolveScout(target: Target, numbers: any = getN()): ScoutReport {
+export function resolveScout(target: ScoutableTarget, numbers: any = getN()): ScoutReport {
   if (target.kind === "rival") {
     const unprotected = defenderUnprotectedTotal(target, numbers);
     return {
@@ -153,9 +166,6 @@ export function resolveScout(target: Target, numbers: any = getN()): ScoutReport
       garrison: sumTroopCounts(target.troops),
       estimatedLoot: unprotected * (numbers.global.combat.lootRate ?? 0),
     };
-  }
-  if (target.kind === "node") {
-    return { kind: "node", level: target.level, supply: target.remaining, estimatedLoot: target.remaining };
   }
   const rewardTotal = Object.values(target.reward).reduce((sum, amount) => sum + (amount ?? 0), 0);
   return { kind: "monster", level: target.level, garrison: target.power, estimatedLoot: rewardTotal };
@@ -193,11 +203,11 @@ function defensePower(defender: Target, numbers: any = getN()): { dp: number; do
   let troopsDp = 0;
   TROOP_ORDER.forEach((arm) => {
     for (const [tierText, count] of Object.entries(defender.troops[arm] ?? {})) {
-      const row = troopTierRow(arm, Number(tierText));
+      const row = troopRow(arm, Number(tierText), numbers);
       troopsDp += (count || 0) * (row?.defense ?? 0);
     }
   });
-  const wallDp = buildingLevelRow("wall", defender.wallLevel)?.defenseValue ?? 0;
+  const wallDp = buildingRow("wall", defender.wallLevel, numbers)?.defenseValue ?? 0;
   const keepDp = defender.keepLevel * (numbers.global.combat.keepDefenseBonusPerLevel ?? 0);
   return { dp: troopsDp + wallDp + keepDp, dominant: dominantArm(defender.troops), totalTroops: sumTroopCounts(defender.troops) };
 }
@@ -245,12 +255,12 @@ export function resolveCombat(
   TROOP_ORDER.forEach((arm) => {
     let armAttack = 0;
     for (const [tierText, count] of Object.entries(attacker.troops?.[arm] ?? {})) {
-      const row = troopTierRow(arm, Number(tierText));
+      const row = troopRow(arm, Number(tierText), numbers);
       armAttack += (count || 0) * (row?.attack ?? 0);
     }
     ap += armAttack * counterMultiplier(arm, dominant, numbers);
   });
-  ap += attacker.heroAttackBonus ?? 0; // marchBonus = 1; hero bonus is a flat hook until task 4
+  ap = ap * (1 + accountBonus("troopAttackBonus", numbers)) + (attacker.heroAttackBonus ?? 0);
 
   const denom = ap + dp;
   const winRatio = denom > 0 ? ap / denom : 0;
@@ -267,14 +277,18 @@ export function resolveCombat(
   const attackerLosses = splitCasualties(attackerTotal * attackerLossPct, woundedRatio, attackerHospitalCapacity);
 
   const defenderHospitalCapacity = defender.kind === "rival"
-    ? (buildingLevelRow("hospital", defender.hospitalLevel)?.woundedCapacity ?? 0)
+    ? (buildingRow("hospital", defender.hospitalLevel, numbers)?.woundedCapacity ?? 0)
     : 0;
   const defenderLosses = defender.kind === "rival"
     ? splitCasualties(defenderTroopTotal * defenderLossPct, woundedRatio, defenderHospitalCapacity)
     : { wounded: 0, dead: 0 };
 
   const unprotected = defender.kind === "rival" ? defenderUnprotectedTotal(defender, numbers) : 0;
-  const loot = Math.min(carryCapacity(attacker, numbers), Math.max(0, unprotected) * (numbers.global.combat.lootRate ?? 0));
+  const rivalLoot = Math.min(carryCapacity(attacker, numbers), Math.max(0, unprotected) * (numbers.global.combat.lootRate ?? 0));
+  const monsterReward = defender.kind === "monster"
+    ? Object.values(defender.reward).reduce((sum, value) => sum + (value ?? 0), 0)
+    : 0;
+  const loot = win ? (defender.kind === "monster" ? monsterReward : rivalLoot) : 0;
 
   return { win, ap, dp, winRatio, loot, attackerLosses, defenderLosses };
 }

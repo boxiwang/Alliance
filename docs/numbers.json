@@ -4798,7 +4798,7 @@
     "centerOpensBy": "server_progression"
   },
   "gatherNodes": {
-    "note": "Leveled outdoor resource nodes 1-10. A node yields ONE resource (assigned per instance). carry = sum(troop.load) + hero carry. Haul/trip = min(carry, node remaining). Trip time = carry / (gatherRatePerHour * academySpeedMult). Difficulty is intentionally high so Academy gather-speed research is the main lever. Node depletes by totalSupply.",
+    "note": "Leveled outdoor resource nodes 1-10. A node yields ONE resource (assigned per instance). carry = sum(troop.load) + hero carry, with the passive account load bonus applied automatically. Haul = min(carry, node remaining). Gather time = hauled / (gatherRatePerHour * (1 + account gather-speed bonus)). Academy/hero bonuses are account-wide passives, never chosen at the node. Node depletes by totalSupply.",
     "carryFromTroopLoad": true,
     "heroCarryBonus": 0,
     "academyGatherSpeedMaxBonus": 1.5,

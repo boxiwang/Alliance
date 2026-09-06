@@ -10,9 +10,10 @@ import Town from "./Town";
 import Admin from "./Admin";
 import AlliancePicker from "./AlliancePicker";
 import ExpeditionLab from "./ExpeditionLab";
+import World from "./World";
 import { grantLocalGm, localGmRequested } from "./lib/gm";
 
-type Stage = "connect" | "start" | "resume" | "founded" | "town";
+type Stage = "connect" | "start" | "resume" | "founded" | "town" | "world";
 
 export default function App() {
   const params = new URLSearchParams(window.location.search);
@@ -21,6 +22,14 @@ export default function App() {
   }
   if (params.has("expedition")) {
     return <ExpeditionLab />;
+  }
+  if (import.meta.env.DEV && params.has("world")) {
+    const devAddress = "0x000000000000000000000000000000000000dEv1";
+    const devProfile: Profile = {
+      address: devAddress, name: "Ruglord World Test", faction: null, factionSymbol: null,
+      keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
+    };
+    return <div className="page"><World address={devAddress} profile={devProfile} onBack={() => window.location.assign("/")} /></div>;
   }
 
   const [detected, setDetected] = useState<Eip6963ProviderDetail[]>([]);
@@ -308,7 +317,8 @@ export default function App() {
         </section>
       )}
 
-      {stage === "town" && profile && <Town address={address} profile={profile} />}
+      {stage === "town" && profile && <Town address={address} profile={profile} onWorld={() => setStage("world")} />}
+      {stage === "world" && profile && <World address={address} profile={profile} onBack={() => setStage("town")} />}
 
       {stage === "founded" && profile && (
         <section className="mid">

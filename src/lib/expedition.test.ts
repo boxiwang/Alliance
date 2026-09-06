@@ -32,6 +32,12 @@ describe("expedition — march & carry", () => {
     expect(marchTimeSec(0, N)).toBe(0);
   });
 
+  it("automatically applies the account-wide march speed bonus", () => {
+    const tuned = structuredClone(N);
+    tuned.global.accountModifiers.marchSpeedBonus = 0.25;
+    expect(marchTimeSec(5, tuned)).toBeCloseTo(marchTimeSec(5, N) / 1.25);
+  });
+
   it("carry capacity = sum of troop load across arms/tiers", () => {
     const armyT1Load = N.troops["troop.army"].tiers["1"].load;
     const navyT1Load = N.troops["troop.navy"].tiers["1"].load;
@@ -44,6 +50,12 @@ describe("expedition — march & carry", () => {
     const armyT1Load = N.troops["troop.army"].tiers["1"].load;
     const f: Force = { troops: { army: { "1": 4 }, navy: {}, air: {} }, heroCarry: 50 };
     expect(carryCapacity(f, N)).toBe(4 * armyT1Load + 50 + (N.gatherNodes.heroCarryBonus ?? 0));
+  });
+
+  it("automatically applies the account-wide load bonus", () => {
+    const tuned = structuredClone(N);
+    tuned.global.accountModifiers.loadBonus = 0.5;
+    expect(carryCapacity(force({ army: { "1": 10 } }), tuned)).toBeCloseTo(carryCapacity(force({ army: { "1": 10 } }), N) * 1.5);
   });
 });
 
@@ -73,39 +85,35 @@ describe("expedition — gathering", () => {
   const rate = N.gatherNodes.levels["1"].gatherRatePerHour;
 
   it("hauls min(carry, remaining)", () => {
-    const small = resolveGather(node, 100, 1, N);
+    const small = resolveGather(node, 100, N);
     expect(small.hauled).toBe(100);
     expect(small.remainingAfter).toBe(400);
 
-    const big = resolveGather(node, 10000, 1, N);
+    const big = resolveGather(node, 10000, N);
     expect(big.hauled).toBe(500);
     expect(big.remainingAfter).toBe(0);
   });
 
   it("trip time scales inversely with gather rate", () => {
-    const lvl1 = resolveGather({ ...node, level: 1 }, 100, 1, N);
-    const lvl10 = resolveGather({ ...node, level: 10, remaining: 100000 }, 100, 1, N);
+    const lvl1 = resolveGather({ ...node, level: 1 }, 100, N);
+    const lvl10 = resolveGather({ ...node, level: 10, remaining: 100000 }, 100, N);
     const rate10 = N.gatherNodes.levels["10"].gatherRatePerHour;
     expect(lvl1.tripTimeSec).toBeCloseTo((100 / (rate * 1)) * 3600);
     expect(lvl10.tripTimeSec).toBeCloseTo((100 / (rate10 * 1)) * 3600);
     expect(lvl10.tripTimeSec).toBeLessThan(lvl1.tripTimeSec);
   });
 
-  it("trip time scales inversely with academy speed multiplier", () => {
-    const noBonus = resolveGather(node, 100, 1, N);
-    const withBonus = resolveGather(node, 100, 1.5, N);
+  it("automatically applies the account-wide gather speed bonus", () => {
+    const tuned = structuredClone(N);
+    tuned.global.accountModifiers.gatherSpeedBonus = 0.5;
+    const noBonus = resolveGather(node, 100, N);
+    const withBonus = resolveGather(node, 100, tuned);
     expect(withBonus.tripTimeSec).toBeCloseTo(noBonus.tripTimeSec / 1.5);
   });
 
-  it("clamps academy speed multiplier to [1, 1+academyGatherSpeedMaxBonus]", () => {
-    const maxBonus = N.gatherNodes.academyGatherSpeedMaxBonus;
-    const capped = resolveGather(node, 100, 999, N);
-    const atCap = resolveGather(node, 100, 1 + maxBonus, N);
-    expect(capped.tripTimeSec).toBeCloseTo(atCap.tripTimeSec);
-
-    const belowFloor = resolveGather(node, 100, 0.2, N);
-    const atFloor = resolveGather(node, 100, 1, N);
-    expect(belowFloor.tripTimeSec).toBeCloseTo(atFloor.tripTimeSec);
+  it("uses hauled amount, not unused load, to time a depleted node", () => {
+    const result = resolveGather(node, 10000, N);
+    expect(result.tripTimeSec).toBeCloseTo((node.remaining / rate) * 3600);
   });
 });
 
@@ -126,13 +134,15 @@ describe("expedition — combat", () => {
     const storageCap = N.buildings["building.storage"].levels[String(bigStorageLevel)].capacityPerResource;
     const protectedFraction = N.buildings["building.storage"].protectedFraction;
     const target = rival({
+      keepLevel: 0,
+      wallLevel: 0,
       storageLevel: bigStorageLevel,
       resources: { cash: storageCap * 5, oil: 0, power: 0 }, // lots of unprotected cash
       troops: { army: { "1": 1 }, navy: {}, air: {} },
     });
 
     // Small attacker: carry is the binding constraint.
-    const smallAttacker = force({ army: { "1": 1 } }); // tiny carry
+    const smallAttacker = force({ air: { "1": 1 } }); // tiny carry; air counters the lone army defender
     const smallResult = resolveCombat(smallAttacker, target, N);
     expect(smallResult.loot).toBeCloseTo(carryCapacity(smallAttacker, N));
 
@@ -142,6 +152,13 @@ describe("expedition — combat", () => {
     const hugeResult = resolveCombat(hugeAttacker, target, N);
     expect(hugeResult.loot).toBeCloseTo(unprotected * N.global.combat.lootRate);
     expect(hugeResult.loot).toBeLessThan(carryCapacity(hugeAttacker, N));
+  });
+
+  it("never awards loot when the attacker loses", () => {
+    const target = rival({ resources: { cash: 999999 }, troops: { army: { "10": 100000 }, navy: {}, air: {} } });
+    const result = resolveCombat(force({ army: { "1": 1 } }), target, N);
+    expect(result.win).toBe(false);
+    expect(result.loot).toBe(0);
   });
 
   it("splits casualties into wounded (up to hospital cap) then dead", () => {
@@ -176,6 +193,14 @@ describe("expedition — combat", () => {
     const attacker = force({ air: { "1": 5 } });
     const result = resolveCombat(attacker, monster, N);
     expect(result.dp).toBe(10);
+  });
+
+  it("automatically applies the attack modifier to the dispatched account", () => {
+    const tuned = structuredClone(N);
+    tuned.global.accountModifiers.troopAttackBonus = 0.2;
+    const monster: MonsterTarget = { kind: "monster", level: 1, power: 100, reward: {} };
+    const attacker = force({ army: { "1": 10 } });
+    expect(resolveCombat(attacker, monster, tuned).ap).toBeCloseTo(resolveCombat(attacker, monster, N).ap * 1.2);
   });
 });
 

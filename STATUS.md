@@ -5,8 +5,8 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-05 · **by:** Claude (expedition engine + lab; outdoor model corrected → rework next)
-**Current focus:** Tasks 2+3 outdoor expedition. Engine done; outdoor UX/model being reworked to real SLG (see "Outdoor model CORRECTED" below).
+**Last updated:** 2026-09-05 · **by:** Codex (coordinate World + account-bound march loop landed locally)
+**Current focus:** Personal Mode outdoor loop now runs locally end-to-end. Next is playtesting/tuning and hardening the local NPC layer before any shared server world.
 
 ### 🧮 Data-balance pass (this session, Claude)
 - **FIXED — per-building upgrade-time monotonicity:** every building's time dipped at L10→L11
@@ -22,22 +22,22 @@ for the *why*; this file is the *where we are right now*.
   normal — WoS=iron, Last War=oil-late — so keeping Cash-lean is fine. Our L25≈5.2d/L30≈9.5d per-level
   matches Last War L21–30 (5–7d). Endgame length beyond L30 = Phase-2 depth, not a flaw.)
 
-### 🌍 Tasks 2+3 — outdoor expedition engine (in progress, Claude + Sonnet)
+### 🌍 Tasks 2+3 — outdoor expedition foundation (Claude + Sonnet)
 - Design locked (bible §22, DIRECTION §9): personal mode = **async single-player PvP**; concentric
   **world rings** (edge spawn, center = the Circle); **NO fog** (scout = intel); leveled
   **gather nodes 1–10**; combat counter **air>army>navy>air +10%**; loot & gather capped by troop load.
 - **Data landed in `numbers.json`:** `gatherNodes` (L1–10: ringZone/totalSupply/gatherRatePerHour +
   academy-speed & hero-carry hooks), `world` (rings/spawn), `global.combat.counter` matrix. `npm run check` green.
 - **Endgame "the Circle"** (seniority cohort treadmill + guardrails) logged as Phase-2 in DIRECTION §9.
-- **Building now (delegated to Sonnet):** `src/lib/expedition.ts` (pure logic: marchTime, carry,
+- **Original engine scope:** `src/lib/expedition.ts` (pure logic: marchTime, carry,
   resolveScout/Gather/Combat, counter, wounded→hospital→dead, loot=load, shield check) + tests +
   a `gatherNodes` editor section in `Admin.tsx`. No UI in Town (logic-only per task 2).
 - **Hooks left for later:** hero carry/combat bonus = 0 (task 4); real-player targets (NPC stub now); inner-ring opening (server, later).
 - **DONE (Sonnet):** `src/lib/expedition.ts` + 19 tests (`npm run check` green, 40 tests total); `Admin.tsx` gained a **Gathering** tab editing `gatherNodes`.
 - **DONE (Claude):** `/?expedition` **Expedition Lab** (`src/ExpeditionLab.tsx`) — hidden points-and-lines test harness: concentric rings, labeled dots (node/monster/rival), pick force → Scout / Gather / Raid → numeric result + march line. Verified end-to-end in browser (combat/counter/wounded/loot all resolve on live numbers).
-- **Follow-up (minor):** `resolveCombat` returns `loot` even on a loss — should be gated to wins (or the caller/Lab should only show loot when `win`).
+- **Resolved by Codex:** `resolveCombat` now gates loot to wins and reads injected troop/building tables correctly in tests and admin-tuned sessions.
 
-### 🔧 Outdoor model CORRECTED → rework next (Claude)
+### 🔧 Outdoor model CORRECTED → first playable build done (Claude → Codex)
 The first `/?expedition` lab was built on **wrong SLG assumptions** — it is now **superseded** (keep it as a
 dev harness only). Re-researched RoK / Last War / WoS; corrected model in **bible §23** + **DIRECTION §9**.
 The 5 corrections:
@@ -50,14 +50,15 @@ The 5 corrections:
    `global.march.marchQueueSlots` (=2); out until return; losses/wounded apply.
 5. **Scout only on enemy cities/monsters**, never resource nodes.
 
-**Rework plan (next build):**
-- Replace the player-centric ring lab with a **coordinate world map** (pan/zoom, city at random (x,y), world-center = Circle, tiles/monsters/rivals at coords).
-- Add **Town → World navigation** (a "World" button; back to city).
-- **Account-bound troop allocation**: read standing army from game state; enforce single-march capacity + march-queue slots; reserve on dispatch, return (minus losses) on completion.
-- **Gather** = send troops; haul = load; **speed = base × `accountModifiers.gatherSpeedBonus`** (auto). No node-side academy.
-- **Scout** shown only on rival/monster targets.
-- Wire `accountModifiers` (gather/march speed, atk/def, load) as auto-applied hooks (sources: Academy research = Phase-2, heroes = task 4; default 0 now).
-- **Data added (numbers.json):** `global.march.marchQueueSlots=2`, `global.accountModifiers` (all 0). `npm run check` green.
+**First corrected build (DONE locally):**
+- `src/World.tsx` is the real player surface: coordinate SVG world, drag/pan/zoom, wallet-deterministic outer spawn, fixed Circle center, distance-gated target zones, Town ↔ World navigation.
+- `src/lib/world.ts` persists one local world per wallet and owns NPC targets, march queues, reports and return settlement.
+- Dispatch reads **actual standing troops** from `GameState`, enforces single-march capacity and 2 active queues, removes troops immediately, then returns survivors and applies wounded/dead/resource outcomes.
+- Gather speed, march speed, attack and load hooks are passive `global.accountModifiers`; the old per-node Academy slider is gone. Scout is rejected for resource fields in UI and engine.
+- Combat loot is now win-only; depleted-node gather time uses the amount actually hauled rather than unused carry capacity.
+- Local GM gained **Fill troops** and **Finish marches**. `/?world&gm` opens a walletless dev harness for fast World testing; normal players enter from Town.
+- Browser-verified: 67K → dispatch 10 internal troop batches → 57K standing → GM return → 67K; reports/resources settle; zoom, Circle recenter, 2/2 queue limit and third-dispatch rejection work with no console errors.
+- Current scope remains **local NPC simulation**, not a shared multiplayer server: rival casualties/respawn and cross-player concurrency are deliberately not implemented yet.
 
 ## 🎯 Decisions locked (this session)
 - **No medieval theme.** Current leading visual exploration is **Degen Freeport**: a prosperous,
@@ -100,19 +101,19 @@ The 5 corrections:
 - **Large-number denomination:** the UI presents resources and troop headcount at ×1,000. Costs, capacity and production use the same display denomination, so pacing and queue timing do not change. Both multipliers are editable under Admin → Game rules.
 - **Might v0.6:** total Might is split into permanent Infrastructure Might + fielded Troop Might. Building rows carry explicit cumulative Might; troop Might is displayed headcount × tier power. With all buildings Lv.30 and each arm at 60% capacity in T10, the current baseline is **23.9% infrastructure / 76.1% troops**. Might is a progression/status score, not the battle formula.
 - **Alliance/Solo onboarding separation:** wallet-held memecoins are the only cards in the Alliance picker. Solo is a separate Personal Mode path and is stored/displayed as “no alliance,” never as a synthetic alliance or banner.
-- **Local test suite:** `npm run check` runs TypeScript, 21 tests and the production build. Dependency audit is clean (0 vulnerabilities).
+- **Local test suite:** `npm run check` runs TypeScript, 49 tests and the production build. Dependency audit is clean (0 vulnerabilities).
 - **Art-direction exploration (concept only):** three desktop SLG concepts are saved under
   `docs/art/concepts/`. V1 establishes Degen Freeport, V2 broadens the audience with civic life and
   NFT identity, and V3 converts it to a chunkier, more readable chibi 2.5D toy-diorama style.
+- **Playable coordinate World (local Personal Mode):** Town → World → select field/crew/rival → scout/gather/raid → timed outbound/work/return march → troop/resource/casualty settlement. World and NPCs persist per wallet in localStorage; 49 tests pass.
 
 ## 🔜 Next up (immediate — for whoever picks this up)
-1. Product owner: explicitly lock or revise the V3 chibi Degen Freeport direction before producing assets.
-2. Build one art vertical slice (Townhall/Exchange + Army Camp + Bank + terrain + core HUD) before commissioning or generating the full 14-building set.
-3. Add resource source/sink breakdown to the pacing simulator.
-4. Playtest the full L1→L10 city loop locally and tune individual rows from observed stalls/click cadence.
-5. Then: outside-city **world map** (explore / gather / raid), and building special-functions
-   (Academy research tree, Embassy reinforcement, Milestone server-progress, Watchtower tasks) — all
-   defined in bible §20–21 / numbers, wired later.
+1. Product playtest the **Town → World → return** loop locally and tune target density, travel time, gather duration, NPC power and rewards from observed play rather than theory.
+2. Persist defender troop casualties/depletion and add a local NPC respawn/refresh rule; current rival resources deplete, but rival troop losses are report-only.
+3. Improve force allocation after playtest (25%/50%/max presets, recommended counter composition, march-cap explanation).
+4. Add resource source/sink breakdown to the pacing simulator, then playtest/tune the full L1→L10 city loop.
+5. Before a real multiplayer alpha: move world/player/march authority to the backend, add server timestamps/locking and resolve simultaneous attacks. LocalStorage is only the current low-cost prototype.
+6. Art remains independent: lock/revise V3 chibi Degen Freeport and build one vertical slice when product mechanics are stable enough.
 
 ## 🩹 Known issues / polish
 - `oldestSeen` (wallet age) reads null for contract addresses; tx-history endpoint shape
@@ -132,6 +133,7 @@ The 5 corrections:
 npm install
 npm run dev            # http://localhost:5173  (open in a browser WITH a wallet extension)
 # For local GM tools, use http://localhost:5173/?gm once with the test wallet.
+# Walletless World test harness: http://localhost:5173/?world&gm
 ```
 Read what the local app actually connected to & read:
 ```bash
@@ -148,6 +150,7 @@ cat /tmp/ruglands-report.json
 - `src/lib/profile.ts` — per-wallet save (localStorage), auto-name.
 - `src/lib/gm.ts` — localhost-only, wallet-bound GM grant and test helpers.
 - `src/lib/simulator.ts` — pure local build/resource pacing model used by Admin.
+- `src/World.tsx` / `src/lib/world.ts` — coordinate-map player UI + persistent local march/settlement engine.
 - `src/lib/factions.ts` — pledgeable-from-holdings + seed top-factions.
 - `src/lib/tasks.ts` — derive signals from records (backend/telemetry only for now).
 - `src/App.tsx` — start-screen stage machine.

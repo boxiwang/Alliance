@@ -1,5 +1,5 @@
 import type { BKey, GameState } from "./game";
-import { BUILDING_ORDER, RES_ORDER, TROOP_ORDER, capacity, isUpgradable, maxLevel, project } from "./game";
+import { BUILDING_ORDER, RES_ORDER, TROOP_ORDER, capacity, highestUnlockedTroopTier, isUpgradable, maxLevel, maxTroopsForType, project } from "./game";
 import { initGame } from "./gamestore";
 
 const KEY = (address: string) => `ruglands:gm:${address.toLowerCase()}`;
@@ -55,6 +55,16 @@ export function gmFinishQueues(state: GameState, now = Date.now()): GameState {
     if (next.training[type].finishAt > 0) next.training[type].finishAt = now;
   });
   return project(next, now);
+}
+
+export function gmFillTroops(state: GameState, now = Date.now()): GameState {
+  const next = project(state, now);
+  TROOP_ORDER.forEach((type) => {
+    Object.keys(next.troops[type]).forEach((tier) => { next.troops[type][tier] = 0; });
+    const capacityForArm = maxTroopsForType(next, type);
+    if (capacityForArm > 0) next.troops[type][String(highestUnlockedTroopTier(next, type))] = capacityForArm;
+  });
+  return next;
 }
 
 export function gmRaiseTownhall(state: GameState, now = Date.now()): GameState {

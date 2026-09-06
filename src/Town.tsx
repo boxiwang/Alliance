@@ -9,12 +9,13 @@ import {
 } from "./lib/game";
 import { loadGame, saveGame, initGame } from "./lib/gamestore";
 import {
-  gmFillResources, gmFinishQueues, gmRaiseTownhall,
+  gmFillResources, gmFillTroops, gmFinishQueues, gmRaiseTownhall,
   gmRaiseBuilding, gmResetProgress,
   grantLocalGm, hasLocalGm, localGmRequested, revokeLocalGm,
 } from "./lib/gm";
 import { Profile } from "./lib/profile";
 import { compact } from "./lib/format";
+import { clearWorld } from "./lib/world";
 
 function fmtMs(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -24,7 +25,7 @@ function fmtMs(ms: number): string {
 }
 function fmtSec(s: number): string { return fmtMs(s * 1000); }
 
-export default function Town({ address, profile }: { address: string; profile: Profile }) {
+export default function Town({ address, profile, onWorld }: { address: string; profile: Profile; onWorld: () => void }) {
   const [game, setGame] = useState<GameState>(() => loadGame(address) || initGame(address));
   const [now, setNow] = useState(Date.now());
   const [msg, setMsg] = useState<string>("");
@@ -116,6 +117,7 @@ export default function Town({ address, profile }: { address: string; profile: P
           <div className="gm-panel-copy"><b>Local GM tools</b><span>Only this browser + wallet on localhost. Never active in production.</span></div>
           <div className="gm-actions">
             <button onClick={() => gmAct(gmFillResources, "GM: resources filled to Warehouse capacity.")}>Fill resources</button>
+            <button onClick={() => gmAct(gmFillTroops, "GM: every trained arm filled to capacity at its highest unlocked tier.")}>Fill troops</button>
             <button onClick={() => gmAct(gmFinishQueues, "GM: active build and training queues completed.")}>Finish queues</button>
             <span className="gm-building-stepper">
               <select aria-label="GM building" value={gmBuilding} onChange={(event) => setGmBuilding(event.target.value as BKey)}>
@@ -127,6 +129,7 @@ export default function Town({ address, profile }: { address: string; profile: P
             <button className="gm-reset" onClick={() => {
               if (!window.confirm("Reset this wallet's city? Buildings, resources, troops and queues will be cleared. Townhall returns to Lv.1.")) return;
               const next = gmResetProgress(address);
+              clearWorld(address);
               setAway(null);
               setGame(next);
               saveGame(next);
@@ -170,7 +173,9 @@ export default function Town({ address, profile }: { address: string; profile: P
         {TROOP_ORDER.filter((type) => view.buildings[TRAINING_BUILDING[type]].lvl >= 1).map(renderTrainer)}
       </div>
 
-      <div className="worldsoon">🗺️ The world map — explore, gather, raid — is the next build.</div>
+      <button className="world-enter" onClick={onWorld}>
+        <span>🗺️</span><b>Enter the World</b><small>Explore coordinates · gather resources · scout and raid</small><em>WORLD →</em>
+      </button>
     </section>
   );
 
