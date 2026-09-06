@@ -15,7 +15,7 @@ import {
 } from "./lib/gm";
 import { Profile } from "./lib/profile";
 import { compact } from "./lib/format";
-import { clearWorld } from "./lib/world";
+import { clearLocalWorldSession } from "./lib/world-adapter";
 
 function fmtMs(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -129,7 +129,7 @@ export default function Town({ address, profile, onWorld }: { address: string; p
             <button className="gm-reset" onClick={() => {
               if (!window.confirm("Reset this wallet's city? Buildings, resources, troops and queues will be cleared. Townhall returns to Lv.1.")) return;
               const next = gmResetProgress(address);
-              clearWorld(address);
+              clearLocalWorldSession(address);
               setAway(null);
               setGame(next);
               saveGame(next);

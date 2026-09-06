@@ -397,6 +397,7 @@ function WorldWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: 
           <NumberSetting {...p(["world", "state", "spatialCellSize"])} label="Nearby-query cell size" help="Technical spatial lookup bucket; usually leave at 16." suffix="tiles" />
         </RuleGroup>
         <RuleGroup icon="✦" title="Target population" description="Recommended live targets scale with the number of players but never fall below the minimum.">
+          <NumberSetting {...p(["world", "population", "localNpcCities"])} label="Local test cities" help="NPC rivals generated only by the temporary offline adapter." />
           <NumberSetting {...p(["world", "population", "resourceFieldsPerPlayer"])} label="Fields per player" help="Resource fields maintained for every active city." step={0.05} />
           <NumberSetting {...p(["world", "population", "monstersPerPlayer"])} label="Monsters per player" help="PvE targets maintained for every active city." step={0.05} />
           <NumberSetting {...p(["world", "population", "minimumResourceFields"])} label="Minimum fields" help="Keeps a young State from feeling empty." />

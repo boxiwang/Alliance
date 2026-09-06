@@ -1,12 +1,13 @@
 # Personal World MVP — headless contract
 
 This document is the implementation contract for the outdoor Personal Mode. The current
-`src/World.tsx` map remains a visual test shell until this headless engine is complete.
+`src/World.tsx` map is a visual test shell powered by this headless engine through a local adapter.
 
-## Implementation status — 2026-09-05
+## Implementation status — 2026-09-06
 
-The first headless engine slice is implemented in `src/lib/world-engine.ts` and covered by
-`src/lib/world-engine.test.ts`. It is deliberately not wired into the current map UI yet.
+The headless engine is implemented in `src/lib/world-engine.ts`, covered by
+`src/lib/world-engine.test.ts`, and now powers the current map UI through
+`src/lib/world-adapter.ts`.
 
 Implemented:
 
@@ -18,9 +19,17 @@ Implemented:
 - Two nullable hero slots plus immutable modifier/effect and balance-version snapshots on every march.
 - Batched deterministic event catch-up; the test suite advances 10,000 events in a 1,000-player State.
 
+Local integration:
+
+- The temporary adapter reconciles Town training/resource progress with troops and cargo held
+  by active marches, then projects the authoritative player state back into `GameState`.
+- Browser-local saves remain per wallet. A one-time migration safely settles active legacy
+  `src/lib/world.ts` marches before removing the old save.
+- Local test States contain one real player plus a configurable small NPC population; the
+  engine itself still accepts 1,024 real player records.
+
 Still intentionally separate:
 
-- The existing local `src/lib/world.ts` UI adapter continues to power `src/World.tsx`.
 - Shared persistence, authenticated commands and cross-process locking require the future server-authority slice.
 - Balance values are provisional; target density, power, rewards, burn damage and Energy pacing need playtests.
 

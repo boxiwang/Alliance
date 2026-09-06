@@ -4809,6 +4809,7 @@
       "cityFootprint": 2
     },
     "population": {
+      "localNpcCities": 47,
       "resourceFieldsPerPlayer": 1.5,
       "monstersPerPlayer": 0.75,
       "minimumResourceFields": 240,

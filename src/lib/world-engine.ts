@@ -288,6 +288,7 @@ export interface SpawnPlayerInput {
   wallLevel?: number;
   hospitalLevel?: number;
   storageLevel?: number;
+  hasAttacked?: boolean;
 }
 
 export interface DispatchMarchInput {
@@ -370,7 +371,11 @@ export function generateSpawnAnchors(stateId: string, config: WorldEngineConfig 
   // This makes a young State quiet without sacrificing the eventual 1,024-player capacity.
   const ordered: Point[] = [];
   const remaining = candidates.slice();
-  const firstIndex = hashText(stateId) % remaining.length;
+  const outermost = Math.max(...remaining.map((point) => distance(point, center)));
+  const outerCandidates = remaining
+    .map((point, index) => ({ index, radial: distance(point, center) }))
+    .filter((candidate) => candidate.radial >= outermost - Math.max(stepX, stepY) * .6);
+  const firstIndex = outerCandidates[hashText(stateId) % outerCandidates.length].index;
   ordered.push(remaining.splice(firstIndex, 1)[0]);
   const minDistanceSq = remaining.map((point) => {
     const dx = point.x - ordered[0].x; const dy = point.y - ordered[0].y;
@@ -442,7 +447,7 @@ function spawnPlayerMutable(world: HeadlessWorld, input: SpawnPlayerInput, now: 
     storageLevel: Math.max(1, input.storageLevel ?? input.townhallLevel ?? 1),
     might: Math.max(0, input.might ?? 0),
     shieldUntil: now + Math.max(0, input.shieldDurationSec ?? world.config.beginnerShieldDurationSec) * 1000,
-    hasAttacked: false, wall: {
+    hasAttacked: input.hasAttacked ?? false, wall: {
       value: world.config.baseWallIntegrity, max: world.config.baseWallIntegrity, burningUntil: 0, relocateAt: 0,
     },
     garrison: clone(troops), resources: clone(resources), protectedFraction: input.protectedFraction ?? .25,

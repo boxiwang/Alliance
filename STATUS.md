@@ -5,8 +5,8 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-05 · **by:** Codex (headless World balance baseline v0.7)
-**Current focus:** Scalable World rules and repeatable balance scenarios are green. Next is replacing the visual test shell's legacy local rules through a temporary GameState adapter before shared-server persistence.
+**Last updated:** 2026-09-06 · **by:** Codex (headless World wired to local player UI)
+**Current focus:** The scalable World engine now powers the existing visual map through a temporary browser-local GameState adapter. Next is player-facing force-selection guidance and balance playtesting before shared-server persistence.
 
 ### 🧮 Data-balance pass (this session, Claude)
 - **FIXED — per-building upgrade-time monotonicity:** every building's time dipped at L10→L11
@@ -60,7 +60,7 @@ The 5 corrections:
 - Browser-verified: 67K → dispatch 10 internal troop batches → 57K standing → GM return → 67K; reports/resources settle; zoom, Circle recenter, 2/2 queue limit and third-dispatch rejection work with no console errors.
 - Current scope remains **local NPC simulation**, not a shared multiplayer server: rival casualties/respawn and cross-player concurrency are deliberately not implemented yet.
 
-### 🧠 Headless Personal World MVP core (Codex — new, not wired to UI yet)
+### 🧠 Headless Personal World MVP core + local UI adapter (Codex)
 - Contract: `docs/WORLD-MVP.md`; implementation: `src/lib/world-engine.ts`; acceptance tests:
   `src/lib/world-engine.test.ts`.
 - One 512×512 State supports **1,024 deterministic, farthest-first city anchors**. The first players
@@ -76,7 +76,7 @@ The 5 corrections:
 - Hero seam is locked now: every march stores two nullable hero slots, resolved modifier/effect snapshot
   and balance version. Adding Heroes later supplies that snapshot and does not rewrite world/march logic.
 - Acceptance now covers 1,000 cities + 10,000 deterministic scheduled events. Full repo check:
-  **69 tests, TypeScript and production build green**.
+  **74 tests, TypeScript and production build green**.
 - **Balance v0.7 complete:** `npm run balance:world` evaluates weak/standard/strong PvE, gathering,
   equal-progression PvP, travel, Energy and target density against declared target bands. The old data
   exposed 86–99.8% matching-monster win rates, 10–343.9h field occupancy and late-game Wall drift.
@@ -88,6 +88,16 @@ The 5 corrections:
 - Admin gained a human-readable **World** page with grouped settings, editable L1–10 monster rows and
   live scenario results. Browser-tested: deliberately breaking L1 power raised warnings immediately;
   Undo restored a clean report; no console errors.
+- **UI adapter complete:** `src/lib/world-adapter.ts` is now the sole browser-local bridge between
+  Town `GameState` and the headless authority used by `src/World.tsx`. Training/resources earned while
+  troops are away merge safely instead of overwriting a march result. Existing legacy marches are
+  force-settled once, troops/rewards are recovered, then their old save is removed.
+- The live local map now renders a 512×512 State with 48 sparse test cities (configurable in Admin),
+  real fields/crews, Energy, queue capacity, shield/Wall state and immutable arrival/return reports.
+  New players start on the outer rim; the camera clamps to the State instead of exposing off-map space.
+- Browser-verified gather, scout and city-attack flows: troops reserve and return correctly, gather
+  rewards arrive only on return, scouting does not reserve a preselected force, and defeat applies
+  wounded/dead before returning survivors. Report values use the same large-number denomination as Town.
 
 ## 🎯 Decisions locked (this session)
 - **No medieval theme.** Current leading visual exploration is **Degen Freeport**: a prosperous,
@@ -130,23 +140,21 @@ The 5 corrections:
 - **Large-number denomination:** the UI presents resources and troop headcount at ×1,000. Costs, capacity and production use the same display denomination, so pacing and queue timing do not change. Both multipliers are editable under Admin → Game rules.
 - **Might v0.6:** total Might is split into permanent Infrastructure Might + fielded Troop Might. Building rows carry explicit cumulative Might; troop Might is displayed headcount × tier power. With all buildings Lv.30 and each arm at 60% capacity in T10, the current baseline is **23.9% infrastructure / 76.1% troops**. Might is a progression/status score, not the battle formula.
 - **Alliance/Solo onboarding separation:** wallet-held memecoins are the only cards in the Alliance picker. Solo is a separate Personal Mode path and is stored/displayed as “no alliance,” never as a synthetic alliance or banner.
-- **Local test suite:** `npm run check` runs TypeScript, 49 tests and the production build. Dependency audit is clean (0 vulnerabilities).
+- **Local test suite:** `npm run check` runs TypeScript, 74 tests and the production build. Dependency audit is clean (0 vulnerabilities).
 - **Art-direction exploration (concept only):** three desktop SLG concepts are saved under
   `docs/art/concepts/`. V1 establishes Degen Freeport, V2 broadens the audience with civic life and
   NFT identity, and V3 converts it to a chunkier, more readable chibi 2.5D toy-diorama style.
-- **Playable coordinate World (local Personal Mode):** Town → World → select field/crew/rival → scout/gather/raid → timed outbound/work/return march → troop/resource/casualty settlement. World and NPCs persist per wallet in localStorage; 49 tests pass.
+- **Playable coordinate World (local Personal Mode):** Town → World → select field/crew/rival → scout/gather/attack → timed outbound/work/return march → troop/resource/casualty settlement. The scalable headless engine is authoritative; a temporary local adapter persists it per wallet until the shared server exists.
 
 ## 🔜 Next up (immediate — for whoever picks this up)
-1. Build a temporary adapter between current `GameState` saves and `HeadlessPlayer`, then switch the
-   existing `World.tsx` test shell from legacy `src/lib/world.ts` to this engine without redesigning UI.
-2. Add force presets (25%/50%/max), recommended counter composition and march-cap explanations to the
+1. Add force presets (25%/50%/max), recommended counter composition and march-cap explanations to the
    visual shell after the engine adapter is stable.
-3. Playtest target density, Wall damage/burn duration and Energy behavior; adjust declared target bands
+2. Playtest target density, Wall damage/burn duration and Energy behavior; adjust declared target bands
    before retuning explicit values when the desired experience changes.
-4. Add resource source/sink breakdown to the pacing simulator, then playtest/tune the full L1→L10 city loop.
-5. Before a real multiplayer alpha: put this authority behind authenticated server commands, server time,
+3. Add resource source/sink breakdown to the pacing simulator, then playtest/tune the full L1→L10 city loop.
+4. Before a real multiplayer alpha: put this authority behind authenticated server commands, server time,
    atomic target locks and durable persistence. LocalStorage remains a test-only adapter.
-6. Art remains independent: lock/revise V3 chibi Degen Freeport and build one vertical slice when mechanics are stable enough.
+5. Art remains independent: lock/revise V3 chibi Degen Freeport and build one vertical slice when mechanics are stable enough.
 
 ## 🩹 Known issues / polish
 - `oldestSeen` (wallet age) reads null for contract addresses; tx-history endpoint shape
@@ -183,8 +191,9 @@ cat /tmp/ruglands-report.json
 - `src/lib/profile.ts` — per-wallet save (localStorage), auto-name.
 - `src/lib/gm.ts` — localhost-only, wallet-bound GM grant and test helpers.
 - `src/lib/simulator.ts` — pure local build/resource pacing model used by Admin.
-- `src/World.tsx` / `src/lib/world.ts` — coordinate-map player UI + persistent local march/settlement engine.
-- `docs/WORLD-MVP.md` / `src/lib/world-engine.ts` — scalable no-UI World contract + deterministic authority engine (future UI/server source of truth).
+- `src/World.tsx` / `src/lib/world-adapter.ts` — coordinate-map player UI + temporary local GameState/persistence bridge.
+- `docs/WORLD-MVP.md` / `src/lib/world-engine.ts` — scalable World contract + deterministic authority engine (current UI and future server source of truth).
+- `src/lib/world.ts` — legacy local engine retained only for one-time safe save migration; do not add new gameplay here.
 - `docs/WORLD-BALANCE.md` / `src/lib/world-balance.ts` — reproducible outdoor balance targets, scenarios and operator report.
 - `src/lib/factions.ts` — pledgeable-from-holdings + seed top-factions.
 - `src/lib/tasks.ts` — derive signals from records (backend/telemetry only for now).
