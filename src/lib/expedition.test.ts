@@ -195,6 +195,14 @@ describe("expedition — combat", () => {
     expect(result.dp).toBe(10);
   });
 
+  it("applies the same counter matrix when a monster declares a dominant arm", () => {
+    const monster: MonsterTarget = { kind: "monster", level: 3, power: 100, dominantArm: "army", reward: {} };
+    const air = resolveCombat(force({ air: { "1": 5 } }), monster, N);
+    const navy = resolveCombat(force({ navy: { "1": 5 } }), monster, N);
+    expect(air.ap).toBeCloseTo(5 * N.troops["troop.air"].tiers["1"].attack * (1 + N.global.combat.counterBonusAtk));
+    expect(navy.ap).toBeCloseTo(5 * N.troops["troop.navy"].tiers["1"].attack);
+  });
+
   it("automatically applies the attack modifier to the dispatched account", () => {
     const tuned = structuredClone(N);
     tuned.global.accountModifiers.troopAttackBonus = 0.2;

@@ -27,6 +27,10 @@ export interface WorldEngineConfig {
   energyCap: number;
   energyRegenSec: number;
   monsterEnergyCost: number;
+  beginnerShieldDurationSec: number;
+  baseWallIntegrity: number;
+  minimumWallDamageOnWin: number;
+  wallDamageAtFullWinRatio: number;
 }
 
 export const DEFAULT_WORLD_ENGINE_CONFIG: WorldEngineConfig = {
@@ -47,7 +51,46 @@ export const DEFAULT_WORLD_ENGINE_CONFIG: WorldEngineConfig = {
   energyCap: 100,
   energyRegenSec: 6 * 60,
   monsterEnergyCost: 10,
+  beginnerShieldDurationSec: 72 * 3600,
+  baseWallIntegrity: 1000,
+  minimumWallDamageOnWin: 100,
+  wallDamageAtFullWinRatio: 500,
 };
+
+export function worldEngineConfig(numbers: any = getN()): WorldEngineConfig {
+  const state = numbers.world?.state ?? {};
+  const lifecycle = numbers.world?.lifecycle ?? {};
+  const energy = numbers.world?.energy ?? {};
+  const cityCombat = numbers.world?.cityCombat ?? {};
+  const march = numbers.global?.march ?? {};
+  const value = (candidate: unknown, fallback: number) => {
+    const parsed = Number(candidate);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  };
+  return {
+    width: value(state.width, DEFAULT_WORLD_ENGINE_CONFIG.width),
+    height: value(state.height, DEFAULT_WORLD_ENGINE_CONFIG.height),
+    maxPlayers: value(state.maxPlayers, DEFAULT_WORLD_ENGINE_CONFIG.maxPlayers),
+    spawnGrid: value(state.spawnGrid, DEFAULT_WORLD_ENGINE_CONFIG.spawnGrid),
+    spawnJitter: value(state.spawnJitter, DEFAULT_WORLD_ENGINE_CONFIG.spawnJitter),
+    circleReserveRadius: value(state.circleReserveRadius, DEFAULT_WORLD_ENGINE_CONFIG.circleReserveRadius),
+    spatialCellSize: value(state.spatialCellSize, DEFAULT_WORLD_ENGINE_CONFIG.spatialCellSize),
+    cityFootprint: value(state.cityFootprint, DEFAULT_WORLD_ENGINE_CONFIG.cityFootprint),
+    marchSlots: value(march.marchQueueSlots, DEFAULT_WORLD_ENGINE_CONFIG.marchSlots),
+    marchCapacity: value(march.baseMarchCapacity, DEFAULT_WORLD_ENGINE_CONFIG.marchCapacity),
+    travelSecondsPerTile: value(march.baseTravelSecondsPerTile, DEFAULT_WORLD_ENGINE_CONFIG.travelSecondsPerTile),
+    resourceRespawnSec: value(lifecycle.resourceRespawnSec, DEFAULT_WORLD_ENGINE_CONFIG.resourceRespawnSec),
+    monsterRespawnSec: value(lifecycle.monsterRespawnSec, DEFAULT_WORLD_ENGINE_CONFIG.monsterRespawnSec),
+    burnDurationSec: value(lifecycle.burnDurationSec, DEFAULT_WORLD_ENGINE_CONFIG.burnDurationSec),
+    energyCap: value(energy.cap, DEFAULT_WORLD_ENGINE_CONFIG.energyCap),
+    energyRegenSec: value(energy.regenSecPerPoint, DEFAULT_WORLD_ENGINE_CONFIG.energyRegenSec),
+    monsterEnergyCost: value(energy.monsterAttackCost, DEFAULT_WORLD_ENGINE_CONFIG.monsterEnergyCost),
+    beginnerShieldDurationSec: value(cityCombat.beginnerShieldDurationSec, DEFAULT_WORLD_ENGINE_CONFIG.beginnerShieldDurationSec),
+    baseWallIntegrity: value(cityCombat.baseWallIntegrity, DEFAULT_WORLD_ENGINE_CONFIG.baseWallIntegrity),
+    minimumWallDamageOnWin: value(cityCombat.minimumWallDamageOnWin, DEFAULT_WORLD_ENGINE_CONFIG.minimumWallDamageOnWin),
+    wallDamageAtFullWinRatio: value(cityCombat.wallDamageAtFullWinRatio, DEFAULT_WORLD_ENGINE_CONFIG.wallDamageAtFullWinRatio),
+  };
+}
 
 export interface MarchModifiers {
   marchSpeedBonus: number;
@@ -351,7 +394,7 @@ export function generateSpawnAnchors(stateId: string, config: WorldEngineConfig 
 export function initHeadlessWorld(
   stateId: string,
   now = Date.now(),
-  config: WorldEngineConfig = DEFAULT_WORLD_ENGINE_CONFIG,
+  config: WorldEngineConfig = worldEngineConfig(),
 ): HeadlessWorld {
   const anchors = generateSpawnAnchors(stateId, config);
   const center = worldCenter(config);
@@ -398,8 +441,10 @@ function spawnPlayerMutable(world: HeadlessWorld, input: SpawnPlayerInput, now: 
     hospitalLevel: Math.max(1, input.hospitalLevel ?? input.townhallLevel ?? 1),
     storageLevel: Math.max(1, input.storageLevel ?? input.townhallLevel ?? 1),
     might: Math.max(0, input.might ?? 0),
-    shieldUntil: now + Math.max(0, input.shieldDurationSec ?? 72 * 3600) * 1000,
-    hasAttacked: false, wall: { value: 1000, max: 1000, burningUntil: 0, relocateAt: 0 },
+    shieldUntil: now + Math.max(0, input.shieldDurationSec ?? world.config.beginnerShieldDurationSec) * 1000,
+    hasAttacked: false, wall: {
+      value: world.config.baseWallIntegrity, max: world.config.baseWallIntegrity, burningUntil: 0, relocateAt: 0,
+    },
     garrison: clone(troops), resources: clone(resources), protectedFraction: input.protectedFraction ?? .25,
   };
   world.entities[cityId] = city;
@@ -476,7 +521,13 @@ function targetLevel(zone: number, random: () => number): number {
   return Math.max(1, Math.min(10, zone * 2 - (random() < .5 ? 1 : 0)));
 }
 
-export function populateWorld(source: HeadlessWorld, resourceCount: number, monsterCount: number, now = Date.now()): HeadlessWorld {
+export function populateWorld(
+  source: HeadlessWorld,
+  resourceCount: number,
+  monsterCount: number,
+  now = Date.now(),
+  numbers: any = getN(),
+): HeadlessWorld {
   const world = clone(source);
   const random = rng(hashText(`${world.stateId}:population:${world.nextEntitySeq}`));
   const resources: ResKey[] = ["cash", "oil", "power"];
@@ -485,7 +536,8 @@ export function populateWorld(source: HeadlessWorld, resourceCount: number, mons
     const position = randomLegalPoint(world, random);
     const zone = zoneForPoint(position, world.config);
     const level = targetLevel(zone, random);
-    const capacity = 1000 * Math.pow(2, level - 1);
+    const capacity = Number(numbers.gatherNodes?.levels?.[String(level)]?.totalSupply)
+      || 1000 * Math.pow(2, level - 1);
     const id = `resource-${world.nextEntitySeq++}`;
     world.entities[id] = {
       id, kind: "resource", state: "available", position, zone, spawnedAt: now, revision: 1,
@@ -498,11 +550,16 @@ export function populateWorld(source: HeadlessWorld, resourceCount: number, mons
     const zone = zoneForPoint(position, world.config);
     const level = targetLevel(zone, random);
     const id = `monster-${world.nextEntitySeq++}`;
+    const row = numbers.world?.monsters?.levels?.[String(level)] ?? {};
     world.entities[id] = {
       id, kind: "monster", state: "alive", position, zone, spawnedAt: now, revision: 1,
-      level, dominantArm: arms[Math.floor(random() * arms.length)],
-      power: Math.round(160 * Math.pow(1.72, level - 1)),
-      reward: { cash: level * 350, oil: level * 180, power: level * 180 },
+      level, dominantArm: row.dominantArm ?? arms[Math.floor(random() * arms.length)],
+      power: Number(row.power) || Math.round(160 * Math.pow(1.72, level - 1)),
+      reward: {
+        cash: Number(row.reward?.["res.cash"]) || level * 350,
+        oil: Number(row.reward?.["res.oil"]) || level * 180,
+        power: Number(row.reward?.["res.power"]) || level * 180,
+      },
       engagedByMarchId: null, respawnAt: 0,
     };
   }
@@ -562,7 +619,7 @@ export function breachCity(source: HeadlessWorld, cityId: string, actorId: strin
   return world;
 }
 
-function respawnTarget(world: HeadlessWorld, entity: ResourceEntity | MonsterEntity, now: number): void {
+function respawnTarget(world: HeadlessWorld, entity: ResourceEntity | MonsterEntity, now: number, numbers: any): void {
   const random = rng(hashText(`${world.stateId}:${entity.id}:${entity.revision}:${now}`));
   const oldPosition = entity.position;
   const position = randomLegalPoint(world, random);
@@ -571,11 +628,20 @@ function respawnTarget(world: HeadlessWorld, entity: ResourceEntity | MonsterEnt
   const level = targetLevel(entity.zone, random);
   entity.level = level;
   if (entity.kind === "resource") {
-    entity.state = "available"; entity.capacity = 1000 * Math.pow(2, level - 1);
+    entity.state = "available";
+    entity.capacity = Number(numbers.gatherNodes?.levels?.[String(level)]?.totalSupply)
+      || 1000 * Math.pow(2, level - 1);
     entity.amount = entity.capacity; entity.occupiedByMarchId = null;
   } else {
-    entity.state = "alive"; entity.power = Math.round(160 * Math.pow(1.72, level - 1));
-    entity.reward = { cash: level * 350, oil: level * 180, power: level * 180 };
+    const row = numbers.world?.monsters?.levels?.[String(level)] ?? {};
+    entity.state = "alive";
+    entity.dominantArm = row.dominantArm ?? entity.dominantArm;
+    entity.power = Number(row.power) || Math.round(160 * Math.pow(1.72, level - 1));
+    entity.reward = {
+      cash: Number(row.reward?.["res.cash"]) || level * 350,
+      oil: Number(row.reward?.["res.oil"]) || level * 180,
+      power: Number(row.reward?.["res.power"]) || level * 180,
+    };
     entity.engagedByMarchId = null;
   }
   addFeed(world, now, `${entity.kind}_respawned`, entity.id, null, { oldPosition, position, level });
@@ -849,9 +915,16 @@ function arriveMonster(world: HeadlessWorld, march: HeadlessMarch, target: Monst
   target.state = "engaged"; target.engagedByMarchId = march.id; target.revision += 1;
   const player = world.players[march.playerId];
   const tuned = effectiveNumbers(player, march.commanderSnapshot, numbers);
+  const pveCasualtyScaling = Number(numbers.world?.monsters?.casualtyScaling);
+  const pveWoundedRatio = Number(numbers.world?.monsters?.woundedRatio);
+  if (Number.isFinite(pveCasualtyScaling) && pveCasualtyScaling >= 0) tuned.global.combat.casualtyScaling = pveCasualtyScaling;
+  if (Number.isFinite(pveWoundedRatio) && pveWoundedRatio >= 0) tuned.global.combat.woundedRatio = pveWoundedRatio;
+  const home = world.entities[player.cityId] as CityEntity;
+  const hospitalCapacity = Number(tuned.buildings?.["building.hospital"]?.levels?.[String(home.hospitalLevel)]?.woundedCapacity) || 0;
   const combat = resolveCombat({ troops: march.force }, {
     kind: "monster", level: target.level, power: target.power, reward: target.reward,
-  }, tuned);
+    dominantArm: target.dominantArm,
+  }, tuned, hospitalCapacity);
   const casualties = combat.attackerLosses.wounded + combat.attackerLosses.dead;
   const surviving = removeCasualties(march.force, casualties);
   march.force = surviving.troops;
@@ -890,6 +963,8 @@ function arriveCity(world: HeadlessWorld, march: HeadlessMarch, target: CityEnti
     kind: "rival", keepLevel: target.townhallLevel, wallLevel: target.wallLevel,
     hospitalLevel: target.hospitalLevel, storageLevel: target.storageLevel, troops: target.garrison,
     resources: target.resources, protectedFraction: target.protectedFraction, hasAttacked: target.hasAttacked,
+    troopDefenseBonus: (Number(numbers.global?.accountModifiers?.troopDefenseBonus) || 0)
+      + (defender?.accountModifiers.troopDefenseBonus ?? 0),
   }, tuned, hospitalCapacity);
   const attackerCasualties = combat.attackerLosses.wounded + combat.attackerLosses.dead;
   march.force = removeCasualties(march.force, attackerCasualties).troops;
@@ -905,7 +980,8 @@ function arriveCity(world: HeadlessWorld, march: HeadlessMarch, target: CityEnti
     if (defender) (Object.keys(march.cargo) as ResKey[]).forEach((resource) => {
       defender.resources[resource] = target.resources[resource];
     });
-    const wallDamage = Math.max(100, Math.round(500 * combat.winRatio));
+    const wallDamage = Math.max(world.config.minimumWallDamageOnWin,
+      Math.round(world.config.wallDamageAtFullWinRatio * combat.winRatio));
     target.wall.value = Math.max(0, target.wall.value - wallDamage);
     target.state = "burning";
     target.wall.burningUntil = at + world.config.burnDurationSec * 1000;
@@ -1022,8 +1098,8 @@ export function advanceHeadlessWorld(source: HeadlessWorld, now = Date.now(), nu
     due.forEach((event) => {
       const entity = world.entities[event.entityId];
       const march = world.marches[event.entityId];
-      if (event.type === "resource_respawn" && entity?.kind === "resource" && entity.state === "depleted" && event.at >= entity.respawnAt) respawnTarget(world, entity, event.at);
-      else if (event.type === "monster_respawn" && entity?.kind === "monster" && entity.state === "defeated" && event.at >= entity.respawnAt) respawnTarget(world, entity, event.at);
+      if (event.type === "resource_respawn" && entity?.kind === "resource" && entity.state === "depleted" && event.at >= entity.respawnAt) respawnTarget(world, entity, event.at, numbers);
+      else if (event.type === "monster_respawn" && entity?.kind === "monster" && entity.state === "defeated" && event.at >= entity.respawnAt) respawnTarget(world, entity, event.at, numbers);
       else if (event.type === "city_recover" && entity?.kind === "city" && entity.state === "burning" && event.at >= entity.wall.burningUntil) recoverCity(world, entity, event.at);
       else if (event.type === "march_arrival" && march) processArrival(world, march, event.at, numbers);
       else if (event.type === "gather_complete" && march) processGatherComplete(world, march, event.at, numbers);

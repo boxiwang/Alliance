@@ -12,10 +12,27 @@ const BUILDING_MIGHT_WEIGHTS: Record<string, number> = {
   "building.watchtower": 5,
 };
 
+function addMissingDefaults(defaultValue: any, currentValue: any): any {
+  if (currentValue === undefined) return JSON.parse(JSON.stringify(defaultValue));
+  if (!defaultValue || typeof defaultValue !== "object" || Array.isArray(defaultValue)) return currentValue;
+  const output = currentValue && typeof currentValue === "object" && !Array.isArray(currentValue)
+    ? JSON.parse(JSON.stringify(currentValue))
+    : {};
+  Object.entries(defaultValue).forEach(([key, value]) => {
+    output[key] = addMissingDefaults(value, output[key]);
+  });
+  return output;
+}
+
 // Preserve browser-local Balance Lab overrides across schema versions.
-function migrateLegacyNumbers(input: any): any {
+export function migrateLegacyNumbers(input: any): any {
   if (!input || typeof input !== "object") return input;
-  if (input.meta?.version === "0.6" && input.global?.display) return input;
+  if (input.meta?.version === (DEFAULTS as any).meta.version) return input;
+  if (input.meta?.version === "0.6" && input.global?.display) {
+    const upgraded = addMissingDefaults(DEFAULTS, input);
+    upgraded.meta.version = (DEFAULTS as any).meta.version;
+    return upgraded;
+  }
   const numbers = JSON.parse(JSON.stringify(input));
   if (numbers.buildings?.["building.barracks"] && !numbers.buildings["building.armyCamp"]) {
     const legacy = numbers.buildings["building.barracks"];
@@ -75,8 +92,8 @@ function migrateLegacyNumbers(input: any): any {
     for (let tier = 1; tier <= 10; tier += 1) troop.tiers[String(tier)].power = troopPower[tier - 1];
   });
   numbers.designTargets.might = JSON.parse(JSON.stringify((DEFAULTS as any).designTargets.might));
-  numbers.meta.version = "0.6";
-  return numbers;
+  numbers.meta.version = (DEFAULTS as any).meta.version;
+  return addMissingDefaults(DEFAULTS, numbers);
 }
 
 export function defaultN(): any {

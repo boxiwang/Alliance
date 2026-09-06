@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "balance:world": "node scripts/world-balance.mjs",
     "test": "vitest run",
     "check": "tsc --noEmit && vitest run && vite build"
   },

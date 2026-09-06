@@ -24,6 +24,9 @@ Still intentionally separate:
 - Shared persistence, authenticated commands and cross-process locking require the future server-authority slice.
 - Balance values are provisional; target density, power, rewards, burn damage and Energy pacing need playtests.
 
+The first deterministic balance pass is recorded in `docs/WORLD-BALANCE.md`. Run
+`npm run balance:world` to reproduce it; the Admin **World** page uses the same scenarios.
+
 ## Product boundary
 
 - One State is a sparse 512 × 512 coordinate world designed for up to 1,024 cities.

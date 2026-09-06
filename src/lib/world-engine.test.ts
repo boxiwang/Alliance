@@ -224,8 +224,9 @@ describe("headless world — march authority and feedback", () => {
   });
 
   it("resolves a city attack at arrival, burns the target, and preserves permanent progression", () => {
+    const raidForce = { army: {}, navy: {}, air: { "10": 1000 } };
     let world = spawnPlayers(initHeadlessWorld("state-raid", 1000), [
-      { id: "attacker", townhallLevel: 10, troops: force },
+      { id: "attacker", townhallLevel: 10, troops: raidForce },
       {
         id: "defender", townhallLevel: 14, might: 555000, shieldDurationSec: 0,
         troops: { army: { "1": 1 }, navy: {}, air: {} }, resources: { cash: 9000, oil: 4000, power: 2000 },
@@ -233,7 +234,7 @@ describe("headless world — march authority and feedback", () => {
     ], 1000);
     const cityId = world.players.defender.cityId;
     const sent = dispatchMarch(world, {
-      playerId: "attacker", targetId: cityId, action: "attack_city", force,
+      playerId: "attacker", targetId: cityId, action: "attack_city", force: raidForce,
       idempotencyKey: "raid-1",
     }, 2000);
     expect(sent.ok).toBe(true);

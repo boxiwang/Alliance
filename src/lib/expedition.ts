@@ -23,6 +23,7 @@ export interface RivalTarget {
   storageLevel?: number; // building.storage level backing resources' protection
   protectedFraction?: number; // override for building.storage.protectedFraction, if provided
   hasAttacked?: boolean; // this rival has made an offensive move already (their own shield is down)
+  troopDefenseBonus?: number; // resolved defender-side account/hero snapshot; default 0
 }
 
 /** A leveled outdoor resource node (map.gather_node, numbers.json → gatherNodes). */
@@ -39,6 +40,7 @@ export interface MonsterTarget {
   level: number;
   power: number; // stands in for DP in resolveCombat
   reward: Partial<Record<ResKey, number>>;
+  dominantArm?: TroopKey; // optional PvE counter identity
 }
 
 export type Target = RivalTarget | NodeTarget | MonsterTarget;
@@ -198,7 +200,7 @@ function dominantArm(troops: Record<TroopKey, Record<string, number>>): TroopKey
 }
 
 function defensePower(defender: Target, numbers: any = getN()): { dp: number; dominant: TroopKey | undefined; totalTroops: number } {
-  if (defender.kind === "monster") return { dp: defender.power, dominant: undefined, totalTroops: 0 };
+  if (defender.kind === "monster") return { dp: defender.power, dominant: defender.dominantArm, totalTroops: 0 };
   if (defender.kind === "node") return { dp: 0, dominant: undefined, totalTroops: 0 };
   let troopsDp = 0;
   TROOP_ORDER.forEach((arm) => {
@@ -207,6 +209,7 @@ function defensePower(defender: Target, numbers: any = getN()): { dp: number; do
       troopsDp += (count || 0) * (row?.defense ?? 0);
     }
   });
+  troopsDp *= 1 + Math.max(0, Number(defender.troopDefenseBonus) || 0);
   const wallDp = buildingRow("wall", defender.wallLevel, numbers)?.defenseValue ?? 0;
   const keepDp = defender.keepLevel * (numbers.global.combat.keepDefenseBonusPerLevel ?? 0);
   return { dp: troopsDp + wallDp + keepDp, dominant: dominantArm(defender.troops), totalTroops: sumTroopCounts(defender.troops) };

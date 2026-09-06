@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import defaults from "../../docs/numbers.json";
 import { simulateProgression } from "./simulator";
 import { validateNumbers } from "./validation";
+import { migrateLegacyNumbers } from "./numbers";
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
@@ -40,5 +41,21 @@ describe("numbers configuration", () => {
     expect(level30.deadlock).toBeUndefined();
     expect(level30.totalDays).toBeGreaterThanOrEqual(120);
     expect(level30.totalDays).toBeLessThanOrEqual(150);
+  });
+
+  it("adds v0.7 World fields to an existing v0.6 local override without losing tuned values", () => {
+    const saved: any = clone(defaults);
+    saved.meta.version = "0.6";
+    saved.gatherNodes.levels[1].gatherRatePerHour = 321;
+    delete saved.world.state;
+    delete saved.world.monsters;
+    delete saved.global.accountModifiers.marchCapacityBonus;
+
+    const migrated = migrateLegacyNumbers(saved);
+    expect(migrated.meta.version).toBe("0.7");
+    expect(migrated.gatherNodes.levels[1].gatherRatePerHour).toBe(321);
+    expect(migrated.world.state.maxPlayers).toBe(1024);
+    expect(migrated.world.monsters.levels[10].power).toBeGreaterThan(0);
+    expect(migrated.global.accountModifiers.marchCapacityBonus).toBe(0);
   });
 });

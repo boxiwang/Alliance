@@ -1,4 +1,5 @@
 import { simulateProgression } from "./simulator";
+import { simulateWorldBalance } from "./world-balance";
 
 export type ValidationSeverity = "error" | "warning";
 
@@ -84,6 +85,41 @@ export function validateNumbers(numbers: any): ValidationIssue[] {
     }
   }
 
+  const worldState = numbers.world?.state ?? {};
+  for (const field of ["width", "height", "maxPlayers", "spawnGrid", "circleReserveRadius", "spatialCellSize", "cityFootprint"]) {
+    if (!finiteNonNegative(worldState[field]) || worldState[field] <= 0) {
+      push("error", `world.state.${field}`, `${field} must be greater than zero.`);
+    }
+  }
+  if (!Number.isInteger(worldState.maxPlayers)) push("error", "world.state.maxPlayers", "Maximum players must be an integer.");
+  if (!Number.isInteger(worldState.spawnGrid)) push("error", "world.state.spawnGrid", "Spawn grid must be an integer.");
+  if (worldState.maxPlayers > worldState.spawnGrid * worldState.spawnGrid) {
+    push("error", "world.state.maxPlayers", "Spawn grid has fewer cells than the maximum player count.");
+  }
+  if (worldState.circleReserveRadius * 2 >= Math.min(worldState.width, worldState.height)) {
+    push("error", "world.state.circleReserveRadius", "Circle reserve must fit inside the map.");
+  }
+  for (const field of ["resourceRespawnSec", "monsterRespawnSec", "burnDurationSec"]) {
+    if (!finiteNonNegative(numbers.world?.lifecycle?.[field]) || numbers.world.lifecycle[field] <= 0) {
+      push("error", `world.lifecycle.${field}`, `${field} must be greater than zero.`);
+    }
+  }
+  for (let level = 1; level <= 10; level += 1) {
+    const monster = numbers.world?.monsters?.levels?.[String(level)];
+    const node = numbers.gatherNodes?.levels?.[String(level)];
+    if (!monster) push("error", `world.monsters.levels.${level}`, "Missing explicit monster level row.");
+    else {
+      if (!finiteNonNegative(monster.power) || monster.power <= 0) push("error", `world.monsters.levels.${level}.power`, "Monster power must be greater than zero.");
+      if (!Number.isInteger(monster.expectedTownhall) || monster.expectedTownhall < 1 || monster.expectedTownhall > maxLevel) push("error", `world.monsters.levels.${level}.expectedTownhall`, "Expected Townhall must be inside the progression range.");
+      if (!["army", "navy", "air"].includes(monster.dominantArm)) push("error", `world.monsters.levels.${level}.dominantArm`, "Dominant arm must be army, navy or air.");
+    }
+    if (!node) push("error", `gatherNodes.levels.${level}`, "Missing explicit gathering level row.");
+    else {
+      if (!finiteNonNegative(node.totalSupply) || node.totalSupply <= 0) push("error", `gatherNodes.levels.${level}.totalSupply`, "Node supply must be greater than zero.");
+      if (!finiteNonNegative(node.gatherRatePerHour) || node.gatherRatePerHour <= 0) push("error", `gatherNodes.levels.${level}.gatherRatePerHour`, "Gathering rate must be greater than zero.");
+    }
+  }
+
   const perLevel = numbers.townhallPrerequisites?.perLevel ?? {};
   const bands = numbers.townhallPrerequisites?.bands ?? [];
   for (let target = 2; target <= maxLevel; target += 1) {
@@ -134,6 +170,10 @@ export function validateNumbers(numbers: any): ValidationIssue[] {
   else if (level10.totalDays < 2 || level10.totalDays > 3.1) push("warning", "simulation.TH10", `Default profile reaches TH10 in ${level10.totalDays.toFixed(1)}d; target is 2–3d.`);
   if (level30.deadlock) push("error", "simulation.TH30", level30.deadlock);
   else if (level30.totalDays < 120 || level30.totalDays > 150) push("warning", "simulation.TH30", `Default profile reaches TH30 in ${level30.totalDays.toFixed(0)}d; target is 120–150d.`);
+
+  if (!issues.some((issue) => issue.severity === "error" && (issue.path.startsWith("world.") || issue.path.startsWith("gatherNodes.")))) {
+    simulateWorldBalance(numbers).issues.forEach((issue) => push(issue.severity, `worldBalance.${issue.code}`, issue.message));
+  }
 
   return issues;
 }

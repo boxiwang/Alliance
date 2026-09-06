@@ -2,10 +2,10 @@
   "meta": {
     "project": "RUGLANDS",
     "phase": "personal-mode MVP · Slice 1 · in-city",
-    "version": "0.6",
+    "version": "0.7",
     "reference": "CoC-early pacing; economy redefined to Cash/Oil/Power + Navy/Army/Air per owner spec",
     "curve": "Explicit per-level tables. Times are seconds; production is per hour.",
-    "note": "Explicit tables. Three training buildings independently gate troop tiers. RSS and troop counts use x1,000 display denominations; Might splits permanent infrastructure from troop power."
+    "note": "Explicit tables. Three training buildings independently gate troop tiers. RSS and troop counts use x1,000 display denominations; Might splits permanent infrastructure from troop power. World map, lifecycle, PvE and PvP reference scenarios are data-driven."
   },
   "global": {
     "keepGatesEverything": true,
@@ -65,6 +65,7 @@
     },
     "march": {
       "capacityFractionOfMaxTroops": 1,
+      "baseMarchCapacity": 1000,
       "baseTravelSecondsPerTile": 6,
       "note": "sys.march_capacity — world-map phase",
       "marchQueueSlots": 2,
@@ -81,7 +82,8 @@
       "marchSpeedBonus": 0.0,
       "troopAttackBonus": 0.0,
       "troopDefenseBonus": 0.0,
-      "loadBonus": 0.0
+      "loadBonus": 0.0,
+      "marchCapacityBonus": 0.0
     }
   },
   "resources": {
@@ -3319,7 +3321,7 @@
             "res.power": 60
           },
           "timeSec": 0,
-          "defenseValue": 200,
+          "defenseValue": 488,
           "might": 300
         },
         "2": {
@@ -3329,7 +3331,7 @@
             "res.power": 90
           },
           "timeSec": 10,
-          "defenseValue": 300,
+          "defenseValue": 606,
           "might": 4800
         },
         "3": {
@@ -3339,7 +3341,7 @@
             "res.power": 140
           },
           "timeSec": 48,
-          "defenseValue": 450,
+          "defenseValue": 1096,
           "might": 24300
         },
         "4": {
@@ -3349,7 +3351,7 @@
             "res.power": 200
           },
           "timeSec": 144,
-          "defenseValue": 680,
+          "defenseValue": 1388,
           "might": 76800
         },
         "5": {
@@ -3359,7 +3361,7 @@
             "res.power": 300
           },
           "timeSec": 432,
-          "defenseValue": 1000,
+          "defenseValue": 1790,
           "might": 187500
         },
         "6": {
@@ -3369,7 +3371,7 @@
             "res.power": 460
           },
           "timeSec": 1152,
-          "defenseValue": 1500,
+          "defenseValue": 3645,
           "might": 388800
         },
         "7": {
@@ -3379,7 +3381,7 @@
             "res.power": 680
           },
           "timeSec": 2304,
-          "defenseValue": 2300,
+          "defenseValue": 4678,
           "might": 720300
         },
         "8": {
@@ -3389,7 +3391,7 @@
             "res.power": 1000
           },
           "timeSec": 4608,
-          "defenseValue": 3400,
+          "defenseValue": 5873,
           "might": 1228800
         },
         "9": {
@@ -3399,7 +3401,7 @@
             "res.power": 1500
           },
           "timeSec": 6912,
-          "defenseValue": 5100,
+          "defenseValue": 10629,
           "might": 1968300
         },
         "10": {
@@ -3409,7 +3411,7 @@
             "res.power": 2300
           },
           "timeSec": 10368,
-          "defenseValue": 7700,
+          "defenseValue": 13729,
           "might": 3000000
         },
         "11": {
@@ -3419,7 +3421,7 @@
             "res.power": 3200
           },
           "timeSec": 13111,
-          "defenseValue": 12000,
+          "defenseValue": 18398,
           "might": 4392300
         },
         "12": {
@@ -3429,7 +3431,7 @@
             "res.power": 4500
           },
           "timeSec": 14803,
-          "defenseValue": 17000,
+          "defenseValue": 32567,
           "might": 6220800
         },
         "13": {
@@ -3439,7 +3441,7 @@
             "res.power": 6300
           },
           "timeSec": 16714,
-          "defenseValue": 26000,
+          "defenseValue": 42441,
           "might": 8568300
         },
         "14": {
@@ -3449,7 +3451,7 @@
             "res.power": 8900
           },
           "timeSec": 18871,
-          "defenseValue": 39000,
+          "defenseValue": 54519,
           "might": 11524800
         },
         "15": {
@@ -3459,7 +3461,7 @@
             "res.power": 12000
           },
           "timeSec": 21306,
-          "defenseValue": 58000,
+          "defenseValue": 93313,
           "might": 15187500
         },
         "16": {
@@ -3469,7 +3471,7 @@
             "res.power": 17000
           },
           "timeSec": 24055,
-          "defenseValue": 88000,
+          "defenseValue": 120105,
           "might": 19660800
         },
         "17": {
@@ -3479,7 +3481,7 @@
             "res.power": 24000
           },
           "timeSec": 27160,
-          "defenseValue": 130000,
+          "defenseValue": 148401,
           "might": 25056300
         },
         "18": {
@@ -3489,7 +3491,7 @@
             "res.power": 34000
           },
           "timeSec": 30666,
-          "defenseValue": 200000,
+          "defenseValue": 262474,
           "might": 31492800
         },
         "19": {
@@ -3499,7 +3501,7 @@
             "res.power": 48000
           },
           "timeSec": 34624,
-          "defenseValue": 300000,
+          "defenseValue": 343392,
           "might": 39096300
         },
         "20": {
@@ -3509,7 +3511,7 @@
             "res.power": 67000
           },
           "timeSec": 39092,
-          "defenseValue": 440000,
+          "defenseValue": 444592,
           "might": 48000000
         },
         "21": {
@@ -3519,7 +3521,7 @@
             "res.power": 93000
           },
           "timeSec": 44138,
-          "defenseValue": 670000,
+          "defenseValue": 566018,
           "might": 58344300
         },
         "22": {
@@ -3529,7 +3531,7 @@
             "res.power": 130000
           },
           "timeSec": 49834,
-          "defenseValue": 1000000,
+          "defenseValue": 988262,
           "might": 70276800
         },
         "23": {
@@ -3539,7 +3541,7 @@
             "res.power": 180000
           },
           "timeSec": 56265,
-          "defenseValue": 1500000,
+          "defenseValue": 1263011,
           "might": 83952300
         },
         "24": {
@@ -3549,7 +3551,7 @@
             "res.power": 260000
           },
           "timeSec": 63528,
-          "defenseValue": 2200000,
+          "defenseValue": 1592685,
           "might": 99532800
         },
         "25": {
@@ -3559,7 +3561,7 @@
             "res.power": 360000
           },
           "timeSec": 71727,
-          "defenseValue": 3400000,
+          "defenseValue": 2059713,
           "might": 117187500
         },
         "26": {
@@ -3569,7 +3571,7 @@
             "res.power": 500000
           },
           "timeSec": 80984,
-          "defenseValue": 5100000,
+          "defenseValue": 3556107,
           "might": 137092800
         },
         "27": {
@@ -3579,7 +3581,7 @@
             "res.power": 700000
           },
           "timeSec": 91436,
-          "defenseValue": 7600000,
+          "defenseValue": 4445354,
           "might": 159432300
         },
         "28": {
@@ -3589,7 +3591,7 @@
             "res.power": 980000
           },
           "timeSec": 103237,
-          "defenseValue": 11000000,
+          "defenseValue": 5927496,
           "might": 184396800
         },
         "29": {
@@ -3599,7 +3601,7 @@
             "res.power": 1400000
           },
           "timeSec": 116561,
-          "defenseValue": 17000000,
+          "defenseValue": 7409563,
           "might": 212184300
         },
         "30": {
@@ -3609,7 +3611,7 @@
             "res.power": 1900000
           },
           "timeSec": 131604,
-          "defenseValue": 26000000,
+          "defenseValue": 12817132,
           "might": 243000000
         }
       }
@@ -4795,7 +4797,72 @@
     "rings": 10,
     "spawnRing": 10,
     "note": "Concentric world: ring 10 = outer edge (newbie spawn), ring 1 = center (the Circle). Node/monster level ~ (11-ring). Inner rings open via server progression (stub now).",
-    "centerOpensBy": "server_progression"
+    "centerOpensBy": "server_progression",
+    "state": {
+      "width": 512,
+      "height": 512,
+      "maxPlayers": 1024,
+      "spawnGrid": 34,
+      "spawnJitter": 1.25,
+      "circleReserveRadius": 38,
+      "spatialCellSize": 16,
+      "cityFootprint": 2
+    },
+    "population": {
+      "resourceFieldsPerPlayer": 1.5,
+      "monstersPerPlayer": 0.75,
+      "minimumResourceFields": 240,
+      "minimumMonsters": 120
+    },
+    "lifecycle": {
+      "resourceRespawnSec": 600,
+      "monsterRespawnSec": 600,
+      "burnDurationSec": 1800
+    },
+    "energy": {
+      "cap": 100,
+      "regenSecPerPoint": 360,
+      "monsterAttackCost": 10
+    },
+    "cityCombat": {
+      "baseWallIntegrity": 1000,
+      "minimumWallDamageOnWin": 100,
+      "wallDamageAtFullWinRatio": 500,
+      "beginnerShieldDurationSec": 259200
+    },
+    "balanceTargets": {
+      "referenceArmyFill": 0.6,
+      "standardPveWinRatioMin": 0.55,
+      "standardPveWinRatioMax": 0.58,
+      "winningPveCasualtyFractionMax": 0.02,
+      "monsterRewardToNodeSupplyMin": 0.1,
+      "monsterRewardToNodeSupplyMax": 0.3,
+      "equalPvpAttackerWinRatioMin": 0.45,
+      "equalPvpAttackerWinRatioMax": 0.5,
+      "fullNodeGatherHoursMin": 2,
+      "fullNodeGatherHoursMax": 6,
+      "typicalDistanceTiles": 20,
+      "roundTripSecondsMin": 120,
+      "roundTripSecondsMax": 600,
+      "dailyEnergyAttacksMin": 8,
+      "dailyEnergyAttacksMax": 30
+    },
+    "monsters": {
+      "casualtyScaling": 0.02,
+      "woundedRatio": 1.0,
+      "levels": {
+        "1": { "expectedTownhall": 1, "dominantArm": "navy", "power": 773, "reward": { "res.cash": 100, "res.oil": 50, "res.power": 50 } },
+        "2": { "expectedTownhall": 3, "dominantArm": "air", "power": 1659, "reward": { "res.cash": 200, "res.oil": 100, "res.power": 100 } },
+        "3": { "expectedTownhall": 6, "dominantArm": "army", "power": 4630, "reward": { "res.cash": 400, "res.oil": 200, "res.power": 200 } },
+        "4": { "expectedTownhall": 9, "dominantArm": "navy", "power": 11946, "reward": { "res.cash": 800, "res.oil": 400, "res.power": 400 } },
+        "5": { "expectedTownhall": 12, "dominantArm": "air", "power": 33613, "reward": { "res.cash": 1600, "res.oil": 800, "res.power": 800 } },
+        "6": { "expectedTownhall": 15, "dominantArm": "army", "power": 91773, "reward": { "res.cash": 3200, "res.oil": 1600, "res.power": 1600 } },
+        "7": { "expectedTownhall": 18, "dominantArm": "navy", "power": 242921, "reward": { "res.cash": 6400, "res.oil": 3200, "res.power": 3200 } },
+        "8": { "expectedTownhall": 22, "dominantArm": "air", "power": 882514, "reward": { "res.cash": 12800, "res.oil": 6400, "res.power": 6400 } },
+        "9": { "expectedTownhall": 26, "dominantArm": "army", "power": 3087648, "reward": { "res.cash": 25600, "res.oil": 12800, "res.power": 12800 } },
+        "10": { "expectedTownhall": 30, "dominantArm": "navy", "power": 10680057, "reward": { "res.cash": 51200, "res.oil": 25600, "res.power": 25600 } }
+      }
+    }
   },
   "gatherNodes": {
     "note": "Leveled outdoor resource nodes 1-10. A node yields ONE resource (assigned per instance). carry = sum(troop.load) + hero carry, with the passive account load bonus applied automatically. Haul = min(carry, node remaining). Gather time = hauled / (gatherRatePerHour * (1 + account gather-speed bonus)). Academy/hero bonuses are account-wide passives, never chosen at the node. Node depletes by totalSupply.",
@@ -4806,52 +4873,52 @@
       "1": {
         "ringZone": 10,
         "totalSupply": 1000,
-        "gatherRatePerHour": 100
+        "gatherRatePerHour": 250
       },
       "2": {
         "ringZone": 9,
         "totalSupply": 2000,
-        "gatherRatePerHour": 135
+        "gatherRatePerHour": 500
       },
       "3": {
         "ringZone": 8,
         "totalSupply": 4000,
-        "gatherRatePerHour": 182
+        "gatherRatePerHour": 1000
       },
       "4": {
         "ringZone": 7,
         "totalSupply": 8000,
-        "gatherRatePerHour": 246
+        "gatherRatePerHour": 2000
       },
       "5": {
         "ringZone": 6,
         "totalSupply": 16000,
-        "gatherRatePerHour": 332
+        "gatherRatePerHour": 4000
       },
       "6": {
         "ringZone": 5,
         "totalSupply": 32000,
-        "gatherRatePerHour": 448
+        "gatherRatePerHour": 8000
       },
       "7": {
         "ringZone": 4,
         "totalSupply": 64000,
-        "gatherRatePerHour": 605
+        "gatherRatePerHour": 16000
       },
       "8": {
         "ringZone": 3,
         "totalSupply": 128000,
-        "gatherRatePerHour": 817
+        "gatherRatePerHour": 32000
       },
       "9": {
         "ringZone": 2,
         "totalSupply": 256000,
-        "gatherRatePerHour": 1103
+        "gatherRatePerHour": 64000
       },
       "10": {
         "ringZone": 1,
         "totalSupply": 512000,
-        "gatherRatePerHour": 1489
+        "gatherRatePerHour": 128000
       }
     }
   }

@@ -5,8 +5,8 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-05 · **by:** Codex (1,024-player headless World authority slice)
-**Current focus:** The scalable Personal World rules now exist as a UI-independent deterministic engine. Next is scenario tuning, then replacing the visual test shell's old local engine through an adapter before shared-server persistence.
+**Last updated:** 2026-09-05 · **by:** Codex (headless World balance baseline v0.7)
+**Current focus:** Scalable World rules and repeatable balance scenarios are green. Next is replacing the visual test shell's legacy local rules through a temporary GameState adapter before shared-server persistence.
 
 ### 🧮 Data-balance pass (this session, Claude)
 - **FIXED — per-building upgrade-time monotonicity:** every building's time dipped at L10→L11
@@ -76,7 +76,18 @@ The 5 corrections:
 - Hero seam is locked now: every march stores two nullable hero slots, resolved modifier/effect snapshot
   and balance version. Adding Heroes later supplies that snapshot and does not rewrite world/march logic.
 - Acceptance now covers 1,000 cities + 10,000 deterministic scheduled events. Full repo check:
-  **63 tests, TypeScript and production build green**.
+  **69 tests, TypeScript and production build green**.
+- **Balance v0.7 complete:** `npm run balance:world` evaluates weak/standard/strong PvE, gathering,
+  equal-progression PvP, travel, Energy and target density against declared target bands. The old data
+  exposed 86–99.8% matching-monster win rates, 10–343.9h field occupancy and late-game Wall drift.
+  Explicit tables now hold matching PvE at ~56%, field occupancy at ~4h and equal PvP attacker ratio
+  at 47% from TH5–30. Rationale and exact reference profile: `docs/WORLD-BALANCE.md`.
+- All headless World knobs now live in `docs/numbers.json`: State size, population, lifecycle, Energy,
+  city integrity/damage, monster levels/power/rewards/counter identities and balance targets. Existing
+  browser-local v0.6 Admin overrides migrate to v0.7 without losing edited values.
+- Admin gained a human-readable **World** page with grouped settings, editable L1–10 monster rows and
+  live scenario results. Browser-tested: deliberately breaking L1 power raised warnings immediately;
+  Undo restored a clean report; no console errors.
 
 ## 🎯 Decisions locked (this session)
 - **No medieval theme.** Current leading visual exploration is **Degen Freeport**: a prosperous,
@@ -126,12 +137,12 @@ The 5 corrections:
 - **Playable coordinate World (local Personal Mode):** Town → World → select field/crew/rival → scout/gather/raid → timed outbound/work/return march → troop/resource/casualty settlement. World and NPCs persist per wallet in localStorage; 49 tests pass.
 
 ## 🔜 Next up (immediate — for whoever picks this up)
-1. Add deterministic balance scenarios (weak/equal/strong PvE and PvP, travel/gather/loot/day) and tune
-   target density, power, rewards, Wall damage, burn duration and Energy from observed results.
-2. Build a temporary adapter between current `GameState` saves and `HeadlessPlayer`, then switch the
+1. Build a temporary adapter between current `GameState` saves and `HeadlessPlayer`, then switch the
    existing `World.tsx` test shell from legacy `src/lib/world.ts` to this engine without redesigning UI.
-3. Add force presets (25%/50%/max), recommended counter composition and march-cap explanations to the
+2. Add force presets (25%/50%/max), recommended counter composition and march-cap explanations to the
    visual shell after the engine adapter is stable.
+3. Playtest target density, Wall damage/burn duration and Energy behavior; adjust declared target bands
+   before retuning explicit values when the desired experience changes.
 4. Add resource source/sink breakdown to the pacing simulator, then playtest/tune the full L1→L10 city loop.
 5. Before a real multiplayer alpha: put this authority behind authenticated server commands, server time,
    atomic target locks and durable persistence. LocalStorage remains a test-only adapter.
@@ -174,6 +185,7 @@ cat /tmp/ruglands-report.json
 - `src/lib/simulator.ts` — pure local build/resource pacing model used by Admin.
 - `src/World.tsx` / `src/lib/world.ts` — coordinate-map player UI + persistent local march/settlement engine.
 - `docs/WORLD-MVP.md` / `src/lib/world-engine.ts` — scalable no-UI World contract + deterministic authority engine (future UI/server source of truth).
+- `docs/WORLD-BALANCE.md` / `src/lib/world-balance.ts` — reproducible outdoor balance targets, scenarios and operator report.
 - `src/lib/factions.ts` — pledgeable-from-holdings + seed top-factions.
 - `src/lib/tasks.ts` — derive signals from records (backend/telemetry only for now).
 - `src/App.tsx` — start-screen stage machine.

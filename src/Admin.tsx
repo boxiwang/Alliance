@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { getN, saveN, resetN, hasOverride } from "./lib/numbers";
 import { simulateProgression } from "./lib/simulator";
+import { simulateWorldBalance } from "./lib/world-balance";
 import { validateNumbers, ValidationIssue } from "./lib/validation";
 
 type Path = (string | number)[];
-type View = "overview" | "buildings" | "troops" | "gathering" | "rules" | "advanced";
+type View = "overview" | "buildings" | "troops" | "gathering" | "world" | "rules" | "advanced";
 
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
@@ -375,6 +376,79 @@ function GatheringWorkspace({ numbers, onChange }: { numbers: any; onChange: (pa
   );
 }
 
+function WorldWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: Path, value: any) => void }) {
+  const p = (path: Path) => ({ path, numbers, onChange });
+  const report = useMemo(() => simulateWorldBalance(numbers), [numbers]);
+  return (
+    <div>
+      <div className="adm-view-intro">
+        <div>
+          <span className="adm-eyebrow">PERSONAL WORLD</span>
+          <h2>Map, targets and expedition balance</h2>
+          <p>These controls feed the same headless engine used by the 1,000-player simulation. The table shows the result of each change immediately.</p>
+        </div>
+      </div>
+      <div className="adm-rule-grid">
+        <RuleGroup icon="🗺️" title="State size" description="Capacity and spacing for one shared World State.">
+          <NumberSetting {...p(["world", "state", "width"])} label="Map width" help="Horizontal coordinate size." suffix="tiles" />
+          <NumberSetting {...p(["world", "state", "height"])} label="Map height" help="Vertical coordinate size." suffix="tiles" />
+          <NumberSetting {...p(["world", "state", "maxPlayers"])} label="Maximum cities" help="Hard player capacity for one State." />
+          <NumberSetting {...p(["world", "state", "circleReserveRadius"])} label="Circle reserve radius" help="No cities or normal targets spawn inside this central area." suffix="tiles" />
+          <NumberSetting {...p(["world", "state", "spatialCellSize"])} label="Nearby-query cell size" help="Technical spatial lookup bucket; usually leave at 16." suffix="tiles" />
+        </RuleGroup>
+        <RuleGroup icon="✦" title="Target population" description="Recommended live targets scale with the number of players but never fall below the minimum.">
+          <NumberSetting {...p(["world", "population", "resourceFieldsPerPlayer"])} label="Fields per player" help="Resource fields maintained for every active city." step={0.05} />
+          <NumberSetting {...p(["world", "population", "monstersPerPlayer"])} label="Monsters per player" help="PvE targets maintained for every active city." step={0.05} />
+          <NumberSetting {...p(["world", "population", "minimumResourceFields"])} label="Minimum fields" help="Keeps a young State from feeling empty." />
+          <NumberSetting {...p(["world", "population", "minimumMonsters"])} label="Minimum monsters" help="Keeps a young State from feeling empty." />
+        </RuleGroup>
+        <RuleGroup icon="⏱️" title="Travel & lifecycle" description="How long marches, empty targets and attacked cities remain in each state.">
+          <NumberSetting {...p(["global", "march", "baseTravelSecondsPerTile"])} label="Travel / tile" help="One-way travel time before bonuses." suffix="seconds" />
+          <NumberSetting {...p(["world", "lifecycle", "resourceRespawnSec"])} label="Field respawn" help="Delay before a depleted field moves and returns." suffix="seconds" />
+          <NumberSetting {...p(["world", "lifecycle", "monsterRespawnSec"])} label="Monster respawn" help="Delay before a defeated monster moves and returns." suffix="seconds" />
+          <NumberSetting {...p(["world", "lifecycle", "burnDurationSec"])} label="City burn duration" help="Recovery window after a successful raid." suffix="seconds" />
+        </RuleGroup>
+        <RuleGroup icon="⚡" title="Energy" description="Limits repeat monster attacks without blocking scouting, gathering or PvP.">
+          <NumberSetting {...p(["world", "energy", "cap"])} label="Energy cap" help="Maximum stored Energy." />
+          <NumberSetting {...p(["world", "energy", "regenSecPerPoint"])} label="Regeneration / point" help="Time required to recover one Energy." suffix="seconds" />
+          <NumberSetting {...p(["world", "energy", "monsterAttackCost"])} label="Monster attack cost" help="Energy spent when a hunt is dispatched." />
+        </RuleGroup>
+        <RuleGroup icon="🔥" title="City raids" description="Wall damage and beginner safety. Buildings and permanent progress are never destroyed.">
+          <NumberSetting {...p(["world", "cityCombat", "baseWallIntegrity"])} label="Wall integrity" help="Burn/relocation health, separate from Wall defensive power." />
+          <NumberSetting {...p(["world", "cityCombat", "minimumWallDamageOnWin"])} label="Minimum winning damage" help="Least integrity removed by a successful raid." />
+          <NumberSetting {...p(["world", "cityCombat", "wallDamageAtFullWinRatio"])} label="Damage at 100% win ratio" help="Upper scale used with the actual battle ratio." />
+          <NumberSetting {...p(["world", "cityCombat", "beginnerShieldDurationSec"])} label="Initial timed shield" help="Extra protection granted when a city first spawns." suffix="seconds" />
+        </RuleGroup>
+        <RuleGroup icon="👾" title="Monster combat" description="PvE uses gentler casualties than city warfare; wounds still respect Hospital capacity.">
+          <NumberSetting {...p(["world", "monsters", "casualtyScaling"])} label="PvE casualty intensity" help="Base casualty pressure for monster fights." suffix="%" scale={100} step={0.1} />
+          <NumberSetting {...p(["world", "monsters", "woundedRatio"])} label="PvE wounded share" help="Share sent to Hospital before any overflow becomes dead." suffix="%" scale={100} step={1} />
+        </RuleGroup>
+      </div>
+
+      <div className="adm-table-wrap">
+        <table className="adm-level-table">
+          <thead><tr><th>Monster</th><th>Expected TH</th><th>Counter identity</th><th>Power</th><th>Cash</th><th>Oil</th><th>Power RSS</th><th>Reference win</th><th>Casualties</th><th>Node time</th></tr></thead>
+          <tbody>{report.stages.map((scenario) => {
+            const path = ["world", "monsters", "levels", String(scenario.monsterLevel)];
+            const row = numbers.world.monsters.levels[String(scenario.monsterLevel)];
+            return <tr key={scenario.monsterLevel}>
+              <th>L{scenario.monsterLevel}</th>
+              <td><input className="adm-cell mono" type="number" value={row.expectedTownhall} onChange={(event) => onChange([...path, "expectedTownhall"], Number(event.target.value) || 0)} /></td>
+              <td><select className="adm-cell" value={row.dominantArm} onChange={(event) => onChange([...path, "dominantArm"], event.target.value)}><option value="army">Army</option><option value="navy">Navy</option><option value="air">Air</option></select></td>
+              <td><input className="adm-cell mono" type="number" value={row.power} onChange={(event) => onChange([...path, "power"], Number(event.target.value) || 0)} /></td>
+              {(["res.cash", "res.oil", "res.power"] as const).map((resource) => <td key={resource}><input className="adm-cell mono" type="number" value={row.reward[resource]} onChange={(event) => onChange([...path, "reward", resource], Number(event.target.value) || 0)} /></td>)}
+              <td>{(scenario.standardWinRatio * 100).toFixed(1)}%</td>
+              <td>{(scenario.standardCasualtyFraction * 100).toFixed(2)}%</td>
+              <td>{scenario.gatherHours.toFixed(1)}h</td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>
+      <div className={`adm-health ${report.issues.length ? "warn" : "good"}`}><span>{report.issues.length ? "△" : "✓"}</span><div><b>{report.issues.length ? `${report.issues.length} World balance warnings` : "World reference scenarios are on target"}</b><small>Weak PvE fails, prepared PvE wins, standard PvE is ~56%, nodes occupy ~4h, and equal city attacks favor the defender.</small></div></div>
+    </div>
+  );
+}
+
 function RulesWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: Path, value: any) => void }) {
   const p = (path: Path) => ({ path, numbers, onChange });
   return (
@@ -488,6 +562,7 @@ export default function Admin() {
     { key: "buildings", label: "Buildings", icon: "▦" },
     { key: "troops", label: "Troops", icon: "⚔" },
     { key: "gathering", label: "Gathering", icon: "🌾" },
+    { key: "world", label: "World", icon: "◎" },
     { key: "rules", label: "Game rules", icon: "⚙" },
     { key: "advanced", label: "Advanced", icon: "⋯" },
   ];
@@ -505,6 +580,7 @@ export default function Admin() {
         {view === "buildings" && <BuildingWorkspace numbers={working} selected={selectedBuilding} setSelected={setSelectedBuilding} onChange={handleChange} />}
         {view === "troops" && <TroopWorkspace numbers={working} selected={selectedTroop} setSelected={setSelectedTroop} onChange={handleChange} />}
         {view === "gathering" && <GatheringWorkspace numbers={working} onChange={handleChange} />}
+        {view === "world" && <WorldWorkspace numbers={working} onChange={handleChange} />}
         {view === "rules" && <RulesWorkspace numbers={working} onChange={handleChange} />}
         {view === "advanced" && <div><div className="adm-view-intro"><div><span className="adm-eyebrow">ADVANCED</span><h2>Raw configuration</h2><p>Technical keys and internal notes live here. Most balancing work should happen in the other four pages.</p></div></div><Section title="Open raw configuration" subtitle="For uncommon fields only" defaultOpen={false}><RawNode path={[]} value={working} onChange={handleChange} /></Section></div>}
       </main>
