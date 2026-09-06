@@ -5,8 +5,8 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-05 · **by:** Codex (coordinate World + account-bound march loop landed locally)
-**Current focus:** Personal Mode outdoor loop now runs locally end-to-end. Next is playtesting/tuning and hardening the local NPC layer before any shared server world.
+**Last updated:** 2026-09-05 · **by:** Codex (1,024-player headless World authority slice)
+**Current focus:** The scalable Personal World rules now exist as a UI-independent deterministic engine. Next is scenario tuning, then replacing the visual test shell's old local engine through an adapter before shared-server persistence.
 
 ### 🧮 Data-balance pass (this session, Claude)
 - **FIXED — per-building upgrade-time monotonicity:** every building's time dipped at L10→L11
@@ -60,6 +60,24 @@ The 5 corrections:
 - Browser-verified: 67K → dispatch 10 internal troop batches → 57K standing → GM return → 67K; reports/resources settle; zoom, Circle recenter, 2/2 queue limit and third-dispatch rejection work with no console errors.
 - Current scope remains **local NPC simulation**, not a shared multiplayer server: rival casualties/respawn and cross-player concurrency are deliberately not implemented yet.
 
+### 🧠 Headless Personal World MVP core (Codex — new, not wired to UI yet)
+- Contract: `docs/WORLD-MVP.md`; implementation: `src/lib/world-engine.ts`; acceptance tests:
+  `src/lib/world-engine.test.ts`.
+- One 512×512 State supports **1,024 deterministic, farthest-first city anchors**. The first players
+  are intentionally sparse; later joins fill gaps. The Circle reserve, five zones and spatial-hash
+  nearby queries are enforced without storing empty tiles.
+- Full target lifecycle: resource field claim/depletion/relocation; monster engage/defeat/respawn;
+  city shield/raid/Wall burn/recovery/relocation without destroying Townhall, Might or permanent progress.
+- Full march lifecycle: real troop reservation, queue/capacity validation, travel, gather contention,
+  Energy + sequential monster unlocks, scout, city combat, recall, return settlement and troop conservation.
+- Feedback is no longer deferred or ambiguous: combat produces an immutable attacker report (and city
+  defender report) **at arrival**; surviving troops, loot and rewards enter inventory only **on return**.
+- Retry-safe dispatch idempotency prevents duplicated troop reservation/Energy cost/rewards.
+- Hero seam is locked now: every march stores two nullable hero slots, resolved modifier/effect snapshot
+  and balance version. Adding Heroes later supplies that snapshot and does not rewrite world/march logic.
+- Acceptance now covers 1,000 cities + 10,000 deterministic scheduled events. Full repo check:
+  **63 tests, TypeScript and production build green**.
+
 ## 🎯 Decisions locked (this session)
 - **No medieval theme.** Current leading visual exploration is **Degen Freeport**: a prosperous,
   dangerous Crypto industrial port in a readable chibi 2.5D SLG style. The V3 concept is preferred
@@ -108,12 +126,16 @@ The 5 corrections:
 - **Playable coordinate World (local Personal Mode):** Town → World → select field/crew/rival → scout/gather/raid → timed outbound/work/return march → troop/resource/casualty settlement. World and NPCs persist per wallet in localStorage; 49 tests pass.
 
 ## 🔜 Next up (immediate — for whoever picks this up)
-1. Product playtest the **Town → World → return** loop locally and tune target density, travel time, gather duration, NPC power and rewards from observed play rather than theory.
-2. Persist defender troop casualties/depletion and add a local NPC respawn/refresh rule; current rival resources deplete, but rival troop losses are report-only.
-3. Improve force allocation after playtest (25%/50%/max presets, recommended counter composition, march-cap explanation).
+1. Add deterministic balance scenarios (weak/equal/strong PvE and PvP, travel/gather/loot/day) and tune
+   target density, power, rewards, Wall damage, burn duration and Energy from observed results.
+2. Build a temporary adapter between current `GameState` saves and `HeadlessPlayer`, then switch the
+   existing `World.tsx` test shell from legacy `src/lib/world.ts` to this engine without redesigning UI.
+3. Add force presets (25%/50%/max), recommended counter composition and march-cap explanations to the
+   visual shell after the engine adapter is stable.
 4. Add resource source/sink breakdown to the pacing simulator, then playtest/tune the full L1→L10 city loop.
-5. Before a real multiplayer alpha: move world/player/march authority to the backend, add server timestamps/locking and resolve simultaneous attacks. LocalStorage is only the current low-cost prototype.
-6. Art remains independent: lock/revise V3 chibi Degen Freeport and build one vertical slice when product mechanics are stable enough.
+5. Before a real multiplayer alpha: put this authority behind authenticated server commands, server time,
+   atomic target locks and durable persistence. LocalStorage remains a test-only adapter.
+6. Art remains independent: lock/revise V3 chibi Degen Freeport and build one vertical slice when mechanics are stable enough.
 
 ## 🩹 Known issues / polish
 - `oldestSeen` (wallet age) reads null for contract addresses; tx-history endpoint shape
@@ -151,6 +173,7 @@ cat /tmp/ruglands-report.json
 - `src/lib/gm.ts` — localhost-only, wallet-bound GM grant and test helpers.
 - `src/lib/simulator.ts` — pure local build/resource pacing model used by Admin.
 - `src/World.tsx` / `src/lib/world.ts` — coordinate-map player UI + persistent local march/settlement engine.
+- `docs/WORLD-MVP.md` / `src/lib/world-engine.ts` — scalable no-UI World contract + deterministic authority engine (future UI/server source of truth).
 - `src/lib/factions.ts` — pledgeable-from-holdings + seed top-factions.
 - `src/lib/tasks.ts` — derive signals from records (backend/telemetry only for now).
 - `src/App.tsx` — start-screen stage machine.
