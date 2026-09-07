@@ -93,6 +93,7 @@ export function worldEngineConfig(numbers: any = getN()): WorldEngineConfig {
 }
 
 export interface MarchModifiers {
+  [key: string]: number;
   marchSpeedBonus: number;
   gatherSpeedBonus: number;
   troopAttackBonus: number;
@@ -189,6 +190,7 @@ export interface HeadlessPlayer {
   spawnIndex: number;
   troops: TroopManifest;
   wounded: number;
+  woundedTroops: TroopManifest;
   dead: number;
   resources: ResourceWallet;
   energyStored: number;
@@ -222,6 +224,7 @@ export interface HeadlessMarch {
   completedAt: number;
   cargo: Partial<ResourceWallet>;
   wounded: number;
+  woundedTroops: TroopManifest;
   dead: number;
   outcome: string | null;
   reportIds: string[];
@@ -282,6 +285,7 @@ export interface SpawnPlayerInput {
   townhallLevel?: number;
   might?: number;
   troops?: Partial<TroopManifest>;
+  woundedTroops?: Partial<TroopManifest>;
   resources?: Partial<ResourceWallet>;
   protectedFraction?: number;
   shieldDurationSec?: number;
@@ -438,6 +442,7 @@ function spawnPlayerMutable(world: HeadlessWorld, input: SpawnPlayerInput, now: 
     power: Math.max(0, input.resources?.power ?? 0),
   };
   const troops = troopManifest(input.troops);
+  const woundedTroops = troopManifest(input.woundedTroops);
   const city: CityEntity = {
     id: cityId, kind: "city", ownerId: input.id, state: "normal", position: { ...position },
     zone: zoneForPoint(position, world.config), spawnedAt: now, revision: 1,
@@ -454,7 +459,7 @@ function spawnPlayerMutable(world: HeadlessWorld, input: SpawnPlayerInput, now: 
   };
   world.entities[cityId] = city;
   world.players[input.id] = {
-    id: input.id, cityId, joinedAt: now, spawnIndex, troops, wounded: 0, dead: 0,
+    id: input.id, cityId, joinedAt: now, spawnIndex, troops, wounded: troopCount(woundedTroops), woundedTroops, dead: 0,
     resources, energyStored: world.config.energyCap, energyUpdatedAt: now,
     highestMonsterDefeated: 0, marchSlots: world.config.marchSlots,
     marchCapacity: world.config.marchCapacity, accountModifiers: modifiers(), reportIds: [],
@@ -522,6 +527,51 @@ function randomLegalPoint(world: HeadlessWorld, random: () => number, minimumCit
   throw new Error("Could not find a legal world-object coordinate.");
 }
 
+function randomLegalPointNear(
+  world: HeadlessWorld,
+  random: () => number,
+  anchor: Point,
+  minimumRadius: number,
+  maximumRadius: number,
+  minimumEntityDistance = 4,
+): Point {
+  const center = worldCenter(world.config);
+  const index = buildSpatialIndex(world);
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    const angle = random() * Math.PI * 2;
+    const radius = Math.sqrt(random()) * (maximumRadius - minimumRadius) + minimumRadius;
+    const point = { x: anchor.x + Math.cos(angle) * radius, y: anchor.y + Math.sin(angle) * radius };
+    if (point.x < 3 || point.y < 3 || point.x > world.config.width - 3 || point.y > world.config.height - 3) continue;
+    if (distance(point, center) <= world.config.circleReserveRadius) continue;
+    if (!queryNearby(world, point, minimumEntityDistance, undefined, index).length) return point;
+  }
+  return randomLegalPoint(world, random, minimumEntityDistance);
+}
+
+function cityPositions(world: HeadlessWorld): Point[] {
+  return Object.values(world.entities)
+    .filter((entity): entity is CityEntity => entity.kind === "city")
+    .map((city) => city.position);
+}
+
+function nearestCityPosition(world: HeadlessWorld, point: Point): Point | null {
+  const cities = cityPositions(world);
+  return cities.reduce<Point | null>((nearest, candidate) => !nearest
+    || distance(candidate, point) < distance(nearest, point) ? candidate : nearest, null);
+}
+
+function growthTargetPosition(
+  world: HeadlessWorld,
+  random: () => number,
+  kind: "resource" | "monster",
+  city: Point | null,
+): Point {
+  if (!city) return randomLegalPoint(world, random);
+  return kind === "resource"
+    ? randomLegalPointNear(world, random, city, 6, 18)
+    : randomLegalPointNear(world, random, city, 10, 26);
+}
+
 function targetLevel(zone: number, random: () => number): number {
   return Math.max(1, Math.min(10, zone * 2 - (random() < .5 ? 1 : 0)));
 }
@@ -537,8 +587,11 @@ export function populateWorld(
   const random = rng(hashText(`${world.stateId}:population:${world.nextEntitySeq}`));
   const resources: ResKey[] = ["cash", "oil", "power"];
   const arms: TroopKey[] = ["army", "navy", "air"];
+  const cities = cityPositions(world);
   for (let i = 0; i < resourceCount; i += 1) {
-    const position = randomLegalPoint(world, random);
+    // Round-robin placement gives every civilization a local growth halo while
+    // keeping each target neutral and contestable. No empty grid tiles exist.
+    const position = growthTargetPosition(world, random, "resource", cities[i % cities.length] ?? null);
     const zone = zoneForPoint(position, world.config);
     const level = targetLevel(zone, random);
     const capacity = Number(numbers.gatherNodes?.levels?.[String(level)]?.totalSupply)
@@ -546,12 +599,15 @@ export function populateWorld(
     const id = `resource-${world.nextEntitySeq++}`;
     world.entities[id] = {
       id, kind: "resource", state: "available", position, zone, spawnedAt: now, revision: 1,
-      resource: resources[Math.floor(random() * resources.length)], level, amount: capacity, capacity,
+      resource: cities.length
+        ? resources[Math.floor(i / cities.length) % resources.length]
+        : resources[Math.floor(random() * resources.length)],
+      level, amount: capacity, capacity,
       occupiedByMarchId: null, respawnAt: 0,
     };
   }
   for (let i = 0; i < monsterCount; i += 1) {
-    const position = randomLegalPoint(world, random);
+    const position = growthTargetPosition(world, random, "monster", cities[i % cities.length] ?? null);
     const zone = zoneForPoint(position, world.config);
     const level = targetLevel(zone, random);
     const id = `monster-${world.nextEntitySeq++}`;
@@ -627,7 +683,9 @@ export function breachCity(source: HeadlessWorld, cityId: string, actorId: strin
 function respawnTarget(world: HeadlessWorld, entity: ResourceEntity | MonsterEntity, now: number, numbers: any): void {
   const random = rng(hashText(`${world.stateId}:${entity.id}:${entity.revision}:${now}`));
   const oldPosition = entity.position;
-  const position = randomLegalPoint(world, random);
+  // Refill the living growth band instead of allowing repeated respawns to
+  // drift all useful targets into empty deep space.
+  const position = growthTargetPosition(world, random, entity.kind, nearestCityPosition(world, oldPosition));
   entity.position = position; entity.zone = zoneForPoint(position, world.config);
   entity.spawnedAt = now; entity.revision += 1; entity.respawnAt = 0;
   const level = targetLevel(entity.zone, random);
@@ -650,6 +708,28 @@ function respawnTarget(world: HeadlessWorld, entity: ResourceEntity | MonsterEnt
     entity.engagedByMarchId = null;
   }
   addFeed(world, now, `${entity.kind}_respawned`, entity.id, null, { oldPosition, position, level });
+}
+
+/** One-time browser-local migration for maps created before civilization growth halos. */
+export function redistributeWorldTargets(source: HeadlessWorld, now = Date.now()): HeadlessWorld {
+  const world = clone(source);
+  const random = rng(hashText(`${world.stateId}:growth-halo:v1`));
+  const cities = cityPositions(world);
+  const activeTargetIds = new Set(Object.values(world.marches)
+    .filter((march) => !["completed", "failed"].includes(march.state))
+    .map((march) => march.targetId));
+  const targets = Object.values(world.entities)
+    .filter((entity): entity is ResourceEntity | MonsterEntity => entity.kind === "resource" || entity.kind === "monster");
+  (["resource", "monster"] as const).forEach((kind) => {
+    targets.filter((entity) => entity.kind === kind).forEach((entity, index) => {
+      if (activeTargetIds.has(entity.id)) return;
+      entity.position = growthTargetPosition(world, random, kind, cities[index % cities.length] ?? null);
+      entity.zone = zoneForPoint(entity.position, world.config);
+      entity.spawnedAt = now;
+      entity.revision += 1;
+    });
+  });
+  return world;
 }
 
 function recoverCity(world: HeadlessWorld, city: CityEntity, now: number): void {
@@ -682,6 +762,34 @@ function troopCount(troops: TroopManifest): number {
     + Object.values(troops[arm] ?? {}).reduce((sum, amount) => sum + Math.max(0, Number(amount) || 0), 0), 0);
 }
 
+export function resourceTroopRequirement(level: number, numbers: any = getN()): number {
+  const configured = Number(numbers.gatherNodes?.levels?.[String(level)]?.recommendedTroops);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : Number.POSITIVE_INFINITY;
+}
+
+function resourceCrewFraction(force: TroopManifest, level: number, numbers: any): number {
+  const required = resourceTroopRequirement(level, numbers);
+  return Number.isFinite(required) ? Math.min(1, troopCount(force) / required) : 1;
+}
+
+function resourceRetireFraction(numbers: any): number {
+  const configured = Number(numbers.gatherNodes?.retireBelowFraction);
+  return Number.isFinite(configured) ? Math.max(0, Math.min(1, configured)) : .25;
+}
+
+function retireResource(world: HeadlessWorld, target: ResourceEntity, at: number, numbers: any): boolean {
+  if (target.capacity <= 0 || target.amount / target.capacity >= resourceRetireFraction(numbers)) return false;
+  target.state = "depleted";
+  target.occupiedByMarchId = null;
+  target.respawnAt = at + world.config.resourceRespawnSec * 1000;
+  target.revision += 1;
+  schedule(world, "resource_respawn", target.id, target.respawnAt);
+  addFeed(world, at, "resource_retired", target.id, null, {
+    remaining: target.amount, capacity: target.capacity, respawnAt: target.respawnAt,
+  });
+  return true;
+}
+
 function hasTroops(available: TroopManifest, requested: TroopManifest): boolean {
   return TROOP_ORDER.every((arm) => Object.entries(requested[arm]).every(([tier, amount]) =>
     amount >= 0 && Number.isInteger(amount) && amount <= (available[arm]?.[tier] ?? 0)));
@@ -693,8 +801,18 @@ function changeTroops(target: TroopManifest, delta: TroopManifest, direction: 1 
   }));
 }
 
-function removeCasualties(source: TroopManifest, requested: number): { troops: TroopManifest; removed: number } {
+function ensureWoundedRoster(player: HeadlessPlayer): TroopManifest {
+  if (!player.woundedTroops) {
+    player.woundedTroops = troopManifest();
+    // Preserve pre-roster local saves as recoverable T1 Army wounded.
+    player.woundedTroops.army["1"] = Math.max(0, player.wounded || 0);
+  }
+  return player.woundedTroops;
+}
+
+function removeCasualties(source: TroopManifest, requested: number): { troops: TroopManifest; removedTroops: TroopManifest; removed: number } {
   const troops = troopManifest(source);
+  const removedTroops = troopManifest();
   const total = troopCount(troops);
   let remaining = Math.min(total, Math.max(0, Math.round(requested)));
   // Highest tiers take losses first. It is deterministic and conserves every troop.
@@ -703,17 +821,24 @@ function removeCasualties(source: TroopManifest, requested: number): { troops: T
   rows.forEach(({ arm, tier }) => {
     const removed = Math.min(remaining, troops[arm][tier] ?? 0);
     troops[arm][tier] = (troops[arm][tier] ?? 0) - removed;
+    removedTroops[arm][tier] = removed;
     remaining -= removed;
   });
-  return { troops, removed: Math.min(total, Math.max(0, Math.round(requested))) - remaining };
+  return { troops, removedTroops, removed: Math.min(total, Math.max(0, Math.round(requested))) - remaining };
+}
+
+function applyCombatCasualties(source: TroopManifest, wounded: number, dead: number): { troops: TroopManifest; woundedTroops: TroopManifest } {
+  const woundedResult = removeCasualties(source, wounded);
+  const deadResult = removeCasualties(woundedResult.troops, dead);
+  return { troops: deadResult.troops, woundedTroops: woundedResult.removedTroops };
 }
 
 function effectiveNumbers(player: HeadlessPlayer, commander: CommanderSnapshot, numbers: any): any {
   const output = clone(numbers);
-  const account = output.global.accountModifiers ||= {};
-  (Object.keys(commander.modifiers) as Array<keyof MarchModifiers>).forEach((key) => {
-    account[key] = (Number(account[key]) || 0) + (Number(player.accountModifiers[key]) || 0)
-      + (Number(commander.modifiers[key]) || 0);
+  const account = output.runtimeAccountModifiers ||= {};
+  const keys = new Set([...Object.keys(player.accountModifiers), ...Object.keys(commander.modifiers)]);
+  keys.forEach((key) => {
+    account[key] = (Number(player.accountModifiers[key]) || 0) + (Number(commander.modifiers[key]) || 0);
   });
   return output;
 }
@@ -809,6 +934,9 @@ export function dispatchMarch(
     + commander.modifiers.marchCapacityBonus));
   if (input.action !== "scout" && count === 0) return { ok: false, world, error: "troops_required" };
   if (count > capacity) return { ok: false, world, error: "march_capacity_exceeded" };
+  if (input.action === "gather" && target.kind === "resource" && count > resourceTroopRequirement(target.level, numbers)) {
+    return { ok: false, world, error: "resource_force_exceeds_need" };
+  }
   if (!hasTroops(player.troops, force)) return { ok: false, world, error: "insufficient_troops" };
 
   if (input.action === "attack_monster") {
@@ -843,7 +971,7 @@ export function dispatchMarch(
     origin: { ...home.position }, destination: { ...target.position }, force,
     commanderSnapshot: commander, balanceVersion: String(numbers.meta?.version ?? "unknown"), idempotencyKey: input.idempotencyKey,
     dispatchedAt: now, arriveAt: now + travelMs, workUntil: 0, returnAt: 0, completedAt: 0,
-    cargo: {}, wounded: 0, dead: 0, outcome: null, reportIds: [],
+    cargo: {}, wounded: 0, woundedTroops: troopManifest(), dead: 0, outcome: null, reportIds: [],
   };
   world.marches[id] = march;
   world.dispatchKeys[dispatchKey] = id;
@@ -902,7 +1030,9 @@ function arriveGather(world: HeadlessWorld, march: HeadlessMarch, target: Resour
   const player = world.players[march.playerId];
   const tuned = effectiveNumbers(player, march.commanderSnapshot, numbers);
   const capacity = carryCapacity({ troops: march.force }, tuned);
-  const result = resolveGather({ kind: "node", level: target.level, resource: target.resource, remaining: target.amount }, capacity, tuned);
+  const crewFraction = resourceCrewFraction(march.force, target.level, numbers);
+  const usefulCapacity = Math.min(capacity, target.amount * crewFraction);
+  const result = resolveGather({ kind: "node", level: target.level, resource: target.resource, remaining: target.amount }, usefulCapacity, tuned);
   march.state = "gathering";
   march.workUntil = at + Math.ceil(result.tripTimeSec * 1000);
   march.outcome = "gathering";
@@ -925,14 +1055,17 @@ function arriveMonster(world: HeadlessWorld, march: HeadlessMarch, target: Monst
   if (Number.isFinite(pveCasualtyScaling) && pveCasualtyScaling >= 0) tuned.global.combat.casualtyScaling = pveCasualtyScaling;
   if (Number.isFinite(pveWoundedRatio) && pveWoundedRatio >= 0) tuned.global.combat.woundedRatio = pveWoundedRatio;
   const home = world.entities[player.cityId] as CityEntity;
-  const hospitalCapacity = Number(tuned.buildings?.["building.hospital"]?.levels?.[String(home.hospitalLevel)]?.woundedCapacity) || 0;
+  const hospitalCapacity = (Number(tuned.buildings?.["building.hospital"]?.levels?.[String(home.hospitalLevel)]?.woundedCapacity) || 0)
+    + (Number(tuned.global?.accountModifiers?.hospitalCapacityBonus) || 0)
+    + (Number(tuned.runtimeAccountModifiers?.hospitalCapacityBonus) || 0)
+    - Math.max(0, player.wounded);
   const combat = resolveCombat({ troops: march.force }, {
     kind: "monster", level: target.level, power: target.power, reward: target.reward,
     dominantArm: target.dominantArm,
   }, tuned, hospitalCapacity);
-  const casualties = combat.attackerLosses.wounded + combat.attackerLosses.dead;
-  const surviving = removeCasualties(march.force, casualties);
-  march.force = surviving.troops;
+  const casualties = applyCombatCasualties(march.force, combat.attackerLosses.wounded, combat.attackerLosses.dead);
+  march.force = casualties.troops;
+  changeTroops(march.woundedTroops, casualties.woundedTroops, 1);
   march.wounded += combat.attackerLosses.wounded;
   march.dead += combat.attackerLosses.dead;
   march.outcome = combat.win ? "victory" : "defeat";
@@ -963,19 +1096,26 @@ function arriveCity(world: HeadlessWorld, march: HeadlessMarch, target: CityEnti
   const defender = world.players[target.ownerId];
   target.garrison = clone(defender?.troops ?? target.garrison);
   const tuned = effectiveNumbers(attacker, march.commanderSnapshot, numbers);
-  const hospitalCapacity = Number(tuned.buildings?.["building.hospital"]?.levels?.[String((world.entities[attacker.cityId] as CityEntity).hospitalLevel)]?.woundedCapacity) || 0;
+  const hospitalCapacity = (Number(tuned.buildings?.["building.hospital"]?.levels?.[String((world.entities[attacker.cityId] as CityEntity).hospitalLevel)]?.woundedCapacity) || 0)
+    + (Number(tuned.global?.accountModifiers?.hospitalCapacityBonus) || 0)
+    + (Number(tuned.runtimeAccountModifiers?.hospitalCapacityBonus) || 0)
+    - Math.max(0, attacker.wounded);
   const combat = resolveCombat({ troops: march.force }, {
     kind: "rival", keepLevel: target.townhallLevel, wallLevel: target.wallLevel,
     hospitalLevel: target.hospitalLevel, storageLevel: target.storageLevel, troops: target.garrison,
     resources: target.resources, protectedFraction: target.protectedFraction, hasAttacked: target.hasAttacked,
-    troopDefenseBonus: (Number(numbers.global?.accountModifiers?.troopDefenseBonus) || 0)
-      + (defender?.accountModifiers.troopDefenseBonus ?? 0),
+    troopDefenseBonus: 0,
+    accountModifiers: defender?.accountModifiers,
+    currentWounded: defender?.wounded,
   }, tuned, hospitalCapacity);
-  const attackerCasualties = combat.attackerLosses.wounded + combat.attackerLosses.dead;
-  march.force = removeCasualties(march.force, attackerCasualties).troops;
+  const attackerCasualties = applyCombatCasualties(march.force, combat.attackerLosses.wounded, combat.attackerLosses.dead);
+  march.force = attackerCasualties.troops;
+  changeTroops(march.woundedTroops, attackerCasualties.woundedTroops, 1);
   march.wounded += combat.attackerLosses.wounded; march.dead += combat.attackerLosses.dead;
   if (defender) {
-    defender.troops = removeCasualties(defender.troops, combat.defenderLosses.wounded + combat.defenderLosses.dead).troops;
+    const defenderCasualties = applyCombatCasualties(defender.troops, combat.defenderLosses.wounded, combat.defenderLosses.dead);
+    defender.troops = defenderCasualties.troops;
+    changeTroops(ensureWoundedRoster(defender), defenderCasualties.woundedTroops, 1);
     defender.wounded += combat.defenderLosses.wounded; defender.dead += combat.defenderLosses.dead;
     target.garrison = clone(defender.troops);
   }
@@ -1039,7 +1179,8 @@ function processGatherComplete(world: HeadlessWorld, march: HeadlessMarch, at: n
   const player = world.players[march.playerId];
   const tuned = effectiveNumbers(player, march.commanderSnapshot, numbers);
   const capacity = carryCapacity({ troops: march.force }, tuned);
-  const hauled = Math.floor(Math.min(capacity, target.amount));
+  const crewFraction = resourceCrewFraction(march.force, target.level, numbers);
+  const hauled = Math.floor(Math.min(capacity, target.amount * crewFraction));
   march.cargo[target.resource] = hauled;
   target.amount -= hauled;
   target.occupiedByMarchId = null;
@@ -1048,7 +1189,7 @@ function processGatherComplete(world: HeadlessWorld, march: HeadlessMarch, at: n
     target.amount = 0; target.state = "depleted";
     target.respawnAt = at + world.config.resourceRespawnSec * 1000;
     schedule(world, "resource_respawn", target.id, target.respawnAt);
-  } else target.state = "available";
+  } else if (!retireResource(world, target, at, numbers)) target.state = "available";
   march.outcome = "gathered";
   report(world, march, "arrival", "gathering_completed", at, { resource: target.resource, hauled, remaining: target.amount });
   scheduleReturn(world, march, at);
@@ -1059,6 +1200,7 @@ function processReturn(world: HeadlessWorld, march: HeadlessMarch, at: number): 
   const player = world.players[march.playerId];
   if (!player) { march.state = "failed"; march.completedAt = at; return; }
   changeTroops(player.troops, march.force, 1);
+  changeTroops(ensureWoundedRoster(player), march.woundedTroops ?? troopManifest(), 1);
   player.wounded += march.wounded;
   player.dead += march.dead;
   (Object.keys(march.cargo) as ResKey[]).forEach((resource) => {
@@ -1075,13 +1217,15 @@ function processReturn(world: HeadlessWorld, march: HeadlessMarch, at: number): 
   });
 }
 
-export function recallMarch(source: HeadlessWorld, marchId: string, playerId: string, now = Date.now()): HeadlessWorld {
+export function recallMarch(source: HeadlessWorld, marchId: string, playerId: string, now = Date.now(), numbers: any = getN()): HeadlessWorld {
   const world = clone(source);
   const march = world.marches[marchId];
   if (!march || march.playerId !== playerId || !["outbound", "gathering"].includes(march.state)) return world;
   const target = world.entities[march.targetId];
   if (target?.kind === "resource" && target.occupiedByMarchId === march.id) {
-    target.state = "available"; target.occupiedByMarchId = null; target.revision += 1;
+    target.occupiedByMarchId = null;
+    target.revision += 1;
+    if (!retireResource(world, target, now, numbers)) target.state = "available";
   }
   const fullTravel = Math.max(0, march.arriveAt - march.dispatchedAt);
   const elapsed = Math.max(0, Math.min(fullTravel, now - march.dispatchedAt));

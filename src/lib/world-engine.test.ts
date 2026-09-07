@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import defaults from "../../docs/numbers.json";
 import {
   DEFAULT_WORLD_ENGINE_CONFIG, HeadlessWorld, Point, ResourceEntity,
   advanceHeadlessWorld, advanceTargetLifecycle, breachCity, buildSpatialIndex, defeatMonster, depleteResource,
@@ -48,6 +49,20 @@ describe("headless world — scale and sparse spawning", () => {
     expect(nearby.length).toBeGreaterThan(0);
     expect(nearby.length).toBeLessThan(80);
     expect(nearby.every((entity) => entity.kind === "city" && distance(city.position, entity.position) <= 70)).toBe(true);
+  });
+
+  it("distributes growth targets around every active civilization", () => {
+    let world = initHeadlessWorld("state-growth-halos", 1000);
+    world = spawnPlayers(world, Array.from({ length: 12 }, (_, index) => ({ id: `halo-${index}` })), 1000);
+    world = populateWorld(world, 60, 24, 1000, defaults);
+    const cities = Object.values(world.entities).filter((entity) => entity.kind === "city");
+    cities.forEach((city) => {
+      const resources = queryNearby(world, city.position, 19, ["resource"]);
+      expect(resources.length).toBeGreaterThanOrEqual(5);
+      expect(new Set(resources.filter((entity) => entity.kind === "resource").map((entity) => entity.resource)))
+        .toEqual(new Set(["cash", "oil", "power"]));
+      expect(queryNearby(world, city.position, 27, ["monster"]).length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   it("advances 10,000 scheduled events deterministically in a 1,000-player State", () => {
@@ -193,6 +208,10 @@ describe("headless world — march authority and feedback", () => {
     expect(world.marches[arrived.id].reportIds.some((id) => world.reports[id].stage === "return")).toBe(true);
     const returned = Object.values(world.players.hunter.troops.army).reduce((sum, amount) => sum + amount, 0);
     expect(returned + world.players.hunter.wounded + world.players.hunter.dead).toBe(800);
+    const woundedRosterTotal = Object.values(world.players.hunter.woundedTroops.army).reduce((sum, amount) => sum + amount, 0)
+      + Object.values(world.players.hunter.woundedTroops.navy).reduce((sum, amount) => sum + amount, 0)
+      + Object.values(world.players.hunter.woundedTroops.air).reduce((sum, amount) => sum + amount, 0);
+    expect(woundedRosterTotal).toBe(world.players.hunter.wounded);
   });
 
   it("lets the first arriving gather march claim a node and returns the loser with a report", () => {
@@ -202,6 +221,7 @@ describe("headless world — march authority and feedback", () => {
       { id: "far", troops: { army: { "1": 100 }, navy: {}, air: {} } },
     ], 1000);
     const node = firstEntity(world, "resource");
+    node.level = 1; node.capacity = 1000; node.amount = 1000;
     // Make ordering explicit; the state machine, not object insertion order, decides the winner.
     (world.entities[world.players.near.cityId] as any).position = { x: node.position.x + 1, y: node.position.y };
     (world.entities[world.players.far.cityId] as any).position = { x: node.position.x + 8, y: node.position.y };
@@ -221,6 +241,58 @@ describe("headless world — march authority and feedback", () => {
     expect(world.marches[near.march.id].state).toBe("gathering");
     expect(world.marches[far.march.id].outcome).toBe("target_unavailable");
     expect(world.marches[far.march.id].reportIds.length).toBeGreaterThan(0);
+  });
+
+  it("enforces the node crew cap and prevents an undersized high-load fleet from clearing it", () => {
+    const numbers: any = structuredClone(defaults);
+    let world = spawnPlayer(populateWorld(initHeadlessWorld("state-gather-crew", 1000), 1, 0, 1000, numbers), {
+      id: "gatherer", troops: { army: {}, navy: {}, air: { "1": 1500 } },
+    }, 1000);
+    const node = firstEntity(world, "resource");
+    node.level = 2; node.capacity = 2000; node.amount = 2000;
+    world.players.gatherer.marchCapacity = 2000;
+    const oversized = dispatchMarch(world, {
+      playerId: "gatherer", targetId: node.id, action: "gather",
+      force: { army: {}, navy: {}, air: { "1": 1001 } }, idempotencyKey: "too-many",
+    }, 2000, numbers);
+    if ("error" in oversized) expect(oversized.error).toBe("resource_force_exceeds_need");
+    else throw new Error("Oversized resource crew unexpectedly dispatched.");
+
+    const partial = dispatchMarch(world, {
+      playerId: "gatherer", targetId: node.id, action: "gather",
+      force: { army: {}, navy: {}, air: { "1": 500 } }, idempotencyKey: "partial-crew",
+    }, 2000, numbers);
+    expect(partial.ok).toBe(true);
+    if (!partial.ok) return;
+    world = advanceHeadlessWorld(partial.world, partial.march.arriveAt, numbers);
+    world = advanceHeadlessWorld(world, world.marches[partial.march.id].workUntil, numbers);
+    expect((world.entities[node.id] as ResourceEntity).amount).toBe(1000);
+    expect((world.entities[node.id] as ResourceEntity).state).toBe("available");
+  });
+
+  it("retires a resource below 25% after the gathering fleet withdraws and respawns it", () => {
+    const numbers: any = structuredClone(defaults);
+    let world = spawnPlayer(populateWorld(initHeadlessWorld("state-resource-retire", 1000), 1, 0, 1000, numbers), {
+      id: "gatherer", troops: { army: {}, navy: {}, air: { "1": 800 } },
+    }, 1000);
+    const node = firstEntity(world, "resource");
+    node.level = 2; node.capacity = 2000; node.amount = 1000;
+    world.players.gatherer.marchCapacity = 2000;
+    const sent = dispatchMarch(world, {
+      playerId: "gatherer", targetId: node.id, action: "gather",
+      force: { army: {}, navy: {}, air: { "1": 800 } }, idempotencyKey: "retire-node",
+    }, 2000, numbers);
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+    world = advanceHeadlessWorld(sent.world, sent.march.arriveAt, numbers);
+    world = advanceHeadlessWorld(world, world.marches[sent.march.id].workUntil, numbers);
+    const retired = world.entities[node.id] as ResourceEntity;
+    expect(retired.amount).toBe(200);
+    expect(retired.state).toBe("depleted");
+    expect(retired.respawnAt).toBeGreaterThan(0);
+    world = advanceHeadlessWorld(world, retired.respawnAt, numbers);
+    expect((world.entities[node.id] as ResourceEntity).state).toBe("available");
+    expect((world.entities[node.id] as ResourceEntity).amount).toBe((world.entities[node.id] as ResourceEntity).capacity);
   });
 
   it("resolves a city attack at arrival, burns the target, and preserves permanent progression", () => {

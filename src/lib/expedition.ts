@@ -24,6 +24,8 @@ export interface RivalTarget {
   protectedFraction?: number; // override for building.storage.protectedFraction, if provided
   hasAttacked?: boolean; // this rival has made an offensive move already (their own shield is down)
   troopDefenseBonus?: number; // resolved defender-side account/hero snapshot; default 0
+  accountModifiers?: Record<string, number>; // completed Academy research snapshot
+  currentWounded?: number; // occupied Hospital beds before this battle
 }
 
 /** A leveled outdoor resource node (map.gather_node, numbers.json → gatherNodes). */
@@ -91,7 +93,8 @@ function buildingRow(key: string, level: number, numbers: any): any {
 }
 
 function accountBonus(key: string, numbers: any): number {
-  return Math.max(0, Number(numbers.global?.accountModifiers?.[key]) || 0);
+  return Math.max(0, Number(numbers.global?.accountModifiers?.[key]) || 0)
+    + Math.max(0, Number(numbers.runtimeAccountModifiers?.[key]) || 0);
 }
 
 // --- march -------------------------------------------------------------
@@ -136,7 +139,8 @@ export function resolveGather(
   carry: number,
   numbers: any = getN(),
 ): GatherResult {
-  const speedMult = 1 + accountBonus("gatherSpeedBonus", numbers);
+  const speedMult = 1 + accountBonus("gatherSpeedBonus", numbers)
+    + accountBonus(`${node.resource}GatherSpeedBonus`, numbers);
   const rate = gatherNodeLevelRow(node.level, numbers)?.gatherRatePerHour ?? 0;
   const hauled = Math.max(0, Math.min(carry, node.remaining));
   const tripTimeSec = rate > 0 ? (hauled / (rate * speedMult)) * 3600 : Number.POSITIVE_INFINITY;
@@ -203,13 +207,25 @@ function defensePower(defender: Target, numbers: any = getN()): { dp: number; do
   if (defender.kind === "monster") return { dp: defender.power, dominant: defender.dominantArm, totalTroops: 0 };
   if (defender.kind === "node") return { dp: 0, dominant: undefined, totalTroops: 0 };
   let troopsDp = 0;
+  const baseModifiers = numbers.global?.accountModifiers ?? {};
+  const defenderModifiers = defender.accountModifiers ?? {};
+  const commonDefense = Math.max(0, Number(baseModifiers.troopDefenseBonus) || 0)
+    + Math.max(0, Number(baseModifiers.troopHealthBonus) || 0)
+    + Math.max(0, Number(defender.troopDefenseBonus) || 0)
+    + Math.max(0, Number(defenderModifiers.troopDefenseBonus) || 0)
+    + Math.max(0, Number(defenderModifiers.troopHealthBonus) || 0);
   TROOP_ORDER.forEach((arm) => {
+    let armDp = 0;
     for (const [tierText, count] of Object.entries(defender.troops[arm] ?? {})) {
       const row = troopRow(arm, Number(tierText), numbers);
-      troopsDp += (count || 0) * (row?.defense ?? 0);
+      armDp += (count || 0) * (row?.defense ?? 0);
     }
+    const armBonus = Math.max(0, Number(baseModifiers[`${arm}DefenseBonus`]) || 0)
+      + Math.max(0, Number(baseModifiers[`${arm}HealthBonus`]) || 0)
+      + Math.max(0, Number(defenderModifiers[`${arm}DefenseBonus`]) || 0)
+      + Math.max(0, Number(defenderModifiers[`${arm}HealthBonus`]) || 0);
+    troopsDp += armDp * (1 + commonDefense + armBonus);
   });
-  troopsDp *= 1 + Math.max(0, Number(defender.troopDefenseBonus) || 0);
   const wallDp = buildingRow("wall", defender.wallLevel, numbers)?.defenseValue ?? 0;
   const keepDp = defender.keepLevel * (numbers.global.combat.keepDefenseBonusPerLevel ?? 0);
   return { dp: troopsDp + wallDp + keepDp, dominant: dominantArm(defender.troops), totalTroops: sumTroopCounts(defender.troops) };
@@ -255,15 +271,19 @@ export function resolveCombat(
   const { dp, dominant, totalTroops: defenderTroopTotal } = defensePower(defender, numbers);
 
   let ap = 0;
+  const commonAttack = accountBonus("troopAttackBonus", numbers)
+    + accountBonus("troopLethalityBonus", numbers);
   TROOP_ORDER.forEach((arm) => {
     let armAttack = 0;
     for (const [tierText, count] of Object.entries(attacker.troops?.[arm] ?? {})) {
       const row = troopRow(arm, Number(tierText), numbers);
       armAttack += (count || 0) * (row?.attack ?? 0);
     }
-    ap += armAttack * counterMultiplier(arm, dominant, numbers);
+    const armBonus = accountBonus(`${arm}AttackBonus`, numbers)
+      + accountBonus(`${arm}LethalityBonus`, numbers);
+    ap += armAttack * (1 + commonAttack + armBonus) * counterMultiplier(arm, dominant, numbers);
   });
-  ap = ap * (1 + accountBonus("troopAttackBonus", numbers)) + (attacker.heroAttackBonus ?? 0);
+  ap += attacker.heroAttackBonus ?? 0;
 
   const denom = ap + dp;
   const winRatio = denom > 0 ? ap / denom : 0;
@@ -280,7 +300,9 @@ export function resolveCombat(
   const attackerLosses = splitCasualties(attackerTotal * attackerLossPct, woundedRatio, attackerHospitalCapacity);
 
   const defenderHospitalCapacity = defender.kind === "rival"
-    ? (buildingRow("hospital", defender.hospitalLevel, numbers)?.woundedCapacity ?? 0)
+    ? Math.max(0, (buildingRow("hospital", defender.hospitalLevel, numbers)?.woundedCapacity ?? 0)
+      + Math.max(0, Number(defender.accountModifiers?.hospitalCapacityBonus) || 0)
+      - Math.max(0, Number(defender.currentWounded) || 0))
     : 0;
   const defenderLosses = defender.kind === "rival"
     ? splitCasualties(defenderTroopTotal * defenderLossPct, woundedRatio, defenderHospitalCapacity)

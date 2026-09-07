@@ -4,7 +4,7 @@
 > This is the single place to understand *what we're building and why*. Pair it with
 > `STATUS.md` (where we are right now) and the two sources of truth in `docs/`.
 
-Last updated: 2026-09-05.
+Last updated: 2026-09-06.
 
 ---
 
@@ -21,9 +21,10 @@ back to fight for their faction?* Everything in the MVP serves testing that — 
 shipping a full game.
 
 ## 2. Theme
-**Degen Wasteland** — Mad Max × crypto slang. Dark comedy, **revenge not victimhood**:
-you're a hardened survivor of the rug who now hunts the whales. (Names are being locked
-separately — see the naming bible. Build by Key, theme last.)
+**Degen Cosmos** — crypto civilizations in hostile deep space. Wallets become civilizations,
+resource fields become planets, PvE targets become rogue planets and the center objective is the
+Wormhole. The voice keeps crypto-native humor rather than sterile hard science fiction. Names are
+locked separately in the naming bible; implementation continues to use stable Keys.
 
 ## 3. Structure — three separate surfaces
 | Surface | What it is | Key |
@@ -88,11 +89,11 @@ the war. `war.isolation` (snapshot in, no write-back) is retention-critical.
 **Phase 1 — Personal-mode MVP** (current). Scope:
 Townhall(Keep) leveling + build queue · 3 resources + storage/protection · three specialized training buildings/troops ·
 hospital (wounded) · wall · living world map (explore/gather/PvE monsters/raid NPC keeps) ·
-might · offline progress · shields · start screen (connect → holdings → optional pledge →
+Academy (Development/Economy/Battle research) · might · offline progress · shields · start screen (connect → holdings → optional pledge →
 found Townhall) · local persistence + stub-then-real identity.
 
 **Phase 2+ backlog** (deferred, NOT dropped — scheduled later):
-heroes/commanders · research tree · more troops + counters · rally/reinforce · **real-player
+heroes/commanders · more troops + counters · rally/reinforce · **real-player
 PvP + matchmaking + rankings + revenge** · **alliance build + alliance war** · faction season
 locks · local clusters · relocation/teleport · market · VIP/events/daily · **our own token** ·
 mobile/WalletConnect wallets.
@@ -102,13 +103,13 @@ mobile/WalletConnect wallets.
 - Phaser living-map: https://claude.ai/code/artifact/620b7d2e-2b4b-4161-81a3-979551ebdaed
 - **The real beta lives in this repo** (`/src`) — wallet connect + read + start screen.
 
-## 9. World map & endgame — "the Circle" (candidate, Phase-2)
+## 9. World map & endgame — the Wormhole (candidate, Phase-2)
 Personal mode is **async single-player PvP** on a shared **concentric world**: ring 10 = outer edge
 (newbie spawn), ring 1 = center. Node/monster level rises toward the center; inner rings open via
 server progression. **No fog-of-war** — the map is visible; scouting = intel on a target.
 
-**The Circle (endgame progression loop):** the center is a PUBG-style circle. Hold your center
-position for cumulative time → **graduate/teleport to the next map**; being beaten out bumps you
+**The Wormhole (endgame progression loop):** the center is a contested transit zone. Hold position
+around the wormhole for cumulative time → **graduate/teleport to the next sector**; being beaten out bumps you
 outward. It's a **seniority cohort treadmill** — the longer you stay on a map the stronger you are
 vs newer entrants, so **time (not just money) earns a "whale moment"** before you graduate and
 become the newcomer again. Guardrails (keep our pillars intact): an F2P **slow-lane always advances**
@@ -119,7 +120,12 @@ no-UI logic MVP.
 
 **Outdoor mechanics (corrected to real SLG — see bible §23):** the world is a **coordinate map**,
 your city at a **random (x,y)** (you are NOT the center; camera opens on you; map pans/zooms); the
-fixed world **center = the Circle**. The outdoor view is reached **from the Town via a "World" button**.
+fixed world **center = the Wormhole**. The outdoor view is reached **from the Town via a "World" button**.
+Entering X/Y is a free camera inspection action and never moves the player's civilization. Actual
+relocation requires a consumable `item.warp_engine`; the MVP exposes the locked affordance but does
+not yet grant or consume that item. Every target reports distance and research-adjusted one-way ETA.
+Neutral planets/rogues are maintained around active civilizations so early growth does not depend on
+a lucky uniform-map spawn.
 Dispatched troops are **account-bound** (your standing army; limited by single-march capacity +
 `marchQueueSlots`; out until they return). **Gather speed is an account-wide passive** from Academy
 research + heroes (`global.accountModifiers`), applied automatically — never chosen at a node.

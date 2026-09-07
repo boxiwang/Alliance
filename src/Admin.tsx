@@ -5,7 +5,7 @@ import { simulateWorldBalance } from "./lib/world-balance";
 import { validateNumbers, ValidationIssue } from "./lib/validation";
 
 type Path = (string | number)[];
-type View = "overview" | "buildings" | "troops" | "gathering" | "world" | "rules" | "advanced";
+type View = "overview" | "buildings" | "troops" | "research" | "gathering" | "world" | "rules" | "advanced";
 
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
@@ -40,13 +40,13 @@ const BUILDING_INFO: Record<string, { name: string; icon: string; group: string;
   "building.bank": { name: "Bank", icon: "🏦", group: "Economy", description: "Generates Cash while the player is away." },
   "building.oilwell": { name: "Oil Well", icon: "🛢️", group: "Economy", description: "Generates Oil while the player is away." },
   "building.powerplant": { name: "Power Plant", icon: "⚡", group: "Economy", description: "Generates Power while the player is away." },
-  "building.armyCamp": { name: "Army Camp", icon: "🪖", group: "Military", description: "Trains Army units. Building level unlocks Army tiers and improves Army capacity and throughput." },
-  "building.navalBase": { name: "Naval Base", icon: "⚓", group: "Military", description: "Trains Navy units. Building level unlocks Navy tiers and improves Navy capacity and throughput." },
-  "building.airfield": { name: "Airfield", icon: "✈️", group: "Military", description: "Trains Air units. Building level unlocks Air tiers and improves Air capacity and throughput." },
+  "building.armyCamp": { name: "Army Camp", icon: "🪖", group: "Military", description: "Trains and promotes Army units. Each level changes batch size and speed; troop tiers set their own required building level." },
+  "building.navalBase": { name: "Naval Base", icon: "⚓", group: "Military", description: "Trains and promotes Navy units. Each level changes batch size and speed; troop tiers set their own required building level." },
+  "building.airfield": { name: "Airfield", icon: "✈️", group: "Military", description: "Trains and promotes Air units. Each level changes batch size and speed; troop tiers set their own required building level." },
   "building.hospital": { name: "Hospital", icon: "⛑️", group: "Military", description: "Protects wounded troops from becoming permanent losses." },
   "building.wall": { name: "Wall", icon: "🧱", group: "Military", description: "Adds defensive strength when the city is raided." },
   "building.embassy": { name: "Embassy", icon: "🏛️", group: "Support", description: "Sets how many allied reinforcement troops the city can receive." },
-  "building.academy": { name: "Academy", icon: "🔬", group: "Support", description: "Will control economy, development and military research." },
+  "building.academy": { name: "Research Institute", icon: "🔬", group: "Support", description: "Runs the Development, Economy and Battle technology trees through one research queue." },
   "building.watchtower": { name: "Watchtower", icon: "🗼", group: "Support", description: "Will control the number of solo missions available to a player." },
   "building.milestone": { name: "Monument", icon: "🗽", group: "Support", description: "Displays server-wide progress. It is not upgraded by individual players." },
 };
@@ -93,6 +93,7 @@ const TROOP_COLUMNS: Column[] = [
 
 const GATHER_COLUMNS: Column[] = [
   { key: "ringZone", label: "Ring zone", group: "World" },
+  { key: "recommendedTroops", label: "Recommended troops", group: "Crew" },
   { key: "totalSupply", label: "Total supply", group: "Supply" },
   { key: "gatherRatePerHour", label: "Gather rate / hour", group: "Supply" },
 ];
@@ -331,7 +332,7 @@ function BuildingWorkspace({ numbers, selected, setSelected, onChange }: { numbe
         {BUILDING_GROUPS.map((group) => <div className="adm-side-group" key={group}><h4>{group}</h4>{Object.entries(BUILDING_INFO).filter(([, value]) => value.group === group).map(([key, value]) => <button key={key} className={selected === key ? "on" : ""} onClick={() => setSelected(key)}><span>{value.icon}</span><b>{value.name}</b></button>)}</div>)}
       </aside>
       <div className="adm-work-main">
-        <div className="adm-editor-head"><span>{info.icon}</span><div><span className="adm-eyebrow">{info.group}</span><h2>{info.name}</h2><p>{info.description}</p></div><div className="adm-editor-meta"><b>Unlocks at TH {building.unlockAtKeep}</b><span>{building.upgradable === false ? "Display only" : `Levels 1–${building.maxLevel}`}</span></div></div>
+        <div className="adm-editor-head"><span>{info.icon}</span><div><span className="adm-eyebrow">{info.group}</span><h2>{info.name}</h2><p>{info.description}</p></div><div className="adm-editor-meta"><b>Unlocks at TH {building.unlockAtKeep}</b><span>{building.upgradable === false ? "Display only" : `Levels 1–${building.maxLevel}`}</span>{building.promotionUnlockLevel != null && <label className="adm-meta-input">Promotion unlock <input className="mono" type="number" min="1" max={building.maxLevel} value={building.promotionUnlockLevel} onChange={(event) => onChange(["buildings", selected, "promotionUnlockLevel"], Number(event.target.value) || 1)} /></label>}</div></div>
         {building.levels ? <LevelTable title={info.name} path={["buildings", selected, "levels"]} rows={building.levels} kind="building" onChange={onChange} /> : <div className="adm-empty-state">This building has no player-upgraded levels yet.</div>}
       </div>
     </div>
@@ -369,9 +370,78 @@ function GatheringWorkspace({ numbers, onChange }: { numbers: any; onChange: (pa
           <ToggleSetting {...p(["gatherNodes", "carryFromTroopLoad"])} label="Carry derives from troop load" help="Expedition carry capacity is the sum of every sent troop's load stat." />
           <NumberSetting {...p(["gatherNodes", "heroCarryBonus"])} label="Hero carry bonus" help="Flat carry added on top of troop load once heroes exist (0 for now)." />
           <NumberSetting {...p(["gatherNodes", "academyGatherSpeedMaxBonus"])} label="Academy gather-speed cap" help="Maximum extra multiplier Academy research can grant to gather speed." suffix="× additional" step={0.1} />
+          <NumberSetting {...p(["gatherNodes", "retireBelowFraction"])} label="Retire below" help="A partially harvested node disappears after withdrawal below this remaining fraction, then respawns." suffix="fraction" step={0.05} />
         </RuleGroup>
       </div>
       <LevelTable title="Gather nodes" path={["gatherNodes", "levels"]} rows={gather.levels} kind="gather" onChange={onChange} />
+    </div>
+  );
+}
+
+function ResearchWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: Path, value: any) => void }) {
+  const [branch, setBranch] = useState<"development" | "economy" | "battle">("development");
+  const [phase, setPhase] = useState(1);
+  const config = numbers.research;
+  const allTechs = Object.values(config?.techs ?? {}) as any[];
+  const branchTechs = allTechs.filter((tech) => tech.branch === branch);
+  const phases = Array.from(new Set(branchTechs.map((tech) => {
+    const academy = Number(tech.levels?.["1"]?.academyLevel) || 1;
+    return Math.min(6, Math.floor((academy - 1) / 5) + 1);
+  }))).sort((left, right) => left - right);
+  const selectedPhase = phases.includes(phase) ? phase : phases[0];
+  const visible = branchTechs.filter((tech) => {
+    const academy = Number(tech.levels?.["1"]?.academyLevel) || 1;
+    return Math.min(6, Math.floor((academy - 1) / 5) + 1) === selectedPhase;
+  }).sort((left, right) => left.family.localeCompare(right.family));
+  const calculateTotals = (key: string) => {
+    const rows = allTechs.filter((tech) => tech.branch === key);
+    return {
+      technologies: rows.length,
+      levels: rows.reduce((sum, tech) => sum + tech.maxLevel, 0),
+      baseTimeSec: rows.reduce((sum, tech) => sum + Object.values(tech.levels).reduce((inner: number, row: any) => inner + (Number(row.timeSec) || 0), 0), 0),
+    };
+  };
+  const totals = calculateTotals(branch);
+
+  return (
+    <div className="adm-research">
+      <div className="adm-view-intro"><div><span className="adm-eyebrow">ACADEMY BALANCE</span><h2>Research tree</h2><p>Every level below is an explicit row. Tune the Academy gate, three resource costs, base duration, Might and completed bonus without changing code.</p></div><div className="adm-editor-meta"><b>{Object.keys(config.techs).length} technologies</b><span>Kingshot-style three-tree ladder</span></div></div>
+      <div className="adm-profile-tabs adm-research-branches">
+        {(["development", "economy", "battle"] as const).map((key) => {
+          const meta = config.branches[key];
+          const live = calculateTotals(key);
+          return <button className={branch === key ? "on" : ""} key={key} onClick={() => { setBranch(key); setPhase(1); }}><b>{meta.icon} {meta.label}</b><span>{live.technologies} techs · {live.levels} levels · {fmtDays(live.baseTimeSec / 86400)}</span></button>;
+        })}
+      </div>
+      <div className="adm-profile-note"><b>{config.branches[branch].label}</b><span>{config.branches[branch].description} Base completion time: {fmtDays(totals.baseTimeSec / 86400)} before research-speed bonuses.</span></div>
+      <div className="adm-phase-tabs">
+        {phases.map((value) => <button key={value} className={selectedPhase === value ? "on" : ""} onClick={() => setPhase(value)}>Phase {value}<span>Academy {((value - 1) * 5) + 1}–{value * 5}</span></button>)}
+      </div>
+      <div className="adm-research-techs">
+        {visible.map((tech) => (
+          <Section key={tech.key} title={tech.name} subtitle={`${tech.description} · ${tech.maxLevel} levels`} defaultOpen={visible.length <= 8}>
+            <div className="adm-tech-prereqs"><b>Prerequisites</b><span>{tech.requirements.length ? tech.requirements.map((requirement: any) => `${config.techs[requirement.tech]?.name ?? requirement.tech} Lv.${requirement.level}`).join(" · ") : "None"}</span></div>
+            <div className="adm-table-wrap">
+              <table className="adm-level-table adm-research-table">
+                <thead><tr><th>Level</th><th>Category</th><th>Academy</th><th>Cash</th><th>Oil</th><th>Power</th><th>Time (sec)</th><th>Might</th><th>Effect key</th><th>Bonus</th></tr></thead>
+                <tbody>{Object.entries(tech.levels).map(([level, row]: [string, any]) => {
+                  const basePath: Path = ["research", "techs", tech.key, "levels", level];
+                  return <tr key={level}>
+                    <th>{level}</th>
+                    <td><span className={`adm-category ${row.category}`}>{humanize(row.category)}</span></td>
+                    <td><input className="adm-cell mono" type="number" value={row.academyLevel} onChange={(event) => onChange([...basePath, "academyLevel"], Number(event.target.value) || 0)} /></td>
+                    {(["res.cash", "res.oil", "res.power"] as const).map((resource) => <td key={resource}><input className="adm-cell mono" type="number" value={row.cost[resource]} onChange={(event) => onChange([...basePath, "cost", resource], Number(event.target.value) || 0)} /></td>)}
+                    <td><input className="adm-cell mono" type="number" value={row.timeSec} onChange={(event) => onChange([...basePath, "timeSec"], Number(event.target.value) || 0)} /></td>
+                    <td><input className="adm-cell mono" type="number" value={row.might} onChange={(event) => onChange([...basePath, "might"], Number(event.target.value) || 0)} /></td>
+                    <td><code>{row.effect.key}</code></td>
+                    <td><input className="adm-cell mono" type="number" step="any" value={row.effect.value} onChange={(event) => onChange([...basePath, "effect", "value"], Number(event.target.value) || 0)} /></td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>
+          </Section>
+        ))}
+      </div>
     </div>
   );
 }
@@ -562,6 +632,7 @@ export default function Admin() {
     { key: "overview", label: "Pacing", icon: "◴" },
     { key: "buildings", label: "Buildings", icon: "▦" },
     { key: "troops", label: "Troops", icon: "⚔" },
+    { key: "research", label: "Research", icon: "⌬" },
     { key: "gathering", label: "Gathering", icon: "🌾" },
     { key: "world", label: "World", icon: "◎" },
     { key: "rules", label: "Game rules", icon: "⚙" },
@@ -580,6 +651,7 @@ export default function Admin() {
         {view === "overview" && <><ValidationPanel issues={validationIssues} /><PaceSimulator numbers={working} /></>}
         {view === "buildings" && <BuildingWorkspace numbers={working} selected={selectedBuilding} setSelected={setSelectedBuilding} onChange={handleChange} />}
         {view === "troops" && <TroopWorkspace numbers={working} selected={selectedTroop} setSelected={setSelectedTroop} onChange={handleChange} />}
+        {view === "research" && <ResearchWorkspace numbers={working} onChange={handleChange} />}
         {view === "gathering" && <GatheringWorkspace numbers={working} onChange={handleChange} />}
         {view === "world" && <WorldWorkspace numbers={working} onChange={handleChange} />}
         {view === "rules" && <RulesWorkspace numbers={working} onChange={handleChange} />}

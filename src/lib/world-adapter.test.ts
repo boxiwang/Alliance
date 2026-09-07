@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import defaults from "../../docs/numbers.json";
 import { initGame } from "./gamestore";
+import { gmFillTroops } from "./gm";
 import { distance, worldCenter } from "./world-engine";
 import {
   advanceLocalWorldSession, createLocalWorldSession, dispatchLocalWorldMarch,
-  loadLocalWorldSession, openLocalWorldSession, saveLocalWorldSession,
+  finishLocalWorldMarches, loadLocalWorldSession, openLocalWorldSession, recallLocalWorldMarch, saveLocalWorldSession,
 } from "./world-adapter";
 import { dispatchMarch as dispatchLegacy, initWorld as initLegacyWorld, saveWorld as saveLegacyWorld } from "./world";
 
@@ -85,6 +86,57 @@ describe("local GameState ↔ headless World adapter", () => {
     sent = advanceLocalWorldSession(sent.session, sent.game, sent.session.world.marches[marchId].workUntil, numbers());
     sent = advanceLocalWorldSession(sent.session, sent.game, sent.session.world.marches[marchId].returnAt, numbers());
     expect(sent.game.troops.army["1"]).toBe(13);
+  });
+
+  it("recalls an outbound local march and returns its reserved troops", () => {
+    const now = 1_800_000_000_000;
+    const base = createLocalWorldSession("0xrecall-local", game("0xrecall-local", now), now, numbers());
+    const node = Object.values(base.session.world.entities).find((entity) => entity.kind === "resource")!;
+    let sent = dispatchLocalWorldMarch(base.session, base.game, {
+      targetId: node.id, action: "gather", force: { army: { "1": 5 }, navy: {}, air: {} },
+      idempotencyKey: "recall-local-1",
+    }, now + 1000, numbers());
+    const marchId = Object.keys(sent.session.world.marches)[0];
+    // A UI click may still hold the pre-dispatch GameState for one frame.
+    sent = recallLocalWorldMarch(sent.session, base.game, marchId, now + 2000, numbers());
+    expect(sent.error).toBeUndefined();
+    expect(sent.session.world.marches[marchId].state).toBe("returning");
+    sent = advanceLocalWorldSession(sent.session, sent.game, sent.session.world.marches[marchId].returnAt, numbers());
+    expect(sent.game.troops.army["1"]).toBe(10);
+  });
+
+  it("conserves troops through the GM-fill, dispatch and immediate-recall UI sequence", () => {
+    const now = 1_800_000_000_000;
+    const base = createLocalWorldSession("0xrecall-gm", game("0xrecall-gm", now, 0), now, numbers());
+    let state = advanceLocalWorldSession(base.session, gmFillTroops(base.game, now + 100), now + 100, numbers());
+    const initial = state.game.troops.army["1"];
+    const node = Object.values(state.session.world.entities).find((entity) => entity.kind === "resource")!;
+    state = dispatchLocalWorldMarch(state.session, state.game, {
+      targetId: node.id, action: "gather", force: { army: { "1": initial }, navy: {}, air: {} },
+      idempotencyKey: "recall-gm-1",
+    }, now + 200, numbers());
+    const marchId = Object.keys(state.session.world.marches)[0];
+    state = recallLocalWorldMarch(state.session, state.game, marchId, now + 300, numbers());
+    state = advanceLocalWorldSession(state.session, state.game, state.session.world.marches[marchId].returnAt, numbers());
+    expect(state.game.troops.army["1"]).toBe(initial);
+  });
+
+  it("conserves a full-default GM fleet when recall is resolved by the GM finisher", () => {
+    const now = 1_800_000_000_000;
+    const source = initGame("0xrecall-defaults");
+    source.lastTick = now;
+    const base = createLocalWorldSession(source.address, source, now, defaults);
+    let state = advanceLocalWorldSession(base.session, gmFillTroops(base.game, now + 100), now + 100, defaults);
+    const initial = state.game.troops.army["1"];
+    const node = Object.values(state.session.world.entities).find((entity) => entity.kind === "resource")!;
+    state = dispatchLocalWorldMarch(state.session, state.game, {
+      targetId: node.id, action: "gather", force: { army: { "1": initial }, navy: {}, air: {} },
+      idempotencyKey: "recall-defaults-1",
+    }, now + 200, defaults);
+    const marchId = Object.keys(state.session.world.marches)[0];
+    state = recallLocalWorldMarch(state.session, state.game, marchId, now + 300, defaults);
+    state = finishLocalWorldMarches(state.session, state.game, now + 400, defaults);
+    expect(state.game.troops.army["1"]).toBe(initial);
   });
 
   it("round-trips the new local save format", () => {

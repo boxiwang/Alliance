@@ -11,25 +11,61 @@ import { gmFillTroops, grantLocalGm, hasLocalGm, localGmRequested } from "./lib/
 import type {
   CityEntity, HeadlessMarch, MonsterEntity, Point, ResourceEntity, WorldReport,
 } from "./lib/world-engine";
-import { distance, energyAt, worldCenter } from "./lib/world-engine";
+import { distance, energyAt, resourceTroopRequirement, worldCenter } from "./lib/world-engine";
 import type { LocalWorldSession } from "./lib/world-adapter";
 import {
   advanceLocalWorldSession, dispatchLocalWorldMarch, finishLocalWorldMarches,
-  localWorldTargetName, openLocalWorldSession, saveLocalWorldSession,
+  localWorldTargetName, openLocalWorldSession, recallLocalWorldMarch, saveLocalWorldSession,
 } from "./lib/world-adapter";
 
 type SelectableEntity = ResourceEntity | MonsterEntity | CityEntity;
+type WorldLayer = "resource" | "monster" | "city";
+type ResultNotice = { title: string; detail: string; good: boolean };
 
 const KIND_META = {
-  resource: { color: "#46c081", icon: "◆", label: "Resource field" },
-  monster: { color: "#e5593d", icon: "▲", label: "Wasteland crew" },
-  city: { color: "#e8b24c", icon: "⬟", label: "Rival city" },
+  resource: { color: "#43f2a1", icon: "●", label: "Resource planet" },
+  monster: { color: "#ff5f78", icon: "◉", label: "Rogue planet" },
+  city: { color: "#aa82ff", icon: "⬡", label: "Civilization" },
 };
+
+const RESOURCE_COLORS = { cash: "#43f2a1", oil: "#ffb454", power: "#38d9ff" };
+const RESOURCE_EMOJI = { cash: "💰", oil: "⛽", power: "⚡" };
+
+type SignalCluster = { id: string; kind: "resource" | "monster"; position: Point; count: number };
+
+export function clusterWorldSignals(entities: SelectableEntity[], cellSize = 44): SignalCluster[] {
+  const buckets = new Map<string, { kind: "resource" | "monster"; x: number; y: number; count: number }>();
+  entities.forEach((entity) => {
+    if (entity.kind === "city") return;
+    const id = `${entity.kind}:${Math.floor(entity.position.x / cellSize)}:${Math.floor(entity.position.y / cellSize)}`;
+    const bucket = buckets.get(id) || { kind: entity.kind, x: 0, y: 0, count: 0 };
+    bucket.x += entity.position.x; bucket.y += entity.position.y; bucket.count += 1; buckets.set(id, bucket);
+  });
+  return Array.from(buckets, ([id, bucket]) => ({ id, kind: bucket.kind, position: { x: bucket.x / bucket.count, y: bucket.y / bucket.count }, count: bucket.count }));
+}
+
+function entityColor(entity: SelectableEntity): string {
+  return entity.kind === "resource" ? RESOURCE_COLORS[entity.resource] : KIND_META[entity.kind].color;
+}
+
+function entityState(entity: SelectableEntity): string {
+  if (entity.kind === "resource") return entity.state === "available" ? "UNCHARTED" : entity.state.toUpperCase();
+  if (entity.kind === "monster") return entity.state === "alive" ? "ROAMING" : entity.state.toUpperCase();
+  return entity.state === "burning" ? "UNDER ATTACK" : "STABLE";
+}
+
+function loadBookmarks(address: string): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(`ruglands:world-bookmarks:${address.toLowerCase()}`) || "[]");
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch { return []; }
+}
 
 const ERROR_COPY: Record<string, string> = {
   player_not_found: "Player record is unavailable.", invalid_target: "That target is no longer valid.",
   cannot_target_self: "You cannot target your own city.", march_slots_full: "All march queues are busy.",
   troops_required: "Select at least one troop.", march_capacity_exceeded: "The selected force exceeds this march's capacity.",
+  resource_force_exceeds_need: "This resource planet cannot use that many troops. Follow its recommended crew cap.",
   insufficient_troops: "Some selected troops are no longer standing in the city.", target_unavailable: "Another march reached that target first.",
   monster_level_locked: "Defeat the previous monster level first.", insufficient_energy: "Not enough Energy for this hunt.",
   target_shielded: "That city is protected by a shield.",
@@ -44,6 +80,20 @@ function fmtDuration(seconds: number): string {
 }
 
 function emptySelection(): Record<TroopKey, Record<string, number>> { return { army: {}, navy: {}, air: {} }; }
+export function recommendedGatherForce(troops: GameState["troops"], limit: number): Record<TroopKey, Record<string, number>> {
+  const selected = emptySelection();
+  let remaining = Math.max(0, Math.floor(limit));
+  const rows = TROOP_ORDER.flatMap((arm) => Object.entries(troops[arm] ?? {})
+    .map(([tier, qty]) => ({ arm, tier, qty: Math.max(0, Math.floor(qty)) }))
+    .filter((row) => row.qty > 0))
+    .sort((left, right) => Number(right.tier) - Number(left.tier));
+  rows.forEach(({ arm, tier, qty }) => {
+    const take = Math.min(remaining, qty);
+    if (take > 0) selected[arm][tier] = take;
+    remaining -= take;
+  });
+  return selected;
+}
 function entityLevel(entity: SelectableEntity): number { return entity.kind === "city" ? entity.townhallLevel : entity.level; }
 function cityShielded(city: CityEntity, now: number, numbers: any): boolean {
   return !city.hasAttacked && (city.shieldUntil > now || city.townhallLevel < (Number(numbers.global?.shield?.protectedUntilKeepLevel) || 0));
@@ -86,38 +136,54 @@ export default function World({ address, profile, onBack }: { address: string; p
   const [game, setGame] = useState<GameState>(() => initial.game);
   const [session, setSession] = useState<LocalWorldSession>(() => initial.session);
   const gameRef = useRef(initial.game);
+  const sessionRef = useRef(initial.session);
   const [now, setNow] = useState(Date.now());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Record<TroopKey, Record<string, number>>>(emptySelection);
   const [message, setMessage] = useState(initial.session.migratedLegacyAt ? "Old World marches were safely settled and migrated." : "");
-  const [zoom, setZoom] = useState(1.15);
+  const [zoom, setZoom] = useState(1.8);
+  const [layers, setLayers] = useState<Record<WorldLayer, boolean>>({ resource: true, monster: true, city: true });
+  const [coordinateDraft, setCoordinateDraft] = useState({ x: "", y: "" });
+  const [bookmarks, setBookmarks] = useState<string[]>(() => loadBookmarks(address));
+  const [resultNotice, setResultNotice] = useState<ResultNotice | null>(null);
   const playerCity = session.world.entities[session.world.players[session.playerId].cityId] as CityEntity;
   const [camera, setCamera] = useState<Point>(() => ({ ...playerCity.position }));
   const drag = useRef<{ x: number; y: number; camera: Point } | null>(null);
   const dispatchSeq = useRef(0);
+  const seenReportCount = useRef(initial.session.world.players[initial.session.playerId].reportIds.length);
   const gm = hasLocalGm(address) || localGmRequested();
 
   useEffect(() => { gameRef.current = game; }, [game]);
+  useEffect(() => { sessionRef.current = session; }, [session]);
   useEffect(() => {
     if (localGmRequested()) grantLocalGm(address);
     const opened = openLocalWorldSession(address, loadGame(address) || initGame(address), Date.now(), N);
-    setGame(opened.game); gameRef.current = opened.game; setSession(opened.session);
+    setGame(opened.game); gameRef.current = opened.game; setSession(opened.session); sessionRef.current = opened.session;
     const city = opened.session.world.entities[opened.session.world.players[opened.session.playerId].cityId] as CityEntity;
     setCamera({ ...city.position }); saveGame(opened.game); saveLocalWorldSession(opened.session);
+    setBookmarks(loadBookmarks(address));
+    seenReportCount.current = opened.session.world.players[opened.session.playerId].reportIds.length;
     if (opened.session.migratedLegacyAt) setMessage("Old World marches were safely settled and migrated.");
   }, [address, N]);
   useEffect(() => {
     const timer = window.setInterval(() => {
       const tick = Date.now(); setNow(tick);
-      setSession((current) => {
-        const result = advanceLocalWorldSession(current, loadGame(address) || gameRef.current, tick, N);
-        if (!result.changed) return current;
-        setGame(result.game); gameRef.current = result.game; saveGame(result.game); saveLocalWorldSession(result.session);
-        return result.session;
-      });
+      const result = advanceLocalWorldSession(sessionRef.current, loadGame(address) || gameRef.current, tick, N);
+      if (!result.changed) return;
+      const reports = result.session.world.players[result.session.playerId].reportIds;
+      if (reports.length > seenReportCount.current) {
+        const report = result.session.world.reports[reports[reports.length - 1]];
+        if (report) setResultNotice(reportCopy(report, result.session.world));
+        seenReportCount.current = reports.length;
+      }
+      sessionRef.current = result.session; setSession(result.session);
+      setGame(result.game); gameRef.current = result.game; saveGame(result.game); saveLocalWorldSession(result.session);
     }, 1000);
     return () => window.clearInterval(timer);
   }, [address, N]);
+  useEffect(() => {
+    try { localStorage.setItem(`ruglands:world-bookmarks:${address.toLowerCase()}`, JSON.stringify(bookmarks)); } catch {}
+  }, [address, bookmarks]);
 
   const world = session.world;
   const viewGame = useMemo(() => project(game, now), [game, now]);
@@ -125,26 +191,63 @@ export default function World({ address, profile, onBack }: { address: string; p
   const selected = targets.find((target) => target.id === selectedId) || null;
   const activeMarches = Object.values(world.marches).filter((march) => !["completed", "failed"].includes(march.state));
   const sentCount = TROOP_ORDER.reduce((sum, arm) => sum + Object.values(selection[arm]).reduce((subtotal, qty) => subtotal + (qty || 0), 0), 0);
-  const oneWay = selected ? distance(playerCity.position, selected.position) * world.config.travelSecondsPerTile : 0;
   const viewport = { width: world.config.width / zoom, height: world.config.width * .655 / zoom };
-  // New players intentionally spawn near the outer rim. Keep their camera
-  // inside the State so the initial view is map, not off-map empty space.
-  const viewX = Math.max(0, Math.min(world.config.width - viewport.width, camera.x - viewport.width / 2));
-  const viewY = Math.max(0, Math.min(world.config.height - viewport.height, camera.y - viewport.height / 2));
+  // The camera may look beyond a State edge. This is intentional: a node near
+  // the rim must still be able to occupy the true visual center of the screen.
+  const viewX = camera.x - viewport.width / 2;
+  const viewY = camera.y - viewport.height / 2;
   const viewBox = `${viewX} ${viewY} ${viewport.width} ${viewport.height}`;
   const center = worldCenter(world.config);
   const worldRadius = Math.hypot(world.config.width / 2, world.config.height / 2);
   const player = world.players[session.playerId];
+  const marchSpeed = Math.max(.01, 1 + (Number(N.global?.accountModifiers?.marchSpeedBonus) || 0)
+    + (Number(player.accountModifiers.marchSpeedBonus) || 0));
+  const marchCapacity = Math.floor(player.marchCapacity * (1 + (Number(N.global?.accountModifiers?.marchCapacityBonus) || 0)
+    + (Number(player.accountModifiers.marchCapacityBonus) || 0)));
+  const travelSecondsTo = (point: Point) => distance(playerCity.position, point) * world.config.travelSecondsPerTile / marchSpeed;
+  const oneWay = selected ? travelSecondsTo(selected.position) : 0;
+  const gatherRequirement = selected?.kind === "resource" ? resourceTroopRequirement(selected.level, N) : Number.POSITIVE_INFINITY;
+  const forceLimit = Math.min(marchCapacity, gatherRequirement);
   const energy = energyAt(player, now, world.config);
   const latestReports = player.reportIds.slice().reverse().slice(0, 6).map((id) => world.reports[id]).filter(Boolean);
+  const strategicZoom = zoom < 1.45;
+  const playerSearchZoom = zoom >= 2.35;
+  const detailZoom = zoom >= 3;
+  const markerScale = 1 / zoom;
+  const importantScale = (strategicZoom ? 1.6 : 1.18) / zoom;
+  const filteredTargets = useMemo(() => targets.filter((entity) => layers[entity.kind]
+    && !(entity.kind === "resource" && entity.state === "depleted")
+    && !(entity.kind === "monster" && entity.state === "defeated")), [layers, targets]);
+  const signalClusters = useMemo(() => clusterWorldSignals(filteredTargets, 72), [filteredTargets]);
+  const bookmarkedTargets = bookmarks.map((id) => targets.find((target) => target.id === id)).filter((target): target is SelectableEntity => !!target);
+  const scoutedTargetIds = useMemo(() => new Set(player.reportIds.map((id) => world.reports[id]).filter((report) => report?.action === "scout" && report.outcome === "scouted").map((report) => report.targetId)), [player.reportIds, world.reports]);
+  const selectedScoutReport = selected ? player.reportIds.slice().reverse().map((id) => world.reports[id]).find((report) => report?.targetId === selected.id && report.action === "scout" && report.outcome === "scouted") : undefined;
+  const selectedScoutSnapshot = (selectedScoutReport?.payload.snapshot ?? {}) as Record<string, number>;
+  const selectedVerified = !!selected && (selected.kind === "resource" || scoutedTargetIds.has(selected.id));
+  const zoomLabel = strategicZoom ? "STRATEGIC" : detailZoom ? "TACTICAL" : "FIELD";
 
   function commit(result: ReturnType<typeof advanceLocalWorldSession>) {
-    setSession(result.session); setGame(result.game); gameRef.current = result.game; saveLocalWorldSession(result.session); saveGame(result.game);
+    sessionRef.current = result.session; setSession(result.session); setGame(result.game); gameRef.current = result.game; saveLocalWorldSession(result.session); saveGame(result.game);
+  }
+  function revealLatestReport(next: LocalWorldSession) {
+    const ids = next.world.players[next.playerId].reportIds;
+    seenReportCount.current = ids.length;
+    const report = next.world.reports[ids[ids.length - 1]];
+    if (report) setResultNotice(reportCopy(report, next.world));
   }
   function setTroop(arm: TroopKey, tier: string, qty: number) {
     const available = viewGame.troops[arm]?.[tier] ?? 0;
-    setSelection((current) => ({ ...current, [arm]: { ...current[arm], [tier]: Math.max(0, Math.min(available, Math.floor(qty) || 0)) } }));
+    setSelection((current) => {
+      const currentRow = current[arm][tier] ?? 0;
+      const currentTotal = TROOP_ORDER.reduce((sum, key) => sum + Object.values(current[key]).reduce((subtotal, amount) => subtotal + (amount || 0), 0), 0);
+      const rowLimit = Math.max(0, forceLimit - (currentTotal - currentRow));
+      return { ...current, [arm]: { ...current[arm], [tier]: Math.max(0, Math.min(available, rowLimit, Math.floor(qty) || 0)) } };
+    });
   }
+  function maxTroop(arm: TroopKey, tier: string, available: number) {
+    setTroop(arm, tier, available);
+  }
+  function autoAssignGatherForce() { setSelection(recommendedGatherForce(viewGame.troops, forceLimit)); }
   function run(action: "scout" | "gather" | "attack_monster" | "attack_city") {
     if (!selected) return;
     // Scouting occupies a march slot but does not quietly reserve whatever force
@@ -153,82 +256,156 @@ export default function World({ address, profile, onBack }: { address: string; p
     const result = dispatchLocalWorldMarch(session, viewGame, { targetId: selected.id, action, force, idempotencyKey: `ui:${Date.now()}:${dispatchSeq.current++}` }, Date.now(), N);
     if (result.error) { setMessage(ERROR_COPY[result.error] || result.error.split("_").join(" ")); return; }
     commit(result); setSelection(emptySelection());
-    setMessage(`${action === "scout" ? "Scout" : action === "gather" ? "Gatherers" : "Strike force"} dispatched to ${localWorldTargetName(result.session.world, selected.id)}.`);
+    setMessage(`${action === "scout" ? "Survey probe" : action === "gather" ? "Harvest fleet" : "Strike fleet"} launched toward ${localWorldTargetName(result.session.world, selected.id)}.`);
   }
   function finishMarches() {
     const result = finishLocalWorldMarches(session, viewGame, Date.now(), N); commit(result);
+    revealLatestReport(result.session);
     setMessage("GM: all active marches completed through the headless engine.");
   }
   function fillTroops() {
     const result = advanceLocalWorldSession(session, gmFillTroops(viewGame), Date.now(), N); commit(result);
     setMessage("GM: standing troops filled to current training-building capacity.");
   }
+  function focusTarget(targetId: string) {
+    const target = targets.find((entity) => entity.id === targetId);
+    if (!target) { setMessage("That signal has left the current sector."); return; }
+    setSelectedId(target.id); setCamera({ ...target.position }); setZoom((value) => Math.max(value, target.kind === "city" ? 2.65 : 2.1)); setMessage("");
+  }
+  function toggleLayer(layer: WorldLayer) {
+    setLayers((current) => ({ ...current, [layer]: !current[layer] }));
+    if (selected?.kind === layer) setSelectedId(null);
+  }
+  function toggleBookmark(targetId: string) {
+    setBookmarks((current) => current.includes(targetId) ? current.filter((id) => id !== targetId) : [...current, targetId]);
+  }
+  function viewCoordinates() {
+    const x = Number(coordinateDraft.x); const y = Number(coordinateDraft.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) { setMessage("Enter a valid X and Y coordinate."); return; }
+    const point = { x: Math.max(0, Math.min(world.config.width, x)), y: Math.max(0, Math.min(world.config.height, y)) };
+    setCamera(point); setSelectedId(null); setMessage(`Viewing sector ${Math.round(point.x).toString().padStart(3, "0")}:${Math.round(point.y).toString().padStart(3, "0")}. Your civilization has not moved.`);
+  }
+  function recall(marchId: string) {
+    // gameRef is updated synchronously by commit; the projected render value can
+    // lag one frame behind a dispatch during fast GM/browser interactions.
+    const result = recallLocalWorldMarch(session, gameRef.current, marchId, Date.now(), N);
+    if (result.error) { setMessage("That fleet can no longer be recalled."); return; }
+    commit(result); setMessage("Fleet recalled. It is returning along its traveled route.");
+  }
   function pointerDown(event: React.PointerEvent<SVGSVGElement>) { drag.current = { x: event.clientX, y: event.clientY, camera }; event.currentTarget.setPointerCapture(event.pointerId); }
   function pointerMove(event: React.PointerEvent<SVGSVGElement>) {
     if (!drag.current) return;
-    setCamera({ x: drag.current.camera.x - (event.clientX - drag.current.x) / zoom, y: drag.current.camera.y - (event.clientY - drag.current.y) / zoom });
+    const scale = viewport.width / Math.max(1, event.currentTarget.clientWidth);
+    setCamera({
+      x: Math.max(0, Math.min(world.config.width, drag.current.camera.x - (event.clientX - drag.current.x) * scale)),
+      y: Math.max(0, Math.min(world.config.height, drag.current.camera.y - (event.clientY - drag.current.y) * scale)),
+    });
   }
   function pointerUp() { drag.current = null; }
 
-  return <section className="world">
+  return <section className="world world-crypto world-cosmos">
     <div className="world-command card">
-      <div><button className="world-back" onClick={onBack}>← Town</button><b>Outer Wastes · State {world.stateId.slice(-6)}</b><span>{profile.name} · coordinate {Math.round(playerCity.position.x)},{Math.round(playerCity.position.y)}</span></div>
+      <div><button className="world-back" onClick={onBack}>← CIVILIZATION</button><b>RHCHAIN // COSMOS</b><span>SECTOR {world.stateId.slice(-6).toUpperCase()} · HOME {Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")} · {profile.name}</span></div>
       <div className="world-command-stats">
-        {RES_ORDER.map((resource) => <span key={resource}><b>{RES[resource].emoji} {compact(displayResource(viewGame.res[resource]))}</b>{RES[resource].label}</span>)}
-        <span><b>{Math.floor(energy)}/{world.config.energyCap}</b> Energy</span><span><b>{activeMarches.length}/{player.marchSlots}</b> marches</span>
-        <span><b>{compact(displayTroops(totalTroops(viewGame)))}</b> standing</span><span><b>{compact(displayTroops(viewGame.wounded))}</b> wounded</span>
-        {gm && <button onClick={fillTroops}>GM fill troops</button>}{gm && <button onClick={finishMarches} disabled={!activeMarches.length}>GM finish marches</button>}
+        {RES_ORDER.map((resource) => <span key={resource} style={{ "--signal": RESOURCE_COLORS[resource] } as React.CSSProperties}><b>{compact(displayResource(viewGame.res[resource]))}</b>{RES[resource].label}</span>)}
+        <span className="world-stat-energy"><b>{Math.floor(energy)}/{world.config.energyCap}</b>ENERGY</span><span><b>{activeMarches.length}/{player.marchSlots}</b>FLEETS</span>
+        <span><b>{compact(displayTroops(totalTroops(viewGame)))}</b>STANDING</span><span><b>{compact(displayTroops(viewGame.wounded))}</b>WOUNDED</span>
+        {gm && <button onClick={fillTroops}>GM TROOPS</button>}{gm && <button onClick={finishMarches} disabled={!activeMarches.length}>GM RESOLVE</button>}
       </div>
     </div>
     {message && <div className="world-message">{message}</div>}
     <div className="world-layout">
       <div className="world-map-shell">
-        <div className="world-map-tools"><button onClick={() => setCamera(playerCity.position)}>My city</button><button onClick={() => setCamera(center)}>The Circle</button><button onClick={() => setZoom((value) => Math.min(4, value + .25))}>＋</button><button onClick={() => setZoom((value) => Math.max(1, value - .25))}>－</button></div>
-        <svg className="world-map world-map-v2" viewBox={viewBox} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onWheel={(event) => { event.preventDefault(); setZoom((value) => Math.max(1, Math.min(4, value + (event.deltaY < 0 ? .15 : -.15)))); }}>
-          <defs><pattern id="world-grid" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M 16 0 L 0 0 0 16" fill="none" stroke="#26304d" strokeWidth=".35" opacity=".45" /></pattern><radialGradient id="world-ground"><stop offset="0" stopColor="#273047"/><stop offset=".45" stopColor="#16233a"/><stop offset="1" stopColor="#101728"/></radialGradient></defs>
-          <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="#0b1020" /><rect x="0" y="0" width={world.config.width} height={world.config.height} fill="url(#world-ground)" /><rect x="0" y="0" width={world.config.width} height={world.config.height} fill="url(#world-grid)" />
-          {Array.from({ length: 5 }, (_, index) => index + 1).map((ring) => <circle key={ring} cx={center.x} cy={center.y} r={worldRadius * ring / 5} fill="none" stroke="#40506c" strokeWidth=".7" strokeDasharray="3 4" opacity={ring === 5 ? .8 : .3} />)}
-          <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius} fill="#d99b36" opacity=".16" stroke="#e8b24c" strokeWidth="1.2" /><text x={center.x} y={center.y + 2} className="world-circle-label">THE CIRCLE</text>
-          {activeMarches.map((march) => <MarchLine key={march.id} march={march} now={now} />)}
-          {targets.map((entity) => {
-            const meta = KIND_META[entity.kind]; const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id;
-            return <g key={entity.id} className={`world-target ${selectedTarget ? "selected" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setMessage(""); }}>
-              <circle cx={entity.position.x} cy={entity.position.y} r={selectedTarget ? 5.5 : 4} fill={meta.color} opacity={unavailable ? .25 : .9} stroke={selectedTarget ? "#fff" : "#0b1020"} strokeWidth="1.2" /><text x={entity.position.x} y={entity.position.y + 1.5} className="world-target-icon">{meta.icon}</text>
-              {(selectedTarget || zoom >= 2.7) && <text x={entity.position.x} y={entity.position.y - 7} className="world-target-name">{localWorldTargetName(world, entity.id)}</text>}<text x={entity.position.x} y={entity.position.y + 8} className="world-target-level">L{entityLevel(entity)}</text>
+        <div className="world-map-status"><span><i /> LIVE SECTOR</span><b>4663</b><em>{zoomLabel} VIEW · {Math.round(zoom * 100)}%</em></div>
+        <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button onClick={() => setCamera(center)}>WORMHOLE</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(8, value + .35))}>＋</button><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(1, value - .35))}>－</button></div>
+        <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><span>VIEW COORDS</span><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>VIEW</button><button type="button" className="world-warp-locked" onClick={() => setMessage("Relocation requires a Warp Engine consumable. Warp travel is not enabled in this MVP build.")}>WARP 🔒</button></form>
+        <div className="world-coordinate world-coordinate-x">X {Math.round(viewX).toString().padStart(3, "0")} — {Math.round(viewX + viewport.width).toString().padStart(3, "0")}</div>
+        <div className="world-coordinate world-coordinate-y">Y {Math.round(viewY).toString().padStart(3, "0")} — {Math.round(viewY + viewport.height).toString().padStart(3, "0")}</div>
+        <svg className="world-map world-map-v2" viewBox={viewBox} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onWheel={(event) => { event.preventDefault(); setZoom((value) => Math.max(1, Math.min(8, value + (event.deltaY < 0 ? .22 : -.22)))); }}>
+          <defs>
+            <pattern id="world-micro-grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" stroke="#17344a" strokeWidth=".25" opacity=".34" /></pattern>
+            <pattern id="world-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#2e7892" strokeWidth=".48" opacity=".52" /><circle cx="0" cy="0" r=".7" fill="#41dffc" opacity=".5" /></pattern>
+            <pattern id="world-stars" width="64" height="64" patternUnits="userSpaceOnUse"><circle cx="7" cy="13" r=".42" fill="#c9f4ff" opacity=".72"/><circle cx="43" cy="8" r=".25" fill="#a8c8ff" opacity=".55"/><circle cx="27" cy="47" r=".35" fill="#e2d4ff" opacity=".64"/><circle cx="58" cy="36" r=".18" fill="#fff" opacity=".8"/><circle cx="12" cy="59" r=".2" fill="#73dfff" opacity=".48"/></pattern>
+            <radialGradient id="world-ground" cx="58%" cy="42%"><stop offset="0" stopColor="#152044"/><stop offset=".34" stopColor="#0b1532"/><stop offset=".72" stopColor="#060c20"/><stop offset="1" stopColor="#02050e"/></radialGradient>
+            <radialGradient id="world-nebula" cx="50%" cy="50%"><stop offset="0" stopColor="#7a49d8" stopOpacity=".16"/><stop offset=".48" stopColor="#215e9b" stopOpacity=".07"/><stop offset="1" stopColor="#030711" stopOpacity="0"/></radialGradient>
+            <radialGradient id="circle-core"><stop offset="0" stopColor="#010208" stopOpacity="1"/><stop offset=".22" stopColor="#09051d" stopOpacity="1"/><stop offset=".48" stopColor="#a35cff" stopOpacity=".42"/><stop offset=".72" stopColor="#38d9ff" stopOpacity=".16"/><stop offset="1" stopColor="#1d123a" stopOpacity="0"/></radialGradient>
+            <filter id="signal-glow" x="-200%" y="-200%" width="400%" height="400%"><feGaussianBlur stdDeviation="1.6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-ground)" />
+          <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-nebula)" />
+          <g className="world-starfield">
+            <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-stars)" />
+            <animateTransform attributeName="transform" type="rotate" from={`0 ${center.x} ${center.y}`} to={`360 ${center.x} ${center.y}`} dur="420s" repeatCount="indefinite" />
+          </g>
+          <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-micro-grid)" />
+          <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-grid)" />
+          <rect x="0" y="0" width={world.config.width} height={world.config.height} className="world-state-boundary" />
+          {Array.from({ length: 5 }, (_, index) => index + 1).map((ring) => <circle key={ring} cx={center.x} cy={center.y} r={worldRadius * ring / 5} className="world-sector-ring" opacity={ring === 5 ? .9 : .34} />)}
+          <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius * 1.55} fill="url(#circle-core)" />
+          <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius} className="world-core-ring" />
+          <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius * .62} className="world-core-ring inner" />
+          <path d={`M ${center.x - world.config.circleReserveRadius - 8} ${center.y} H ${center.x + world.config.circleReserveRadius + 8} M ${center.x} ${center.y - world.config.circleReserveRadius - 8} V ${center.y + world.config.circleReserveRadius + 8}`} className="world-core-cross" />
+          <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`} className="world-core-marker" onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera(center)}><circle cx={center.x} cy={center.y} r="7.5" /><ellipse cx={center.x} cy={center.y} rx="5.2" ry="2.8" /><circle cx={center.x} cy={center.y} r="2.1" /><text x={center.x} y={center.y - 11} className="world-circle-label">THE WORMHOLE</text><text x={center.x} y={center.y + 12} className="world-circle-sub">HOLD TO UNLOCK TRANSIT</text></g>
+          {activeMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} />)}
+          {strategicZoom && signalClusters.map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera(cluster.position); setZoom(1.8); }}>
+            <circle cx={cluster.position.x} cy={cluster.position.y} r="6.5" /><circle cx={cluster.position.x} cy={cluster.position.y} r="3.7" /><text x={cluster.position.x} y={cluster.position.y + 1.3}>{cluster.count}</text>
+          </g>)}
+          {filteredTargets.filter((entity) => !strategicZoom && (entity.kind !== "city" || playerSearchZoom)).map((entity) => {
+            const color = entityColor(entity); const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id; const verified = entity.kind === "resource" || scoutedTargetIds.has(entity.id);
+            return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setSelection(emptySelection()); setMessage(""); }}>
+              {selectedTarget && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
+              <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />
+              {detailZoom && entity.kind !== "city" ? <text x={entity.position.x} y={entity.position.y + 3.4} className="world-target-emoji">{entity.kind === "monster" ? "💀" : RESOURCE_EMOJI[entity.resource]}</text> : entity.kind === "city" ? <polygon points={`${entity.position.x},${entity.position.y - 4.1} ${entity.position.x + 3.6},${entity.position.y - 2} ${entity.position.x + 3.6},${entity.position.y + 2} ${entity.position.x},${entity.position.y + 4.1} ${entity.position.x - 3.6},${entity.position.y + 2} ${entity.position.x - 3.6},${entity.position.y - 2}`} fill={color} /> : entity.kind === "monster" ? <path d={`M ${entity.position.x} ${entity.position.y - 4.2} L ${entity.position.x + 4} ${entity.position.y + 3.4} H ${entity.position.x - 4} Z`} fill={color} /> : <rect x={entity.position.x - 3} y={entity.position.y - 3} width="6" height="6" fill={color} transform={`rotate(45 ${entity.position.x} ${entity.position.y})`} />}
+              {verified && entity.kind !== "resource" && <circle cx={entity.position.x + 4.5} cy={entity.position.y - 4.5} r="1.2" className="world-verified-dot" />}
+              {bookmarks.includes(entity.id) && <text x={entity.position.x + 7} y={entity.position.y - 6} className="world-bookmark-star">★</text>}
+              {(selectedTarget || detailZoom) && <text x={entity.position.x} y={entity.position.y - 8} className="world-target-name">{localWorldTargetName(world, entity.id)}</text>}
+              {(selectedTarget || detailZoom) && <text x={entity.position.x} y={entity.position.y + 8} className="world-target-level">L{entityLevel(entity)} · {entityState(entity)} · ETA {fmtDuration(travelSecondsTo(entity.position))}</text>}
             </g>;
           })}
-          <g className="world-city" onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera(playerCity.position)}><rect x={playerCity.position.x - 5} y={playerCity.position.y - 5} width="10" height="10" rx="2" fill="#5aa9e6" stroke="#dbe2f3" strokeWidth="1.2" transform={`rotate(45 ${playerCity.position.x} ${playerCity.position.y})`} /><text x={playerCity.position.x < 45 ? playerCity.position.x + 30 : playerCity.position.x > world.config.width - 45 ? playerCity.position.x - 30 : playerCity.position.x} y={playerCity.position.y < 18 ? playerCity.position.y + 14 : playerCity.position.y - 9} className="world-city-name">YOUR CITY · TH{viewGame.buildings.keep.lvl}</text></g>
+          <g className="world-city" transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`} onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera({ ...playerCity.position })}>
+            <circle cx={playerCity.position.x} cy={playerCity.position.y} r="7.5" className="world-home-ring" />
+            <rect x={playerCity.position.x - 4} y={playerCity.position.y - 4} width="8" height="8" rx="1" transform={`rotate(45 ${playerCity.position.x} ${playerCity.position.y})`} />
+            <circle cx={playerCity.position.x} cy={playerCity.position.y} r="1.5" />
+            <text x={playerCity.position.x} y={playerCity.position.y - 11} className="world-city-name">YOUR CIVILIZATION · TH{viewGame.buildings.keep.lvl}</text>
+            <text x={playerCity.position.x} y={playerCity.position.y + 12} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
+          </g>
         </svg>
-        <div className="world-map-hint">Drag to pan · wheel or ± to zoom · 512×512 State · {Object.keys(world.players).length}/{world.config.maxPlayers} cities</div>
+        {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
+        <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")}><i className="city" />CIVILIZATIONS</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>
+        <div className="world-map-hint">DRAG TO PAN · WHEEL TO ZOOM · {world.config.width}×{world.config.height} SECTOR · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS</div>
       </div>
       <aside className="world-side">
-        {!selected ? <div className="world-empty"><b>Select a map target</b><span>Green fields gather resources. Red crews and gold cities can be scouted or attacked.</span></div> : <>
-          <div className="world-target-head"><span style={{ color: KIND_META[selected.kind].color }}>{KIND_META[selected.kind].icon}</span><div><small>{KIND_META[selected.kind].label}</small><b>{localWorldTargetName(world, selected.id)}</b></div><em>L{entityLevel(selected)}</em></div>
-          <div className="world-facts"><span>Distance <b>{distance(playerCity.position, selected.position).toFixed(1)} tiles</b></span><span>One-way march <b>{fmtDuration(oneWay)}</b></span><span>Map zone <b>{selected.zone}</b></span>
-            {selected.kind === "resource" && <span>Remaining <b>{compact(displayResource(selected.amount))} {RES[selected.resource].label}</b></span>}
-            {selected.kind === "monster" && <><span>Known power <b>{compact(selected.power)}</b></span><span>Counter identity <b>{TROOPS_META[selected.dominantArm].label}</b></span></>}
-            {selected.kind === "city" && <><span>Protection <b>{cityShielded(selected, now, N) ? "Shielded" : "Open"}</b></span><span>Wall integrity <b>{selected.wall.value}/{selected.wall.max}</b></span></>}
+        {!selected ? <div className="world-empty"><div className="world-empty-radar"><i /><i /><i /></div><small>DEEP-SPACE ARRAY</small><b>SELECT A SIGNAL</b><span>Resource planets, rogue worlds and rival civilizations orbit this sector. Scan unknown targets before committing a fleet.</span></div> : <>
+          <div className={`world-intel-ribbon ${selectedVerified ? "verified" : "public"}`}><span>{selected.kind === "resource" ? "OPEN LEDGER" : selectedVerified ? "VERIFIED INTEL" : "PUBLIC SIGNAL"}</span><b>{selected.kind === "resource" ? "LIVE" : selectedVerified ? "SCANNED" : "ENCRYPTED"}</b></div>
+          <div className="world-target-actions"><button className={bookmarks.includes(selected.id) ? "saved" : ""} onClick={() => toggleBookmark(selected.id)}>{bookmarks.includes(selected.id) ? "★ SAVED" : "☆ SAVE SIGNAL"}</button><span>{entityState(selected)}</span></div>
+          <div className="world-target-head"><span style={{ color: entityColor(selected) }}>{KIND_META[selected.kind].icon}</span><div><small>{KIND_META[selected.kind].label} · {selected.id.slice(-8).toUpperCase()}</small><b>{localWorldTargetName(world, selected.id)}</b></div><em>L{entityLevel(selected)}</em></div>
+          <div className="world-facts"><span>Coordinates <b>{Math.round(selected.position.x).toString().padStart(3, "0")}:{Math.round(selected.position.y).toString().padStart(3, "0")}</b></span><span>Distance <b>{distance(playerCity.position, selected.position).toFixed(1)} light units</b></span><span>March ETA <b>{fmtDuration(oneWay)}</b></span><span>Sector band <b>ORBIT {selected.zone}</b></span>
+            {selected.kind === "resource" && <><span>Asset <b style={{ color: RESOURCE_COLORS[selected.resource] }}>{RES[selected.resource].label}</b></span><span>Liquidity <b>{compact(displayResource(selected.amount))}</b></span></>}
+            {selected.kind === "monster" && <><span>Combat power <b>{selectedVerified ? compact(selected.power) : "ENCRYPTED"}</b></span><span>Dominant force <b>{selectedVerified ? TROOPS_META[selected.dominantArm].label : "UNKNOWN"}</b></span></>}
+            {selected.kind === "city" && <><span>Protection <b>{cityShielded(selected, now, N) ? "SHIELDED" : "OPEN"}</b></span><span>Wall integrity <b>{selectedVerified ? `${selected.wall.value}/${selected.wall.max}` : "ENCRYPTED"}</b></span><span>Garrison <b>{selectedVerified ? compact(displayTroops(selectedScoutSnapshot.garrison ?? 0)) : "ENCRYPTED"}</b></span><span>Est. loot <b>{selectedVerified ? compact(displayResource(selectedScoutSnapshot.estimatedLoot ?? 0)) : "ENCRYPTED"}</b></span></>}
           </div>
-          {selected.kind !== "resource" && <button className="world-scout" onClick={() => run("scout")}>🔭 Scout · uses 1 march slot</button>}
-          <div className="world-force-title"><b>Dispatch force</b><span>{compact(displayTroops(sentCount))} selected · cap {compact(displayTroops(player.marchCapacity))}</span></div>
+          {selected.kind !== "resource" && <button className="world-scout" onClick={() => run("scout")}><span>SCAN TARGET</span><em>1 MARCH SLOT</em></button>}
+          <div className="world-force-title"><b>Assemble fleet</b><span>{compact(displayTroops(sentCount))} selected · cap {compact(displayTroops(forceLimit))}</span></div>
+          {selected.kind === "resource" && <div className="world-gather-recommend"><div><b>RECOMMENDED CREW {compact(displayTroops(gatherRequirement))}</b><span>Send fewer to harvest a proportional share. This planet accepts no excess troops.</span></div><button onClick={autoAssignGatherForce}>AUTO ASSIGN</button></div>}
           <div className="world-force-list">
-            {TROOP_ORDER.flatMap((arm) => Object.entries(viewGame.troops[arm] ?? {}).filter(([, qty]) => qty > 0).map(([tier, qty]) => <div className="world-force-row" key={`${arm}-${tier}`}><span>{TROOPS_META[arm].emoji} {TROOPS_META[arm].label} T{tier}<small>{compact(displayTroops(qty))} home</small></span><input type="number" min="0" max={qty} value={selection[arm][tier] ?? 0} onChange={(event) => setTroop(arm, tier, Number(event.target.value))} /><button onClick={() => setTroop(arm, tier, qty)}>max</button></div>))}
-            {totalTroops(viewGame) === 0 && <div className="world-no-force">No standing troops. Train units in Town before dispatching.</div>}
+            {TROOP_ORDER.flatMap((arm) => Object.entries(viewGame.troops[arm] ?? {}).filter(([, qty]) => qty > 0).map(([tier, qty]) => <div className="world-force-row" key={`${arm}-${tier}`}><span>{TROOPS_META[arm].emoji} {TROOPS_META[arm].label} T{tier}<small>{compact(displayTroops(qty))} home</small></span><input type="number" min="0" max={qty} value={selection[arm][tier] ?? 0} onChange={(event) => setTroop(arm, tier, Number(event.target.value))} /><button onClick={() => maxTroop(arm, tier, qty)}>MAX</button></div>))}
+            {totalTroops(viewGame) === 0 && <div className="world-no-force">NO STANDING TROOPS · TRAIN UNITS IN TOWN</div>}
           </div>
-          {selected.kind === "resource" ? <button className="world-dispatch" disabled={sentCount <= 0 || selected.state !== "available"} onClick={() => run("gather")}>Gather resources →</button> : selected.kind === "monster" ? <button className="world-dispatch danger" disabled={sentCount <= 0 || selected.state !== "alive"} onClick={() => run("attack_monster")}>Attack crew · {world.config.monsterEnergyCost} Energy →</button> : <button className="world-dispatch danger" disabled={sentCount <= 0 || cityShielded(selected, now, N)} onClick={() => run("attack_city")}>Attack city →</button>}
+          {selected.kind === "resource" ? <button className="world-dispatch" disabled={sentCount <= 0 || selected.state !== "available"} onClick={() => run("gather")}>HARVEST PLANET →</button> : selected.kind === "monster" ? <button className="world-dispatch danger" disabled={sentCount <= 0 || selected.state !== "alive"} onClick={() => run("attack_monster")}>ENGAGE ROGUE · {world.config.monsterEnergyCost} ENERGY →</button> : <button className="world-dispatch danger" disabled={sentCount <= 0 || cityShielded(selected, now, N)} onClick={() => run("attack_city")}>ATTACK CIVILIZATION →</button>}
         </>}
-        <div className="world-marches"><div className="world-force-title"><b>March queues</b><span>{activeMarches.length}/{player.marchSlots}</span></div>{activeMarches.map((march) => <div className="world-march" key={march.id}><span>{march.action === "scout" ? "🔭" : march.action === "gather" ? "⛏️" : "⚔️"}</span><div><b>{localWorldTargetName(world, march.targetId)}</b><small>{marchPhase(march)} · {fmtDuration(marchRemainingSec(march, now))}</small></div></div>)}{!activeMarches.length && <div className="world-no-force">Both march queues are idle.</div>}</div>
-        {!!latestReports.length && <div className="world-reports"><div className="world-force-title"><b>Latest reports</b><span>arrival + return</span></div>{latestReports.map((report) => { const copy = reportCopy(report, world); return <div className={`world-report ${copy.good ? "good" : "bad"}`} key={report.id}><b>{copy.title}</b><span>{copy.detail}</span></div>; })}</div>}
+        <div className="world-marches"><div className="world-force-title"><b>Live fleets</b><span>{activeMarches.length}/{player.marchSlots} channels</span></div>{activeMarches.map((march) => <div className="world-march" key={march.id}><button className="world-march-focus" onClick={() => focusTarget(march.targetId)}><span>{march.action === "scout" ? "◎" : march.action === "gather" ? "◇" : "△"}</span><div><b>{localWorldTargetName(world, march.targetId)}</b><small>{marchPhase(march).toUpperCase()} · {fmtDuration(marchRemainingSec(march, now))}</small></div></button>{["outbound", "gathering"].includes(march.state) && <button className="world-recall" onClick={() => recall(march.id)}>RECALL</button>}</div>)}{!activeMarches.length && <div className="world-no-force">ALL FLEET CHANNELS IDLE</div>}</div>
+        {!!bookmarkedTargets.length && <div className="world-bookmarks"><div className="world-force-title"><b>Saved signals</b><span>{bookmarkedTargets.length}</span></div>{bookmarkedTargets.map((target) => <button key={target.id} onClick={() => focusTarget(target.id)}><span style={{ color: entityColor(target) }}>{KIND_META[target.kind].icon}</span><b>{localWorldTargetName(world, target.id)}</b><small>{Math.round(target.position.x).toString().padStart(3, "0")}:{Math.round(target.position.y).toString().padStart(3, "0")}</small></button>)}</div>}
+        {!!latestReports.length && <div className="world-reports"><div className="world-force-title"><b>Mission archive</b><span>click to locate</span></div>{latestReports.map((report) => { const copy = reportCopy(report, world); return <button onClick={() => focusTarget(report.targetId)} className={`world-report ${copy.good ? "good" : "bad"}`} key={report.id}><b>{copy.title}</b><span>{copy.detail}</span></button>; })}</div>}
       </aside>
     </div>
   </section>;
 }
 
-function MarchLine({ march, now }: { march: HeadlessMarch; now: number }) {
+function MarchLine({ march, now, zoom }: { march: HeadlessMarch; now: number; zoom: number }) {
   let progress = 0;
   if (march.state === "outbound") progress = (now - march.dispatchedAt) / Math.max(1, march.arriveAt - march.dispatchedAt);
   else if (march.state === "gathering") progress = 1;
   else if (march.state === "returning") { const start = march.workUntil || march.arriveAt; progress = 1 - (now - start) / Math.max(1, march.returnAt - start); }
   const safe = Math.max(0, Math.min(1, progress)); const x = march.origin.x + (march.destination.x - march.origin.x) * safe; const y = march.origin.y + (march.destination.y - march.origin.y) * safe;
-  return <g className="world-march-line"><line x1={march.origin.x} y1={march.origin.y} x2={march.destination.x} y2={march.destination.y} /><circle cx={x} cy={y} r="2.2" /><text x={x} y={y - 4}>{march.action === "scout" ? "SCOUT" : march.action === "gather" ? "GATHER" : "ATTACK"}</text></g>;
+  return <g className={`world-march-line ${march.action}`}><line x1={march.origin.x} y1={march.origin.y} x2={march.destination.x} y2={march.destination.y} /><g transform={`translate(${x} ${y}) scale(${1 / zoom}) translate(${-x} ${-y})`}><circle cx={x} cy={y} r="3.8" className="world-march-pulse" /><circle cx={x} cy={y} r="1.8" /><text x={x} y={y - 4}>{march.action === "scout" ? "SCAN" : march.action === "gather" ? "GATHER" : "STRIKE"}</text></g></g>;
 }

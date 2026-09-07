@@ -1,6 +1,7 @@
 import type { BKey, GameState } from "./game";
-import { BUILDING_ORDER, RES_ORDER, TROOP_ORDER, capacity, highestUnlockedTroopTier, isUpgradable, maxLevel, maxTroopsForType, project } from "./game";
+import { BUILDING_ORDER, RES_ORDER, TROOP_ORDER, buildingOperationBlockReason, capacity, highestUnlockedTroopTier, isUpgradable, maxLevel, maxTroopsForType, project } from "./game";
 import { initGame } from "./gamestore";
+import { researchTechs } from "./research";
 
 const KEY = (address: string) => `ruglands:gm:${address.toLowerCase()}`;
 
@@ -54,6 +55,8 @@ export function gmFinishQueues(state: GameState, now = Date.now()): GameState {
   TROOP_ORDER.forEach((type) => {
     if (next.training[type].finishAt > 0) next.training[type].finishAt = now;
   });
+  if (next.researchQueue.finishAt > 0) next.researchQueue.finishAt = now;
+  if (next.healing.finishAt > 0) next.healing.finishAt = now;
   return project(next, now);
 }
 
@@ -67,6 +70,13 @@ export function gmFillTroops(state: GameState, now = Date.now()): GameState {
   return next;
 }
 
+export function gmMaxResearch(state: GameState, now = Date.now()): GameState {
+  const next = project(state, now);
+  next.researchQueue = { tech: "", targetLevel: 0, durationSec: 0, finishAt: 0 };
+  researchTechs().forEach((tech) => { next.research[tech.key] = tech.maxLevel; });
+  return next;
+}
+
 export function gmRaiseTownhall(state: GameState, now = Date.now()): GameState {
   const next = project(state, now);
   next.buildings.keep.finishAt = 0;
@@ -77,6 +87,9 @@ export function gmRaiseTownhall(state: GameState, now = Date.now()): GameState {
 export function gmRaiseBuilding(state: GameState, building: BKey, now = Date.now()): GameState {
   const next = project(state, now);
   if (!isUpgradable(building)) return next;
+  // GM can skip costs/timers, but it cannot violate the same operating-building
+  // invariant as a player upgrade.
+  if (buildingOperationBlockReason(next, building)) return next;
   next.buildings[building].finishAt = 0;
   next.buildings[building].lvl = Math.min(maxLevel(building), next.buildings[building].lvl + 1);
   return next;
@@ -92,9 +105,11 @@ export function gmResetProgress(address: string, now = Date.now()): GameState {
   RES_ORDER.forEach((resource) => { next.res[resource] = 0; });
   TROOP_ORDER.forEach((type) => {
     Object.keys(next.troops[type]).forEach((tier) => { next.troops[type][tier] = 0; });
-    next.training[type] = { tier: 1, qty: 0, per: 0, finishAt: 0 };
+    next.training[type] = { mode: "train", sourceTier: 0, tier: 1, qty: 0, per: 0, finishAt: 0 };
   });
   next.wounded = 0;
+  next.research = {};
+  next.researchQueue = { tech: "", targetLevel: 0, durationSec: 0, finishAt: 0 };
   next.lastTick = now;
   return next;
 }

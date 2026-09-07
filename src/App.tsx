@@ -23,8 +23,18 @@ export default function App() {
   if (params.has("expedition")) {
     return <ExpeditionLab />;
   }
+  if (import.meta.env.DEV && params.has("town")) {
+    const devSlot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
+    const devAddress = devSlot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${devSlot}`;
+    const devProfile: Profile = {
+      address: devAddress, name: "Ruglord Town Test", faction: null, factionSymbol: null,
+      keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
+    };
+    return <div className="page"><Town address={devAddress} profile={devProfile} onWorld={() => window.location.assign(`/?world&gm&slot=${devSlot}`)} /></div>;
+  }
   if (import.meta.env.DEV && params.has("world")) {
-    const devAddress = "0x000000000000000000000000000000000000dEv1";
+    const devSlot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
+    const devAddress = devSlot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${devSlot}`;
     const devProfile: Profile = {
       address: devAddress, name: "Ruglord World Test", faction: null, factionSymbol: null,
       keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,

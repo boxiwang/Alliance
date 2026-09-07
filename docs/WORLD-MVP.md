@@ -13,6 +13,10 @@ Implemented:
 
 - 1,024 deterministic farthest-first city anchors, five zones, Circle exclusion and spatial queries.
 - Resource, monster and city target lifecycles with respawn, burning and non-destructive relocation.
+- Neutral resources and monsters are distributed in growth halos around every active civilization;
+  respawns stay in the living civilization band instead of drifting into empty space.
+- Population targets scale at three resource planets and one rogue planet per active civilization,
+  with 240/120 young-State floors; each complete local resource cycle includes Cash, Oil and Power.
 - Account troop reservation, two march slots, per-march capacity, travel timing and recall.
 - Gather contention, Energy-gated sequential monsters, scouting and asynchronous city combat.
 - Arrival reports, defender reports and return delivery reports; idempotent dispatch commands.
@@ -62,6 +66,12 @@ The first deterministic balance pass is recorded in `docs/WORLD-BALANCE.md`. Run
 - City: `normal/shielded → breached → burning → normal` (relocate when Wall reaches zero)
 - March: `outbound → gathering/fighting → returning → completed`, with recall support
 
+Resource planets expose an explicit recommended crew per level. It is also a server-authoritative
+headcount cap: players may mix Army, Navy and Air up to that total, while undersized crews can only
+reserve a proportional share regardless of raw carry load. After the occupying fleet withdraws,
+nodes below 25% remaining retire and enter the normal respawn loop. L2 is calibrated to a 1,000-unit
+internal crew in `numbers.json`; presentation denomination remains controlled separately.
+
 ## Hero compatibility (locked before hero implementation)
 
 Every march stores a `commanderSnapshot` with two nullable hero slots, resolved passive
@@ -72,7 +82,7 @@ target lifecycle, troop reservation, combat reports or persistence.
 ## Beta, not this MVP
 
 Real shared-server authority, alliance rallies, reinforcement/garrison, alliance territory,
-facilities, resource-tile PvP, teleport items, world bosses, seasons, cross-State migration,
+facilities, resource-tile PvP, usable teleport items, world bosses, seasons, cross-State migration,
 push notifications, free-path movement and open-field interception.
 
 ## Headless acceptance gates
@@ -84,5 +94,7 @@ push notifications, free-path movement and open-field interception.
 - One resource field cannot be occupied by two marches.
 - `home + marching + wounded + dead delta` conserves troops.
 - Depleted/defeated targets disappear and respawn at a new legal coordinate.
+- Every active city receives nearby neutral growth targets; field/rogue respawns remain near the
+  living population rather than becoming globally uniform.
 - Combat resolves and reports at arrival; loot reaches inventory only on return.
 - 10,000 scheduled events can be advanced deterministically in tests.

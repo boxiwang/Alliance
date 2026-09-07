@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initGame } from "./gamestore";
 import { capacity, totalTroops } from "./game";
 import {
-  gmFillResources, gmFillTroops, gmFinishQueues, gmRaiseBuilding, gmRaiseTownhall, gmResetProgress,
+  gmFillResources, gmFillTroops, gmFinishQueues, gmMaxResearch, gmRaiseBuilding, gmRaiseTownhall, gmResetProgress,
   grantLocalGm, hasLocalGm, localGmAvailable, localGmRequested, revokeLocalGm,
 } from "./gm";
 
@@ -51,7 +51,7 @@ describe("local GM tools", () => {
   it("finishes active construction and training queues", () => {
     const game = initGame("0xgm");
     game.buildings.bank.finishAt = Date.now() + 60_000;
-    game.training.army = { tier: 2, qty: 12, per: 5, finishAt: Date.now() + 60_000 };
+    game.training.army = { mode: "train", sourceTier: 0, tier: 2, qty: 12, per: 5, finishAt: Date.now() + 60_000 };
 
     const finished = gmFinishQueues(game);
     expect(finished.buildings.bank.lvl).toBe(2);
@@ -70,6 +70,15 @@ describe("local GM tools", () => {
     expect(Object.values(filled.troops.army).reduce((sum, qty) => sum + qty, 0)).toBeGreaterThan(0);
     expect(Object.values(filled.troops.navy).reduce((sum, qty) => sum + qty, 0)).toBeGreaterThan(0);
     expect(Object.values(filled.troops.air).reduce((sum, qty) => sum + qty, 0)).toBeGreaterThan(0);
+  });
+
+  it("maxes every research technology for account-effect testing", () => {
+    const game = initGame("0xgm");
+    game.researchQueue = { tech: "research.development.rapidConstruction.1", targetLevel: 1, durationSec: 10, finishAt: Date.now() + 10_000 };
+    const researched = gmMaxResearch(game);
+    expect(researched.research["research.development.commandTactics.3"]).toBe(1);
+    expect(researched.research["research.battle.regimentalExpansion.6"]).toBeGreaterThan(0);
+    expect(researched.researchQueue.finishAt).toBe(0);
   });
 
   it("raises Townhall instantly but never beyond level 30", () => {

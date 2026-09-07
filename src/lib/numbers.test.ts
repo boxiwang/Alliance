@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import defaults from "../../docs/numbers.json";
 import { simulateProgression } from "./simulator";
 import { validateNumbers } from "./validation";
-import { migrateLegacyNumbers } from "./numbers";
+import { defaultN, migrateLegacyNumbers } from "./numbers";
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
@@ -52,7 +52,7 @@ describe("numbers configuration", () => {
     delete saved.global.accountModifiers.marchCapacityBonus;
 
     const migrated = migrateLegacyNumbers(saved);
-    expect(migrated.meta.version).toBe("0.7");
+    expect(migrated.meta.version).toBe(defaultN().meta.version);
     expect(migrated.gatherNodes.levels[1].gatherRatePerHour).toBe(321);
     expect(migrated.world.state.maxPlayers).toBe(1024);
     expect(migrated.world.monsters.levels[10].power).toBeGreaterThan(0);

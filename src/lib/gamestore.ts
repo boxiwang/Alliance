@@ -1,7 +1,8 @@
 import { getN } from "./numbers";
 const N: any = getN();
 import type { GameState, BKey, ResKey, TroopKey } from "./game";
-import { BUILDING_ORDER, RES_ORDER, TROOP_ORDER } from "./game";
+import { BUILDING_ORDER, RES_ORDER, TROOP_ORDER, emptyTroopRoster, troopRosterCount } from "./game";
+import { EMPTY_RESEARCH_QUEUE, researchTech } from "./research";
 
 const KEY = (a: string) => `ruglands:game:${a.toLowerCase()}`;
 
@@ -60,11 +61,44 @@ export function migrateGame(raw: any, address: string): GameState {
     }
   });
 
+  const woundedTroops = emptyTroopRoster();
+  if (raw?.woundedTroops && typeof raw.woundedTroops === "object") {
+    TROOP_ORDER.forEach((type) => {
+      for (let tier = 1; tier <= 10; tier += 1) {
+        const saved = raw.woundedTroops?.[type]?.[String(tier)];
+        woundedTroops[type][String(tier)] = Number.isFinite(saved) ? Math.max(0, saved) : 0;
+      }
+    });
+  } else if (Number.isFinite(raw?.wounded) && raw.wounded > 0) {
+    // Legacy saves lacked tier identity; preserve the recoverable headcount as Army T1.
+    woundedTroops.army["1"] = Math.max(0, raw.wounded);
+  }
+
+  const healing = raw?.healing && typeof raw.healing === "object"
+    ? {
+      troops: (() => {
+        const roster = emptyTroopRoster();
+        TROOP_ORDER.forEach((type) => {
+          for (let tier = 1; tier <= 10; tier += 1) {
+            const saved = raw.healing?.troops?.[type]?.[String(tier)];
+            roster[type][String(tier)] = Number.isFinite(saved) ? Math.max(0, saved) : 0;
+          }
+        });
+        return roster;
+      })(),
+      qty: Math.max(0, Number(raw.healing.qty) || 0),
+      durationSec: Math.max(0, Number(raw.healing.durationSec) || 0),
+      finishAt: Math.max(0, Number(raw.healing.finishAt) || 0),
+    }
+    : { troops: emptyTroopRoster(), qty: 0, durationSec: 0, finishAt: 0 };
+
   const training = { ...fresh.training };
   TROOP_ORDER.forEach((type) => {
     const saved = raw?.training?.[type];
     if (saved && typeof saved === "object") {
       training[type] = {
+        mode: saved.mode === "promote" ? "promote" : "train",
+        sourceTier: Number.isFinite(saved.sourceTier) ? Math.max(0, saved.sourceTier) : 0,
         tier: Number.isFinite(saved.tier) ? Math.max(1, saved.tier) : 1,
         qty: Number.isFinite(saved.qty) ? Math.max(0, saved.qty) : 0,
         per: Number.isFinite(saved.per) ? Math.max(0, saved.per) : 0,
@@ -76,12 +110,32 @@ export function migrateGame(raw: any, address: string): GameState {
   if (!raw?.training && raw?.train && TROOP_ORDER.includes(raw.train.type)) {
     const type = raw.train.type as TroopKey;
     training[type] = {
+      mode: "train",
+      sourceTier: 0,
       tier: Number.isFinite(raw.train.tier) ? Math.max(1, raw.train.tier) : 1,
       qty: Number.isFinite(raw.train.qty) ? Math.max(0, raw.train.qty) : 0,
       per: Number.isFinite(raw.train.per) ? Math.max(0, raw.train.per) : 0,
       finishAt: Number.isFinite(raw.train.finishAt) ? Math.max(0, raw.train.finishAt) : 0,
     };
   }
+
+  const research: Record<string, number> = {};
+  if (raw?.research && typeof raw.research === "object") {
+    Object.entries(raw.research).forEach(([techKey, rawLevel]) => {
+      const tech = researchTech(techKey);
+      if (!tech) return;
+      research[techKey] = Math.min(tech.maxLevel, Math.max(0, Math.floor(Number(rawLevel) || 0)));
+    });
+  }
+  const savedResearchQueue = raw?.researchQueue;
+  const researchQueue = savedResearchQueue && researchTech(savedResearchQueue.tech)
+    ? {
+      tech: savedResearchQueue.tech,
+      targetLevel: Math.max(1, Math.floor(Number(savedResearchQueue.targetLevel) || 1)),
+      durationSec: Math.max(1, Number(savedResearchQueue.durationSec) || 1),
+      finishAt: Math.max(0, Number(savedResearchQueue.finishAt) || 0),
+    }
+    : { ...EMPTY_RESEARCH_QUEUE };
 
   return {
     ...fresh,
@@ -90,8 +144,12 @@ export function migrateGame(raw: any, address: string): GameState {
     buildings,
     res,
     troops,
-    wounded: Number.isFinite(raw?.wounded) ? Math.max(0, raw.wounded) : 0,
+    wounded: troopRosterCount(woundedTroops),
+    woundedTroops,
+    healing,
     training,
+    research,
+    researchQueue,
     lastTick: Number.isFinite(raw?.lastTick) ? raw.lastTick : Date.now(),
   };
 }
@@ -121,11 +179,15 @@ export function initGame(address: string): GameState {
     res,
     troops,
     wounded: 0,
+    woundedTroops: emptyTroopRoster(),
+    healing: { troops: emptyTroopRoster(), qty: 0, durationSec: 0, finishAt: 0 },
     training: {
-      army: { tier: 1, qty: 0, per: 0, finishAt: 0 },
-      navy: { tier: 1, qty: 0, per: 0, finishAt: 0 },
-      air: { tier: 1, qty: 0, per: 0, finishAt: 0 },
+      army: { mode: "train", sourceTier: 0, tier: 1, qty: 0, per: 0, finishAt: 0 },
+      navy: { mode: "train", sourceTier: 0, tier: 1, qty: 0, per: 0, finishAt: 0 },
+      air: { mode: "train", sourceTier: 0, tier: 1, qty: 0, per: 0, finishAt: 0 },
     },
+    research: {},
+    researchQueue: { ...EMPTY_RESEARCH_QUEUE },
     lastTick: Date.now(),
   };
 }

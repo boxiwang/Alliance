@@ -5,8 +5,90 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-06 · **by:** Codex (headless World wired to local player UI)
-**Current focus:** The scalable World engine now powers the existing visual map through a temporary browser-local GameState adapter. Next is player-facing force-selection guidance and balance playtesting before shared-server persistence.
+**Last updated:** 2026-09-06 · **by:** Codex (near-field growth + gathering rules)
+**Current focus:** Personal-city progression and the local World loop are now playable. Next is balance playtesting and shared-world/server architecture before hero/alliance layers.
+
+### 🌌 Degen Cosmos World + intelligence UX (Codex)
+- Re-skinned the existing SVG World as an asset-free **onchain star map**: wallet civilization, resource
+  planets, rogue planets, starfield/nebula, sector HUD, target lock, fleet routes and center Wormhole.
+- Three zoom layers now enforce map readability: strategic view keeps only the player's landmark visible and
+  clusters resource/hostile signals; field view expands non-player targets; tactical view adds names and detail.
+- Camera/marker scale was corrected after playtesting: the player's node is the true default center even at a
+  State edge, **MY NODE** restores that exact center through the full **1×–8×** range, and labels/ordinary icons
+  keep a stable screen size instead of inflating with zoom. The old drifting home pulse was removed.
+- Strategic view now hides rival players, enlarges only the player's node/Core, and groups non-player signals;
+  rival wallet nodes appear only at search zoom. Tactical resource/hostile markers switch to 💰/⛽/⚡/💀,
+  while 47 deterministic NPC cities use player-like crypto handles for local discovery testing.
+- Preserved the locked **no-fog** rule. Cities and hostiles begin as public signals; scouting upgrades them to
+  verified intel and reveals force/loot detail. Resource nodes stay fully public as open-ledger targets.
+- Added coordinate viewing, layer toggles, persistent saved signals, report-to-target navigation, real-time fleet
+  state, real engine recall, capacity-aware MAX and arrival/return mission notifications.
+- `VIEW COORDS` is camera-only and leaves HOME unchanged. Real relocation is reserved for the future
+  consumable **Warp Engine**; the current WARP control is visibly locked and never moves the player.
+- Resource and rogue targets now round-robin around every active civilization (resources 6–18 tiles,
+  rogues 10–26) and respawn into the living population band. Existing local World v1 saves migrate idle
+  targets once without resetting Town progress or changing active march destinations.
+- Mature-State density is now **3 resource planets + 1 rogue per civilization** (young-State floors remain
+  240/120). Resource rounds rotate Cash/Oil/Power so a complete local cycle cannot randomly omit one economy.
+- All selectable targets show research-adjusted one-way march ETA. Resource levels now define an explicit
+  recommended crew and hard headcount cap; `AUTO ASSIGN` fills up to the player's available/capacity limit.
+  Undersized high-load fleets can only harvest a proportional share, and nodes below 25% retire after the
+  fleet withdraws before returning through the timed respawn loop. Admin exposes both crew and threshold.
+- Removed the rotating Wormhole ellipse; only the star layer rotates very slowly (420s) for depth.
+- Fixed a React Strict Mode authority bug found during browser testing: persistence side effects no longer run
+  inside a repeated state updater, so recalled fleets cannot duplicate. Covered GM-fill→dispatch→recall paths.
+- Browser-verified public → scanned target, filtering, coordinate jump, bookmarking, dispatch, recall, return
+  conservation and mission feedback. Full repo check: **97 tests + TypeScript + production build green**.
+
+### ✅ Research effect closure (Codex)
+- All **696 research levels** explicitly store `category: development|economy|battle`. Validation rejects
+  uncategorized/cross-category rows and effect keys not registered to a live account system. Admin shows Category.
+- Research Institute shows completed bonuses currently active on the connected wallet.
+- `Command Tactics` at Academy 9/19/29 is functional: each milestone adds one simultaneous World march,
+  moving the default account from **2 → 3 → 4 → 5** queues, including existing sessions after reconciliation.
+- Closed the previous healing gap: casualties retain Army/Navy/Air + Tier identity; Hospital now has a persisted
+  healing queue, cost, time, slider and upgrade lock. Healing speed shortens the queue, Medical Expansion adds
+  real available beds, and completion restores the original tiers. Legacy scalar wounded remain recoverable as T1.
+- Runtime wiring matrix: `docs/RESEARCH-EFFECTS.md`. Acceptance covers all 30 effect families, category coverage,
+  live march queues, city/gather/combat calculators, healing and migration. **89 tests + TypeScript + build green**.
+
+### 🪖 Training + promotion v0.8 (Codex)
+- Army Camp / Naval Base / Airfield now follow the Kingshot building ladder: T1–T10 unlock at building
+  **1/4/7/11/13/16/19/22/26/30**; base batch capacity is an explicit **17→209** level table and
+  building training-speed bonuses are explicit at every level. Our Army/Navy/Air attack, defense, load,
+  power and Might values remain unchanged.
+- Training quantity is a slider with a live maximum, full batch cost and adjusted completion time. Each
+  building still owns one independent queue.
+- Promotion unlocks at training-building Lv.13. Existing lower-tier troops can be reserved into the same
+  queue and promoted to any unlocked higher tier; cost and time are target minus source, and promotion
+  batch size scales by that time difference. Source troops leave standing forces immediately and the
+  target tier arrives at completion, so troops cannot be deployed twice and Might gains only the tier delta.
+- Operating buildings are hard-locked in both directions: an Academy cannot upgrade while researching and
+  cannot research while upgrading; a training building cannot upgrade while training/promoting and cannot
+  train/promote while upgrading. The invariant is enforced below the UI and respected by GM level controls.
+- Kingshot unlock/capacity/training data changed the tier available at several World reference checkpoints;
+  corresponding monster power and TH10/TH15 Wall reference values were rebaselined so declared PvE/PvP
+  balance bands remain clean. Superseded by the 89-test research-effect closure check above.
+
+### 🔬 Academy v0.8 — complete playable three-tree baseline (Codex)
+- Researched Kingshot's live tree structure and adapted it rather than copying its economy. RUGLANDS now has
+  **183 technologies / 696 upgrades**: Development **45/129**, Economy **36/108** (three resources rather
+  than Kingshot's four), Battle **102/459**. Full baseline queue time = **383.4 days** before research-speed bonuses.
+- Every upgrade is explicit in `numbers.json`: Academy gate, prerequisites, Cash/Oil/Power cost, time, cumulative
+  effect and Might. Reproducible seed = `scripts/bake-research.mjs`; design/tuning guide = `docs/ACADEMY.md`.
+- Real player state landed: permanent completed levels, one persisted queue, old-save migration, resource deduction,
+  Academy/predecessor/prerequisite enforcement, offline completion and research Might.
+- Effects are wired into the current game: construction/research/training/healing speed, training capacity,
+  resource-specific production/gathering, Hospital capacity, march queues/capacity, and universal +
+  Army/Navy/Air combat stats.
+- Town's **Research Institute** card opens a dedicated full-screen secondary surface (GM also has a direct
+  **Open Research** action). Development/Economy/Battle are long text-only dependency trees: prerequisites are
+  always above dependents, lines are generated from `numbers.json`, and selecting a node highlights its direct
+  paths plus a sticky requirements/cost/time panel. Admin gained an organized **Research** page with branch/phase filters and
+  editable per-level tables. GM Finish queues completes the active Academy research; **Max research** completes all
+  three categories so every account effect can be tested immediately; Reset city clears research.
+- Validation checks all 696 rows and their references. Browser-verified Admin navigation/table layout; full repo
+  check is green.
 
 ### 🧮 Data-balance pass (this session, Claude)
 - **FIXED — per-building upgrade-time monotonicity:** every building's time dipped at L10→L11
@@ -47,13 +129,14 @@ The 5 corrections:
 3. **Academy is a passive account-wide modifier** (`global.accountModifiers`), auto-applied. Gather speed comes
    from it (+heroes), **never chosen at a node.** (Removed the node-side academy slider concept.)
 4. **Troops are account-bound**: dispatch only what you actually have; limited by single-march capacity +
-   `global.march.marchQueueSlots` (=2); out until return; losses/wounded apply.
+   the base 2 queues enhanced to 5 by Command Tactics; out until return; losses/wounded apply.
 5. **Scout only on enemy cities/monsters**, never resource nodes.
 
 **First corrected build (DONE locally):**
 - `src/World.tsx` is the real player surface: coordinate SVG world, drag/pan/zoom, wallet-deterministic outer spawn, fixed Circle center, distance-gated target zones, Town ↔ World navigation.
 - `src/lib/world.ts` persists one local world per wallet and owns NPC targets, march queues, reports and return settlement.
-- Dispatch reads **actual standing troops** from `GameState`, enforces single-march capacity and 2 active queues, removes troops immediately, then returns survivors and applies wounded/dead/resource outcomes.
+- Dispatch reads **actual standing troops** from `GameState`, enforces single-march capacity and the wallet's
+  researched active-queue limit (base 2, maximum 5), removes troops immediately, then returns survivors and applies wounded/dead/resource outcomes.
 - Gather speed, march speed, attack and load hooks are passive `global.accountModifiers`; the old per-node Academy slider is gone. Scout is rejected for resource fields in UI and engine.
 - Combat loot is now win-only; depleted-node gather time uses the amount actually hauled rather than unused carry capacity.
 - Local GM gained **Fill troops** and **Finish marches**. `/?world&gm` opens a walletless dev harness for fast World testing; normal players enter from Town.
@@ -76,7 +159,7 @@ The 5 corrections:
 - Hero seam is locked now: every march stores two nullable hero slots, resolved modifier/effect snapshot
   and balance version. Adding Heroes later supplies that snapshot and does not rewrite world/march logic.
 - Acceptance now covers 1,000 cities + 10,000 deterministic scheduled events. Full repo check:
-  **74 tests, TypeScript and production build green**.
+  Current coverage is included in the **89-test** full repo check above.
 - **Balance v0.7 complete:** `npm run balance:world` evaluates weak/standard/strong PvE, gathering,
   equal-progression PvP, travel, Energy and target density against declared target bands. The old data
   exposed 86–99.8% matching-monster win rates, 10–343.9h field occupancy and late-game Wall drift.
@@ -92,17 +175,18 @@ The 5 corrections:
   Town `GameState` and the headless authority used by `src/World.tsx`. Training/resources earned while
   troops are away merge safely instead of overwriting a march result. Existing legacy marches are
   force-settled once, troops/rewards are recovered, then their old save is removed.
-- The live local map now renders a 512×512 State with 48 sparse test cities (configurable in Admin),
+- The live local map now renders a 512×512 State with 48 sparse test civilizations (configurable in Admin),
   real fields/crews, Energy, queue capacity, shield/Wall state and immutable arrival/return reports.
-  New players start on the outer rim; the camera clamps to the State instead of exposing off-map space.
+  New players start on the outer rim; the camera may render the surrounding deep-space grid so any edge home
+  can still occupy the exact screen center.
 - Browser-verified gather, scout and city-attack flows: troops reserve and return correctly, gather
   rewards arrive only on return, scouting does not reserve a preselected force, and defeat applies
   wounded/dead before returning survivors. Report values use the same large-number denomination as Town.
 
 ## 🎯 Decisions locked (this session)
-- **No medieval theme.** Current leading visual exploration is **Degen Freeport**: a prosperous,
-  dangerous Crypto industrial port in a readable chibi 2.5D SLG style. The V3 concept is preferred
-  for exploration, but still needs an explicit production lock; see `docs/ART-DIRECTION.md`.
+- **No medieval theme. World direction is now Degen Cosmos:** wallets are civilizations, outdoor resources
+  are planets, PvE targets are rogue planets, and the center progression gate is the Wormhole. Existing city
+  art exploration remains non-binding until the later art-production pass; code continues to use stable Keys.
 - Economy: 3 resources **Cash / Oil / Power**; 14 city buildings (see bible §20); troops **Army/Navy/Air, T1–T10**.
 - **Townhall → L30**; shield lifts at L10; all buildings unlock by TH10.
 - **Prerequisites** (numbers.json → townhallPrerequisites): TH→L needs buildings ≥ L−1, **Warehouse anchor**,
@@ -135,26 +219,31 @@ The 5 corrections:
 - **Config validation:** Admin checks missing/negative rows, troop unlock order, prerequisite bands, impossible unlocks, Warehouse/TH capacity deadlocks and pacing drift. Errors block Save.
 - **Playable T1–T10 training:** Town UI exposes tier unlocks; training cost/time, completion and Might use the selected tier's row. Old numeric troop saves migrate safely to T1.
 - **Three specialized training branches:** Army Camp / Naval Base / Airfield each owns its levels, troop capacity, speed, batch limit and simultaneous queue. Tiers unlock from the matching building level rather than Townhall; old Barracks saves migrate without losing levels or active training.
+- **Kingshot-shaped training and promotion:** exact building unlock/capacity/speed and troop cost/time ladders,
+  slider quantity selection, live total cost/time, same-queue lower-tier promotion, persisted promotion state,
+  operating-building upgrade locks and save migration. See `docs/TRAINING.md`.
 - **Human-readable Balance Lab:** `/?admin` is organized into Pacing / Buildings / Troops / Game rules / Advanced. Buildings are grouped by purpose; table columns are grouped by cost, timing, output, unlock, training and combat. System keys/notes stay out of the normal workflow.
-- **Wallet-bound local GM mode:** open `/?gm` in the Vite dev server and connect the test wallet once. Town gets Fill resources / Finish queues / Selected building +1 / Townhall +1 / Reset city / Disable GM controls. Reset creates a clean but playable TH1 save with zero resources/troops. The grant is stored only for that browser + wallet, no address is committed, and production builds ignore `?gm`.
+- **Wallet-bound local GM mode:** open `/?gm` in the Vite dev server and connect the test wallet once. Town gets Fill resources / Fill troops / Finish queues / Max research / Open Research / Selected building +1 / Townhall +1 / Reset city / Disable GM controls. Reset creates a clean but playable TH1 save with zero resources/troops. The grant is stored only for that browser + wallet, no address is committed, and production builds ignore `?gm`.
 - **Large-number denomination:** the UI presents resources and troop headcount at ×1,000. Costs, capacity and production use the same display denomination, so pacing and queue timing do not change. Both multipliers are editable under Admin → Game rules.
 - **Might v0.6:** total Might is split into permanent Infrastructure Might + fielded Troop Might. Building rows carry explicit cumulative Might; troop Might is displayed headcount × tier power. With all buildings Lv.30 and each arm at 60% capacity in T10, the current baseline is **23.9% infrastructure / 76.1% troops**. Might is a progression/status score, not the battle formula.
 - **Alliance/Solo onboarding separation:** wallet-held memecoins are the only cards in the Alliance picker. Solo is a separate Personal Mode path and is stored/displayed as “no alliance,” never as a synthetic alliance or banner.
-- **Local test suite:** `npm run check` runs TypeScript, 74 tests and the production build. Dependency audit is clean (0 vulnerabilities).
+- **Local test suite:** `npm run check` runs TypeScript, 89 tests and the production build. Dependency audit is clean (0 vulnerabilities).
 - **Art-direction exploration (concept only):** three desktop SLG concepts are saved under
   `docs/art/concepts/`. V1 establishes Degen Freeport, V2 broadens the audience with civic life and
   NFT identity, and V3 converts it to a chunkier, more readable chibi 2.5D toy-diorama style.
 - **Playable coordinate World (local Personal Mode):** Town → World → select field/crew/rival → scout/gather/attack → timed outbound/work/return march → troop/resource/casualty settlement. The scalable headless engine is authoritative; a temporary local adapter persists it per wallet until the shared server exists.
 
 ## 🔜 Next up (immediate — for whoever picks this up)
-1. Add force presets (25%/50%/max), recommended counter composition and march-cap explanations to the
+1. Add an Academy pacing/max-output simulator that runs research alongside TH1→30, reports resource contention,
+   completion dates and max city/gathering/march/combat values; tune the v0.8 seed from real play sessions.
+2. Add force presets (25%/50%/max), recommended counter composition and march-cap explanations to the
    visual shell after the engine adapter is stable.
-2. Playtest target density, Wall damage/burn duration and Energy behavior; adjust declared target bands
+3. Playtest target density, Wall damage/burn duration and Energy behavior; adjust declared target bands
    before retuning explicit values when the desired experience changes.
-3. Add resource source/sink breakdown to the pacing simulator, then playtest/tune the full L1→L10 city loop.
-4. Before a real multiplayer alpha: put this authority behind authenticated server commands, server time,
+4. Add resource source/sink breakdown to the pacing simulator, then playtest/tune the full L1→L10 city loop.
+5. Before a real multiplayer alpha: put this authority behind authenticated server commands, server time,
    atomic target locks and durable persistence. LocalStorage remains a test-only adapter.
-5. Art remains independent: lock/revise V3 chibi Degen Freeport and build one vertical slice when mechanics are stable enough.
+6. Art remains independent: lock/revise V3 chibi Degen Freeport and build one vertical slice when mechanics are stable enough.
 
 ## 🩹 Known issues / polish
 - `oldestSeen` (wallet age) reads null for contract addresses; tx-history endpoint shape
@@ -185,6 +274,7 @@ cat /tmp/ruglands-report.json
 - `docs/DIRECTION.md` — vision, structure, rules, tech, roadmap.
 - `docs/naming-bible.md` — feature Keys + concepts + themed names (**build by Key**).
 - `docs/numbers.json` / `docs/NUMBERS.md` — numeric source of truth.
+- `docs/ACADEMY.md` / `docs/RESEARCH-EFFECTS.md` — research tree design and account-runtime wiring matrix.
 - `docs/ART-DIRECTION.md` / `docs/art/concepts/` — visual proposal, constraints and concept images.
 - `src/lib/wallet.ts` — EIP-6963 connect / chain switch / sign.
 - `src/lib/blockscout.ts` — read-only chain records.

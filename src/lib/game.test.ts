@@ -7,9 +7,14 @@ import {
   mightBreakdown,
   maxTroopsForType,
   project,
+  promotionBatchCost,
+  promotionQueueSize,
+  startPromote,
+  startResearch,
   startTrain,
   startUpgrade,
   totalTroops,
+  trainQueueSize,
   troopStats,
 } from "./game";
 import { initGame, migrateGame } from "./gamestore";
@@ -39,9 +44,9 @@ describe("solo game progression", () => {
     game.buildings.keep.lvl = 30;
     const locked = startTrain(game, "army", 2, 10);
     expect(locked.ok).toBe(false);
-    expect(locked.reason).toBe("T2 requires Army Camp Lv.3");
+    expect(locked.reason).toBe("T2 requires Army Camp Lv.4");
 
-    game.buildings.armyCamp.lvl = 3;
+    game.buildings.armyCamp.lvl = 4;
     const training = startTrain(game, "army", 2, 10);
     expect(training.ok).toBe(true);
     expect(training.state.training.army.tier).toBe(2);
@@ -61,6 +66,9 @@ describe("solo game progression", () => {
     delete old.training;
     old.buildings.barracks = { lvl: 7, finishAt: 0 };
     old.train = { type: "navy", qty: 3, per: 9, finishAt: 12345 };
+    old.wounded = 6;
+    delete old.woundedTroops;
+    delete old.healing;
 
     const migrated = migrateGame(old, "0xold");
     expect(migrated.troops.army["1"]).toBe(17);
@@ -71,6 +79,8 @@ describe("solo game progression", () => {
     expect(migrated.buildings.airfield.lvl).toBe(7);
     expect(migrated.training.navy.tier).toBe(1);
     expect(migrated.training.navy.qty).toBe(3);
+    expect(migrated.woundedTroops.army["1"]).toBe(6);
+    expect(migrated.wounded).toBe(6);
     expect(totalTroops(migrated)).toBe(23);
   });
 
@@ -84,6 +94,64 @@ describe("solo game progression", () => {
     expect(navy.ok).toBe(true);
     expect(navy.state.training.army.finishAt).toBeGreaterThan(Date.now());
     expect(navy.state.training.navy.finishAt).toBeGreaterThan(Date.now());
+  });
+
+  it("hard-locks an operating building against upgrades in both directions", () => {
+    const game = richGame();
+    game.buildings.keep.lvl = 30;
+    game.buildings.armyCamp.lvl = 4;
+    game.buildings.academy.lvl = 4;
+
+    const training = startTrain(game, "army", 2, 5);
+    expect(training.ok).toBe(true);
+    expect(startUpgrade(training.state, "armyCamp").reason).toContain("Finish current training");
+
+    const upgradingCamp = structuredClone(game);
+    upgradingCamp.buildings.armyCamp.finishAt = Date.now() + 60_000;
+    expect(startTrain(upgradingCamp, "army", 2, 5).reason).toBe("Army Camp is upgrading");
+
+    const research = startResearch(game, "research.development.rapidConstruction.1");
+    expect(research.ok).toBe(true);
+    expect(startUpgrade(research.state, "academy").reason).toContain("Finish current research");
+
+    const upgradingAcademy = structuredClone(game);
+    upgradingAcademy.buildings.academy.finishAt = Date.now() + 60_000;
+    expect(startResearch(upgradingAcademy, "research.development.rapidConstruction.1").reason).toBe("Research Institute is upgrading");
+  });
+
+  it("promotes existing troops for the Kingshot-style cost/time difference", () => {
+    const game = richGame();
+    game.buildings.keep.lvl = 30;
+    game.buildings.armyCamp.lvl = 30;
+    game.buildings.storage.lvl = 30;
+    game.res = { cash: 1_000_000, oil: 1_000_000, power: 1_000_000 };
+    game.troops.army["9"] = 100;
+    const beforeMight = might(game);
+    const fullT10Cost = troopStats("army", 10)!.cost;
+    const difference = promotionBatchCost("army", 9, 10, 10);
+
+    expect(difference.cash).toBe(((fullT10Cost.cash ?? 0) - (troopStats("army", 9)!.cost.cash ?? 0)) * 10);
+    expect(promotionQueueSize(game, "army", 9, 10)).toBeGreaterThan(209);
+
+    const promoted = startPromote(game, "army", 9, 10, 10);
+    expect(promoted.ok).toBe(true);
+    expect(promoted.state.training.army.mode).toBe("promote");
+    expect(promoted.state.troops.army["9"]).toBe(90);
+    expect(might(promoted.state)).toBeLessThan(beforeMight);
+
+    const finished = project(promoted.state, promoted.state.training.army.finishAt);
+    expect(finished.troops.army["9"]).toBe(90);
+    expect(finished.troops.army["10"]).toBe(10);
+    expect(might(finished) - beforeMight).toBe(10 * 1000 * (troopStats("army", 10)!.power - troopStats("army", 9)!.power));
+  });
+
+  it("uses the Kingshot barracks unlock and batch-capacity ladder", () => {
+    const game = richGame();
+    game.buildings.armyCamp.lvl = 1;
+    expect(trainQueueSize(game, "army")).toBe(17);
+    game.buildings.armyCamp.lvl = 30;
+    expect(trainQueueSize(game, "army")).toBe(209);
+    expect(Array.from({ length: 10 }, (_, index) => troopStats("army", index + 1)!.unlockAtTrainingBuilding)).toEqual([1, 4, 7, 11, 13, 16, 19, 22, 26, 30]);
   });
 
   it("exposes all ten configured troop tiers", () => {

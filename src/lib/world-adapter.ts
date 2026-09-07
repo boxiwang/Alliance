@@ -2,23 +2,25 @@
 // Temporary by design: a server adapter can replace persistence without changing World.tsx actions.
 import type { GameState, TroopKey } from "./game";
 import {
-  RES_ORDER, TROOP_ORDER, capacity, maxTroops, might, project,
+  RES_ORDER, TROOP_ORDER, accountResearchModifiers, capacity, maxTroops, might, project, worldMarchSlots,
+  emptyTroopRoster, troopRosterCount,
 } from "./game";
 import type { DispatchMarchInput, HeadlessWorld, ResourceWallet, SpawnPlayerInput, TroopManifest } from "./world-engine";
 import {
-  advanceHeadlessWorld, dispatchMarch, initHeadlessWorld, populateWorld, spawnPlayers,
+  advanceHeadlessWorld, dispatchMarch, initHeadlessWorld, populateWorld, recallMarch, redistributeWorldTargets, spawnPlayers,
   worldEngineConfig, zoneForPoint,
 } from "./world-engine";
 import { clearWorld as clearLegacyWorld, loadWorld as loadLegacyWorld, projectWorld as projectLegacyWorld } from "./world";
 
 export interface WorldGameSnapshot {
   troops: TroopManifest;
+  woundedTroops: TroopManifest;
   resources: ResourceWallet;
   wounded: number;
 }
 
 export interface LocalWorldSession {
-  version: 1;
+  version: 2;
   address: string;
   playerId: string;
   world: HeadlessWorld;
@@ -46,9 +48,22 @@ function manifest(source: GameState["troops"]): TroopManifest {
   return troops;
 }
 
+function playerResearchModifiers(game: GameState): any {
+  return {
+    marchSpeedBonus: 0,
+    gatherSpeedBonus: 0,
+    troopAttackBonus: 0,
+    troopDefenseBonus: 0,
+    loadBonus: 0,
+    marchCapacityBonus: 0,
+    ...accountResearchModifiers(game),
+  };
+}
+
 export function snapshotWorldGame(game: GameState): WorldGameSnapshot {
   return {
     troops: manifest(game.troops),
+    woundedTroops: manifest(game.woundedTroops),
     resources: { cash: game.res.cash, oil: game.res.oil, power: game.res.power },
     wounded: Math.max(0, game.wounded),
   };
@@ -105,7 +120,7 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
     wallLevel: Math.max(1, game.buildings.wall.lvl),
     hospitalLevel: Math.max(1, game.buildings.hospital.lvl),
     storageLevel: Math.max(1, game.buildings.storage.lvl),
-    might: might(game), troops: game.troops, resources: game.res,
+    might: might(game), troops: game.troops, woundedTroops: game.woundedTroops, resources: game.res,
     protectedFraction: Number(numbers.buildings?.["building.storage"]?.protectedFraction) || .25,
   }], now);
   const configuredNpcCount = Number(numbers.world?.population?.localNpcCities);
@@ -121,10 +136,13 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
     playerCount * (Number(population.monstersPerPlayer) || 0)));
   world = populateWorld(world, resources, monsters, now, numbers);
   const player = world.players[playerId];
+  player.accountModifiers = playerResearchModifiers(game);
+  player.marchSlots = worldMarchSlots(game, numbers);
+  // Store the base capacity; dispatch applies the account modifier snapshot.
   player.marchCapacity = Math.max(0, Math.floor(maxTroops(game)
     * (Number(numbers.global?.march?.capacityFractionOfMaxTroops) || 1)));
   const session: LocalWorldSession = {
-    version: 1, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
+    version: 2, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
   };
   return { session, game, changed: true };
 }
@@ -132,6 +150,15 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
 function applyExternalGameDelta(session: LocalWorldSession, game: GameState): void {
   const player = session.world.players[session.playerId];
   if (!player) throw new Error("Local World player is missing.");
+  if (!player.woundedTroops) {
+    player.woundedTroops = emptyTroopRoster();
+    player.woundedTroops.army["1"] = Math.max(0, player.wounded || 0);
+  }
+  const priorWounded = session.syncedGame.woundedTroops ?? (() => {
+    const roster = emptyTroopRoster();
+    roster.army["1"] = Math.max(0, session.syncedGame.wounded || 0);
+    return roster;
+  })();
   const current = snapshotWorldGame(game);
   TROOP_ORDER.forEach((arm) => {
     for (let tier = 1; tier <= 10; tier += 1) {
@@ -140,11 +167,18 @@ function applyExternalGameDelta(session: LocalWorldSession, game: GameState): vo
       player.troops[arm][key] = Math.max(0, (player.troops[arm][key] ?? 0) + delta);
     }
   });
+  TROOP_ORDER.forEach((arm) => {
+    for (let tier = 1; tier <= 10; tier += 1) {
+      const key = String(tier);
+      const delta = current.woundedTroops[arm][key] - (priorWounded[arm][key] ?? 0);
+      player.woundedTroops[arm][key] = Math.max(0, (player.woundedTroops[arm][key] ?? 0) + delta);
+    }
+  });
   RES_ORDER.forEach((resource) => {
     const delta = current.resources[resource] - session.syncedGame.resources[resource];
     player.resources[resource] = Math.max(0, player.resources[resource] + delta);
   });
-  player.wounded = Math.max(0, player.wounded + current.wounded - session.syncedGame.wounded);
+  player.wounded = troopRosterCount(player.woundedTroops);
 }
 
 function updatePlayerMetadata(session: LocalWorldSession, game: GameState, numbers: any): void {
@@ -158,7 +192,8 @@ function updatePlayerMetadata(session: LocalWorldSession, game: GameState, numbe
   city.might = might(game);
   city.garrison = clone(player.troops);
   city.resources = clone(player.resources);
-  player.marchSlots = Math.max(1, Math.floor(Number(numbers.global?.march?.marchQueueSlots) || 1));
+  player.accountModifiers = playerResearchModifiers(game);
+  player.marchSlots = worldMarchSlots(game, numbers);
   player.marchCapacity = Math.max(0, Math.floor(maxTroops(game)
     * (Number(numbers.global?.march?.capacityFractionOfMaxTroops) || 1)));
 }
@@ -167,9 +202,10 @@ export function applyWorldPlayerToGame(session: LocalWorldSession, sourceGame: G
   const game = clone(sourceGame);
   const player = session.world.players[session.playerId];
   game.troops = manifest(player.troops);
+  game.woundedTroops = manifest(player.woundedTroops);
   const cap = capacity(game);
   RES_ORDER.forEach((resource) => { game.res[resource] = Math.min(cap, Math.max(0, Math.floor(player.resources[resource]))); });
-  game.wounded = Math.max(0, Math.floor(player.wounded));
+  game.wounded = troopRosterCount(game.woundedTroops);
   return game;
 }
 
@@ -210,6 +246,26 @@ export function advanceLocalWorldSession(
   return reconcile(clone(sourceSession), sourceGame, now, numbers);
 }
 
+export function recallLocalWorldMarch(
+  sourceSession: LocalWorldSession,
+  sourceGame: GameState,
+  marchId: string,
+  now = Date.now(),
+  numbers: any,
+): LocalWorldResult {
+  // Recall changes only an already-reserved World force. Do not reconcile an
+  // incoming GameState snapshot here: a click can race React/localStorage by a
+  // frame and make the pre-dispatch roster look like newly trained troops.
+  const session = clone(sourceSession);
+  const before = JSON.stringify(session.world.marches[marchId]);
+  session.world = recallMarch(session.world, marchId, session.playerId, now, numbers);
+  let game = applyWorldPlayerToGame(session, project(sourceGame, now));
+  if (before === JSON.stringify(session.world.marches[marchId])) return { session, game, changed: false, error: "march_not_recallable" };
+  updatePlayerMetadata(session, game, numbers);
+  session.syncedGame = snapshotWorldGame(game);
+  return { session, game, changed: true };
+}
+
 export function finishLocalWorldMarches(
   sourceSession: LocalWorldSession,
   sourceGame: GameState,
@@ -238,7 +294,7 @@ export function loadLocalWorldSession(address: string): LocalWorldSession | null
   try {
     const raw = localStorage.getItem(KEY(address));
     const parsed = raw ? JSON.parse(raw) : null;
-    return parsed?.version === 1 && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
+    return [1, 2].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
   } catch { return null; }
 }
 
@@ -258,7 +314,13 @@ function settleLegacyWorld(address: string, sourceGame: GameState, now: number):
 
 export function openLocalWorldSession(address: string, sourceGame: GameState, now = Date.now(), numbers: any): LocalWorldResult {
   const stored = loadLocalWorldSession(address);
-  if (stored) return reconcile(stored, sourceGame, now, numbers);
+  if (stored) {
+    if ((stored as any).version < 2) {
+      stored.world = redistributeWorldTargets(stored.world, now);
+      stored.version = 2;
+    }
+    return reconcile(stored, sourceGame, now, numbers);
+  }
   const legacy = settleLegacyWorld(address, project(sourceGame, now), now);
   const created = createLocalWorldSession(address, legacy.game, now, numbers);
   if (legacy.migrated) created.session.migratedLegacyAt = now;
@@ -274,8 +336,13 @@ export function clearLocalWorldSession(address: string): void {
 export function localWorldTargetName(world: HeadlessWorld, entityId: string): string {
   const entity = world.entities[entityId];
   if (!entity) return "Unknown target";
-  if (entity.kind === "resource") return `${entity.resource.toUpperCase()} FIELD · L${entity.level}`;
-  if (entity.kind === "monster") return `WASTELAND CREW · L${entity.level}`;
-  if (entity.kind === "city") return entity.ownerId.startsWith("npc.") ? `OUTPOST ${entity.ownerId.slice(4)}` : "PLAYER CITY";
+  if (entity.kind === "resource") return `${entity.resource.toUpperCase()} PLANET · L${entity.level}`;
+  if (entity.kind === "monster") return `ROGUE PLANET · L${entity.level}`;
+  if (entity.kind === "city") {
+    if (!entity.ownerId.startsWith("npc.")) return `${entity.ownerId.slice(0, 6)}…${entity.ownerId.slice(-4)}`;
+    const handles = ["LUNA.ETH", "0xMOGUL", "DEGENLILY", "SATS PILOT", "PIXEL WHALE", "BAGHOLDER", "YIELD WITCH", "MOONCAT", "GAS MAXI", "JEETSLAYER", "CHAIN GHOST", "ALPHA LEAK"];
+    const index = Number(entity.ownerId.slice(4)) || 0;
+    return `${handles[index % handles.length]} · ${String(index).padStart(2, "0")}`;
+  }
   return entity.name;
 }

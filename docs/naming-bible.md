@@ -1,7 +1,7 @@
 # RUGLANDS — Naming Bible (v0.1 draft)
 
-> On-chain meme-war SLG · theme: **Degen Wasteland** (Mad Max × crypto slang)
-> Your wallet is your bunker. Your memecoin is your tribe.
+> On-chain meme-war SLG · theme: **Degen Cosmos** (crypto civilizations × hostile deep space)
+> Your wallet is your civilization. Your memecoin is your banner.
 
 ---
 
@@ -13,7 +13,7 @@
 - Want a feature that isn't here? Add a row at the bottom under **Unfiled** with a plain-English `Concept`; I'll assign it a `Key`.
 - When you're done, send the whole file back and I'll (a) apply it to the clickable prototype and (b) keep this as the source of truth.
 
-**Tone anchor (so future copy stays consistent):** dark comedy, not misery. The player isn't a victim of the rug — they're a hardened survivor who lived through it and now hunts the whales. Voice = degen black humor + wasteland grit. Real crypto slang wherever possible.
+**Tone anchor (so future copy stays consistent):** cosmic ambition with degen black humor, not sterile hard sci-fi. Wallets become civilizations; resources become planets; hostile PvE becomes rogue worlds; the center is a wormhole. Real crypto slang wherever possible. Older wasteland-themed names below are legacy placeholders until the full naming pass; code still follows Key.
 
 ---
 
@@ -188,6 +188,8 @@
 | `spawn.random` | Player spawns at a random map location (not near their faction) | | needs newbie-protection ring |
 | `discovery.same_faction` | Exploring can reveal same-faction members nearby | | |
 | `action.relocate` | Paid relocation to move near others (optional; monetization hook) | | classic SLG teleport |
+| `action.view_coordinates` | Move only the map camera to an X/Y coordinate; never relocates the civilization | **View Coordinates** | free inspection action |
+| `item.warp_engine` | Consumable required to relocate a civilization to another legal coordinate | **Warp Engine** | advanced relocation item; not active in MVP |
 | `group.local_cluster` | Small local squad formed by clustering same-faction players (≠ the global faction) | | proximity = bonus, not a gate |
 
 ## 15 · Three surfaces & alliance war (added v0.2)
@@ -294,7 +296,7 @@ Watchtower = solo-task board. Values live in `numbers.json`. In-city first; worl
 | `building.hospital` | heals wounded troops | | 3 | 30 |
 | `building.embassy` | receives allied reinforcement troops (capacity) | | 5 | 30 |
 | `building.wall` | defense value in raids | | 2 | 30 |
-| `building.academy` | Research Institute — research Troops / Economy(RSS) / Development(storage cap, troop count, build speed…) | | 4 | 30 |
+| `building.academy` | Research Institute — one queue across Development / Economy / Battle; building level gates every research upgrade | | 4 | 30 |
 | `building.watchtower` | issues solo (PvE) tasks/quests | | 3 | 30 |
 | `building.milestone` | Monument — shows server-wide progress + triggers server-wide rewards (display/meta) | | start | — |
 
@@ -305,7 +307,7 @@ Watchtower = solo-task board. Values live in `numbers.json`. In-city first; worl
 | `troop.navy` | Naval force (海军) | |
 | `troop.air` | Air force (空军) | |
 
-*Defined-now / functional-later:* Academy research nodes (tech tree = Phase 2), Embassy reinforcement
+*Defined-now / functional-later:* Embassy reinforcement
 (needs multiplayer), Milestone server backend, Watchtower task content, outside-city world map.
 *(Retired from Phase-1 active use: `building.mine`/`building.farm` → replaced by bank/oilwell/powerplant;
 the single `building.barracks` split into Army Camp / Naval Base / Airfield; `res.build`/`res.food`/`res.fuel` → cash/oil/power.
@@ -351,13 +353,13 @@ visible; "discovery" = scouting a target for intel.
 | Key | Concept (anchor — don't change) | Themed ✏️ | Why / original |
 |---|---|---|---|
 | `sys.expedition` | Send troops (+hero later) to a world target → march time by distance → resolve (scout / gather / combat) → return | | tasks 2+3 engine |
-| `world.rings` | Concentric world: ring 10 = outer edge (newbie spawn), ring 1 = center (the Circle); node/monster level ≈ 11−ring; inner rings open via server progression | | data in `numbers.json → world` |
+| `world.rings` | Concentric sector: ring 10 = outer edge (newbie spawn), ring 1 = center (the Wormhole); planet/rogue level ≈ 11−ring; inner rings open via server progression | | data in `numbers.json → world` |
 | `map.no_fog` | No persistent fog-of-war; map visible, discovery via scouting intel | | genre-standard (RoK/WoS/Last War) |
 | `action.scout` | Scout a target = intel recon (reveal level / garrison / supply), not fog-clearing | | (was §? — reframed) |
 | `map.gather_node` | Leveled outdoor resource nodes 1–10 (data `numbers.json → gatherNodes`); each yields ONE resource; carry = Σ troop.load (+ hero); high difficulty, **Academy research speeds gathering** | | task 3 |
 | `combat.counter` | air > army, army > navy, navy > air; winner arm +10% atk (data `global.combat.counter`) | | |
 | `hero.carry` | Hero carry / expedition-bonus hook (0 until the hero system, task 4) | | |
-| `endgame.circle` | Center = **the Circle**: hold your center position for cumulative time → graduate/teleport to the next map; beaten out of the circle bumps you outward. **Seniority cohort treadmill** — time (not just money) earns a dominance window over newer entrants. Guardrails: an F2P slow-lane always advances (no hard wall); stakes = circle-time/position, never permanent loss; per weight-class realm; anti-bully diminishing rewards push graduation. Phase-2, server-authoritative, sits on `sys.expedition`. | | PUBG-circle × SLG, reframed |
+| `endgame.circle` | Center = **the Wormhole**: hold the surrounding transit zone for cumulative time → unlock passage to the next sector; being beaten out pushes you outward. **Seniority cohort treadmill** — time (not just money) earns a dominance window over newer entrants. Guardrails: an F2P slow-lane always advances (no hard wall); stakes = hold-time/position, never permanent loss; per weight-class realm; anti-bully diminishing rewards push graduation. Phase-2, server-authoritative, sits on `sys.expedition`. | **The Wormhole** | Cosmic reframing of the same locked mechanic; Key intentionally unchanged |
 
 ---
 
@@ -368,7 +370,7 @@ lab got these wrong; the rework below is the source of truth.
 
 | Key | Concept (anchor — don't change) | Themed ✏️ | Why / original |
 |---|---|---|---|
-| `world.coordinate` | World is ONE large **coordinate map**; your city sits at a **random (x,y)** — you are NOT the world center. Camera merely opens on your city; the map **pans + zooms**. The fixed **world center = the Circle** (endgame). Distance-from-center gates tile/monster level (outer = low, inner = high, opens later). Relocate via teleport items (later). | | corrects the player-centric ring lab |
+| `world.coordinate` | World is ONE large **coordinate sector**; your civilization sits at a **random (x,y)** — you are NOT the world center. Camera merely opens centered on your home; the map **pans + zooms**. The fixed **world center = the Wormhole** (endgame). Distance-from-center gates planet/rogue level (outer = low, inner = high, opens later). Relocate via teleport items (later). | | corrects the player-centric ring lab |
 | `nav.town_world` | The outdoor world is entered from the **Town via a "World" button** and returns to the city — part of the game loop, not a standalone page | | point 2 |
 | `troops.account_bound` | Dispatched troops come from your account's **standing army** (trained in Army Camp / Naval Base / Airfield); you can only allocate what you actually have; they're **unavailable until the march returns**; losses/wounded apply on return | | point 4 |
 | `sys.march_queue` | Limited **simultaneous marches** (`numbers.global.march.marchQueueSlots`); a scout march also consumes a slot | | RoK march queue |
