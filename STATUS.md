@@ -5,7 +5,7 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-08 · **by:** Codex (City/Star Map product-console pass)
+**Last updated:** 2026-09-08 · **by:** Codex (City operations/research clarity pass)
 **Current focus:** Personal-city progression and the local World loop are playable and measurable together. Next is tuning the L1→10 account experience from the new ledger, then hardening shared-world/server authority before alliance layers.
 
 ### ✦ Product-console visual/interaction pass (Codex)
@@ -36,8 +36,14 @@ for the *why*; this file is the *where we are right now*.
 - Wallet identity now generates a compact civilization sigil, and City gives the player's live **Civilization Core**
   its own command landmark. The right inspector defaults to placeholder **Daily Tasks**, with a second **Signals**
   tab assembled from real build, training, research, fleet and wounded state.
-- City gained a real two-slot **Build Queue** fed by active building timers. Idle, building name, target level,
-  remaining time and progress update from saved game state rather than mock data.
+- City's former Build Queue is now one **Operations Queue** for the whole account: two real build slots,
+  independent Army/Navy/Air training slots, Research, Medical and Rally. Every implemented system reads its
+  persisted live timer, target, quantity and progress; Rally stays an honest available/empty slot until its
+  server-backed engine lands rather than presenting a fake countdown.
+- Research details now name the exact affected account system (for example all building timers, Army attack,
+  Cash gathering or three-service training capacity) and separate the currently active bonus from the selected
+  level's bonus. The dependency-tree cards were reduced to technology name, Institute gate and level state;
+  duplicated effect values remain only in the dedicated details surface.
 - Building and Resource Network cards now show only identity, level/production and a compact status such as
   `READY`, `NEEDS RESOURCES`, `BUILDERS BUSY` or the relevant TH lock. Selecting any unlocked building opens
   its real upgrade surface in the right inspector.
@@ -47,8 +53,8 @@ for the *why*; this file is the *where we are right now*.
 - Star Map copy was reduced to control/data language: shorter map status and coordinate controls, compact intel,
   facts, fleet, saved-signal and report labels, and a minimal empty state. Mission results remain verbose enough
   to explain outcomes.
-- Browser-verified City default, Townhall detail/upgrade, live Build Queue and Star Map target panel. Full repo
-  check: **105 tests + TypeScript + production build green**.
+- Browser-verified City default, Townhall detail/upgrade, all eight operation slots, compact Research tree/detail
+  and Star Map target panel. Full repo check: **107 tests + TypeScript + production build green**.
 
 ### 🧭 Personal-mode navigation/UI mockup (Codex)
 - Product name is now **ALLIANCE** in the app chrome, page title, Balance Lab and naming sources. Existing

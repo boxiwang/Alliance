@@ -185,7 +185,7 @@ export function researchBlockReason(state: ResearchStateLike, techKey: string): 
   const next = current + 1;
   const row = researchLevelRow(techKey, next);
   if (!row) return "Missing research level data";
-  if (state.buildings.academy.lvl < row.academyLevel) return `Academy Lv.${row.academyLevel} required`;
+  if (state.buildings.academy.lvl < row.academyLevel) return `Research Institute Lv.${row.academyLevel} required`;
   const missing = missingResearchRequirements(state, techKey);
   if (missing.length) {
     const requirement = researchTech(missing[0].tech);
