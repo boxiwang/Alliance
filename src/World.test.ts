@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import defaults from "../docs/numbers.json";
-import { clusterWorldSignals, gatherCarryWithAccount, marchMapProgress, recommendedGatherForce } from "./World";
+import { clusterWorldSignals, gatherCarryWithAccount, marchMapProgress, recommendedGatherForce, resourceOccupationDisposition } from "./World";
 import type { MonsterEntity, ResourceEntity } from "./lib/world-engine";
 
 describe("World strategic signal clusters", () => {
@@ -38,6 +38,26 @@ describe("World gather recommendation", () => {
     const troops = { army: { "1": 10 }, navy: {}, air: {} } as any;
     const base = gatherCarryWithAccount(troops, {}, defaults);
     expect(gatherCarryWithAccount(troops, { loadBonus: .5 }, defaults)).toBeCloseTo(base * 1.5);
+  });
+});
+
+describe("World resource occupation display", () => {
+  const resource = (state: ResourceEntity["state"], marchId: string | null): ResourceEntity => ({
+    id: "r1", kind: "resource", position: { x: 8, y: 8 }, zone: 1, spawnedAt: 0, revision: 0,
+    state, resource: "cash", level: 4, amount: 100, capacity: 100,
+    occupiedByMarchId: marchId, respawnAt: 0,
+  });
+  const players = {
+    me: { id: "me", allianceId: "meme-a" },
+    ally: { id: "ally", allianceId: "meme-a" },
+    rival: { id: "rival", allianceId: "meme-b" },
+  };
+
+  it("separates neutral, own, allied and rival harvest fleets", () => {
+    expect(resourceOccupationDisposition(resource("available", null), {}, players, "me", "meme-a")).toBe("neutral");
+    expect(resourceOccupationDisposition(resource("occupied", "m1"), { m1: { playerId: "me" } }, players, "me", "meme-a")).toBe("self");
+    expect(resourceOccupationDisposition(resource("occupied", "m2"), { m2: { playerId: "ally" } }, players, "me", "meme-a")).toBe("ally");
+    expect(resourceOccupationDisposition(resource("occupied", "m3"), { m3: { playerId: "rival" } }, players, "me", "meme-a")).toBe("enemy");
   });
 });
 

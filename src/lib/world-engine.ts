@@ -185,6 +185,8 @@ export type WorldEntity = CityEntity | ResourceEntity | MonsterEntity | PoiEntit
 
 export interface HeadlessPlayer {
   id: string;
+  /** Wallet-selected meme alliance CA. Optional while legacy local saves migrate. */
+  allianceId?: string | null;
   cityId: string;
   joinedAt: number;
   spawnIndex: number;
@@ -283,6 +285,7 @@ export interface HeadlessWorld {
 
 export interface SpawnPlayerInput {
   id: string;
+  allianceId?: string | null;
   townhallLevel?: number;
   might?: number;
   troops?: Partial<TroopManifest>;
@@ -460,7 +463,7 @@ function spawnPlayerMutable(world: HeadlessWorld, input: SpawnPlayerInput, now: 
   };
   world.entities[cityId] = city;
   world.players[input.id] = {
-    id: input.id, cityId, joinedAt: now, spawnIndex, troops, wounded: troopCount(woundedTroops), woundedTroops, dead: 0,
+    id: input.id, allianceId: input.allianceId ?? null, cityId, joinedAt: now, spawnIndex, troops, wounded: troopCount(woundedTroops), woundedTroops, dead: 0,
     resources, energyStored: world.config.energyCap, energyUpdatedAt: now,
     highestMonsterDefeated: 0, marchSlots: world.config.marchSlots,
     marchCapacity: world.config.marchCapacity, accountModifiers: modifiers(), reportIds: [],

@@ -13,8 +13,16 @@ for the *why*; this file is the *where we are right now*.
   starfield live in the **page backdrop**, outside the draggable/zoomable SVG map, so camera movement never moves
   or scales the background effect. The Wormhole remains a separate actionable landmark inside map coordinates.
 - Field zoom renders Cash/Oil/Power as small shaded planets with rings; Tactical zoom switches resources and rogues
-  to 💰/⛽/⚡/💀 instead of letter markers. The right console now defaults to live nearest signals and real sensor
-  events, opens the existing target/dispatch controls on selection, and returns to signals through an explicit close.
+  to larger planet bodies with centered 💰/⛽/⚡/💀 and a compact numeric level badge instead of letter markers.
+  Tactical names/status/ETA stay in the click-through inspector rather than overlaying the map, keeping it readable
+  like a native SLG; selection is communicated by the lock ring instead of another text label.
+- Resource occupancy has a live visual protocol based on the occupying march: blue ring/pip for the player's fleet,
+  green for the same meme alliance CA and red for a rival alliance. Player alliance identity is carried in the World
+  model now; legacy saves remain compatible while server/NPC alliance data can populate the same field later.
+- Fleet movement uses a larger directional triangle cursor rather than a tiny rocket emoji. It rotates from the actual
+  outbound/return heading, retains route/ETA feedback and changes to the combat color for hostile marches.
+- The right console now defaults to live nearest signals and real sensor events, opens the existing target/dispatch
+  controls on selection, and returns to signals through an explicit close.
 - City now renders a deterministic, randomly distributed Canvas starfield instead of tiled CSS dots: three depth
   bands drift at different speeds, bright stars breathe subtly, and a slow blue-violet nebula supplies spatial
   movement without image assets or runtime requests. Reduced-motion clients receive a static frame.

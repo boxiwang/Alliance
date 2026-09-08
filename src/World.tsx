@@ -24,6 +24,7 @@ import CosmicBackdrop from "./CosmicBackdrop";
 type SelectableEntity = ResourceEntity | MonsterEntity | CityEntity;
 type WorldLayer = "resource" | "monster" | "city";
 type ResultNotice = { title: string; detail: string; good: boolean };
+export type ResourceOccupationDisposition = "neutral" | "self" | "ally" | "enemy";
 
 const KIND_META = {
   resource: { color: "#43f2a1", icon: "●", label: "Resource planet" },
@@ -58,23 +59,44 @@ function entitySignalIcon(entity: SelectableEntity): string {
   return entity.kind === "resource" ? RESOURCE_EMOJI[entity.resource] : entity.kind === "monster" ? "💀" : "◈";
 }
 
-function WorldEntityGlyph({ entity, detailZoom }: { entity: SelectableEntity; detailZoom: boolean }) {
+export function resourceOccupationDisposition(
+  entity: ResourceEntity,
+  marches: Record<string, Pick<HeadlessMarch, "playerId">>,
+  players: Record<string, { id: string; allianceId?: string | null }>,
+  viewerId: string,
+  viewerAllianceId: string | null,
+): ResourceOccupationDisposition {
+  if (entity.state !== "occupied" || !entity.occupiedByMarchId) return "neutral";
+  const occupierId = marches[entity.occupiedByMarchId]?.playerId;
+  if (!occupierId) return "enemy";
+  if (occupierId === viewerId) return "self";
+  const occupierAlliance = players[occupierId]?.allianceId;
+  return viewerAllianceId && occupierAlliance === viewerAllianceId ? "ally" : "enemy";
+}
+
+function WorldLevelBadge({ x, y, level }: { x: number; y: number; level: number }) {
+  return <g className="world-level-badge"><circle cx={x + 6.5} cy={y + 6.2} r="3.25" /><text x={x + 6.5} y={y + 7.25}>{level}</text></g>;
+}
+
+function WorldEntityGlyph({ entity, detailZoom, occupation }: { entity: SelectableEntity; detailZoom: boolean; occupation: ResourceOccupationDisposition }) {
   const x = entity.position.x;
   const y = entity.position.y;
   const color = entityColor(entity);
-  if (detailZoom && entity.kind !== "city") {
-    return <text x={x} y={y + 3.4} className="world-target-emoji">{entity.kind === "monster" ? "💀" : RESOURCE_EMOJI[entity.resource]}</text>;
-  }
   if (entity.kind === "resource") {
-    return <g className={`world-planet-glyph ${entity.resource}`}>
-      <circle cx={x} cy={y} r="3.8" fill={RESOURCE_GRADIENT[entity.resource]} />
-      <ellipse cx={x} cy={y} rx="5" ry="1.45" transform={`rotate(-18 ${x} ${y})`} fill="none" stroke={color} strokeWidth=".55" opacity=".68" />
-      <circle cx={x - 1.1} cy={y - 1.2} r=".72" fill="#f3fdff" opacity=".72" />
+    const radius = detailZoom ? 7.2 : 4.2;
+    return <g className={`world-planet-glyph ${entity.resource} ${detailZoom ? "tactical" : "field"}`}>
+      {occupation !== "neutral" && <><circle cx={x} cy={y} r={radius + 2.15} className="world-occupation-ring" /><circle cx={x + radius * .82} cy={y - radius * .72} r="1.45" className="world-occupation-pip" /></>}
+      <circle cx={x} cy={y} r={radius} fill={RESOURCE_GRADIENT[entity.resource]} />
+      <ellipse cx={x} cy={y} rx={radius * 1.22} ry={radius * .35} transform={`rotate(-18 ${x} ${y})`} fill="none" stroke={color} strokeWidth=".55" opacity=".68" />
+      <circle cx={x - radius * .3} cy={y - radius * .32} r={radius * .18} fill="#f3fdff" opacity=".68" />
+      {detailZoom && <text x={x} y={y + 2.35} className="world-planet-emoji">{RESOURCE_EMOJI[entity.resource]}</text>}
+      {detailZoom && <WorldLevelBadge x={x} y={y} level={entity.level} />}
     </g>;
   }
   if (entity.kind === "city") {
-    return <polygon points={`${x},${y - 4.1} ${x + 3.6},${y - 2} ${x + 3.6},${y + 2} ${x},${y + 4.1} ${x - 3.6},${y + 2} ${x - 3.6},${y - 2}`} fill={color} />;
+    return <g><polygon points={`${x},${y - 4.1} ${x + 3.6},${y - 2} ${x + 3.6},${y + 2} ${x},${y + 4.1} ${x - 3.6},${y + 2} ${x - 3.6},${y - 2}`} fill={color} />{detailZoom && <WorldLevelBadge x={x} y={y} level={entity.townhallLevel} />}</g>;
   }
+  if (detailZoom) return <g className="world-rogue-glyph"><circle cx={x} cy={y} r="7.2" /><ellipse cx={x} cy={y} rx="8.5" ry="2.4" transform={`rotate(16 ${x} ${y})`} /><text x={x} y={y + 2.4}>💀</text><WorldLevelBadge x={x} y={y} level={entity.level} /></g>;
   return <path d={`M ${x} ${y - 4.2} L ${x + 4} ${y + 3.4} H ${x - 4} Z`} fill={color} />;
 }
 
@@ -208,13 +230,14 @@ export default function World({ address, profile, onBack }: { address: string; p
   useEffect(() => {
     if (localGmRequested()) grantLocalGm(address);
     const opened = openLocalWorldSession(address, loadGame(address) || initGame(address), Date.now(), N);
+    opened.session.world.players[opened.session.playerId].allianceId = profile.faction;
     setGame(opened.game); gameRef.current = opened.game; setSession(opened.session); sessionRef.current = opened.session;
     const city = opened.session.world.entities[opened.session.world.players[opened.session.playerId].cityId] as CityEntity;
     setCamera({ ...city.position }); saveGame(opened.game); saveLocalWorldSession(opened.session);
     setBookmarks(loadBookmarks(address));
     seenReportCount.current = opened.session.world.players[opened.session.playerId].reportIds.length;
     if (opened.session.migratedLegacyAt) setMessage("Old World marches were safely settled and migrated.");
-  }, [address, N]);
+  }, [address, N, profile.faction]);
   useEffect(() => {
     const timer = window.setInterval(() => {
       const tick = Date.now(); setNow(tick);
@@ -296,6 +319,9 @@ export default function World({ address, profile, onBack }: { address: string; p
   const selectedScoutReport = selected ? player.reportIds.slice().reverse().map((id) => world.reports[id]).find((report) => report?.targetId === selected.id && report.action === "scout" && report.outcome === "scouted") : undefined;
   const selectedScoutSnapshot = (selectedScoutReport?.payload.snapshot ?? {}) as Record<string, number>;
   const selectedVerified = !!selected && (selected.kind === "resource" || scoutedTargetIds.has(selected.id));
+  const selectedOccupation = selected?.kind === "resource"
+    ? resourceOccupationDisposition(selected, world.marches, world.players, session.playerId, profile.faction)
+    : "neutral";
   const zoomLabel = strategicZoom ? "STRATEGIC" : detailZoom ? "TACTICAL" : "FIELD";
 
   function commit(result: ReturnType<typeof advanceLocalWorldSession>) {
@@ -437,14 +463,13 @@ export default function World({ address, profile, onBack }: { address: string; p
           </g>)}
           {filteredTargets.filter((entity) => !strategicZoom && (entity.kind !== "city" || playerSearchZoom)).map((entity) => {
             const color = entityColor(entity); const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id; const verified = entity.kind === "resource" || scoutedTargetIds.has(entity.id);
-            return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setSelection(emptySelection()); setMessage(""); setTileMark(null); }}>
+            const occupation = entity.kind === "resource" ? resourceOccupationDisposition(entity, world.marches, world.players, session.playerId, profile.faction) : "neutral";
+            return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setSelection(emptySelection()); setMessage(""); setTileMark(null); }}>
               {selectedTarget && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
               <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />
-              <WorldEntityGlyph entity={entity} detailZoom={detailZoom} />
+              <WorldEntityGlyph entity={entity} detailZoom={detailZoom} occupation={occupation} />
               {verified && entity.kind !== "resource" && <circle cx={entity.position.x + 4.5} cy={entity.position.y - 4.5} r="1.2" className="world-verified-dot" />}
               {bookmarks.includes(entity.id) && <text x={entity.position.x + 7} y={entity.position.y - 6} className="world-bookmark-star">★</text>}
-              {(selectedTarget || detailZoom) && <text x={entity.position.x} y={entity.position.y - 8} className="world-target-name">{localWorldTargetName(world, entity.id)}</text>}
-              {(selectedTarget || detailZoom) && <text x={entity.position.x} y={entity.position.y + 8} className="world-target-level">L{entityLevel(entity)} · {entityState(entity)} · ETA {fmtDuration(travelSecondsTo(entity.position))}</text>}
             </g>;
           })}
           <g className="world-city" transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`} onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera({ ...playerCity.position })}>
@@ -486,7 +511,7 @@ export default function World({ address, profile, onBack }: { address: string; p
           <div className="world-target-toolbar"><div className={`world-intel-ribbon ${selectedVerified ? "verified" : "public"}`}><span>{selected.kind === "resource" ? "LIVE" : selectedVerified ? "SCANNED" : "PUBLIC"}</span></div><div className="world-target-actions"><button className={bookmarks.includes(selected.id) ? "saved" : ""} onClick={() => toggleBookmark(selected.id)}>{bookmarks.includes(selected.id) ? "★ SAVED" : "☆ SAVE"}</button></div></div>
           <div className="world-target-head"><span style={{ color: entityColor(selected) }}>{KIND_META[selected.kind].icon}</span><div><small>{KIND_META[selected.kind].label}</small><b>{localWorldTargetName(world, selected.id)}</b></div><em>L{entityLevel(selected)}</em></div>
           <div className="world-facts"><span>COORDS <b>{Math.round(selected.position.x).toString().padStart(3, "0")}:{Math.round(selected.position.y).toString().padStart(3, "0")}</b></span><span>DISTANCE <b>{distance(playerCity.position, selected.position).toFixed(1)} LU</b></span><span>ETA <b>{fmtDuration(oneWay)}</b></span>
-            {selected.kind === "resource" && <><span>ASSET <b style={{ color: RESOURCE_COLORS[selected.resource] }}>{RES[selected.resource].label}</b></span><span>AVAILABLE <b className={activeGatherOnSelected ? "world-liquidity-draining" : ""}>{compact(displayResource(liveSelectedAmount))}</b></span></>}
+            {selected.kind === "resource" && <><span>ASSET <b style={{ color: RESOURCE_COLORS[selected.resource] }}>{RES[selected.resource].label}</b></span><span>AVAILABLE <b className={activeGatherOnSelected ? "world-liquidity-draining" : ""}>{compact(displayResource(liveSelectedAmount))}</b></span>{selectedOccupation !== "neutral" && <span>OCCUPIED <b className={`world-occupation-copy ${selectedOccupation}`}>{selectedOccupation === "self" ? "YOUR FLEET" : selectedOccupation === "ally" ? "ALLIED FLEET" : "RIVAL FLEET"}</b></span>}</>}
             {selected.kind === "monster" && <><span>POWER <b>{selectedVerified ? compact(selected.power) : "ENCRYPTED"}</b></span><span>TYPE <b>{selectedVerified ? TROOPS_META[selected.dominantArm].label : "UNKNOWN"}</b></span></>}
             {selected.kind === "city" && <><span>SHIELD <b>{cityShielded(selected, now, N) ? "ACTIVE" : "OPEN"}</b></span><span>WALL <b>{selectedVerified ? `${selected.wall.value}/${selected.wall.max}` : "ENCRYPTED"}</b></span><span>GARRISON <b>{selectedVerified ? compact(displayTroops(selectedScoutSnapshot.garrison ?? 0)) : "ENCRYPTED"}</b></span><span>LOOT <b>{selectedVerified ? compact(displayResource(selectedScoutSnapshot.estimatedLoot ?? 0)) : "ENCRYPTED"}</b></span></>}
           </div>
@@ -521,7 +546,7 @@ function MarchLine({ march, now, zoom }: { march: HeadlessMarch; now: number; zo
   const heading = march.state === "returning"
     ? Math.atan2(march.origin.y - march.destination.y, march.origin.x - march.destination.x)
     : Math.atan2(march.destination.y - march.origin.y, march.destination.x - march.origin.x);
-  const rocketDeg = heading * 180 / Math.PI + 45; // 🚀 glyph nominally points up-right (~-45°)
+  const cursorDeg = heading * 180 / Math.PI + 90; // Cursor geometry points north before rotation.
   const eta = fmtDuration(marchRemainingSec(march, now));
-  return <g className={`world-march-line ${march.action} state-${march.state}`}><line x1={march.origin.x} y1={march.origin.y} x2={march.destination.x} y2={march.destination.y} /><g transform={`translate(${x} ${y}) scale(${1 / zoom}) translate(${-x} ${-y})`}><circle cx={x} cy={y} r="4.6" className="world-march-pulse" /><text x={x} y={y} className="world-march-rocket" transform={`rotate(${rocketDeg} ${x} ${y})`}>🚀</text><text x={x} y={y - 6.5} className="world-march-eta">{eta}</text></g></g>;
+  return <g className={`world-march-line ${march.action} state-${march.state}`}><line x1={march.origin.x} y1={march.origin.y} x2={march.destination.x} y2={march.destination.y} /><g transform={`translate(${x} ${y}) scale(${1 / zoom}) translate(${-x} ${-y})`}><circle cx={x} cy={y} r="8.4" className="world-march-pulse" /><g className="world-march-cursor" transform={`rotate(${cursorDeg} ${x} ${y})`}><path d={`M ${x} ${y - 8.5} L ${x + 5.8} ${y + 6} L ${x} ${y + 3.2} L ${x - 5.8} ${y + 6} Z`} /><path d={`M ${x} ${y - 4.9} L ${x + 2.2} ${y + 2.4} L ${x} ${y + 1.05} L ${x - 2.2} ${y + 2.4} Z`} className="world-march-cursor-core" /></g><text x={x} y={y - 11.5} className="world-march-eta">{eta}</text></g></g>;
 }
