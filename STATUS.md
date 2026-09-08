@@ -5,13 +5,28 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-08 · **by:** Codex (Star Map radial-geography pass)
-**Current focus:** Personal-city progression and the local World loop are playable and measurable together. Next is tuning the L1→10 account experience from the new ledger, then hardening shared-world/server authority before alliance layers.
+**Last updated:** 2026-09-08 · **by:** Codex (Star Map identity, load and rogue-combat pass)
+**Current focus:** Personal-city progression and the local World loop are playable and measurable together. Immediate work is fresh-player rogue guidance plus visible L1→L5/gathering playtests; then tune the full L1→10 account before server authority and alliance layers. Short handoff: `HANDOFF.md`.
+
+### ⚔ Star Map player identity + load/PvE closure (Codex)
+- Rival test civilizations now read like players, not map resources: tactical view shows a Kingshot-shaped
+  circular **city-level number + player-name plaque**, with no `TH` prefix. The player's own live profile name and
+  Command Core level use the same visual grammar. Local NPCs are deterministically spread across levels 1–30;
+  browser-local World sessions migrate once without resetting the player's City.
+- Gathering is now **load-authoritative**. Army/Navy/Air tiers retain distinct `load` values; `AUTO MIN` and row
+  `FILL MAX` stop at the smallest useful troop set for the planet's remaining supply and march headcount. The
+  engine rejects only genuinely removable excess troops and no longer scales harvest by a legacy crew fraction.
+- Rogue planets now have explicit **L1–30** rows: six levels per radial zone, rising toward the Wormhole. Each level
+  targets a 57% reference win at the matching Command Core level. Prepared wins have small but real casualties;
+  casualties enter the Medical Bay first and overflow becomes permanent deaths.
+- Rogue power is public; scanning reveals counter identity. Selecting troops shows an estimated
+  `VICTORY/DEFEAT + wounded/dead`, while arrival/return reports remain authoritative. Admin World exposes all 30 rows.
+- `numbers.json` schema is **v0.9**; v0.8 local Balance Lab overrides preserve unrelated tuning during migration.
 
 ### ✦ Product-console visual/interaction pass (Codex)
 - Star Map geography no longer manufactures resource/rogue halos around each city. Targets are distributed
   across the full legal map, and both initial spawn and respawn recalculate difficulty from radial geography:
-  outer zone L1–2, then +2 levels per inward zone toward the Wormhole. Existing local v1/v2 sessions migrate
+  resources use L1–2 then +2 per inward zone; rogues use L1–6 then +6 per zone toward the Wormhole. Existing local sessions migrate
   once to this rule without touching active marches or Town progression.
 - Tactical planets now use integrated SVG surface emblems (coin stack, fuel drop, energy bolt and rogue skull)
   plus subtle contouring instead of an emoji pasted over the sphere. Empty-tile coordinate labels stay at a
@@ -139,10 +154,9 @@ for the *why*; this file is the *where we are right now*.
   resetting Town progress or changing active march destinations.
 - Mature-State density is now **3 resource planets + 1 rogue per civilization** (young-State floors remain
   240/120). Resource rounds rotate Cash/Oil/Power so a complete local cycle cannot randomly omit one economy.
-- All selectable targets show research-adjusted one-way march ETA. Resource levels now define an explicit
-  recommended crew and hard headcount cap; `AUTO ASSIGN` fills up to the player's available/capacity limit.
-  Undersized high-load fleets can only harvest a proportional share, and nodes below 25% retire after the
-  fleet withdraws before returning through the timed respawn loop. Admin exposes both crew and threshold.
+- All selectable targets show research-adjusted one-way march ETA. Resource dispatch derives the minimum useful
+  fleet from per-tier carry capacity; `AUTO MIN` never adds troops whose load would be wasted. Nodes below 25%
+  retire after the fleet withdraws before returning through the timed respawn loop.
 - Removed the rotating Wormhole ellipse; only the star layer rotates very slowly (420s) for depth.
 - Fixed a React Strict Mode authority bug found during browser testing: persistence side effects no longer run
   inside a repeated state updater, so recalled fleets cannot duplicate. Covered GM-fill→dispatch→recall paths.
@@ -277,7 +291,7 @@ The 5 corrections:
 - All headless World knobs now live in `docs/numbers.json`: State size, population, lifecycle, Energy,
   city integrity/damage, monster levels/power/rewards/counter identities and balance targets. Existing
   browser-local v0.6 Admin overrides migrate to v0.7 without losing edited values.
-- Admin gained a human-readable **World** page with grouped settings, editable L1–10 monster rows and
+- Admin gained a human-readable **World** page with grouped settings, now expanded to editable L1–30 rogue rows and
   live scenario results. Browser-tested: deliberately breaking L1 power raised warnings immediately;
   Undo restored a clean report; no console errors.
 - **UI adapter complete:** `src/lib/world-adapter.ts` is now the sole browser-local bridge between
@@ -343,16 +357,18 @@ The 5 corrections:
 - **Playable coordinate World (local Personal Mode):** Town → World → select field/crew/rival → scout/gather/attack → timed outbound/work/return march → troop/resource/casualty settlement. The scalable headless engine is authoritative; a temporary local adapter persists it per wallet until the shared server exists.
 
 ## 🔜 Next up (immediate — for whoever picks this up)
-1. Use the integrated simulator plus manual fresh-account sessions to tune the **L1→10 playable loop**:
-   decide whether 4–5 days for a balanced account is correct, then address early training starvation and
-   late Warehouse overflow without destroying Cash's intended role as the primary pinch.
-2. Add force presets (25%/50%/max), recommended counter composition and clearer march-cap explanations to the
-   visual shell after the engine adapter is stable.
-3. Playtest target density, Wall damage/burn duration and Energy behavior; adjust declared target bands
-   before retuning explicit values when the desired experience changes.
-4. Before a real multiplayer alpha: put this authority behind authenticated server commands, server time,
-   atomic target locks and durable persistence. LocalStorage remains a test-only adapter.
-5. Art remains independent: lock/revise V3 chibi Degen Freeport and build one vertical slice when mechanics are stable enough.
+1. Finish fresh-player rogue guidance: show the sequential unlock requirement, disable impossible dispatches
+   and add a **find next rogue** action so L1 is discoverable without manually searching the full map.
+2. Browser-playtest L1→L5 rogues plus one complete gather/return cycle, including Energy, Medical Bay overflow,
+   reports, rewards and target respawn. Unit coverage exists; this step validates the visible player loop.
+3. Add one recommended counter composition action plus optional 25%/50%/useful-max presets; keep the existing
+   engine combat and per-tier load rules authoritative.
+4. Tune the **L1→10 playable account** with fresh sessions and the integrated simulator: decide whether 4–5
+   balanced days is correct, then address early training starvation, Cash pressure and late Warehouse overflow.
+5. Playtest target density/travel, L1 availability, city raid damage/burn and Energy cadence. Change declared
+   target bands before retuning explicit rows.
+6. Before a real multiplayer alpha, put World authority behind authenticated server commands, server time,
+   atomic target locks and durable persistence. Then replace NPCs with real players; alliance systems come after.
 
 ## 🩹 Known issues / polish
 - `oldestSeen` (wallet age) reads null for contract addresses; tx-history endpoint shape

@@ -67,11 +67,11 @@ The first deterministic balance pass is recorded in `docs/WORLD-BALANCE.md`. Run
 - City: `normal/shielded → breached → burning → normal` (relocate when Wall reaches zero)
 - March: `outbound → gathering/fighting → returning → completed`, with recall support
 
-Resource planets expose an explicit recommended crew per level. It is also a server-authoritative
-headcount cap: players may mix Army, Navy and Air up to that total, while undersized crews can only
-reserve a proportional share regardless of raw carry load. After the occupying fleet withdraws,
-nodes below 25% remaining retire and enter the normal respawn loop. L2 is calibrated to a 1,000-unit
-internal crew in `numbers.json`; presentation denomination remains controlled separately.
+Resource planets expose remaining supply, not an arbitrary recommended headcount. March capacity is the
+server-authoritative troop-count cap; useful gathering force is the smallest mix whose actual per-tier load
+can carry the remaining supply. Higher-load troops need fewer bodies. The engine accepts unavoidable one-unit
+overage caused by discrete troop load but rejects a force if any selected troop could be removed while retaining
+enough capacity. After the fleet withdraws, nodes below 25% remaining retire and enter the normal respawn loop.
 
 ## Hero compatibility (locked before hero implementation)
 

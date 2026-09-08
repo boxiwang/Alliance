@@ -25,13 +25,20 @@ describe("World strategic signal clusters", () => {
 });
 
 describe("World gather recommendation", () => {
-  it("fills the requested crew without exceeding available troops", () => {
+  it("stops at the minimum load needed instead of filling every available troop", () => {
     const force = recommendedGatherForce({
       army: { "1": 400 }, navy: { "2": 300 }, air: { "3": 500 },
-    } as any, 1000);
+    } as any, 1000, 1000, defaults);
     const total = Object.values(force).flatMap((tiers) => Object.values(tiers)).reduce((sum, qty) => sum + qty, 0);
-    expect(total).toBe(1000);
-    expect(force.air["3"]).toBe(500);
+    expect(total).toBeLessThan(1200);
+    expect(gatherCarryWithAccount(force, {}, defaults)).toBeGreaterThanOrEqual(1000);
+    expect(force.army["1"]).toBe(84);
+  });
+
+  it("uses fewer high-tier troops when their per-unit load is higher", () => {
+    const low = recommendedGatherForce({ army: { "1": 1000 }, navy: {}, air: {} } as any, 1000, 1000, defaults);
+    const high = recommendedGatherForce({ army: { "10": 1000 }, navy: {}, air: {} } as any, 1000, 1000, defaults);
+    expect(low.army["1"]).toBeGreaterThan(high.army["10"]);
   });
 
   it("includes the player's researched load bonus in the estimated haul", () => {

@@ -170,20 +170,21 @@ export function validateNumbers(numbers: any): ValidationIssue[] {
       push("error", `world.lifecycle.${field}`, `${field} must be greater than zero.`);
     }
   }
-  for (let level = 1; level <= 10; level += 1) {
+  for (let level = 1; level <= 30; level += 1) {
     const monster = numbers.world?.monsters?.levels?.[String(level)];
-    const node = numbers.gatherNodes?.levels?.[String(level)];
     if (!monster) push("error", `world.monsters.levels.${level}`, "Missing explicit monster level row.");
     else {
       if (!finiteNonNegative(monster.power) || monster.power <= 0) push("error", `world.monsters.levels.${level}.power`, "Monster power must be greater than zero.");
       if (!Number.isInteger(monster.expectedTownhall) || monster.expectedTownhall < 1 || monster.expectedTownhall > maxLevel) push("error", `world.monsters.levels.${level}.expectedTownhall`, "Expected Townhall must be inside the progression range.");
       if (!["army", "navy", "air"].includes(monster.dominantArm)) push("error", `world.monsters.levels.${level}.dominantArm`, "Dominant arm must be army, navy or air.");
     }
+  }
+  for (let level = 1; level <= 10; level += 1) {
+    const node = numbers.gatherNodes?.levels?.[String(level)];
     if (!node) push("error", `gatherNodes.levels.${level}`, "Missing explicit gathering level row.");
     else {
       if (!finiteNonNegative(node.totalSupply) || node.totalSupply <= 0) push("error", `gatherNodes.levels.${level}.totalSupply`, "Node supply must be greater than zero.");
       if (!finiteNonNegative(node.gatherRatePerHour) || node.gatherRatePerHour <= 0) push("error", `gatherNodes.levels.${level}.gatherRatePerHour`, "Gathering rate must be greater than zero.");
-      if (!Number.isInteger(node.recommendedTroops) || node.recommendedTroops <= 0) push("error", `gatherNodes.levels.${level}.recommendedTroops`, "Recommended troop crew must be a positive integer.");
     }
   }
   if (!finiteNonNegative(numbers.gatherNodes?.retireBelowFraction) || numbers.gatherNodes.retireBelowFraction > 1) {

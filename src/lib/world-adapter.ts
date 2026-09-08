@@ -20,7 +20,7 @@ export interface WorldGameSnapshot {
 }
 
 export interface LocalWorldSession {
-  version: 3;
+  version: 4;
   address: string;
   playerId: string;
   world: HeadlessWorld;
@@ -81,8 +81,9 @@ function troopTierAt(numbers: any, townhall: number): number {
 function npcInput(index: number, world: HeadlessWorld, numbers: any): SpawnPlayerInput {
   const position = world.spawnAnchors[index];
   const zone = zoneForPoint(position, world.config);
-  const monsterLevel = Math.max(1, Math.min(10, zone * 2 - 1));
-  const townhall = Number(numbers.world?.monsters?.levels?.[String(monsterLevel)]?.expectedTownhall) || monsterLevel;
+  // Local stand-ins model real accounts at many progression stages. Their city
+  // level is identity data, not the level of nearby geography.
+  const townhall = 1 + ((index * 7 + zone * 5) % 30);
   const tier = troopTierAt(numbers, townhall);
   const fill = Number(numbers.world?.balanceTargets?.referenceArmyFill) || .6;
   const troops = { army: {}, navy: {}, air: {} } as TroopManifest;
@@ -108,6 +109,29 @@ function npcInput(index: number, world: HeadlessWorld, numbers: any): SpawnPlaye
     shieldDurationSec: 0,
     hasAttacked: true,
   };
+}
+
+function retuneLocalNpcs(world: HeadlessWorld, numbers: any): void {
+  const activeTargets = new Set(Object.values(world.marches)
+    .filter((march) => !["completed", "failed"].includes(march.state))
+    .map((march) => march.targetId));
+  Object.values(world.players).filter((player) => player.id.startsWith("npc.")).forEach((player) => {
+    if (activeTargets.has(player.cityId)) return;
+    const input = npcInput(player.spawnIndex, world, numbers);
+    const city = world.entities[player.cityId];
+    if (!city || city.kind !== "city") return;
+    const troops = manifest(input.troops as GameState["troops"]);
+    const resources = {
+      cash: Math.max(0, input.resources?.cash ?? 0), oil: Math.max(0, input.resources?.oil ?? 0), power: Math.max(0, input.resources?.power ?? 0),
+    };
+    player.troops = troops; player.woundedTroops = emptyTroopRoster(); player.wounded = 0; player.dead = 0; player.resources = resources;
+    city.townhallLevel = input.townhallLevel ?? 1;
+    city.wallLevel = input.wallLevel ?? city.townhallLevel;
+    city.hospitalLevel = input.hospitalLevel ?? city.townhallLevel;
+    city.storageLevel = input.storageLevel ?? city.townhallLevel;
+    city.might = input.might ?? 0; city.garrison = structuredClone(troops); city.resources = structuredClone(resources);
+    city.revision += 1;
+  });
 }
 
 export function createLocalWorldSession(address: string, sourceGame: GameState, now = Date.now(), numbers: any): LocalWorldResult {
@@ -142,7 +166,7 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
   player.marchCapacity = Math.max(0, Math.floor(maxTroops(game)
     * (Number(numbers.global?.march?.capacityFractionOfMaxTroops) || 1)));
   const session: LocalWorldSession = {
-    version: 3, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
+    version: 4, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
   };
   return { session, game, changed: true };
 }
@@ -294,7 +318,7 @@ export function loadLocalWorldSession(address: string): LocalWorldSession | null
   try {
     const raw = localStorage.getItem(KEY(address));
     const parsed = raw ? JSON.parse(raw) : null;
-    return [1, 2, 3].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
+    return [1, 2, 3, 4].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
   } catch { return null; }
 }
 
@@ -315,9 +339,10 @@ function settleLegacyWorld(address: string, sourceGame: GameState, now: number):
 export function openLocalWorldSession(address: string, sourceGame: GameState, now = Date.now(), numbers: any): LocalWorldResult {
   const stored = loadLocalWorldSession(address);
   if (stored) {
-    if ((stored as any).version < 3) {
+    if ((stored as any).version < 4) {
       stored.world = redistributeWorldTargets(stored.world, now, numbers);
-      stored.version = 3;
+      retuneLocalNpcs(stored.world, numbers);
+      stored.version = 4;
     }
     return reconcile(stored, sourceGame, now, numbers);
   }

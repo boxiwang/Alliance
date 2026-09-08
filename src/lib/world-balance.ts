@@ -13,6 +13,7 @@ export interface WorldBalanceIssue {
 
 export interface WorldStageScenario {
   monsterLevel: number;
+  resourceLevel: number;
   expectedTownhall: number;
   troopTier: number;
   referenceTroops: number;
@@ -117,7 +118,7 @@ export function simulateWorldBalance(numbers: any): WorldBalanceReport {
   const issues: WorldBalanceIssue[] = [];
   const tunedPve = pveNumbers(numbers);
 
-  for (let level = 1; level <= 10; level += 1) {
+  for (let level = 1; level <= 30; level += 1) {
     const monster = numbers.world?.monsters?.levels?.[String(level)] ?? {};
     const expectedTownhall = Number(monster.expectedTownhall) || level;
     const tier = bestTier(numbers, expectedTownhall);
@@ -140,13 +141,15 @@ export function simulateWorldBalance(numbers: any): WorldBalanceReport {
     const strong = fight(1.25);
     const force = mixedForce(referenceTroops, tier);
     const carry = carryCapacity(force, numbers);
-    const node = numbers.gatherNodes?.levels?.[String(level)] ?? {};
+    const resourceLevel = Math.max(1, Math.min(10, Math.ceil(level / 3)));
+    const node = numbers.gatherNodes?.levels?.[String(resourceLevel)] ?? {};
     const gather = resolveGather({
-      kind: "node", level, resource: "cash", remaining: Number(node.totalSupply) || 0,
+      kind: "node", level: resourceLevel, resource: "cash", remaining: Number(node.totalSupply) || 0,
     }, carry, numbers);
     const casualties = standard.attackerLosses.wounded + standard.attackerLosses.dead;
     const scenario: WorldStageScenario = {
       monsterLevel: level,
+      resourceLevel,
       expectedTownhall,
       troopTier: tier,
       referenceTroops,

@@ -531,8 +531,12 @@ function randomLegalPoint(world: HeadlessWorld, random: () => number, minimumCit
   throw new Error("Could not find a legal world-object coordinate.");
 }
 
-function targetLevel(zone: number, random: () => number): number {
+function resourceLevel(zone: number, random: () => number): number {
   return Math.max(1, Math.min(10, zone * 2 - (random() < .5 ? 1 : 0)));
+}
+
+function monsterLevel(zone: number, random: () => number): number {
+  return Math.max(1, Math.min(30, (zone - 1) * 6 + 1 + Math.floor(random() * 6)));
 }
 
 function tuneResourceForLevel(entity: ResourceEntity, level: number, numbers: any, refill: boolean): void {
@@ -571,7 +575,7 @@ export function populateWorld(
     // radial zone controls difficulty and reward.
     const position = randomLegalPoint(world, random);
     const zone = zoneForPoint(position, world.config);
-    const level = targetLevel(zone, random);
+    const level = resourceLevel(zone, random);
     const capacity = Number(numbers.gatherNodes?.levels?.[String(level)]?.totalSupply)
       || 1000 * Math.pow(2, level - 1);
     const id = `resource-${world.nextEntitySeq++}`;
@@ -585,7 +589,7 @@ export function populateWorld(
   for (let i = 0; i < monsterCount; i += 1) {
     const position = randomLegalPoint(world, random);
     const zone = zoneForPoint(position, world.config);
-    const level = targetLevel(zone, random);
+    const level = monsterLevel(zone, random);
     const id = `monster-${world.nextEntitySeq++}`;
     const row = numbers.world?.monsters?.levels?.[String(level)] ?? {};
     world.entities[id] = {
@@ -664,17 +668,19 @@ function respawnTarget(world: HeadlessWorld, entity: ResourceEntity | MonsterEnt
   const position = randomLegalPoint(world, random);
   entity.position = position; entity.zone = zoneForPoint(position, world.config);
   entity.spawnedAt = now; entity.revision += 1; entity.respawnAt = 0;
-  const level = targetLevel(entity.zone, random);
   if (entity.kind === "resource") {
+    const level = resourceLevel(entity.zone, random);
     entity.state = "available";
     tuneResourceForLevel(entity, level, numbers, true);
     entity.occupiedByMarchId = null;
+    addFeed(world, now, `${entity.kind}_respawned`, entity.id, null, { oldPosition, position, level });
   } else {
+    const level = monsterLevel(entity.zone, random);
     entity.state = "alive";
     tuneMonsterForLevel(entity, level, numbers);
     entity.engagedByMarchId = null;
+    addFeed(world, now, `${entity.kind}_respawned`, entity.id, null, { oldPosition, position, level });
   }
-  addFeed(world, now, `${entity.kind}_respawned`, entity.id, null, { oldPosition, position, level });
 }
 
 /** One-time browser-local migration from player halos to neutral radial geography. */
@@ -691,9 +697,8 @@ export function redistributeWorldTargets(source: HeadlessWorld, now = Date.now()
       if (activeTargetIds.has(entity.id)) return;
       entity.position = randomLegalPoint(world, random);
       entity.zone = zoneForPoint(entity.position, world.config);
-      const level = targetLevel(entity.zone, random);
-      if (entity.kind === "resource") tuneResourceForLevel(entity, level, numbers, entity.state === "available");
-      else tuneMonsterForLevel(entity, level, numbers);
+      if (entity.kind === "resource") tuneResourceForLevel(entity, resourceLevel(entity.zone, random), numbers, entity.state === "available");
+      else tuneMonsterForLevel(entity, monsterLevel(entity.zone, random), numbers);
       entity.spawnedAt = now;
       entity.revision += 1;
     });
@@ -731,14 +736,17 @@ function troopCount(troops: TroopManifest): number {
     + Object.values(troops[arm] ?? {}).reduce((sum, amount) => sum + Math.max(0, Number(amount) || 0), 0), 0);
 }
 
-export function resourceTroopRequirement(level: number, numbers: any = getN()): number {
-  const configured = Number(numbers.gatherNodes?.levels?.[String(level)]?.recommendedTroops);
-  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : Number.POSITIVE_INFINITY;
-}
-
-function resourceCrewFraction(force: TroopManifest, level: number, numbers: any): number {
-  const required = resourceTroopRequirement(level, numbers);
-  return Number.isFinite(required) ? Math.min(1, troopCount(force) / required) : 1;
+function hasRedundantGatherTroop(force: TroopManifest, targetAmount: number, numbers: any): boolean {
+  if (carryCapacity({ troops: force }, numbers) < targetAmount) return false;
+  for (const arm of TROOP_ORDER) {
+    for (const [tier, count] of Object.entries(force[arm] ?? {})) {
+      if (count <= 0) continue;
+      const reduced = clone(force);
+      reduced[arm][tier] = count - 1;
+      if (carryCapacity({ troops: reduced }, numbers) >= targetAmount) return true;
+    }
+  }
+  return false;
 }
 
 function resourceRetireFraction(numbers: any): number {
@@ -904,10 +912,13 @@ export function dispatchMarch(
     + commander.modifiers.marchCapacityBonus));
   if (input.action !== "scout" && count === 0) return { ok: false, world, error: "troops_required" };
   if (count > capacity) return { ok: false, world, error: "march_capacity_exceeded" };
-  if (input.action === "gather" && target.kind === "resource" && count > resourceTroopRequirement(target.level, numbers)) {
-    return { ok: false, world, error: "resource_force_exceeds_need" };
-  }
   if (!hasTroops(player.troops, force)) return { ok: false, world, error: "insufficient_troops" };
+  if (input.action === "gather" && target.kind === "resource") {
+    const tuned = effectiveNumbers(player, commander, numbers);
+    if (hasRedundantGatherTroop(force, target.amount, tuned)) {
+      return { ok: false, world, error: "resource_force_exceeds_need" };
+    }
+  }
 
   if (input.action === "attack_monster") {
     const monster = target as MonsterEntity;
@@ -1000,9 +1011,7 @@ function arriveGather(world: HeadlessWorld, march: HeadlessMarch, target: Resour
   const player = world.players[march.playerId];
   const tuned = effectiveNumbers(player, march.commanderSnapshot, numbers);
   const capacity = carryCapacity({ troops: march.force }, tuned);
-  const crewFraction = resourceCrewFraction(march.force, target.level, numbers);
-  const usefulCapacity = Math.min(capacity, target.amount * crewFraction);
-  const result = resolveGather({ kind: "node", level: target.level, resource: target.resource, remaining: target.amount }, usefulCapacity, tuned);
+  const result = resolveGather({ kind: "node", level: target.level, resource: target.resource, remaining: target.amount }, capacity, tuned);
   march.state = "gathering";
   march.workUntil = at + Math.ceil(result.tripTimeSec * 1000);
   march.outcome = "gathering";
@@ -1149,8 +1158,7 @@ function processGatherComplete(world: HeadlessWorld, march: HeadlessMarch, at: n
   const player = world.players[march.playerId];
   const tuned = effectiveNumbers(player, march.commanderSnapshot, numbers);
   const capacity = carryCapacity({ troops: march.force }, tuned);
-  const crewFraction = resourceCrewFraction(march.force, target.level, numbers);
-  const hauled = Math.floor(Math.min(capacity, target.amount * crewFraction));
+  const hauled = Math.floor(Math.min(capacity, target.amount));
   march.cargo[target.resource] = hauled;
   target.amount -= hauled;
   target.occupiedByMarchId = null;

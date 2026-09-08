@@ -2,7 +2,7 @@
   "meta": {
     "project": "ALLIANCE",
     "phase": "personal-mode MVP · Slice 1 · in-city",
-    "version": "0.8",
+    "version": "0.9",
     "reference": "CoC-early pacing; economy redefined to Cash/Oil/Power + Navy/Army/Air per owner spec",
     "curve": "Explicit per-level tables. Times are seconds; production is per hour.",
     "note": "Explicit city, troop, World and Academy tables. Academy and troop training use Kingshot-shaped gates, capacities and queue math adapted to ALLIANCE resources and combat."
@@ -4882,13 +4882,14 @@
       "dailyEnergyAttacksMax": 30
     },
     "monsters": {
-      "casualtyScaling": 0.02,
+      "note": "Thirty rogue levels. Each row targets a 57% win ratio for a 60%-filled mixed fleet at the matching Command Core level. Power rises with unlocked troop tiers; rewards map every three rogue levels to one resource-planet tier. Combat losses are wounded first up to Medical Bay capacity, with overflow becoming permanent deaths.",
+      "casualtyScaling": 0.06,
       "woundedRatio": 1,
       "levels": {
         "1": {
           "expectedTownhall": 1,
           "dominantArm": "navy",
-          "power": 773,
+          "power": 742,
           "reward": {
             "res.cash": 100,
             "res.oil": 50,
@@ -4896,100 +4897,300 @@
           }
         },
         "2": {
-          "expectedTownhall": 3,
+          "expectedTownhall": 2,
           "dominantArm": "air",
-          "power": 1286,
+          "power": 973,
+          "reward": {
+            "res.cash": 110,
+            "res.oil": 55,
+            "res.power": 55
+          }
+        },
+        "3": {
+          "expectedTownhall": 3,
+          "dominantArm": "army",
+          "power": 1245,
+          "reward": {
+            "res.cash": 120,
+            "res.oil": 60,
+            "res.power": 60
+          }
+        },
+        "4": {
+          "expectedTownhall": 4,
+          "dominantArm": "navy",
+          "power": 2015,
           "reward": {
             "res.cash": 200,
             "res.oil": 100,
             "res.power": 100
           }
         },
-        "3": {
+        "5": {
+          "expectedTownhall": 5,
+          "dominantArm": "air",
+          "power": 2607,
+          "reward": {
+            "res.cash": 220,
+            "res.oil": 110,
+            "res.power": 110
+          }
+        },
+        "6": {
           "expectedTownhall": 6,
           "dominantArm": "army",
-          "power": 3502,
+          "power": 3363,
+          "reward": {
+            "res.cash": 240,
+            "res.oil": 120,
+            "res.power": 120
+          }
+        },
+        "7": {
+          "expectedTownhall": 7,
+          "dominantArm": "navy",
+          "power": 5585,
           "reward": {
             "res.cash": 400,
             "res.oil": 200,
             "res.power": 200
           }
         },
-        "4": {
+        "8": {
+          "expectedTownhall": 8,
+          "dominantArm": "air",
+          "power": 7037,
+          "reward": {
+            "res.cash": 440,
+            "res.oil": 220,
+            "res.power": 220
+          }
+        },
+        "9": {
           "expectedTownhall": 9,
+          "dominantArm": "army",
+          "power": 9019,
+          "reward": {
+            "res.cash": 480,
+            "res.oil": 240,
+            "res.power": 240
+          }
+        },
+        "10": {
+          "expectedTownhall": 10,
           "dominantArm": "navy",
-          "power": 9240,
+          "power": 11406,
           "reward": {
             "res.cash": 800,
             "res.oil": 400,
             "res.power": 400
           }
         },
-        "5": {
-          "expectedTownhall": 12,
+        "11": {
+          "expectedTownhall": 11,
           "dominantArm": "air",
-          "power": 25834,
+          "power": 19843,
+          "reward": {
+            "res.cash": 880,
+            "res.oil": 440,
+            "res.power": 440
+          }
+        },
+        "12": {
+          "expectedTownhall": 12,
+          "dominantArm": "army",
+          "power": 24985,
+          "reward": {
+            "res.cash": 960,
+            "res.oil": 480,
+            "res.power": 480
+          }
+        },
+        "13": {
+          "expectedTownhall": 13,
+          "dominantArm": "navy",
+          "power": 41601,
           "reward": {
             "res.cash": 1600,
             "res.oil": 800,
             "res.power": 800
           }
         },
-        "6": {
+        "14": {
+          "expectedTownhall": 14,
+          "dominantArm": "air",
+          "power": 53788,
+          "reward": {
+            "res.cash": 1760,
+            "res.oil": 880,
+            "res.power": 880
+          }
+        },
+        "15": {
           "expectedTownhall": 15,
           "dominantArm": "army",
-          "power": 71181,
+          "power": 68343,
+          "reward": {
+            "res.cash": 1920,
+            "res.oil": 960,
+            "res.power": 960
+          }
+        },
+        "16": {
+          "expectedTownhall": 16,
+          "dominantArm": "navy",
+          "power": 111456,
           "reward": {
             "res.cash": 3200,
             "res.oil": 1600,
             "res.power": 1600
           }
         },
-        "7": {
+        "17": {
+          "expectedTownhall": 17,
+          "dominantArm": "air",
+          "power": 138824,
+          "reward": {
+            "res.cash": 3520,
+            "res.oil": 1760,
+            "res.power": 1760
+          }
+        },
+        "18": {
           "expectedTownhall": 18,
+          "dominantArm": "army",
+          "power": 181839,
+          "reward": {
+            "res.cash": 3840,
+            "res.oil": 1920,
+            "res.power": 1920
+          }
+        },
+        "19": {
+          "expectedTownhall": 19,
           "dominantArm": "navy",
-          "power": 186328,
+          "power": 304968,
           "reward": {
             "res.cash": 6400,
             "res.oil": 3200,
             "res.power": 3200
           }
         },
-        "8": {
-          "expectedTownhall": 22,
+        "20": {
+          "expectedTownhall": 20,
           "dominantArm": "air",
-          "power": 882514,
+          "power": 398006,
+          "reward": {
+            "res.cash": 7040,
+            "res.oil": 3520,
+            "res.power": 3520
+          }
+        },
+        "21": {
+          "expectedTownhall": 21,
+          "dominantArm": "army",
+          "power": 510349,
+          "reward": {
+            "res.cash": 7680,
+            "res.oil": 3840,
+            "res.power": 3840
+          }
+        },
+        "22": {
+          "expectedTownhall": 22,
+          "dominantArm": "navy",
+          "power": 840808,
           "reward": {
             "res.cash": 12800,
             "res.oil": 6400,
             "res.power": 6400
           }
         },
-        "9": {
-          "expectedTownhall": 26,
+        "23": {
+          "expectedTownhall": 23,
+          "dominantArm": "air",
+          "power": 1082723,
+          "reward": {
+            "res.cash": 14080,
+            "res.oil": 7040,
+            "res.power": 7040
+          }
+        },
+        "24": {
+          "expectedTownhall": 24,
           "dominantArm": "army",
-          "power": 3087648,
+          "power": 1376542,
+          "reward": {
+            "res.cash": 15360,
+            "res.oil": 7680,
+            "res.power": 7680
+          }
+        },
+        "25": {
+          "expectedTownhall": 25,
+          "dominantArm": "navy",
+          "power": 1751684,
           "reward": {
             "res.cash": 25600,
             "res.oil": 12800,
             "res.power": 12800
           }
         },
-        "10": {
-          "expectedTownhall": 30,
+        "26": {
+          "expectedTownhall": 26,
+          "dominantArm": "air",
+          "power": 2933053,
+          "reward": {
+            "res.cash": 28160,
+            "res.oil": 14080,
+            "res.power": 14080
+          }
+        },
+        "27": {
+          "expectedTownhall": 27,
+          "dominantArm": "army",
+          "power": 3697095,
+          "reward": {
+            "res.cash": 30720,
+            "res.oil": 15360,
+            "res.power": 15360
+          }
+        },
+        "28": {
+          "expectedTownhall": 28,
           "dominantArm": "navy",
-          "power": 10680057,
+          "power": 4849837,
           "reward": {
             "res.cash": 51200,
             "res.oil": 25600,
             "res.power": 25600
+          }
+        },
+        "29": {
+          "expectedTownhall": 29,
+          "dominantArm": "air",
+          "power": 6110526,
+          "reward": {
+            "res.cash": 56320,
+            "res.oil": 28160,
+            "res.power": 28160
+          }
+        },
+        "30": {
+          "expectedTownhall": 30,
+          "dominantArm": "army",
+          "power": 10418975,
+          "reward": {
+            "res.cash": 61440,
+            "res.oil": 30720,
+            "res.power": 30720
           }
         }
       }
     }
   },
   "gatherNodes": {
-    "note": "Leveled outdoor resource nodes 1-10. A node yields ONE resource (assigned per instance). Each level has a recommended troop crew that is also a hard dispatch cap. A smaller crew can only reserve the same fraction of the node, even when its raw load is higher. Academy/hero bonuses are account-wide passives. Nodes below retireBelowFraction retire after the occupying march leaves, then respawn near the living civilization band.",
+    "note": "Leveled outdoor resource planets 1-10. A planet yields one resource. Dispatch is limited by march headcount, while useful fleet size is determined by the actual per-tier troop load needed to carry the remaining supply. Academy and future hero load bonuses apply account-wide. Planets below retireBelowFraction retire after the occupying march leaves, then respawn at a new globally distributed coordinate with level derived from distance to the Core.",
     "carryFromTroopLoad": true,
     "heroCarryBonus": 0,
     "academyGatherSpeedMaxBonus": 1.5,
@@ -4997,61 +5198,51 @@
     "levels": {
       "1": {
         "ringZone": 10,
-        "recommendedTroops": 500,
         "totalSupply": 1000,
         "gatherRatePerHour": 250
       },
       "2": {
         "ringZone": 9,
-        "recommendedTroops": 1000,
         "totalSupply": 2000,
         "gatherRatePerHour": 500
       },
       "3": {
         "ringZone": 8,
-        "recommendedTroops": 2000,
         "totalSupply": 4000,
         "gatherRatePerHour": 1000
       },
       "4": {
         "ringZone": 7,
-        "recommendedTroops": 4000,
         "totalSupply": 8000,
         "gatherRatePerHour": 2000
       },
       "5": {
         "ringZone": 6,
-        "recommendedTroops": 8000,
         "totalSupply": 16000,
         "gatherRatePerHour": 4000
       },
       "6": {
         "ringZone": 5,
-        "recommendedTroops": 16000,
         "totalSupply": 32000,
         "gatherRatePerHour": 8000
       },
       "7": {
         "ringZone": 4,
-        "recommendedTroops": 32000,
         "totalSupply": 64000,
         "gatherRatePerHour": 16000
       },
       "8": {
         "ringZone": 3,
-        "recommendedTroops": 64000,
         "totalSupply": 128000,
         "gatherRatePerHour": 32000
       },
       "9": {
         "ringZone": 2,
-        "recommendedTroops": 128000,
         "totalSupply": 256000,
         "gatherRatePerHour": 64000
       },
       "10": {
         "ringZone": 1,
-        "recommendedTroops": 256000,
         "totalSupply": 512000,
         "gatherRatePerHour": 128000
       }

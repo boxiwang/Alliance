@@ -28,6 +28,16 @@ function addMissingDefaults(defaultValue: any, currentValue: any): any {
 export function migrateLegacyNumbers(input: any): any {
   if (!input || typeof input !== "object") return input;
   if (input.meta?.version === (DEFAULTS as any).meta.version) return input;
+  if (input.meta?.version === "0.8") {
+    const upgraded = addMissingDefaults(DEFAULTS, input);
+    // v0.9 replaces the old ten-stage/crew-cap World model as one atomic
+    // balance schema; keep every other operator-tuned value intact.
+    upgraded.world.monsters = JSON.parse(JSON.stringify((DEFAULTS as any).world.monsters));
+    Object.values(upgraded.gatherNodes?.levels ?? {}).forEach((row: any) => { delete row.recommendedTroops; });
+    upgraded.gatherNodes.note = (DEFAULTS as any).gatherNodes.note;
+    upgraded.meta.version = (DEFAULTS as any).meta.version;
+    return upgraded;
+  }
   if (input.meta?.version === "0.6" && input.global?.display) {
     const upgraded = addMissingDefaults(DEFAULTS, input);
     upgraded.meta.version = (DEFAULTS as any).meta.version;

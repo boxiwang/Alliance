@@ -104,8 +104,9 @@ mobile/WalletConnect wallets.
 - **The real beta lives in this repo** (`/src`) — wallet connect + read + start screen.
 
 ## 9. World map & endgame — the Wormhole (candidate, Phase-2)
-Personal mode is **async single-player PvP** on a shared **concentric world**: ring 10 = outer edge
-(newbie spawn), ring 1 = center. Node/monster level rises toward the center; inner rings open via
+Personal mode is **async single-player PvP** on a shared **concentric world**: five radial zones run
+from the outer edge to the center. Resource planets rise from L1–2 to L9–10; rogues rise from L1–6
+to L25–30. Inner zones open via
 server progression. **No fog-of-war** — the map is visible; scouting = intel on a target.
 
 **The Wormhole (endgame progression loop):** the center is a contested transit zone. Hold position

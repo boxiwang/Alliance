@@ -11,8 +11,8 @@ import { gmFillTroops, grantLocalGm, hasLocalGm, localGmRequested } from "./lib/
 import type {
   CityEntity, HeadlessMarch, MonsterEntity, Point, ResourceEntity, WorldReport,
 } from "./lib/world-engine";
-import { distance, energyAt, resourceTroopRequirement, worldCenter } from "./lib/world-engine";
-import { carryCapacity } from "./lib/expedition";
+import { distance, energyAt, worldCenter } from "./lib/world-engine";
+import { carryCapacity, resolveCombat } from "./lib/expedition";
 import type { LocalWorldSession } from "./lib/world-adapter";
 import {
   advanceLocalWorldSession, dispatchLocalWorldMarch, finishLocalWorldMarches,
@@ -92,6 +92,18 @@ function WorldLevelBadge({ x, y, level }: { x: number; y: number; level: number 
   return <g className="world-level-badge"><circle cx={x + 6.5} cy={y + 6.2} r="3.25" /><text x={x + 6.5} y={y + 7.25}>{level}</text></g>;
 }
 
+function CityIdentityTag({ x, y, level, name, own = false }: { x: number; y: number; level: number; name: string; own?: boolean }) {
+  const label = name.slice(0, 18);
+  const width = Math.max(22, label.length * 3.25 + 8);
+  const left = x - width / 2;
+  return <g className={`world-city-tag ${own ? "own" : "rival"}`} pointerEvents="none">
+    <rect x={left} y={y + 6.1} width={width} height="7.1" rx="2.2" />
+    <circle cx={left} cy={y + 9.65} r="4.15" />
+    <text className="world-city-level" x={left} y={y + 10.9}>{level}</text>
+    <text className="world-city-player" x={left + 5.4} y={y + 10.85}>{label}</text>
+  </g>;
+}
+
 function WorldSurfaceMark({ x, y, kind }: { x: number; y: number; kind: ResourceEntity["resource"] | "rogue" }) {
   if (kind === "cash") return <g className="world-surface-mark cash">
     <ellipse cx={x} cy={y - 1.9} rx="2.65" ry="1" />
@@ -122,7 +134,7 @@ function WorldEntityGlyph({ entity, detailZoom, occupation }: { entity: Selectab
     </g>;
   }
   if (entity.kind === "city") {
-    return <g><polygon points={`${x},${y - 4.1} ${x + 3.6},${y - 2} ${x + 3.6},${y + 2} ${x},${y + 4.1} ${x - 3.6},${y + 2} ${x - 3.6},${y - 2}`} fill={color} />{detailZoom && <WorldLevelBadge x={x} y={y} level={entity.townhallLevel} />}</g>;
+    return <polygon points={`${x},${y - 4.1} ${x + 3.6},${y - 2} ${x + 3.6},${y + 2} ${x},${y + 4.1} ${x - 3.6},${y + 2} ${x - 3.6},${y - 2}`} fill={color} />;
   }
   if (detailZoom) return <g className="world-rogue-glyph"><circle cx={x} cy={y} r="7.2" /><ellipse cx={x} cy={y} rx="8.5" ry="2.4" transform={`rotate(16 ${x} ${y})`} /><path d={`M ${x - 5.4} ${y + 1.7}Q ${x} ${y + 4.5} ${x + 5.4} ${y + 1}`} className="world-planet-contour" /><WorldSurfaceMark x={x} y={y} kind="rogue" /><WorldLevelBadge x={x} y={y} level={entity.level} /></g>;
   return <path d={`M ${x} ${y - 4.2} L ${x + 4} ${y + 3.4} H ${x - 4} Z`} fill={color} />;
@@ -145,7 +157,7 @@ const ERROR_COPY: Record<string, string> = {
   player_not_found: "Player record is unavailable.", invalid_target: "That target is no longer valid.",
   cannot_target_self: "You cannot target your own city.", march_slots_full: "All march queues are busy.",
   troops_required: "Select at least one troop.", march_capacity_exceeded: "The selected force exceeds this march's capacity.",
-  resource_force_exceeds_need: "This resource planet cannot use that many troops. Follow its recommended crew cap.",
+  resource_force_exceeds_need: "This fleet contains troops whose load would go unused. Use the minimum useful fleet.",
   insufficient_troops: "Some selected troops are no longer standing in the city.", target_unavailable: "Another march reached that target first.",
   monster_level_locked: "Defeat the previous monster level first.", insufficient_energy: "Not enough Energy for this hunt.",
   target_shielded: "That city is protected by a shield.",
@@ -160,17 +172,29 @@ function fmtDuration(seconds: number): string {
 }
 
 function emptySelection(): Record<TroopKey, Record<string, number>> { return { army: {}, navy: {}, air: {} }; }
-export function recommendedGatherForce(troops: GameState["troops"], limit: number): Record<TroopKey, Record<string, number>> {
+export function recommendedGatherForce(
+  troops: GameState["troops"],
+  targetAmount: number,
+  limit: number,
+  numbers: any,
+  accountModifiers: Record<string, number> = {},
+): Record<TroopKey, Record<string, number>> {
   const selected = emptySelection();
-  let remaining = Math.max(0, Math.floor(limit));
+  let remainingCount = Math.max(0, Math.floor(limit));
+  let remainingLoad = Math.max(0, targetAmount);
   const rows = TROOP_ORDER.flatMap((arm) => Object.entries(troops[arm] ?? {})
-    .map(([tier, qty]) => ({ arm, tier, qty: Math.max(0, Math.floor(qty)) }))
+    .map(([tier, qty]) => {
+      const unit = emptySelection(); unit[arm][tier] = 1;
+      return { arm, tier, qty: Math.max(0, Math.floor(qty)), load: gatherCarryWithAccount(unit, accountModifiers, numbers) };
+    })
     .filter((row) => row.qty > 0))
-    .sort((left, right) => Number(right.tier) - Number(left.tier));
-  rows.forEach(({ arm, tier, qty }) => {
-    const take = Math.min(remaining, qty);
+    .sort((left, right) => right.load - left.load || Number(right.tier) - Number(left.tier));
+  rows.forEach(({ arm, tier, qty, load }) => {
+    if (remainingCount <= 0 || remainingLoad <= 0 || load <= 0) return;
+    const take = Math.min(remainingCount, qty, Math.ceil(remainingLoad / load));
     if (take > 0) selected[arm][tier] = take;
-    remaining -= take;
+    remainingCount -= take;
+    remainingLoad -= take * load;
   });
   return selected;
 }
@@ -307,12 +331,10 @@ export default function World({ address, profile, onBack }: { address: string; p
     + (Number(player.accountModifiers.marchCapacityBonus) || 0)));
   const travelSecondsTo = (point: Point) => distance(playerCity.position, point) * world.config.travelSecondsPerTile / marchSpeed;
   const oneWay = selected ? travelSecondsTo(selected.position) : 0;
-  const gatherRequirement = selected?.kind === "resource" ? resourceTroopRequirement(selected.level, N) : Number.POSITIVE_INFINITY;
-  const forceLimit = Math.min(marchCapacity, gatherRequirement);
+  const forceLimit = marchCapacity;
   const energy = energyAt(player, now, world.config);
-  // How much the CURRENTLY selected force would actually haul from this planet.
-  const gatherCrewFraction = selected?.kind === "resource" && Number.isFinite(gatherRequirement) && gatherRequirement > 0 ? Math.min(1, sentCount / gatherRequirement) : 1;
-  const expectedHarvest = selected?.kind === "resource" ? Math.floor(Math.min(gatherCarryWithAccount(selection, player.accountModifiers, N), selected.amount * gatherCrewFraction)) : 0;
+  const selectedCarry = selected?.kind === "resource" ? gatherCarryWithAccount(selection, player.accountModifiers, N) : 0;
+  const expectedHarvest = selected?.kind === "resource" ? Math.floor(Math.min(selectedCarry, selected.amount)) : 0;
   // While a harvest march works this planet, show its liquidity draining in real time
   // (the engine only settles the deduction on return, so this is a projected read).
   const activeGatherOnSelected = selected?.kind === "resource" ? activeMarches.find((m) => m.targetId === selected.id && m.action === "gather" && m.state === "gathering") : undefined;
@@ -321,10 +343,7 @@ export default function World({ address, profile, onBack }: { address: string; p
     if (!activeGatherOnSelected) return selected.amount;
     const m = activeGatherOnSelected;
     const progress = Math.max(0, Math.min(1, (now - m.arriveAt) / Math.max(1, m.workUntil - m.arriveAt)));
-    const req = resourceTroopRequirement(selected.level, N);
-    const count = TROOP_ORDER.reduce((sum, arm) => sum + Object.values(m.force[arm] ?? {}).reduce((s, q) => s + (q || 0), 0), 0);
-    const frac = Number.isFinite(req) && req > 0 ? Math.min(1, count / req) : 1;
-    const reserved = Math.floor(Math.min(gatherCarryWithAccount(m.force, player.accountModifiers, N), selected.amount * frac));
+    const reserved = Math.floor(Math.min(gatherCarryWithAccount(m.force, player.accountModifiers, N), selected.amount));
     return Math.max(0, selected.amount - Math.floor(reserved * progress));
   })();
   // Mission Archive = settled RESULTS only. In-flight gather milestones are already
@@ -351,6 +370,21 @@ export default function World({ address, profile, onBack }: { address: string; p
     ? resourceOccupationDisposition(selected, world.marches, world.players, session.playerId, profile.faction)
     : "neutral";
   const zoomLabel = strategicZoom ? "STRATEGIC" : detailZoom ? "TACTICAL" : "FIELD";
+  const monsterPreview = useMemo(() => {
+    if (!selected || selected.kind !== "monster" || sentCount <= 0) return null;
+    const runtime = { ...(N.runtimeAccountModifiers ?? {}) };
+    Object.entries(player.accountModifiers).forEach(([key, value]) => { runtime[key] = (Number(runtime[key]) || 0) + (Number(value) || 0); });
+    const tuned = structuredClone(N);
+    tuned.runtimeAccountModifiers = runtime;
+    tuned.global.combat.casualtyScaling = Number(N.world?.monsters?.casualtyScaling) || 0;
+    tuned.global.combat.woundedRatio = Number(N.world?.monsters?.woundedRatio) || 0;
+    const hospitalRow = N.buildings?.["building.hospital"]?.levels?.[String(Math.max(1, viewGame.buildings.hospital.lvl))];
+    const hospitalOpen = Math.max(0, (Number(hospitalRow?.woundedCapacity) || 0) - viewGame.wounded);
+    return resolveCombat({ troops: selection }, {
+      kind: "monster", level: selected.level, power: selected.power,
+      reward: selected.reward, dominantArm: selected.dominantArm,
+    }, tuned, hospitalOpen);
+  }, [N, player.accountModifiers, selected, selection, sentCount, viewGame.buildings.hospital.lvl, viewGame.wounded]);
 
   function commit(result: ReturnType<typeof advanceLocalWorldSession>) {
     sessionRef.current = result.session; setSession(result.session); setGame(result.game); gameRef.current = result.game; saveLocalWorldSession(result.session); saveGame(result.game);
@@ -373,7 +407,10 @@ export default function World({ address, profile, onBack }: { address: string; p
   function maxTroop(arm: TroopKey, tier: string, available: number) {
     setTroop(arm, tier, available);
   }
-  function autoAssignGatherForce() { setSelection(recommendedGatherForce(viewGame.troops, forceLimit)); }
+  function autoAssignGatherForce() {
+    if (!selected || selected.kind !== "resource") return;
+    setSelection(recommendedGatherForce(viewGame.troops, selected.amount, forceLimit, N, player.accountModifiers));
+  }
   function run(action: "scout" | "gather" | "attack_monster" | "attack_city") {
     if (!selected) return;
     // Scouting occupies a march slot but does not quietly reserve whatever force
@@ -496,6 +533,7 @@ export default function World({ address, profile, onBack }: { address: string; p
               {selectedTarget && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
               <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />
               <WorldEntityGlyph entity={entity} detailZoom={detailZoom} occupation={occupation} />
+              {entity.kind === "city" && detailZoom && <CityIdentityTag x={entity.position.x} y={entity.position.y} level={entity.townhallLevel} name={localWorldTargetName(world, entity.id)} />}
               {verified && entity.kind !== "resource" && <circle cx={entity.position.x + 4.5} cy={entity.position.y - 4.5} r="1.2" className="world-verified-dot" />}
               {bookmarks.includes(entity.id) && <text x={entity.position.x + 7} y={entity.position.y - 6} className="world-bookmark-star">★</text>}
             </g>;
@@ -504,8 +542,8 @@ export default function World({ address, profile, onBack }: { address: string; p
             <circle cx={playerCity.position.x} cy={playerCity.position.y} r="7.5" className="world-home-ring" />
             <rect x={playerCity.position.x - 4} y={playerCity.position.y - 4} width="8" height="8" rx="1" transform={`rotate(45 ${playerCity.position.x} ${playerCity.position.y})`} />
             <circle cx={playerCity.position.x} cy={playerCity.position.y} r="1.5" />
-            <text x={playerCity.position.x} y={playerCity.position.y - 11} className="world-city-name">YOUR CIVILIZATION · TH{viewGame.buildings.keep.lvl}</text>
-            <text x={playerCity.position.x} y={playerCity.position.y + 12} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
+            <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y} level={viewGame.buildings.keep.lvl} name={profile.name} own />
+            <text x={playerCity.position.x} y={playerCity.position.y + 18} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
           </g>
           {tileMark && <g className="world-tile-mark" pointerEvents="none">
             <rect x={tileMark.x} y={tileMark.y} width="1" height="1" className="world-tile-cell" />
@@ -540,25 +578,33 @@ export default function World({ address, profile, onBack }: { address: string; p
           <div className="world-target-head"><span style={{ color: entityColor(selected) }}>{KIND_META[selected.kind].icon}</span><div><small>{KIND_META[selected.kind].label}</small><b>{localWorldTargetName(world, selected.id)}</b></div><em>L{entityLevel(selected)}</em></div>
           <div className="world-facts"><span>COORDS <b>{Math.round(selected.position.x).toString().padStart(3, "0")}:{Math.round(selected.position.y).toString().padStart(3, "0")}</b></span><span>DISTANCE <b>{distance(playerCity.position, selected.position).toFixed(1)} LU</b></span><span>ETA <b>{fmtDuration(oneWay)}</b></span>
             {selected.kind === "resource" && <><span>ASSET <b style={{ color: RESOURCE_COLORS[selected.resource] }}>{RES[selected.resource].label}</b></span><span>AVAILABLE <b className={activeGatherOnSelected ? "world-liquidity-draining" : ""}>{compact(displayResource(liveSelectedAmount))}</b></span>{selectedOccupation !== "neutral" && <span>OCCUPIED <b className={`world-occupation-copy ${selectedOccupation}`}>{selectedOccupation === "self" ? "YOUR FLEET" : selectedOccupation === "ally" ? "ALLIED FLEET" : "RIVAL FLEET"}</b></span>}</>}
-            {selected.kind === "monster" && <><span>POWER <b>{selectedVerified ? compact(selected.power) : "ENCRYPTED"}</b></span><span>TYPE <b>{selectedVerified ? TROOPS_META[selected.dominantArm].label : "UNKNOWN"}</b></span></>}
+            {selected.kind === "monster" && <><span>POWER <b>{compact(selected.power)}</b></span><span>TYPE <b>{selectedVerified ? TROOPS_META[selected.dominantArm].label : "SCAN TO REVEAL"}</b></span></>}
             {selected.kind === "city" && <><span>SHIELD <b>{cityShielded(selected, now, N) ? "ACTIVE" : "OPEN"}</b></span><span>WALL <b>{selectedVerified ? `${selected.wall.value}/${selected.wall.max}` : "ENCRYPTED"}</b></span><span>GARRISON <b>{selectedVerified ? compact(displayTroops(selectedScoutSnapshot.garrison ?? 0)) : "ENCRYPTED"}</b></span><span>LOOT <b>{selectedVerified ? compact(displayResource(selectedScoutSnapshot.estimatedLoot ?? 0)) : "ENCRYPTED"}</b></span></>}
           </div>
           {selected.kind !== "resource" && <button className="world-scout" onClick={() => run("scout")}><span>SCAN</span><em>1 SLOT</em></button>}
           <div className="world-force-title"><b>FLEET</b><span className="world-force-count"><b>{compact(displayTroops(sentCount))}</b> / {compact(displayTroops(forceLimit))}</span></div>
-          {selected.kind === "resource" && <div className="world-gather-recommend"><div><b>CREW {compact(displayTroops(gatherRequirement))}</b></div><button onClick={autoAssignGatherForce}>AUTO</button></div>}
+          {selected.kind === "resource" && <div className="world-gather-recommend"><div><small>LOAD</small><b>{compact(displayResource(selectedCarry))} / {compact(displayResource(selected.amount))}</b></div><button onClick={autoAssignGatherForce}>AUTO MIN</button></div>}
           <div className="world-force-list">
             {TROOP_ORDER.flatMap((arm) => Object.entries(viewGame.troops[arm] ?? {}).filter(([, qty]) => qty > 0).map(([tier, qty]) => {
               const sel = selection[arm][tier] ?? 0;
-              const rowMax = Math.max(sel, Math.min(qty, forceLimit - (sentCount - sel)));
+              const headcountMax = Math.min(qty, forceLimit - (sentCount - sel));
+              const unit = emptySelection(); unit[arm][tier] = 1;
+              const unitLoad = gatherCarryWithAccount(unit, player.accountModifiers, N);
+              const otherCarry = Math.max(0, selectedCarry - sel * unitLoad);
+              const usefulMax = selected.kind === "resource" && unitLoad > 0
+                ? Math.min(headcountMax, Math.ceil(Math.max(0, selected.amount - otherCarry) / unitLoad))
+                : headcountMax;
+              const rowMax = Math.max(sel, usefulMax);
               return <div className="world-force-row" key={`${arm}-${tier}`}>
                 <span>{TROOPS_META[arm].emoji} {TROOPS_META[arm].label} T{tier}<small><b>{compact(displayTroops(sel))}</b> / {compact(displayTroops(qty))}</small></span>
                 <input type="range" min="0" max={rowMax} step="1" value={sel} onChange={(event) => setTroop(arm, tier, Number(event.target.value))} disabled={rowMax <= 0} />
-                <button className="world-force-max" title={`Fill ${TROOPS_META[arm].label} T${tier} to its maximum`} aria-label={`Fill ${TROOPS_META[arm].label} tier ${tier} to maximum`} onClick={() => maxTroop(arm, tier, rowMax)}>FILL MAX</button>
+                <button className="world-force-max" title={selected.kind === "resource" ? "Add only the troops whose load this planet can use" : `Fill ${TROOPS_META[arm].label} T${tier} to its maximum`} aria-label={`Fill ${TROOPS_META[arm].label} tier ${tier} to useful maximum`} onClick={() => maxTroop(arm, tier, usefulMax)}>FILL MAX</button>
               </div>;
             }))}
             {totalTroops(viewGame) === 0 && <div className="world-no-force">NO TROOPS</div>}
           </div>
           {selected.kind === "resource" && sentCount > 0 && <div className="world-harvest-estimate"><span>HAUL</span><b style={{ color: RESOURCE_COLORS[selected.resource] }}>{RESOURCE_EMOJI[selected.resource]} {compact(displayResource(expectedHarvest))} {RES[selected.resource].label}</b></div>}
+          {selected.kind === "monster" && monsterPreview && <div className={`world-combat-preview ${monsterPreview.win ? "win" : "lose"}`}><span>ESTIMATE</span><b>{monsterPreview.win ? "VICTORY" : "DEFEAT"}</b><small>{compact(displayTroops(monsterPreview.attackerLosses.wounded))} wounded · {compact(displayTroops(monsterPreview.attackerLosses.dead))} dead</small></div>}
           {selected.kind === "resource" ? <button className="world-dispatch" disabled={sentCount <= 0 || selected.state !== "available"} onClick={() => run("gather")}>HARVEST PLANET →</button> : selected.kind === "monster" ? <button className="world-dispatch danger" disabled={sentCount <= 0 || selected.state !== "alive"} onClick={() => run("attack_monster")}>ENGAGE ROGUE · {world.config.monsterEnergyCost} ENERGY →</button> : <button className="world-dispatch danger" disabled={sentCount <= 0 || cityShielded(selected, now, N)} onClick={() => run("attack_city")}>ATTACK CIVILIZATION →</button>}
         </>}
         <div className="world-marches"><div className="world-force-title"><b>FLEETS</b><span>{activeMarches.length}/{player.marchSlots}</span></div>{activeMarches.map((march) => <div className="world-march" key={march.id}><button className="world-march-focus" onClick={() => focusTarget(march.targetId)}><span>{march.action === "scout" ? "◎" : march.action === "gather" ? "◇" : "△"}</span><div><b>{localWorldTargetName(world, march.targetId)}</b><small>{march.state === "outbound" ? (march.action === "gather" ? "EN ROUTE TO HARVEST" : march.action === "scout" ? "SCOUT EN ROUTE" : "STRIKE EN ROUTE") : march.state === "gathering" ? "HARVESTING" : "RETURNING"} · <b>{fmtDuration(marchRemainingSec(march, now))}</b></small></div></button>{["outbound", "gathering"].includes(march.state) && <button className="world-recall" onClick={() => recall(march.id)}>RECALL</button>}</div>)}{!activeMarches.length && <div className="world-no-force">IDLE</div>}</div>

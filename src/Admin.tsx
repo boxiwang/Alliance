@@ -93,7 +93,6 @@ const TROOP_COLUMNS: Column[] = [
 
 const GATHER_COLUMNS: Column[] = [
   { key: "ringZone", label: "Ring zone", group: "World" },
-  { key: "recommendedTroops", label: "Recommended troops", group: "Crew" },
   { key: "totalSupply", label: "Total supply", group: "Supply" },
   { key: "gatherRatePerHour", label: "Gather rate / hour", group: "Supply" },
 ];
@@ -596,7 +595,7 @@ function WorldWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: 
 
       <div className="adm-table-wrap">
         <table className="adm-level-table">
-          <thead><tr><th>Monster</th><th>Expected TH</th><th>Counter identity</th><th>Power</th><th>Cash</th><th>Oil</th><th>Power RSS</th><th>Reference win</th><th>Casualties</th><th>Node time</th></tr></thead>
+          <thead><tr><th>Rogue</th><th>Core level</th><th>Counter identity</th><th>Power</th><th>Cash</th><th>Oil</th><th>Power RSS</th><th>Reference win</th><th>Casualties</th><th>Planet / time</th></tr></thead>
           <tbody>{report.stages.map((scenario) => {
             const path = ["world", "monsters", "levels", String(scenario.monsterLevel)];
             const row = numbers.world.monsters.levels[String(scenario.monsterLevel)];
@@ -608,7 +607,7 @@ function WorldWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: 
               {(["res.cash", "res.oil", "res.power"] as const).map((resource) => <td key={resource}><input className="adm-cell mono" type="number" value={row.reward[resource]} onChange={(event) => onChange([...path, "reward", resource], Number(event.target.value) || 0)} /></td>)}
               <td>{(scenario.standardWinRatio * 100).toFixed(1)}%</td>
               <td>{(scenario.standardCasualtyFraction * 100).toFixed(2)}%</td>
-              <td>{scenario.gatherHours.toFixed(1)}h</td>
+              <td>L{scenario.resourceLevel} · {scenario.gatherHours.toFixed(1)}h</td>
             </tr>;
           })}</tbody>
         </table>
