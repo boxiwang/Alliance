@@ -5,10 +5,16 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-07 · **by:** Codex (City/Star Map product-console pass)
+**Last updated:** 2026-09-08 · **by:** Codex (City/Star Map product-console pass)
 **Current focus:** Personal-city progression and the local World loop are playable and measurable together. Next is tuning the L1→10 account experience from the new ledger, then hardening shared-world/server authority before alliance layers.
 
 ### ✦ Product-console visual/interaction pass (Codex)
+- Star Map now shares City's exact `GameNav` without a World-specific variant. Its new black hole and slow-moving
+  starfield live in the **page backdrop**, outside the draggable/zoomable SVG map, so camera movement never moves
+  or scales the background effect. The Wormhole remains a separate actionable landmark inside map coordinates.
+- Field zoom renders Cash/Oil/Power as small shaded planets with rings; Tactical zoom switches resources and rogues
+  to 💰/⛽/⚡/💀 instead of letter markers. The right console now defaults to live nearest signals and real sensor
+  events, opens the existing target/dispatch controls on selection, and returns to signals through an explicit close.
 - City now renders a deterministic, randomly distributed Canvas starfield instead of tiled CSS dots: three depth
   bands drift at different speeds, bright stars breathe subtly, and a slow blue-violet nebula supplies spatial
   movement without image assets or runtime requests. Reduced-motion clients receive a static frame.

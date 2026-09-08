@@ -19,6 +19,7 @@ import {
   localWorldTargetName, openLocalWorldSession, recallLocalWorldMarch, saveLocalWorldSession,
 } from "./lib/world-adapter";
 import GameNav from "./GameNav";
+import CosmicBackdrop from "./CosmicBackdrop";
 
 type SelectableEntity = ResourceEntity | MonsterEntity | CityEntity;
 type WorldLayer = "resource" | "monster" | "city";
@@ -32,6 +33,7 @@ const KIND_META = {
 
 const RESOURCE_COLORS = { cash: "#43f2a1", oil: "#ffb454", power: "#38d9ff" };
 const RESOURCE_EMOJI = { cash: "💰", oil: "⛽", power: "⚡" };
+const RESOURCE_GRADIENT = { cash: "url(#world-planet-cash)", oil: "url(#world-planet-oil)", power: "url(#world-planet-power)" };
 // In-flight gather milestones (shown live in Live Fleets) are kept out of the results archive.
 const ARCHIVE_HIDDEN_OUTCOMES = new Set(["gathering_started", "gathering_completed"]);
 
@@ -50,6 +52,30 @@ export function clusterWorldSignals(entities: SelectableEntity[], cellSize = 44)
 
 function entityColor(entity: SelectableEntity): string {
   return entity.kind === "resource" ? RESOURCE_COLORS[entity.resource] : KIND_META[entity.kind].color;
+}
+
+function entitySignalIcon(entity: SelectableEntity): string {
+  return entity.kind === "resource" ? RESOURCE_EMOJI[entity.resource] : entity.kind === "monster" ? "💀" : "◈";
+}
+
+function WorldEntityGlyph({ entity, detailZoom }: { entity: SelectableEntity; detailZoom: boolean }) {
+  const x = entity.position.x;
+  const y = entity.position.y;
+  const color = entityColor(entity);
+  if (detailZoom && entity.kind !== "city") {
+    return <text x={x} y={y + 3.4} className="world-target-emoji">{entity.kind === "monster" ? "💀" : RESOURCE_EMOJI[entity.resource]}</text>;
+  }
+  if (entity.kind === "resource") {
+    return <g className={`world-planet-glyph ${entity.resource}`}>
+      <circle cx={x} cy={y} r="3.8" fill={RESOURCE_GRADIENT[entity.resource]} />
+      <ellipse cx={x} cy={y} rx="5" ry="1.45" transform={`rotate(-18 ${x} ${y})`} fill="none" stroke={color} strokeWidth=".55" opacity=".68" />
+      <circle cx={x - 1.1} cy={y - 1.2} r=".72" fill="#f3fdff" opacity=".72" />
+    </g>;
+  }
+  if (entity.kind === "city") {
+    return <polygon points={`${x},${y - 4.1} ${x + 3.6},${y - 2} ${x + 3.6},${y + 2} ${x},${y + 4.1} ${x - 3.6},${y + 2} ${x - 3.6},${y - 2}`} fill={color} />;
+  }
+  return <path d={`M ${x} ${y - 4.2} L ${x + 4} ${y + 3.4} H ${x - 4} Z`} fill={color} />;
 }
 
 function entityState(entity: SelectableEntity): string {
@@ -261,6 +287,9 @@ export default function World({ address, profile, onBack }: { address: string; p
   const filteredTargets = useMemo(() => targets.filter((entity) => layers[entity.kind]
     && !(entity.kind === "resource" && entity.state === "depleted")
     && !(entity.kind === "monster" && entity.state === "defeated")), [layers, targets]);
+  const nearbySignals = useMemo(() => filteredTargets.slice()
+    .sort((left, right) => distance(playerCity.position, left.position) - distance(playerCity.position, right.position))
+    .slice(0, 3), [filteredTargets, playerCity.position.x, playerCity.position.y]);
   const signalClusters = useMemo(() => clusterWorldSignals(filteredTargets, 72), [filteredTargets]);
   const bookmarkedTargets = bookmarks.map((id) => targets.find((target) => target.id === id)).filter((target): target is SelectableEntity => !!target);
   const scoutedTargetIds = useMemo(() => new Set(player.reportIds.map((id) => world.reports[id]).filter((report) => report?.action === "scout" && report.outcome === "scouted").map((report) => report.targetId)), [player.reportIds, world.reports]);
@@ -358,6 +387,8 @@ export default function World({ address, profile, onBack }: { address: string; p
   }
 
   return <section className="world world-crypto world-cosmos">
+    <CosmicBackdrop />
+    <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="world" profile={profile} townhallLevel={viewGame.buildings.keep.lvl}
       location={`SECTOR ${world.stateId.slice(-6).toUpperCase()} · HOME ${Math.round(playerCity.position.x).toString().padStart(3, "0")}:${Math.round(playerCity.position.y).toString().padStart(3, "0")}`}
       resources={viewGame.res}
@@ -381,6 +412,9 @@ export default function World({ address, profile, onBack }: { address: string; p
             <radialGradient id="world-ground" cx="58%" cy="42%"><stop offset="0" stopColor="#152044"/><stop offset=".34" stopColor="#0b1532"/><stop offset=".72" stopColor="#060c20"/><stop offset="1" stopColor="#02050e"/></radialGradient>
             <radialGradient id="world-nebula" cx="50%" cy="50%"><stop offset="0" stopColor="#7a49d8" stopOpacity=".16"/><stop offset=".48" stopColor="#215e9b" stopOpacity=".07"/><stop offset="1" stopColor="#030711" stopOpacity="0"/></radialGradient>
             <radialGradient id="circle-core"><stop offset="0" stopColor="#010208" stopOpacity="1"/><stop offset=".22" stopColor="#09051d" stopOpacity="1"/><stop offset=".48" stopColor="#a35cff" stopOpacity=".42"/><stop offset=".72" stopColor="#38d9ff" stopOpacity=".16"/><stop offset="1" stopColor="#1d123a" stopOpacity="0"/></radialGradient>
+            <radialGradient id="world-planet-cash" cx="32%" cy="27%"><stop offset="0" stopColor="#f3fff9"/><stop offset=".13" stopColor="#82ffc5"/><stop offset=".52" stopColor="#237756"/><stop offset="1" stopColor="#07140f"/></radialGradient>
+            <radialGradient id="world-planet-oil" cx="32%" cy="27%"><stop offset="0" stopColor="#fff8e9"/><stop offset=".13" stopColor="#ffd08a"/><stop offset=".52" stopColor="#815528"/><stop offset="1" stopColor="#160e07"/></radialGradient>
+            <radialGradient id="world-planet-power" cx="32%" cy="27%"><stop offset="0" stopColor="#f2fdff"/><stop offset=".13" stopColor="#89e7ff"/><stop offset=".52" stopColor="#226b91"/><stop offset="1" stopColor="#07131b"/></radialGradient>
             <filter id="signal-glow" x="-200%" y="-200%" width="400%" height="400%"><feGaussianBlur stdDeviation="1.6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           </defs>
           <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-ground)" />
@@ -406,7 +440,7 @@ export default function World({ address, profile, onBack }: { address: string; p
             return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setSelection(emptySelection()); setMessage(""); setTileMark(null); }}>
               {selectedTarget && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
               <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />
-              {detailZoom && entity.kind !== "city" ? <text x={entity.position.x} y={entity.position.y + 3.4} className="world-target-emoji">{entity.kind === "monster" ? "💀" : RESOURCE_EMOJI[entity.resource]}</text> : entity.kind === "city" ? <polygon points={`${entity.position.x},${entity.position.y - 4.1} ${entity.position.x + 3.6},${entity.position.y - 2} ${entity.position.x + 3.6},${entity.position.y + 2} ${entity.position.x},${entity.position.y + 4.1} ${entity.position.x - 3.6},${entity.position.y + 2} ${entity.position.x - 3.6},${entity.position.y - 2}`} fill={color} /> : entity.kind === "monster" ? <path d={`M ${entity.position.x} ${entity.position.y - 4.2} L ${entity.position.x + 4} ${entity.position.y + 3.4} H ${entity.position.x - 4} Z`} fill={color} /> : <rect x={entity.position.x - 3} y={entity.position.y - 3} width="6" height="6" fill={color} transform={`rotate(45 ${entity.position.x} ${entity.position.y})`} />}
+              <WorldEntityGlyph entity={entity} detailZoom={detailZoom} />
               {verified && entity.kind !== "resource" && <circle cx={entity.position.x + 4.5} cy={entity.position.y - 4.5} r="1.2" className="world-verified-dot" />}
               {bookmarks.includes(entity.id) && <text x={entity.position.x + 7} y={entity.position.y - 6} className="world-bookmark-star">★</text>}
               {(selectedTarget || detailZoom) && <text x={entity.position.x} y={entity.position.y - 8} className="world-target-name">{localWorldTargetName(world, entity.id)}</text>}
@@ -432,10 +466,24 @@ export default function World({ address, profile, onBack }: { address: string; p
         <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")}><i className="city" />CIVILIZATIONS</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>
         <div className="world-map-hint">{world.config.width}×{world.config.height} · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS</div>
       </div>
-      <aside className="world-side">
-        {!selected ? <div className="world-empty"><div className="world-empty-radar"><i /><i /><i /></div><b>SELECT A SIGNAL</b></div> : <>
-          <div className={`world-intel-ribbon ${selectedVerified ? "verified" : "public"}`}><span>{selected.kind === "resource" ? "LIVE" : selectedVerified ? "SCANNED" : "PUBLIC"}</span></div>
-          <div className="world-target-actions"><button className={bookmarks.includes(selected.id) ? "saved" : ""} onClick={() => toggleBookmark(selected.id)}>{bookmarks.includes(selected.id) ? "★ SAVED" : "☆ SAVE"}</button></div>
+      <aside className={`world-side ${selected ? "target-open" : "signals-open"}`}>
+        <div className="world-intel-header"><b>{selected ? "TARGET INTEL" : "NEARBY SIGNALS"}</b><span><i />LIVE</span>{selected && <button aria-label="Close target intel" onClick={() => { setSelectedId(null); setSelection(emptySelection()); }}>×</button>}</div>
+        {!selected ? <>
+          <div className="world-nearby-signals">
+            <div className="world-side-section-title">WITHIN SENSOR RANGE</div>
+            {nearbySignals.map((target) => <button key={target.id} className="world-nearby-signal" onClick={() => focusTarget(target.id)}>
+              <span className={`world-nearby-icon ${target.kind}`}>{entitySignalIcon(target)}</span>
+              <span><b>{localWorldTargetName(world, target.id)}</b><small>{entityState(target)} · {Math.round(target.position.x).toString().padStart(3, "0")}:{Math.round(target.position.y).toString().padStart(3, "0")}</small></span>
+              <time>{fmtDuration(travelSecondsTo(target.position))}</time>
+            </button>)}
+          </div>
+          <div className="world-sensor-feed">
+            <div className="world-side-section-title">SENSOR FEED</div>
+            {activeMarches[0] ? <div className="world-sensor-event active"><b>Fleet in transit</b><span>{localWorldTargetName(world, activeMarches[0].targetId)} · {fmtDuration(marchRemainingSec(activeMarches[0], now))}</span></div> : <div className="world-sensor-event"><b>Fleet channels idle</b><span>{player.marchSlots} routes available</span></div>}
+            {latestReports[0] ? <div className={`world-sensor-event ${reportCopy(latestReports[0], world).good ? "good" : "danger"}`}><b>{reportCopy(latestReports[0], world).title}</b><span>{reportCopy(latestReports[0], world).detail}</span></div> : <div className="world-sensor-event"><b>Sector synchronized</b><span>{filteredTargets.length} live signals indexed</span></div>}
+          </div>
+        </> : <>
+          <div className="world-target-toolbar"><div className={`world-intel-ribbon ${selectedVerified ? "verified" : "public"}`}><span>{selected.kind === "resource" ? "LIVE" : selectedVerified ? "SCANNED" : "PUBLIC"}</span></div><div className="world-target-actions"><button className={bookmarks.includes(selected.id) ? "saved" : ""} onClick={() => toggleBookmark(selected.id)}>{bookmarks.includes(selected.id) ? "★ SAVED" : "☆ SAVE"}</button></div></div>
           <div className="world-target-head"><span style={{ color: entityColor(selected) }}>{KIND_META[selected.kind].icon}</span><div><small>{KIND_META[selected.kind].label}</small><b>{localWorldTargetName(world, selected.id)}</b></div><em>L{entityLevel(selected)}</em></div>
           <div className="world-facts"><span>COORDS <b>{Math.round(selected.position.x).toString().padStart(3, "0")}:{Math.round(selected.position.y).toString().padStart(3, "0")}</b></span><span>DISTANCE <b>{distance(playerCity.position, selected.position).toFixed(1)} LU</b></span><span>ETA <b>{fmtDuration(oneWay)}</b></span>
             {selected.kind === "resource" && <><span>ASSET <b style={{ color: RESOURCE_COLORS[selected.resource] }}>{RES[selected.resource].label}</b></span><span>AVAILABLE <b className={activeGatherOnSelected ? "world-liquidity-draining" : ""}>{compact(displayResource(liveSelectedAmount))}</b></span></>}
