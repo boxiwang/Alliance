@@ -32,6 +32,7 @@ import { energyAt } from "./lib/world-engine";
 import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
 import BuildingGlyph from "./BuildingGlyph";
+import CosmicBackdrop from "./CosmicBackdrop";
 
 const ECONOMY_BUILDINGS: BKey[] = ["bank", "oilwell", "powerplant"];
 const COMMAND_BUILDINGS: BKey[] = ["storage", "wall"];
@@ -153,6 +154,7 @@ export default function Town({ address, profile, onWorld }: { address: string; p
 
   return (
     <section className="town">
+      <CosmicBackdrop />
       <GameNav view="city" profile={profile} townhallLevel={view.buildings.keep.lvl} location={worldStatus.location}
         resources={view.res} energy={worldStatus.energy} energyCap={worldStatus.energyCap}
         activeFleets={worldStatus.activeFleets} fleetCap={worldStatus.fleetCap} standing={troopsTotal} wounded={view.wounded}

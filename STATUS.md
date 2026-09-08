@@ -9,7 +9,9 @@ for the *why*; this file is the *where we are right now*.
 **Current focus:** Personal-city progression and the local World loop are playable and measurable together. Next is tuning the L1→10 account experience from the new ledger, then hardening shared-world/server authority before alliance layers.
 
 ### ✦ Product-console visual/interaction pass (Codex)
-- The full site now shares a restrained CSS-only cosmic background; no image asset or runtime request was added.
+- City now renders a deterministic, randomly distributed Canvas starfield instead of tiled CSS dots: three depth
+  bands drift at different speeds, bright stars breathe subtly, and a slow blue-violet nebula supplies spatial
+  movement without image assets or runtime requests. Reduced-motion clients receive a static frame.
 - **Might** is a prominent gold account metric in the sticky command bar, beside a unified segmented
   **City / Star Map** control. Cash/Oil/Power, Energy, fleets, standing and wounded remain stable across views;
   the top bar now keeps only current balances, uses larger labels and reserves a visible **Credits** purchase slot.
