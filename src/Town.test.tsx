@@ -6,7 +6,7 @@ import { initGame } from "./lib/gamestore";
 describe("Town troop training UI", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("shows T1 as trainable and higher tiers as training-building-gated", () => {
+  it("keeps detailed training controls behind the Army Camp facility", () => {
     const html = renderToStaticMarkup(
       <Town
         address="0xrender"
@@ -23,12 +23,21 @@ describe("Town troop training UI", () => {
       />,
     );
 
-    expect(html).toContain("Train 10.00K T1");
-    expect(html).toContain("ATK 6 · DEF 6 · MIGHT 2");
     expect(html).toContain("Army Camp");
-    expect(html).toContain('title="Requires Army Camp Lv.4"');
-    expect(html).toContain('type="range"');
-    expect(html).toContain("Total:");
+    expect(html).toContain("Resource Network");
+    expect(html).toContain("RESOURCE NETWORK");
+    expect(html).toContain("BUILD QUEUE");
+    expect(html).toContain("Daily Tasks");
+    expect(html).toContain("CREDITS");
+    expect(html).toContain('aria-label="Army Camp details"');
+    expect(html).not.toContain("Army quantity");
+    expect(html).not.toContain("Training grounds");
+    expect(html).not.toContain("Trains Army units");
+    expect(html).not.toContain("Training, promotion, healing and research controls");
+    expect(html).toContain("CITY");
+    expect(html).toContain("STAR MAP");
+    expect(html).not.toContain("Enter the World");
+    expect(html).not.toContain("No alliance");
   });
 
   it("shows player cheat controls for a locally granted GM wallet", () => {
@@ -53,7 +62,7 @@ describe("Town troop training UI", () => {
       />,
     );
 
-    expect(html).toContain("Local GM tools");
+    expect(html).toContain("LOCAL GM");
     expect(html).toContain("Fill resources");
     expect(html).toContain("Fill troops");
     expect(html).toContain("Finish queues");
@@ -86,7 +95,8 @@ describe("Town troop training UI", () => {
     );
 
     expect(html).toContain("Research Institute");
-    expect(html).toContain("Open Research");
+    expect(html).toContain('aria-label="Research Institute details"');
+    expect(html).toContain("READY");
     expect(html).not.toContain("Rapid Construction I");
   });
 });

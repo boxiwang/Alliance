@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  GameState, BKey, TroopKey, BUILDINGS, BUILDING_ORDER, RES, RES_ORDER, TROOPS_META, TROOP_ORDER,
+  GameState, BKey, TroopKey, ResKey, BUILDINGS, BUILDING_ORDER, RES, RES_ORDER, TROOPS_META, TROOP_ORDER,
   project, startUpgrade, startTrain, upgradeCost, upgradeTimeSec,
   buildingOperationBlockReason,
-  isUnlocked, isUpgradable, unlockAtKeep, capForLevel, capacity, prodPerHour, maxTroops, totalTroops,
+  isUnlocked, isUpgradable, unlockAtKeep, capForLevel, prodPerHour, totalTroops,
   mightBreakdown, troopStats, troopBatchCost, troopCountByType, maxTroopsForType, trainQueueSize, TRAINING_BUILDING,
+  activeUpgrades, buildQueueSlots,
   trainSpeedMult, unlockedTroopTiers,
   promotionBatchCost, promotionQueueSize, promotionTimePerTroop, promotionUnlocked, promotionUnlockLevel, startPromote,
   healingBatchCost, healingDurationSec, healingSpeedMult, hospitalCapacity, startHealing,
   displayResource, displayTroops,
-  townhallRequirements, missingTownhallPrerequisites,
+  missingTownhallPrerequisites,
   accountMarchCapacity, accountResearchModifiers, startResearch, worldMarchSlots,
 } from "./lib/game";
 import {
-  ResearchBranch, effectLabel, missingResearchRequirements, researchBlockReason,
+  ResearchBranch, effectLabel, researchBlockReason,
   RESEARCH_EFFECT_BRANCH, researchConfig, researchCost, researchLevel, researchLevelRow, researchTech, researchTechs,
   researchTreeLayers,
 } from "./lib/research";
@@ -26,6 +27,16 @@ import {
 import { Profile } from "./lib/profile";
 import { compact } from "./lib/format";
 import { clearLocalWorldSession } from "./lib/world-adapter";
+import { loadLocalWorldSession } from "./lib/world-adapter";
+import { energyAt } from "./lib/world-engine";
+import { getN } from "./lib/numbers";
+import GameNav from "./GameNav";
+import BuildingGlyph from "./BuildingGlyph";
+
+const ECONOMY_BUILDINGS: BKey[] = ["bank", "oilwell", "powerplant"];
+const COMMAND_BUILDINGS: BKey[] = ["storage", "wall"];
+const MILITARY_BUILDINGS: BKey[] = ["armyCamp", "navalBase", "airfield"];
+const INFRASTRUCTURE_BUILDINGS: BKey[] = ["academy", "hospital", "watchtower", "embassy", "milestone"];
 
 function fmtMs(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -49,7 +60,8 @@ export default function Town({ address, profile, onWorld }: { address: string; p
   const [promoteFrom, setPromoteFrom] = useState<Record<TroopKey, number>>({ army: 1, navy: 1, air: 1 });
   const [healQty, setHealQty] = useState(10);
   const [researchBranch, setResearchBranch] = useState<ResearchBranch>("development");
-  const [researchOpen, setResearchOpen] = useState(false);
+  const [facilityOpen, setFacilityOpen] = useState<BKey | null>(null);
+  const [commandTab, setCommandTab] = useState<"today" | "signals">("today");
   const [selectedResearchKey, setSelectedResearchKey] = useState("");
   const [gm, setGm] = useState(() => hasLocalGm(address));
   const [gmBuilding, setGmBuilding] = useState<BKey>("keep");
@@ -95,12 +107,36 @@ export default function Town({ address, profile, onWorld }: { address: string; p
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!facilityOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setFacilityOpen(null); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [facilityOpen]);
+
   const view = useMemo(() => project(game, now), [game, now]);
   const rate = prodPerHour(view);
-  const cap = capacity(view);
-  const mt = maxTroops(view);
   const troopsTotal = totalTroops(view);
   const mightScore = mightBreakdown(view);
+  const buildQueues = BUILDING_ORDER.filter((building) => view.buildings[building].finishAt > 0);
+  const worldStatus = useMemo(() => {
+    const stored = loadLocalWorldSession(address);
+    if (!stored) {
+      const energyCap = Number(getN().world?.energy?.cap) || 100;
+      return { location: "RHCHAIN 4663 · HOME NOT YET CHARTED", energy: energyCap, energyCap, activeFleets: 0, fleetCap: worldMarchSlots(view) };
+    }
+    const player = stored.world.players[stored.playerId];
+    const city = player ? stored.world.entities[player.cityId] : null;
+    const home = city?.kind === "city" ? `${Math.round(city.position.x).toString().padStart(3, "0")}:${Math.round(city.position.y).toString().padStart(3, "0")}` : "---:---";
+    const activeFleets = Object.values(stored.world.marches).filter((march) => march.playerId === stored.playerId && march.state !== "completed").length;
+    return {
+      location: `SECTOR ${stored.world.stateId.slice(-6).toUpperCase()} · HOME ${home}`,
+      energy: player ? energyAt(player, now, stored.world.config) : stored.world.config.energyCap,
+      energyCap: stored.world.config.energyCap,
+      activeFleets,
+      fleetCap: player?.marchSlots ?? worldMarchSlots(view),
+    };
+  }, [address, now, view]);
 
   function act(fn: () => { state: GameState; ok: boolean; reason?: string }) {
     const r = fn();
@@ -115,27 +151,17 @@ export default function Town({ address, profile, onWorld }: { address: string; p
     setMsg(message);
   }
 
-  const alliance = profile.factionSymbol ? "$" + profile.factionSymbol : "No alliance";
-
   return (
     <section className="town">
-      {/* command bar */}
-      <div className="card cmdbar">
-        <div className="cb-id">
-          <span className="cb-name">{profile.name}</span>
-          <span className="cb-banner">{alliance}</span>
-        </div>
-        <div className="cb-stats">
-          {gm && <div className="gm-badge">GM</div>}
-          <div className="cbs"><span>Might</span><b className="mono">{compact(mightScore.total)}</b><small className="mono">{compact(mightScore.infrastructure)} base · {compact(mightScore.research)} research · {compact(mightScore.troops)} troops</small></div>
-          <div className="cbs"><span>Troops</span><b className="mono">{compact(displayTroops(troopsTotal))}/{compact(displayTroops(mt))}</b></div>
-        </div>
-      </div>
+      <GameNav view="city" profile={profile} townhallLevel={view.buildings.keep.lvl} location={worldStatus.location}
+        resources={view.res} energy={worldStatus.energy} energyCap={worldStatus.energyCap}
+        activeFleets={worldStatus.activeFleets} fleetCap={worldStatus.fleetCap} standing={troopsTotal} wounded={view.wounded}
+        might={mightScore.total} onCity={() => {}} onWorld={onWorld} />
 
 
       {gm && (
         <div className="gm-panel">
-          <div className="gm-panel-copy"><b>Local GM tools</b><span>Only this browser + wallet on localhost. Never active in production.</span></div>
+          <div className="gm-panel-copy"><b>LOCAL GM</b></div>
           <div className="gm-actions">
             <button onClick={() => gmAct(gmFillResources, "GM: resources filled to Warehouse capacity.")}>Fill resources</button>
             <button onClick={() => gmAct(gmFillTroops, "GM: every trained arm filled to capacity at its highest unlocked tier.")}>Fill troops</button>
@@ -145,7 +171,7 @@ export default function Town({ address, profile, onWorld }: { address: string; p
               const next = game.buildings.academy.lvl >= 1 ? game : gmRaiseBuilding(game, "academy");
               setGame(next);
               saveGame(next);
-              setResearchOpen(true);
+              setFacilityOpen("academy");
               setMsg(game.buildings.academy.lvl >= 1 ? "" : "GM: Research Institute built at Lv.1.");
             }}>Open Research</button>
             <span className="gm-building-stepper">
@@ -169,53 +195,100 @@ export default function Town({ address, profile, onWorld }: { address: string; p
         </div>
       )}
 
-      {/* resources */}
-      <div className="resbar">
-        {RES_ORDER.map((r) => {
-          const cur = view.res[r]; const pct = Math.min(100, (cur / cap) * 100);
-          return (
-            <div className="resbox" key={r}>
-              <div className="rhead"><span>{RES[r].emoji} {RES[r].label}</span>
-                <span className="mono">{compact(displayResource(cur))}<span className="cap">/{compact(displayResource(cap))}</span></span></div>
-              <div className="rmeter"><i style={{ width: pct + "%" }} className={cur >= cap ? "full" : ""} /></div>
-              <div className="rrate mono">+{compact(displayResource(rate[r]))}/hr</div>
-            </div>
-          );
-        })}
-      </div>
-
       {away && (away.cash > 0 || away.oil > 0 || away.power > 0) && (
         <div className="awaynote">🌙 While you were away: <b>+{compact(displayResource(away.cash))} Cash</b>, <b>+{compact(displayResource(away.oil))} Oil</b>, <b>+{compact(displayResource(away.power))} Power</b>
           <button className="mini" onClick={() => setAway(null)}>collect</button></div>
       )}
       {msg && <div className={"gmsg" + (msg.startsWith("GM:") ? " gmmsg" : "")}>{msg}</div>}
 
-      {/* buildings */}
-      <div className="ct town-ct">Your keep</div>
-      <div className="bgrid">
-        {BUILDING_ORDER.map((k) => renderBuilding(k))}
-      </div>
+      <section className="build-queue" aria-label="Build queue">
+        <header><span>BUILD QUEUE</span><b className="mono">{buildQueues.length}/{buildQueueSlots}</b></header>
+        <div>{Array.from({ length: buildQueueSlots }, (_, slot) => {
+          const building = buildQueues[slot];
+          if (!building) return <div className="build-slot idle" key={slot}><i>＋</i><span>IDLE</span></div>;
+          const state = view.buildings[building];
+          return <button className="build-slot active" key={building} onClick={() => setFacilityOpen(building)}><span className="build-slot-glyph"><BuildingGlyph building={building} /></span><div><b>{BUILDINGS[building].label}</b><small>LV.{state.lvl + 1}</small></div><time className="mono">{fmtMs(state.finishAt - now)}</time><span className="build-slot-meter"><i style={{ width: upPct(building, state, now) + "%" }} /></span></button>;
+        })}</div>
+      </section>
 
-      {/* Each troop arm has its own building, tier ladder and training queue. */}
-      <div className="ct town-ct">Training grounds <span className="from">upgrade each building to unlock that arm's higher tiers</span></div>
-      <div className="trainer-grid">
-        {TROOP_ORDER.filter((type) => view.buildings[TRAINING_BUILDING[type]].lvl >= 1).map(renderTrainer)}
-      </div>
-
-      <button className="world-enter" onClick={onWorld}>
-        <span>🗺️</span><b>Enter the World</b><small>Explore coordinates · gather resources · scout and raid</small><em>WORLD →</em>
-      </button>
-
-      {researchOpen && view.buildings.academy.lvl >= 1 && (
-        <div className="research-overlay" role="dialog" aria-modal="true" aria-label="Research Institute">
-          <div className="research-window">
-            <button className="research-close" onClick={() => setResearchOpen(false)}>← Back to city</button>
-            {renderResearchCenter()}
-          </div>
+      <section className="economy-strip" aria-label="Resource Network">
+        <header><span>RESOURCE NETWORK</span><i>PRODUCTION</i></header>
+        <div className="economy-nodes">
+          {ECONOMY_BUILDINGS.map(renderEconomyBuilding)}
         </div>
-      )}
+      </section>
+
+      {/* buildings */}
+      <div className={`city-workspace${facilityOpen === "academy" && view.buildings.academy.lvl >= 1 ? " research-focus" : ""}`}>
+        <div className="city-directory">
+          <button type="button" className={`civilization-core${facilityOpen === "keep" ? " selected" : ""}`} onClick={() => setFacilityOpen("keep")}>
+            <span className="civilization-core-glyph"><BuildingGlyph building="keep" /></span>
+            <span className="civilization-core-copy"><small>CIVILIZATION CORE</small><b>{profile.name}</b><em>ONLINE</em></span>
+            <span className="civilization-core-metrics"><span><small>CORE LEVEL</small><b className="mono">{view.buildings.keep.lvl}</b></span><span><small>SHIELD</small><b className="mono">{view.buildings.keep.lvl < 10 ? "ACTIVE" : "OFFLINE"}</b></span><i>›</i></span>
+          </button>
+          <section className="building-group command-group">
+            <header><span>COMMAND</span></header>
+            <div className="bgrid command-grid">{COMMAND_BUILDINGS.map(renderBuilding)}</div>
+          </section>
+          <section className="building-group military-group">
+            <header><span>MILITARY</span></header>
+            <div className="bgrid facility-grid">{MILITARY_BUILDINGS.map(renderBuilding)}</div>
+          </section>
+          <section className="building-group infrastructure-group">
+            <header><span>INFRASTRUCTURE</span></header>
+            <div className="bgrid facility-grid">{INFRASTRUCTURE_BUILDINGS.map(renderBuilding)}</div>
+          </section>
+        </div>
+        {facilityOpen ? (() => {
+          const trainingType = TROOP_ORDER.find((type) => TRAINING_BUILDING[type] === facilityOpen);
+          const research = facilityOpen === "academy" && view.buildings.academy.lvl >= 1;
+          const hospital = facilityOpen === "hospital";
+          return (
+            <aside className={`facility-inspector${research ? " research" : ""}`} aria-label={BUILDINGS[facilityOpen].label}>
+              <header className="facility-inspector-head">
+                <div><span className="facility-head-glyph"><BuildingGlyph building={facilityOpen} /></span><b>{BUILDINGS[facilityOpen].label}</b><small>LV.{view.buildings[facilityOpen].lvl}</small></div>
+                <button aria-label="Close facility" onClick={() => { setFacilityOpen(null); setCommandTab("today"); }}>×</button>
+              </header>
+              <div className="facility-inspector-body">
+                {research ? renderResearchCenter() : <>
+                  {renderBuildingUpgrade(facilityOpen)}
+                  {view.buildings[facilityOpen].lvl >= 1 && (trainingType ? renderTrainer(trainingType) : hospital ? <div className="facility-hospital">{renderHospitalControls(view.buildings.hospital.finishAt > 0)}</div> : null)}
+                </>}
+              </div>
+            </aside>
+          );
+        })() : (
+          <aside className="facility-inspector command-feed" aria-label="Command feed">{renderCommandFeed()}</aside>
+        )}
+      </div>
     </section>
   );
+
+  function renderCommandFeed() {
+    const signals: Array<{ time: string; text: string }> = [];
+    buildQueues.forEach((building) => signals.push({ time: fmtMs(view.buildings[building].finishAt - now), text: `${BUILDINGS[building].label} upgrade in progress` }));
+    TROOP_ORDER.forEach((type) => {
+      const queue = view.training[type];
+      if (queue.finishAt > 0) signals.push({ time: fmtMs(queue.finishAt - now), text: `${TROOPS_META[type].label} ${queue.mode === "promote" ? "promotion" : "training"} in progress` });
+    });
+    if (view.researchQueue.finishAt > 0) signals.push({ time: fmtMs(view.researchQueue.finishAt - now), text: `${researchTech(view.researchQueue.tech || "")?.name ?? "Research"} in progress` });
+    if (worldStatus.activeFleets > 0) signals.push({ time: "LIVE", text: `${worldStatus.activeFleets} fleet${worldStatus.activeFleets === 1 ? "" : "s"} active in the Star Map` });
+    if (view.wounded > 0) signals.push({ time: "MED", text: `${compact(displayTroops(view.wounded))} wounded troops await recovery` });
+
+    return <>
+      <div className="command-feed-status"><span><i /> SYSTEMS NOMINAL</span><em>RHCHAIN 4663</em></div>
+      <div className="command-feed-tabs"><button className={commandTab === "today" ? "active" : ""} onClick={() => setCommandTab("today")}>TODAY</button><button className={commandTab === "signals" ? "active" : ""} onClick={() => setCommandTab("signals")}>SIGNALS</button></div>
+      {commandTab === "today" ? <div className="daily-operations">
+        <header><div><small>DAILY OPERATIONS</small><b>Daily Tasks</b></div><strong className="mono">2 / 5</strong></header>
+        <div className="daily-progress"><i /></div>
+        <div className="daily-task done"><span>✓</span><div><b>Collect sector resources</b><small>500K / 500K</small></div><em>DONE</em></div>
+        <div className="daily-task done"><span>✓</span><div><b>Train combat units</b><small>1,000 / 1,000</small></div><em>DONE</em></div>
+        <div className="daily-task"><span>3</span><div><b>Complete expeditions</b><small>2 / 3</small></div><em>67%</em></div>
+        <div className="daily-task"><span>4</span><div><b>Defeat a rogue fleet</b><small>0 / 1</small></div><em>0%</em></div>
+        <div className="daily-task"><span>5</span><div><b>Use fleet energy</b><small>670 / 1,000</small></div><em>67%</em></div>
+      </div> : <div className="command-signals"><header><small>LIVE OPERATIONS</small><b>Signal Log</b></header>{signals.length ? signals.map((signal, index) => <div className="command-signal" key={`${signal.text}-${index}`}><time className="mono">{signal.time}</time><span>{signal.text}</span></div>) : <div className="command-signal-empty"><div className="facility-empty-scan"><i /><i /><i /></div><b>All channels idle</b></div>}</div>}
+    </>;
+  }
 
   function trainPct(v: GameState, type: TroopKey, t: number) {
     const queue = v.training[type];
@@ -257,8 +330,7 @@ export default function Town({ address, profile, onWorld }: { address: string; p
     return (
       <div className="card trainer" key={type}>
         <div className="trainer-head">
-          <div className="ct">{TROOPS_META[type].emoji} {BUILDINGS[buildingKey].label} <span className="from">Lv.{building.lvl}</span></div>
-          <span className="trainer-cap mono">{compact(displayTroops(armCount))}/{compact(displayTroops(armCapacity))} · batch {compact(displayTroops(queueCapacity))}</span>
+          <span className="trainer-cap mono">TROOPS {compact(displayTroops(armCount))}/{compact(displayTroops(armCapacity))} · BATCH {compact(displayTroops(queueCapacity))}</span>
         </div>
         {queue.finishAt > 0 ? (
           <div className="training">
@@ -266,11 +338,10 @@ export default function Town({ address, profile, onWorld }: { address: string; p
             <div className="rmeter"><i style={{ width: trainPct(view, type, now) + "%" }} /></div>
           </div>
         ) : building.finishAt > 0 ? (
-          <div className="training unavailable"><div className="tr-row"><span>Training unavailable while {BUILDINGS[buildingKey].label} is upgrading</span><span className="mono">{fmtMs(building.finishAt - now)}</span></div></div>
+          <div className="training unavailable"><div className="tr-row"><span>UPGRADING</span><span className="mono">{fmtMs(building.finishAt - now)}</span></div></div>
         ) : (
           <div className="trainctl">
             <div className="train-mode-row">
-              <label htmlFor={`${type}-training-mode`}>ORDER</label>
               <select id={`${type}-training-mode`} value={mode} onChange={(event) => {
                 const nextMode = event.target.value as "train" | "promote";
                 setTrainingMode((current) => ({ ...current, [type]: nextMode }));
@@ -281,10 +352,9 @@ export default function Town({ address, profile, onWorld }: { address: string; p
                   setTrainTier((current) => ({ ...current, [type]: nextTarget }));
                 }
               }}>
-                <option value="train">Train new troops</option>
-                <option value="promote" disabled={!promotionUnlocked(view, type)}>Promote existing troops</option>
+                <option value="train">Train</option>
+                <option value="promote" disabled={!promotionUnlocked(view, type)}>Promote · Lv.{promotionUnlockLevel(type)}</option>
               </select>
-              {!promotionUnlocked(view, type) && <span className="promotion-lock">Promotion unlocks at Lv.{promotionUnlockLevel(type)}</span>}
             </div>
             {mode === "promote" && (
               <div className="promote-source">
@@ -324,9 +394,9 @@ export default function Town({ address, profile, onWorld }: { address: string; p
                 <span className="mono">{compact(displayTroops(maxQuantity))}</span>
               </div>
               <div className="troop-stats mono">T{tier} · ATK {stats.attack} · DEF {stats.defense} · MIGHT {stats.power}</div>
-              <div className="bcost mono">Total: {RES_ORDER.map((r) => batchCost[r] ? `${compact(displayResource(batchCost[r]!))}${RES[r].emoji} ` : "").join("")}· ◷ {fmtSec(totalSeconds)}</div>
+              {quantity > 0 && <div className="bcost mono">{RES_ORDER.map((r) => batchCost[r] ? `${compact(displayResource(batchCost[r]!))}${RES[r].emoji} ` : "").join("")}· ◷ {fmtSec(totalSeconds)}</div>}
               <button className="cta sm" disabled={quantity <= 0} onClick={() => act(() => mode === "promote" ? startPromote(game, type, sourceTier, tier, quantity) : startTrain(game, type, tier, quantity))}>
-                {mode === "promote" ? `Promote ${compact(displayTroops(quantity))} T${sourceTier} → T${tier}` : `Train ${compact(displayTroops(quantity))} T${tier}`}
+                {quantity <= 0 ? (mode === "promote" ? "No eligible troops" : "Capacity full") : mode === "promote" ? `Promote ${compact(displayTroops(quantity))} T${sourceTier} → T${tier}` : `Train ${compact(displayTroops(quantity))} T${tier}`}
               </button>
             </div>
           </div>
@@ -345,12 +415,12 @@ export default function Town({ address, profile, onWorld }: { address: string; p
       { length: Math.ceil(layer.length / maximumColumns) },
       (_, index) => layer.slice(index * maximumColumns, (index + 1) * maximumColumns),
     ));
-    const nodeWidth = researchBranch === "battle" ? 168 : 190;
-    const nodeHeight = 82;
-    const columnGap = 28;
-    const rowGap = 62;
-    const graphPadding = 34;
-    const graphWidth = Math.max(980, maximumColumns * nodeWidth + Math.max(0, maximumColumns - 1) * columnGap + graphPadding * 2);
+    const nodeWidth = researchBranch === "battle" ? 150 : 166;
+    const nodeHeight = 68;
+    const columnGap = 22;
+    const rowGap = 42;
+    const graphPadding = 28;
+    const graphWidth = Math.max(760, maximumColumns * nodeWidth + Math.max(0, maximumColumns - 1) * columnGap + graphPadding * 2);
     const graphHeight = graphPadding * 2 + visualLayers.length * nodeHeight + Math.max(0, visualLayers.length - 1) * rowGap;
     const positions = new Map<string, { x: number; y: number; tech: any }>();
     visualLayers.forEach((layer, depth) => {
@@ -377,8 +447,8 @@ export default function Town({ address, profile, onWorld }: { address: string; p
     return (
       <section className="research-center">
         <div className="research-titlebar">
-          <div><span className="research-kicker">ACADEMY · LV.{view.buildings.academy.lvl}</span><h2>Research Institute</h2><p>One queue. Permanent bonuses. Higher Academy levels unlock deeper upgrades.</p></div>
-          <div className="research-summary mono"><b>{researchedLevels}/{branch.totals.levels}</b><span>levels completed</span></div>
+          <span>PROGRESS</span>
+          <div className="research-summary mono"><b>{researchedLevels}/{branch.totals.levels}</b></div>
         </div>
 
         {queue.finishAt > 0 && queueTech ? (
@@ -387,18 +457,17 @@ export default function Town({ address, profile, onWorld }: { address: string; p
             <div className="research-queue-time mono">{fmtMs(queue.finishAt - now)}</div>
             <div className="rmeter"><i style={{ width: Math.min(100, Math.max(0, ((queue.durationSec * 1000 - (queue.finishAt - now)) / (queue.durationSec * 1000)) * 100)) + "%" }} /></div>
           </div>
-        ) : <div className="research-queue"><div><span>RESEARCH QUEUE</span><b>Idle — choose a technology</b></div></div>}
+        ) : <div className="research-queue"><div><span>QUEUE</span><b>IDLE</b></div></div>}
 
         <div className="research-tabs">
           {(Object.keys(config.branches) as ResearchBranch[]).map((key) => {
             const meta = config.branches[key];
-            return <button key={key} className={researchBranch === key ? "on" : ""} onClick={() => { setResearchBranch(key); setSelectedResearchKey(""); }}><b>{meta.label}</b><small>{meta.totals.technologies} techs · {meta.totals.levels} levels</small></button>;
+            return <button key={key} className={researchBranch === key ? "on" : ""} onClick={() => { setResearchBranch(key); setSelectedResearchKey(""); }}><b>{meta.label}</b></button>;
           })}
         </div>
-        <p className="research-branch-copy">{branch.description}</p>
-        <div className="research-account-effects">
-          <div className="research-account-title"><b>Active account effects</b><span>Applied automatically to this wallet</span></div>
-          {activeEffects.length > 0 ? <div className="research-account-grid">{activeEffects.map(([key]) => {
+        {activeEffects.length > 0 && <div className="research-account-effects">
+          <div className="research-account-title"><b>ACTIVE BONUSES</b></div>
+          <div className="research-account-grid">{activeEffects.map(([key]) => {
             const value = accountModifiers[key];
             const flat = key === "trainingCapacityBonus" || key === "hospitalCapacityBonus" || key === "marchQueueBonus";
             const detail = key === "marchQueueBonus"
@@ -407,13 +476,13 @@ export default function Town({ address, profile, onWorld }: { address: string; p
                 ? `${compact(displayTroops(accountMarchCapacity(view)))} current march cap`
                 : flat ? `+${compact(displayTroops(value))}` : `+${(value * 100).toFixed(value * 100 < 10 ? 1 : 0)}%`;
             return <div key={key}><span>{researchEffectName(key)}</span><b className="mono">{detail}</b></div>;
-          })}</div> : <p>No completed {branch.label} bonuses yet.</p>}
-        </div>
+          })}</div>
+        </div>}
 
         {selectedTech && renderResearchDetail(selectedTech)}
 
         <div className="research-tree-head">
-          <div><b>{branch.label} dependency tree</b><span>Follow the lines from top to bottom. Select a technology to highlight its direct paths and see requirements.</span></div>
+          <div><b>{branch.label.toUpperCase()} TREE</b></div>
           <div className="research-tree-legend"><span className="complete">MAXED</span><span className="available">AVAILABLE</span><span className="locked">LOCKED</span></div>
         </div>
         <div className="research-graph-scroll">
@@ -455,7 +524,7 @@ export default function Town({ address, profile, onWorld }: { address: string; p
               >
                 <span className="research-tree-node-name">{tech.name}</span>
                 <span className="research-tree-node-effect">{effect ? effectLabel(effect) : "No bonus"}</span>
-                <span className="research-tree-node-meta"><i>Academy {row?.academyLevel ?? 30}</i><b className="mono">{complete ? "MAX" : `${current}/${tech.maxLevel}`}</b></span>
+                <span className="research-tree-node-meta"><i>RI {row?.academyLevel ?? 30}</i><b className="mono">{complete ? "MAX" : `${current}/${tech.maxLevel}`}</b></span>
               </button>;
             })}
           </div>
@@ -471,22 +540,21 @@ export default function Town({ address, profile, onWorld }: { address: string; p
     const row = researchLevelRow(tech.key, nextLevel);
     const cost = researchCost(tech.key, nextLevel);
     const reason = complete ? null : researchBlockReason(view, tech.key);
-    const missing = missingResearchRequirements(view, tech.key);
+    const resourcesMet = hasResources(cost);
     const currentEffect = current > 0 ? researchLevelRow(tech.key, current)?.effect : null;
     const nextEffect = row?.effect;
     return (
       <article className={`research-detail ${complete ? "complete" : reason ? "locked" : "available"}`}>
-        <div className="research-detail-copy"><span className="research-kicker">SELECTED TECHNOLOGY</span><h3>{tech.name}</h3><p>{tech.description}</p></div>
-        <div className="research-detail-progress"><span>CURRENT LEVEL</span><b className="mono">{current}/{tech.maxLevel}</b><div className="research-effect"><span>{currentEffect ? effectLabel(currentEffect) : "No bonus"}</span>{!complete && nextEffect && <><i>→</i><b>{effectLabel(nextEffect)}</b></>}</div></div>
+        <div className="research-detail-copy"><h3>{tech.name}</h3></div>
+        <div className="research-detail-progress"><b className="mono">{current}/{tech.maxLevel}</b><div className="research-effect"><span>{currentEffect ? effectLabel(currentEffect) : "—"}</span>{!complete && nextEffect && <><i>→</i><b>{effectLabel(nextEffect)}</b></>}</div></div>
         {!complete && <div className="research-detail-gates">
-          <span className={view.buildings.academy.lvl >= row.academyLevel ? "met" : ""}>Academy Lv.{row.academyLevel}</span>
-          {(tech.requirements ?? []).map((requirement: any) => <span className={researchLevel(view, requirement.tech) >= requirement.level ? "met" : ""} key={requirement.tech}>{researchTech(requirement.tech)?.name} Lv.{requirement.level}</span>)}
-          {missing.length === 0 && <span className="met">Prerequisites cleared</span>}
+          {view.buildings.academy.lvl < row.academyLevel && <span>🔒 Academy Lv.{row.academyLevel}</span>}
+          {(tech.requirements ?? []).filter((requirement: any) => researchLevel(view, requirement.tech) < requirement.level).map((requirement: any) => <span key={requirement.tech}>🔒 {researchTech(requirement.tech)?.name} Lv.{requirement.level}</span>)}
         </div>}
-        {!complete && <div className="research-detail-action"><div className="research-cost mono">{RES_ORDER.map((resource) => cost[resource] ? <span key={resource}>{compact(displayResource(cost[resource]))}{RES[resource].emoji}</span> : null)}<span>◷ {fmtSec(row.timeSec)}</span></div><button disabled={!!reason} onClick={() => act(() => startResearch(game, tech.key))}>
+        {!complete && <div className="research-detail-action"><div className="research-cost mono">{renderResourceCosts(cost)}<span>◷ {fmtSec(row.timeSec)}</span></div><button className={resourcesMet && !reason ? "ready" : ""} disabled={!!reason} onClick={() => act(() => startResearch(game, tech.key))}>
           {complete ? "MAXED" : reason ?? `Research Lv.${nextLevel}`}
         </button></div>}
-        {complete && <div className="research-detail-maxed">All levels completed</div>}
+        {complete && <div className="research-detail-maxed">MAXED</div>}
       </article>
     );
   }
@@ -500,29 +568,37 @@ export default function Town({ address, profile, onWorld }: { address: string; p
     const target = b.lvl + 1;
     const atCap = !locked && b.lvl >= capForLevel(view, k);
     const cost = upgradable ? upgradeCost(k, target) : {};
-    const time = upgradable ? upgradeTimeSec(k, target) : 0;
-    const requirements = k === "keep" ? townhallRequirements(target) : [];
     const missingRequirements = k === "keep" ? missingTownhallPrerequisites(view, target) : [];
     const activeTrainingType = TROOP_ORDER.find((type) => TRAINING_BUILDING[type] === k);
+    const selectableBuilding = !locked && (upgradable || k === "academy" || k === "hospital" || !!activeTrainingType);
     const occupiedReason = k === "academy" && view.researchQueue.finishAt > 0
-      ? "Research in progress"
+      ? "Researching"
       : activeTrainingType && view.training[activeTrainingType].finishAt > 0
-        ? view.training[activeTrainingType].mode === "promote" ? "Promotion in progress" : "Training in progress"
-        : k === "hospital" && view.healing.finishAt > 0 ? "Healing in progress"
+        ? view.training[activeTrainingType].mode === "promote" ? "Promoting" : "Training"
+        : k === "hospital" && view.healing.finishAt > 0 ? "Healing"
         : "";
+    const resourcesMet = hasResources(cost);
+    const buildersBusy = activeUpgrades(view) >= buildQueueSlots;
+    const upgradeReady = resourcesMet && !buildersBusy && missingRequirements.length === 0 && !occupiedReason;
+    const status = occupiedReason || (buildersBusy ? "BUILDERS BUSY" : missingRequirements.length ? "REQUIREMENTS" : resourcesMet ? "READY" : "NEEDS RESOURCES");
 
     return (
-      <div className={"bcard" + (locked ? " locked" : "")} key={k}>
-        <div className="bicon">{meta.emoji}</div>
-        <div className="bmain">
+      <div className={`bcard${locked ? " locked" : ""}${selectableBuilding ? " facility" : ""}${facilityOpen === k ? " selected" : ""}`} key={k}
+        role={selectableBuilding ? "button" : undefined}
+        aria-label={selectableBuilding ? `${meta.label} details` : undefined}
+        tabIndex={selectableBuilding ? 0 : undefined}
+        onClick={selectableBuilding ? () => setFacilityOpen(k) : undefined}
+        onKeyDown={selectableBuilding ? (event) => { if (event.key === "Enter" || event.key === " ") setFacilityOpen(k); } : undefined}>
+        <header className="bcard-head">
+          <div className="bicon"><BuildingGlyph building={k} /></div>
           <div className="brow1"><span className="blabel">{meta.label}</span>
-            <span className="blvl">{locked ? "🔒" : !upgradable ? "" : b.lvl === 0 ? "—" : "Lv." + b.lvl}</span></div>
-          <div className="bblurb">{meta.blurb}</div>
-
+            <span className="blvl">{locked || !upgradable ? "" : b.lvl === 0 ? "—" : "Lv." + b.lvl}</span></div>
+        </header>
+        <div className="bmain">
           {locked ? (
-            <div className="bgate">Unlocks at Townhall Lv.{unlockAtKeep(k)}</div>
+            <div className="bgate" title={`Unlocks at Townhall Lv.${unlockAtKeep(k)}`}>🔒 TH {unlockAtKeep(k)}</div>
           ) : !upgradable ? (
-            null
+            <div className="bgate">SOON</div>
           ) : upgrading ? (
             <div className="bprog">
               <div className="rmeter"><i style={{ width: upPct(k, b, now) + "%" }} /></div>
@@ -531,27 +607,103 @@ export default function Town({ address, profile, onWorld }: { address: string; p
           ) : atCap && k === "keep" ? (
             <div className="bgate">Max level</div>
           ) : atCap ? (
-            <div className="bgate">Raise Townhall to upgrade</div>
+            <div className="bgate" title="Upgrade Townhall first">🔒 TH {b.lvl + 1}</div>
           ) : (
-            <button className="bupg" disabled={missingRequirements.length > 0 || !!occupiedReason} onClick={() => act(() => startUpgrade(game, k))}>
-              <span>{occupiedReason || (b.lvl === 0 ? "Build" : "Upgrade → Lv." + target)}</span>
-              <span className="bcost mono">
-                {RES_ORDER.map((r) => cost[r] ? `${compact(displayResource(cost[r]!))}${RES[r].emoji} ` : "").join("")}· {fmtSec(time)}
-              </span>
-            </button>
+            <div className={`bcard-state ${upgradeReady ? "ready" : "blocked"}`}><b>{status}</b><i>→</i></div>
           )}
-          {!locked && !upgrading && k === "keep" && requirements.length > 0 && (
-            <div className={"breqs" + (missingRequirements.length > 0 ? " missing" : " met")}>
-              Requires {requirements.map((req) => `${BUILDINGS[req].label} Lv.${target - 1}`).join(" · ")}
-            </div>
-          )}
-          {!locked && !upgrading && k === "academy" && b.lvl >= 1 && (
-            <button className="academy-open" onClick={() => setResearchOpen(true)}>Open Research →</button>
-          )}
-          {!locked && k === "hospital" && b.lvl >= 1 && renderHospitalControls(upgrading)}
         </div>
       </div>
     );
+  }
+
+  function renderEconomyBuilding(k: BKey) {
+    const building = view.buildings[k];
+    const meta = BUILDINGS[k];
+    const resource = meta.produces!;
+    const locked = !isUnlocked(view, k);
+    const upgrading = building.finishAt > 0;
+    const target = building.lvl + 1;
+    const atCap = !locked && building.lvl >= capForLevel(view, k);
+    const cost = upgradeCost(k, target);
+    const resourcesMet = hasResources(cost);
+    const buildersBusy = activeUpgrades(view) >= buildQueueSlots;
+    const upgradeReady = resourcesMet && !buildersBusy;
+    return (
+      <article className={`economy-node ${resource}${locked ? " locked" : ""}${facilityOpen === k ? " selected" : ""}`} key={k}
+        role={!locked ? "button" : undefined} aria-label={!locked ? `${meta.label} details` : undefined} tabIndex={!locked ? 0 : undefined}
+        onClick={!locked ? () => setFacilityOpen(k) : undefined}
+        onKeyDown={!locked ? (event) => { if (event.key === "Enter" || event.key === " ") setFacilityOpen(k); } : undefined}>
+        <div className="economy-node-main">
+          <span className="economy-glyph"><BuildingGlyph building={k} /></span>
+          <div><small>{RES[resource].label}</small><b>{meta.label}</b></div>
+          <strong className="mono">LV.{building.lvl}</strong>
+        </div>
+        <div className="economy-output"><span className="mono">+{compact(displayResource(rate[resource]))}/HR</span><i /></div>
+        {locked ? <div className="economy-gate mono">🔒 TH {unlockAtKeep(k)}</div>
+          : upgrading ? <div className="economy-progress"><div className="rmeter"><i style={{ width: upPct(k, building, now) + "%" }} /></div><span className="mono">{fmtMs(building.finishAt - now)}</span></div>
+            : atCap ? <div className="economy-gate mono">🔒 TH {building.lvl + 1}</div>
+              : <div className={`economy-state ${upgradeReady ? "ready" : "blocked"}`}><b>{buildersBusy ? "BUILDERS BUSY" : resourcesMet ? "READY" : "NEEDS RESOURCES"}</b><i>→</i></div>}
+      </article>
+    );
+  }
+
+  function renderBuildingUpgrade(k: BKey) {
+    const building = view.buildings[k];
+    const upgradable = isUpgradable(k);
+    const locked = !isUnlocked(view, k);
+    const target = building.lvl + 1;
+    const atCap = !locked && building.lvl >= capForLevel(view, k);
+    const upgrading = building.finishAt > 0;
+    const cost = upgradable ? upgradeCost(k, target) : {};
+    const missingRequirements = k === "keep" ? missingTownhallPrerequisites(view, target) : [];
+    const operationBlock = buildingOperationBlockReason(view, k);
+    const buildersBusy = activeUpgrades(view) >= buildQueueSlots;
+    const resourcesMet = hasResources(cost);
+    const ready = upgradable && !locked && !atCap && !upgrading && !operationBlock && !buildersBusy && resourcesMet && missingRequirements.length === 0;
+    const blockLabel = locked ? `TH ${unlockAtKeep(k)} REQUIRED`
+      : !upgradable ? "COMING SOON"
+        : atCap ? (k === "keep" ? "MAX LEVEL" : `TH ${building.lvl + 1} REQUIRED`)
+          : operationBlock ? operationBlock.toUpperCase()
+            : buildersBusy ? "BUILDERS BUSY"
+              : missingRequirements.length ? "REQUIREMENTS NOT MET"
+                : !resourcesMet ? "INSUFFICIENT RESOURCES"
+                  : "READY";
+
+    return <section className={`upgrade-inspector${ready ? " ready" : " blocked"}`}>
+      <div className="upgrade-inspector-level">
+        <span>NEXT</span>
+        <b>{building.lvl === 0 ? "BUILD" : `LV.${building.lvl} → LV.${target}`}</b>
+        {upgradable && !atCap && <time className="mono">◷ {fmtSec(upgradeTimeSec(k, target))}</time>}
+      </div>
+      {upgradable && !atCap && <div className="upgrade-resource-grid">
+        {RES_ORDER.filter((resource) => (cost[resource] ?? 0) > 0).map((resource) => {
+          const required = cost[resource] ?? 0;
+          const enough = view.res[resource] >= required;
+          return <div className={`upgrade-resource ${enough ? "enough" : "short"}`} key={resource}>
+            <span>{RES[resource].emoji} {RES[resource].label}</span>
+            <b className="mono">{compact(displayResource(required))}</b>
+            <small className="mono">{compact(displayResource(view.res[resource]))} AVAILABLE</small>
+          </div>;
+        })}
+      </div>}
+      {!!missingRequirements.length && <div className="upgrade-requirements">
+        {missingRequirements.map((requirement) => <span key={requirement.key}>🔒 {BUILDINGS[requirement.key].label} LV.{requirement.requiredLevel}</span>)}
+      </div>}
+      {upgrading ? <div className="upgrade-inspector-progress"><div className="rmeter"><i style={{ width: upPct(k, building, now) + "%" }} /></div><b className="mono">{fmtMs(building.finishAt - now)}</b></div>
+        : <button className={ready ? "ready" : "blocked"} disabled={!ready} onClick={() => act(() => startUpgrade(game, k))}><span>{blockLabel}</span>{ready && <b>{building.lvl === 0 ? "BUILD" : "UPGRADE"} →</b>}</button>}
+    </section>;
+  }
+
+  function hasResources(cost: Partial<Record<ResKey, number>>): boolean {
+    return RES_ORDER.every((resource) => view.res[resource] >= (cost[resource] ?? 0));
+  }
+
+  function renderResourceCosts(cost: Partial<Record<ResKey, number>>) {
+    return <span className="upgrade-costs">{RES_ORDER.filter((resource) => (cost[resource] ?? 0) > 0).map((resource) => {
+      const required = cost[resource] ?? 0;
+      const enough = view.res[resource] >= required;
+      return <span className={`upgrade-cost ${enough ? "enough" : "short"}`} key={resource} title={`${compact(displayResource(view.res[resource]))} available`}><i>{RES[resource].emoji}</i><b className="mono">{compact(displayResource(required))}</b></span>;
+    })}</span>;
   }
 
   function renderHospitalControls(upgrading: boolean) {

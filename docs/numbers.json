@@ -1,11 +1,11 @@
 {
   "meta": {
-    "project": "RUGLANDS",
+    "project": "ALLIANCE",
     "phase": "personal-mode MVP · Slice 1 · in-city",
     "version": "0.8",
     "reference": "CoC-early pacing; economy redefined to Cash/Oil/Power + Navy/Army/Air per owner spec",
     "curve": "Explicit per-level tables. Times are seconds; production is per hour.",
-    "note": "Explicit city, troop, World and Academy tables. Academy and troop training use Kingshot-shaped gates, capacities and queue math adapted to RUGLANDS resources and combat."
+    "note": "Explicit city, troop, World and Academy tables. Academy and troop training use Kingshot-shaped gates, capacities and queue math adapted to ALLIANCE resources and combat."
   },
   "global": {
     "keepGatesEverything": true,

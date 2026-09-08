@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { getN, saveN, resetN, hasOverride } from "./lib/numbers";
-import { simulateProgression } from "./lib/simulator";
+import { PersonalSimulationStrategy, simulatePersonalProgression, simulateProgression } from "./lib/simulator";
 import { simulateWorldBalance } from "./lib/world-balance";
 import { validateNumbers, ValidationIssue } from "./lib/validation";
 
@@ -236,6 +236,17 @@ function fmtDays(days: number): string {
   return `${days.toFixed(days < 10 ? 1 : 0)}d`;
 }
 
+function fmtCompact(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function fmtResearchEffect(key: string, value: number): string {
+  if (key === "marchQueueBonus") return `+${Math.round(value)} queue`;
+  if (key === "trainingCapacityBonus" || key === "hospitalCapacityBonus") return `+${fmtCompact(value)}`;
+  return `+${(value * 100).toFixed(1)}%`;
+}
+
 const PACE_PROFILES = {
   light: { name: "Light", sessions: 1, uptime: 65, description: "Checks in once a day and often leaves a builder idle." },
   normal: { name: "Normal", sessions: 3, uptime: 85, description: "Returns a few times a day and usually keeps construction moving." },
@@ -305,6 +316,93 @@ function PaceSimulator({ numbers }: { numbers: any }) {
         </div>
       )}
     </div>
+  );
+}
+
+const PERSONAL_STRATEGIES: Record<PersonalSimulationStrategy, { name: string; description: string }> = {
+  growth: { name: "Growth first", description: "Prioritizes the Research Institute and protects the next construction bill." },
+  balanced: { name: "Balanced", description: "Keeps development, economy and battle research close together." },
+  military: { name: "Military first", description: "Funds troop queues and battle research more aggressively." },
+};
+
+const RESOURCE_DISPLAY = {
+  "res.cash": { icon: "💰", name: "Cash" },
+  "res.oil": { icon: "⛽", name: "Oil" },
+  "res.power": { icon: "⚡", name: "Power" },
+};
+
+function PersonalLoopSimulator({ numbers }: { numbers: any }) {
+  const [strategy, setStrategy] = useState<PersonalSimulationStrategy>("balanced");
+  const [targetLevel, setTargetLevel] = useState(10);
+  const [harvests, setHarvests] = useState(1);
+  const result = useMemo(() => simulatePersonalProgression(numbers, {
+    targetLevel,
+    strategy,
+    sessionsPerDay: 3,
+    queueUptime: .85,
+    researchUptime: .8,
+    trainingUptime: .75,
+    fullNodeHarvestsPerDay: harvests,
+  }), [numbers, targetLevel, strategy, harvests]);
+  const resourceKeys = Object.keys(RESOURCE_DISPLAY) as Array<keyof typeof RESOURCE_DISPLAY>;
+  const modifiers = Object.entries(result.research.modifiers)
+    .filter(([, value]) => Math.abs(value) > 1e-9)
+    .sort((left, right) => Math.abs(right[1]) - Math.abs(left[1]));
+
+  return (
+    <section className="adm-loop">
+      <div className="adm-view-intro">
+        <div>
+          <span className="adm-eyebrow">WHOLE ACCOUNT MODEL</span>
+          <h2>What does a real personal-mode account become?</h2>
+          <p>Runs construction, Academy research, all three training queues and repeat world gathering on one shared resource economy. Use it to find which system is starving the others.</p>
+        </div>
+      </div>
+      <div className="adm-loop-toolbar">
+        <div className="adm-profile-tabs adm-strategy-tabs">
+          {(Object.entries(PERSONAL_STRATEGIES) as Array<[PersonalSimulationStrategy, typeof PERSONAL_STRATEGIES[PersonalSimulationStrategy]]>).map(([key, value]) => (
+            <button className={strategy === key ? "on" : ""} key={key} onClick={() => setStrategy(key)}><b>{value.name}</b><span>{value.description}</span></button>
+          ))}
+        </div>
+        <div className="adm-loop-controls">
+          <label>Simulate to <select value={targetLevel} onChange={(event) => setTargetLevel(Number(event.target.value))}><option value={10}>TH10</option><option value={30}>TH30</option></select></label>
+          <label>Full planets / day <input type="number" min="0" max="20" step="0.25" value={harvests} onChange={(event) => setHarvests(Math.max(0, Number(event.target.value) || 0))} /></label>
+        </div>
+      </div>
+      <div className={`adm-loop-summary ${result.deadlock ? "bad" : ""}`}>
+        <div><small>TIME TO TH{targetLevel}</small><b>{result.deadlock ? "BLOCKED" : fmtDays(result.totalDays)}</b><span>{PERSONAL_STRATEGIES[strategy].name}</span></div>
+        <div><small>RESEARCH</small><b>{result.research.upgrades}</b><span>{fmtCompact(result.research.might)} Might</span></div>
+        <div><small>TRAINED TROOPS</small><b>{fmtCompact(result.troops.total)}</b><span>{fmtCompact(result.troops.might)} Might</span></div>
+        <div><small>BOTTLENECK</small><b>{result.bottleneck.toUpperCase()}</b><span>highest spend / supply</span></div>
+      </div>
+      {result.deadlock && <div className="adm-loop-deadlock">{result.deadlock}</div>}
+      <div className="adm-loop-grid">
+        <div className="adm-loop-panel">
+          <h3>Resource ledger</h3>
+          <p>Every source and sink is reconciled, including resources lost to Warehouse overflow.</p>
+          <div className="adm-table-wrap adm-ledger-wrap">
+            <table className="adm-level-table adm-ledger">
+              <thead><tr><th>Resource</th><th>Start</th><th>City</th><th>World</th><th>Buildings</th><th>Research</th><th>Troops</th><th>Overflow</th><th>Ending</th></tr></thead>
+              <tbody>{resourceKeys.map((key) => <tr key={key}><th>{RESOURCE_DISPLAY[key].icon} {RESOURCE_DISPLAY[key].name}</th><td>{fmtCompact(result.resources.starting[key])}</td><td className="source">+{fmtCompact(result.resources.cityProduction[key])}</td><td className="source">+{fmtCompact(result.resources.worldGathering[key])}</td><td className="sink">−{fmtCompact(result.resources.buildingSpend[key])}</td><td className="sink">−{fmtCompact(result.resources.researchSpend[key])}</td><td className="sink">−{fmtCompact(result.resources.trainingSpend[key])}</td><td>{fmtCompact(result.resources.overflow[key])}</td><td>{fmtCompact(result.resources.ending[key])}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </div>
+        <div className="adm-loop-panel">
+          <h3>Queue pressure</h3>
+          <p>Low utilization shows where resource shortages or upgrade locks leave a queue idle.</p>
+          <div className="adm-queue-bars">
+            {Object.entries(result.queues).map(([key, value]) => <div key={key}><span>{humanize(key)}</span><i><b style={{ width: `${Math.round(value * 100)}%` }} /></i><strong>{Math.round(value * 100)}%</strong></div>)}
+          </div>
+          <h3 className="adm-loop-subhead">End-state forces</h3>
+          <div className="adm-force-split">{(["army", "navy", "air"] as const).map((arm) => <div key={arm}><span>{TROOP_INFO[`troop.${arm}`].icon} {humanize(arm)}</span><b>{fmtCompact(result.troops[arm])}</b></div>)}</div>
+        </div>
+      </div>
+      <div className="adm-loop-panel adm-research-output">
+        <div><h3>Research actually applied</h3><p>{result.research.byBranch.development} Development · {result.research.byBranch.economy} Economy · {result.research.byBranch.battle} Battle levels completed</p></div>
+        <div className="adm-modifier-list">{modifiers.length ? modifiers.map(([key, value]) => <span key={key}><b>{humanize(key)}</b> {fmtResearchEffect(key, value)}</span>) : <span>No completed bonuses</span>}</div>
+      </div>
+      <p className="adm-sim-foot">Planning assumptions: 3 visits/day, 85% builder uptime, 80% research uptime, 75% training uptime. Gathering is modeled as the selected number of fully harvested planets per day, split evenly across Cash, Oil and Power. It is a deterministic balance model, not a player-behavior forecast.</p>
+    </section>
   );
 }
 
@@ -642,13 +740,13 @@ export default function Admin() {
   return (
     <div className="admin">
       <header className="adm-toolbar">
-        <div className="adm-toolbar-left"><span className="adm-title">RUGLANDS Balance Lab</span><span className="adm-subtitle">Tune progression, economy and combat without touching code.</span></div>
+        <div className="adm-toolbar-left"><span className="adm-title">ALLIANCE Balance Lab</span><span className="adm-subtitle">Tune progression, economy and combat without touching code.</span></div>
         <div className="adm-toolbar-right"><button className="adm-btn adm-btn-primary" onClick={onSaveReload}>Save locally</button><button className="adm-btn" onClick={onRevert}>Undo changes</button><button className="adm-btn" onClick={onExport}>Export JSON</button><button className="adm-btn adm-btn-danger" onClick={onResetDefaults}>Restore defaults</button></div>
       </header>
       <div className="adm-status"><span className={`adm-badge ${overrideActive ? "on" : ""}`}>{overrideActive ? "Local tuning active" : "Bundled defaults"}</span><span>{leafCount.toLocaleString()} editable values</span><span>Nothing is online until you export and commit it.</span>{savedNote && <span className="adm-savednote">{savedNote}</span>}</div>
       <nav className="adm-nav">{tabs.map((tab) => <button key={tab.key} className={view === tab.key ? "on" : ""} onClick={() => setView(tab.key)}><span>{tab.icon}</span>{tab.label}</button>)}</nav>
       <main className="adm-body">
-        {view === "overview" && <><ValidationPanel issues={validationIssues} /><PaceSimulator numbers={working} /></>}
+        {view === "overview" && <><ValidationPanel issues={validationIssues} /><PaceSimulator numbers={working} /><PersonalLoopSimulator numbers={working} /></>}
         {view === "buildings" && <BuildingWorkspace numbers={working} selected={selectedBuilding} setSelected={setSelectedBuilding} onChange={handleChange} />}
         {view === "troops" && <TroopWorkspace numbers={working} selected={selectedTroop} setSelected={setSelectedTroop} onChange={handleChange} />}
         {view === "research" && <ResearchWorkspace numbers={working} onChange={handleChange} />}

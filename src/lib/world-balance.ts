@@ -256,7 +256,7 @@ export function simulateWorldBalance(numbers: any): WorldBalanceReport {
 
 export function worldBalanceSummary(report: WorldBalanceReport): string {
   const lines = [
-    "RUGLANDS Personal World — deterministic balance report",
+    "ALLIANCE Personal World — deterministic balance report",
     "",
     "PvE / gathering by monster level",
     "Lv  TH  Tier  Troops   Win%  Casualty%  Gather(h)  Reward",

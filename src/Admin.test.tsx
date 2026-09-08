@@ -6,7 +6,7 @@ describe("Balance Lab", () => {
   it("opens on a human-readable pacing overview", () => {
     const html = renderToStaticMarkup(<Admin />);
 
-    expect(html).toContain("RUGLANDS Balance Lab");
+    expect(html).toContain("ALLIANCE Balance Lab");
     expect(html).toContain("All checks passed");
     expect(html).toContain("Light");
     expect(html).toContain("Normal");

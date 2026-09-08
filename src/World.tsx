@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Profile } from "./lib/profile";
 import {
   GameState, RES, RES_ORDER, TROOP_ORDER, TROOPS_META, TroopKey,
-  displayResource, displayTroops, project, totalTroops,
+  displayResource, displayTroops, mightBreakdown, project, totalTroops,
 } from "./lib/game";
 import { loadGame, saveGame, initGame } from "./lib/gamestore";
 import { getN } from "./lib/numbers";
@@ -18,6 +18,7 @@ import {
   advanceLocalWorldSession, dispatchLocalWorldMarch, finishLocalWorldMarches,
   localWorldTargetName, openLocalWorldSession, recallLocalWorldMarch, saveLocalWorldSession,
 } from "./lib/world-adapter";
+import GameNav from "./GameNav";
 
 type SelectableEntity = ResourceEntity | MonsterEntity | CityEntity;
 type WorldLayer = "resource" | "monster" | "city";
@@ -96,6 +97,31 @@ export function recommendedGatherForce(troops: GameState["troops"], limit: numbe
     remaining -= take;
   });
   return selected;
+}
+export function gatherCarryWithAccount(
+  troops: Record<TroopKey, Record<string, number>>,
+  accountModifiers: Record<string, number>,
+  numbers: any,
+): number {
+  const runtime = { ...(numbers.runtimeAccountModifiers ?? {}) };
+  Object.entries(accountModifiers).forEach(([key, value]) => { runtime[key] = (Number(runtime[key]) || 0) + (Number(value) || 0); });
+  return carryCapacity({ troops }, { ...numbers, runtimeAccountModifiers: runtime });
+}
+export function marchMapProgress(march: HeadlessMarch, now: number): number {
+  if (march.state === "outbound") return Math.max(0, Math.min(1, (now - march.dispatchedAt) / Math.max(1, march.arriveAt - march.dispatchedAt)));
+  if (march.state === "gathering") return 1;
+  if (march.state !== "returning") return 0;
+  const fullTravel = Math.max(1, march.arriveAt - march.dispatchedAt);
+  const legacyRecallStart = march.workUntil > 0
+    ? march.returnAt - fullTravel
+    : (march.returnAt + march.dispatchedAt) / 2;
+  const returnStartedAt = march.returnStartedAt
+    || (march.outcome === "recalled" ? legacyRecallStart : march.workUntil || march.arriveAt);
+  const outboundProgressAtReturn = returnStartedAt >= march.arriveAt
+    ? 1
+    : Math.max(0, Math.min(1, (returnStartedAt - march.dispatchedAt) / fullTravel));
+  const returnProgress = (now - returnStartedAt) / Math.max(1, march.returnAt - returnStartedAt);
+  return Math.max(0, Math.min(1, outboundProgressAtReturn * (1 - returnProgress)));
 }
 function entityLevel(entity: SelectableEntity): number { return entity.kind === "city" ? entity.townhallLevel : entity.level; }
 function cityShielded(city: CityEntity, now: number, numbers: any): boolean {
@@ -209,7 +235,7 @@ export default function World({ address, profile, onBack }: { address: string; p
   const energy = energyAt(player, now, world.config);
   // How much the CURRENTLY selected force would actually haul from this planet.
   const gatherCrewFraction = selected?.kind === "resource" && Number.isFinite(gatherRequirement) && gatherRequirement > 0 ? Math.min(1, sentCount / gatherRequirement) : 1;
-  const expectedHarvest = selected?.kind === "resource" ? Math.floor(Math.min(carryCapacity({ troops: selection }, N), selected.amount * gatherCrewFraction)) : 0;
+  const expectedHarvest = selected?.kind === "resource" ? Math.floor(Math.min(gatherCarryWithAccount(selection, player.accountModifiers, N), selected.amount * gatherCrewFraction)) : 0;
   // While a harvest march works this planet, show its liquidity draining in real time
   // (the engine only settles the deduction on return, so this is a projected read).
   const activeGatherOnSelected = selected?.kind === "resource" ? activeMarches.find((m) => m.targetId === selected.id && m.action === "gather" && m.state === "gathering") : undefined;
@@ -221,7 +247,7 @@ export default function World({ address, profile, onBack }: { address: string; p
     const req = resourceTroopRequirement(selected.level, N);
     const count = TROOP_ORDER.reduce((sum, arm) => sum + Object.values(m.force[arm] ?? {}).reduce((s, q) => s + (q || 0), 0), 0);
     const frac = Number.isFinite(req) && req > 0 ? Math.min(1, count / req) : 1;
-    const reserved = Math.floor(Math.min(carryCapacity({ troops: m.force }, N), selected.amount * frac));
+    const reserved = Math.floor(Math.min(gatherCarryWithAccount(m.force, player.accountModifiers, N), selected.amount * frac));
     return Math.max(0, selected.amount - Math.floor(reserved * progress));
   })();
   // Mission Archive = settled RESULTS only. In-flight gather milestones are already
@@ -332,21 +358,19 @@ export default function World({ address, profile, onBack }: { address: string; p
   }
 
   return <section className="world world-crypto world-cosmos">
-    <div className="world-command card">
-      <div><button className="world-back" onClick={onBack}>← CIVILIZATION</button><b>RHCHAIN // COSMOS</b><span>SECTOR {world.stateId.slice(-6).toUpperCase()} · HOME {Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")} · {profile.name}</span></div>
-      <div className="world-command-stats">
-        {RES_ORDER.map((resource) => <span key={resource} style={{ "--signal": RESOURCE_COLORS[resource] } as React.CSSProperties}><b>{compact(displayResource(viewGame.res[resource]))}</b>{RES[resource].label}</span>)}
-        <span className="world-stat-energy"><b>{Math.floor(energy)}/{world.config.energyCap}</b>ENERGY</span><span><b>{activeMarches.length}/{player.marchSlots}</b>FLEETS</span>
-        <span><b>{compact(displayTroops(totalTroops(viewGame)))}</b>STANDING</span><span><b>{compact(displayTroops(viewGame.wounded))}</b>WOUNDED</span>
-        {gm && <button onClick={fillTroops}>GM TROOPS</button>}{gm && <button onClick={finishMarches} disabled={!activeMarches.length}>GM RESOLVE</button>}
-      </div>
-    </div>
+    <GameNav view="world" profile={profile} townhallLevel={viewGame.buildings.keep.lvl}
+      location={`SECTOR ${world.stateId.slice(-6).toUpperCase()} · HOME ${Math.round(playerCity.position.x).toString().padStart(3, "0")}:${Math.round(playerCity.position.y).toString().padStart(3, "0")}`}
+      resources={viewGame.res}
+      energy={energy} energyCap={world.config.energyCap} activeFleets={activeMarches.length} fleetCap={player.marchSlots}
+      standing={totalTroops(viewGame)} wounded={viewGame.wounded} might={mightBreakdown(viewGame).total}
+      onCity={onBack} onWorld={() => {}} />
+    {gm && <div className="world-gm-strip"><span>LOCAL GM</span><button onClick={fillTroops}>FILL TROOPS</button><button onClick={finishMarches} disabled={!activeMarches.length}>RESOLVE FLEETS</button></div>}
     {message && <div className="world-message">{message}</div>}
     <div className="world-layout">
       <div className="world-map-shell">
-        <div className="world-map-status"><span><i /> LIVE SECTOR</span><b>4663</b><em>{zoomLabel} VIEW · {Math.round(zoom * 100)}%</em></div>
+        <div className="world-map-status"><b>{zoomLabel}</b><em>{Math.round(zoom * 100)}%</em></div>
         <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button onClick={() => setCamera(center)}>WORMHOLE</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(8, value + .35))}>＋</button><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(1, value - .35))}>－</button></div>
-        <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><span>VIEW COORDS</span><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>VIEW</button><button type="button" className="world-warp-locked" onClick={() => setMessage("Relocation requires a Warp Engine consumable. Warp travel is not enabled in this MVP build.")}>WARP 🔒</button></form>
+        <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>GO</button><button type="button" className="world-warp-locked" onClick={() => setMessage("Relocation requires a Warp Engine consumable. Warp travel is not enabled in this MVP build.")}>WARP 🔒</button></form>
         <div className="world-coordinate world-coordinate-x">X {Math.round(viewX).toString().padStart(3, "0")} — {Math.round(viewX + viewport.width).toString().padStart(3, "0")}</div>
         <div className="world-coordinate world-coordinate-y">Y {Math.round(viewY).toString().padStart(3, "0")} — {Math.round(viewY + viewport.height).toString().padStart(3, "0")}</div>
         <svg className="world-map world-map-v2" viewBox={viewBox} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { drag.current = null; }} onWheel={(event) => { event.preventDefault(); setZoom((value) => Math.max(1, Math.min(8, value + (event.deltaY < 0 ? .22 : -.22)))); }}>
@@ -372,7 +396,7 @@ export default function World({ address, profile, onBack }: { address: string; p
           <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius} className="world-core-ring" />
           <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius * .62} className="world-core-ring inner" />
           <path d={`M ${center.x - world.config.circleReserveRadius - 8} ${center.y} H ${center.x + world.config.circleReserveRadius + 8} M ${center.x} ${center.y - world.config.circleReserveRadius - 8} V ${center.y + world.config.circleReserveRadius + 8}`} className="world-core-cross" />
-          <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`} className="world-core-marker" onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera(center)}><circle cx={center.x} cy={center.y} r="7.5" /><ellipse cx={center.x} cy={center.y} rx="5.2" ry="2.8" /><circle cx={center.x} cy={center.y} r="2.1" /><text x={center.x} y={center.y - 11} className="world-circle-label">THE WORMHOLE</text><text x={center.x} y={center.y + 12} className="world-circle-sub">HOLD TO UNLOCK TRANSIT</text></g>
+          <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`} className="world-core-marker" onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera(center)}><circle cx={center.x} cy={center.y} r="7.5" /><ellipse cx={center.x} cy={center.y} rx="5.2" ry="2.8" /><circle cx={center.x} cy={center.y} r="2.1" /><text x={center.x} y={center.y - 11} className="world-circle-label">WORMHOLE</text></g>
           {activeMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} />)}
           {strategicZoom && signalClusters.map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera(cluster.position); setZoom(1.8); }}>
             <circle cx={cluster.position.x} cy={cluster.position.y} r="6.5" /><circle cx={cluster.position.x} cy={cluster.position.y} r="3.7" /><text x={cluster.position.x} y={cluster.position.y + 1.3}>{cluster.count}</text>
@@ -406,21 +430,21 @@ export default function World({ address, profile, onBack }: { address: string; p
         </svg>
         {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
         <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")}><i className="city" />CIVILIZATIONS</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>
-        <div className="world-map-hint">DRAG TO PAN · WHEEL TO ZOOM · {world.config.width}×{world.config.height} SECTOR · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS</div>
+        <div className="world-map-hint">{world.config.width}×{world.config.height} · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS</div>
       </div>
       <aside className="world-side">
-        {!selected ? <div className="world-empty"><div className="world-empty-radar"><i /><i /><i /></div><small>DEEP-SPACE ARRAY</small><b>SELECT A SIGNAL</b><span>Resource planets, rogue worlds and rival civilizations orbit this sector. Scan unknown targets before committing a fleet.</span></div> : <>
-          <div className={`world-intel-ribbon ${selectedVerified ? "verified" : "public"}`}><span>{selected.kind === "resource" ? "OPEN LEDGER" : selectedVerified ? "VERIFIED INTEL" : "PUBLIC SIGNAL"}</span><b>{selected.kind === "resource" ? "LIVE" : selectedVerified ? "SCANNED" : "ENCRYPTED"}</b></div>
-          <div className="world-target-actions"><button className={bookmarks.includes(selected.id) ? "saved" : ""} onClick={() => toggleBookmark(selected.id)}>{bookmarks.includes(selected.id) ? "★ SAVED" : "☆ SAVE SIGNAL"}</button><span>{entityState(selected)}</span></div>
-          <div className="world-target-head"><span style={{ color: entityColor(selected) }}>{KIND_META[selected.kind].icon}</span><div><small>{KIND_META[selected.kind].label} · {selected.id.slice(-8).toUpperCase()}</small><b>{localWorldTargetName(world, selected.id)}</b></div><em>L{entityLevel(selected)}</em></div>
-          <div className="world-facts"><span>Coordinates <b>{Math.round(selected.position.x).toString().padStart(3, "0")}:{Math.round(selected.position.y).toString().padStart(3, "0")}</b></span><span>Distance <b>{distance(playerCity.position, selected.position).toFixed(1)} light units</b></span><span>March ETA <b>{fmtDuration(oneWay)}</b></span><span>Sector band <b>ORBIT {selected.zone}</b></span>
-            {selected.kind === "resource" && <><span>Asset <b style={{ color: RESOURCE_COLORS[selected.resource] }}>{RES[selected.resource].label}</b></span><span>Liquidity <b className={activeGatherOnSelected ? "world-liquidity-draining" : ""}>{compact(displayResource(liveSelectedAmount))}</b></span></>}
-            {selected.kind === "monster" && <><span>Combat power <b>{selectedVerified ? compact(selected.power) : "ENCRYPTED"}</b></span><span>Dominant force <b>{selectedVerified ? TROOPS_META[selected.dominantArm].label : "UNKNOWN"}</b></span></>}
-            {selected.kind === "city" && <><span>Protection <b>{cityShielded(selected, now, N) ? "SHIELDED" : "OPEN"}</b></span><span>Wall integrity <b>{selectedVerified ? `${selected.wall.value}/${selected.wall.max}` : "ENCRYPTED"}</b></span><span>Garrison <b>{selectedVerified ? compact(displayTroops(selectedScoutSnapshot.garrison ?? 0)) : "ENCRYPTED"}</b></span><span>Est. loot <b>{selectedVerified ? compact(displayResource(selectedScoutSnapshot.estimatedLoot ?? 0)) : "ENCRYPTED"}</b></span></>}
+        {!selected ? <div className="world-empty"><div className="world-empty-radar"><i /><i /><i /></div><b>SELECT A SIGNAL</b></div> : <>
+          <div className={`world-intel-ribbon ${selectedVerified ? "verified" : "public"}`}><span>{selected.kind === "resource" ? "LIVE" : selectedVerified ? "SCANNED" : "PUBLIC"}</span></div>
+          <div className="world-target-actions"><button className={bookmarks.includes(selected.id) ? "saved" : ""} onClick={() => toggleBookmark(selected.id)}>{bookmarks.includes(selected.id) ? "★ SAVED" : "☆ SAVE"}</button></div>
+          <div className="world-target-head"><span style={{ color: entityColor(selected) }}>{KIND_META[selected.kind].icon}</span><div><small>{KIND_META[selected.kind].label}</small><b>{localWorldTargetName(world, selected.id)}</b></div><em>L{entityLevel(selected)}</em></div>
+          <div className="world-facts"><span>COORDS <b>{Math.round(selected.position.x).toString().padStart(3, "0")}:{Math.round(selected.position.y).toString().padStart(3, "0")}</b></span><span>DISTANCE <b>{distance(playerCity.position, selected.position).toFixed(1)} LU</b></span><span>ETA <b>{fmtDuration(oneWay)}</b></span>
+            {selected.kind === "resource" && <><span>ASSET <b style={{ color: RESOURCE_COLORS[selected.resource] }}>{RES[selected.resource].label}</b></span><span>AVAILABLE <b className={activeGatherOnSelected ? "world-liquidity-draining" : ""}>{compact(displayResource(liveSelectedAmount))}</b></span></>}
+            {selected.kind === "monster" && <><span>POWER <b>{selectedVerified ? compact(selected.power) : "ENCRYPTED"}</b></span><span>TYPE <b>{selectedVerified ? TROOPS_META[selected.dominantArm].label : "UNKNOWN"}</b></span></>}
+            {selected.kind === "city" && <><span>SHIELD <b>{cityShielded(selected, now, N) ? "ACTIVE" : "OPEN"}</b></span><span>WALL <b>{selectedVerified ? `${selected.wall.value}/${selected.wall.max}` : "ENCRYPTED"}</b></span><span>GARRISON <b>{selectedVerified ? compact(displayTroops(selectedScoutSnapshot.garrison ?? 0)) : "ENCRYPTED"}</b></span><span>LOOT <b>{selectedVerified ? compact(displayResource(selectedScoutSnapshot.estimatedLoot ?? 0)) : "ENCRYPTED"}</b></span></>}
           </div>
-          {selected.kind !== "resource" && <button className="world-scout" onClick={() => run("scout")}><span>SCAN TARGET</span><em>1 MARCH SLOT</em></button>}
-          <div className="world-force-title"><b>Assemble fleet</b><span className="world-force-count"><b>{compact(displayTroops(sentCount))}</b> selected · cap {compact(displayTroops(forceLimit))}</span></div>
-          {selected.kind === "resource" && <div className="world-gather-recommend"><div><b>RECOMMENDED CREW {compact(displayTroops(gatherRequirement))}</b><span>Send fewer to harvest a proportional share. This planet accepts no excess troops.</span></div><button onClick={autoAssignGatherForce}>AUTO ASSIGN</button></div>}
+          {selected.kind !== "resource" && <button className="world-scout" onClick={() => run("scout")}><span>SCAN</span><em>1 SLOT</em></button>}
+          <div className="world-force-title"><b>FLEET</b><span className="world-force-count"><b>{compact(displayTroops(sentCount))}</b> / {compact(displayTroops(forceLimit))}</span></div>
+          {selected.kind === "resource" && <div className="world-gather-recommend"><div><b>CREW {compact(displayTroops(gatherRequirement))}</b></div><button onClick={autoAssignGatherForce}>AUTO</button></div>}
           <div className="world-force-list">
             {TROOP_ORDER.flatMap((arm) => Object.entries(viewGame.troops[arm] ?? {}).filter(([, qty]) => qty > 0).map(([tier, qty]) => {
               const sel = selection[arm][tier] ?? 0;
@@ -431,25 +455,21 @@ export default function World({ address, profile, onBack }: { address: string; p
                 <button onClick={() => maxTroop(arm, tier, rowMax)}>MAX</button>
               </div>;
             }))}
-            {totalTroops(viewGame) === 0 && <div className="world-no-force">NO STANDING TROOPS · TRAIN UNITS IN TOWN</div>}
+            {totalTroops(viewGame) === 0 && <div className="world-no-force">NO TROOPS</div>}
           </div>
-          {selected.kind === "resource" && sentCount > 0 && <div className="world-harvest-estimate"><span>ESTIMATED HAUL</span><b style={{ color: RESOURCE_COLORS[selected.resource] }}>{RESOURCE_EMOJI[selected.resource]} {compact(displayResource(expectedHarvest))} {RES[selected.resource].label}</b></div>}
+          {selected.kind === "resource" && sentCount > 0 && <div className="world-harvest-estimate"><span>HAUL</span><b style={{ color: RESOURCE_COLORS[selected.resource] }}>{RESOURCE_EMOJI[selected.resource]} {compact(displayResource(expectedHarvest))} {RES[selected.resource].label}</b></div>}
           {selected.kind === "resource" ? <button className="world-dispatch" disabled={sentCount <= 0 || selected.state !== "available"} onClick={() => run("gather")}>HARVEST PLANET →</button> : selected.kind === "monster" ? <button className="world-dispatch danger" disabled={sentCount <= 0 || selected.state !== "alive"} onClick={() => run("attack_monster")}>ENGAGE ROGUE · {world.config.monsterEnergyCost} ENERGY →</button> : <button className="world-dispatch danger" disabled={sentCount <= 0 || cityShielded(selected, now, N)} onClick={() => run("attack_city")}>ATTACK CIVILIZATION →</button>}
         </>}
-        <div className="world-marches"><div className="world-force-title"><b>Live fleets</b><span>{activeMarches.length}/{player.marchSlots} channels</span></div>{activeMarches.map((march) => <div className="world-march" key={march.id}><button className="world-march-focus" onClick={() => focusTarget(march.targetId)}><span>{march.action === "scout" ? "◎" : march.action === "gather" ? "◇" : "△"}</span><div><b>{localWorldTargetName(world, march.targetId)}</b><small>{march.state === "outbound" ? (march.action === "gather" ? "EN ROUTE TO HARVEST" : march.action === "scout" ? "SCOUT EN ROUTE" : "STRIKE EN ROUTE") : march.state === "gathering" ? "HARVESTING" : "RETURNING"} · <b>{fmtDuration(marchRemainingSec(march, now))}</b></small></div></button>{["outbound", "gathering"].includes(march.state) && <button className="world-recall" onClick={() => recall(march.id)}>RECALL</button>}</div>)}{!activeMarches.length && <div className="world-no-force">ALL FLEET CHANNELS IDLE</div>}</div>
-        {!!bookmarkedTargets.length && <div className="world-bookmarks"><div className="world-force-title"><b>Saved signals</b><span>{bookmarkedTargets.length}</span></div>{bookmarkedTargets.map((target) => <button key={target.id} onClick={() => focusTarget(target.id)}><span style={{ color: entityColor(target) }}>{KIND_META[target.kind].icon}</span><b>{localWorldTargetName(world, target.id)}</b><small>{Math.round(target.position.x).toString().padStart(3, "0")}:{Math.round(target.position.y).toString().padStart(3, "0")}</small></button>)}</div>}
-        {!!latestReports.length && <div className="world-reports"><div className="world-force-title"><b>Mission archive</b><span>click to locate</span></div>{latestReports.map((report) => { const copy = reportCopy(report, world); return <button onClick={() => focusTarget(report.targetId)} className={`world-report ${copy.good ? "good" : "bad"}`} key={report.id}><b>{copy.title}</b><span>{copy.detail}</span></button>; })}</div>}
+        <div className="world-marches"><div className="world-force-title"><b>FLEETS</b><span>{activeMarches.length}/{player.marchSlots}</span></div>{activeMarches.map((march) => <div className="world-march" key={march.id}><button className="world-march-focus" onClick={() => focusTarget(march.targetId)}><span>{march.action === "scout" ? "◎" : march.action === "gather" ? "◇" : "△"}</span><div><b>{localWorldTargetName(world, march.targetId)}</b><small>{march.state === "outbound" ? (march.action === "gather" ? "EN ROUTE TO HARVEST" : march.action === "scout" ? "SCOUT EN ROUTE" : "STRIKE EN ROUTE") : march.state === "gathering" ? "HARVESTING" : "RETURNING"} · <b>{fmtDuration(marchRemainingSec(march, now))}</b></small></div></button>{["outbound", "gathering"].includes(march.state) && <button className="world-recall" onClick={() => recall(march.id)}>RECALL</button>}</div>)}{!activeMarches.length && <div className="world-no-force">IDLE</div>}</div>
+        {!!bookmarkedTargets.length && <div className="world-bookmarks"><div className="world-force-title"><b>SAVED</b><span>{bookmarkedTargets.length}</span></div>{bookmarkedTargets.map((target) => <button key={target.id} onClick={() => focusTarget(target.id)}><span style={{ color: entityColor(target) }}>{KIND_META[target.kind].icon}</span><b>{localWorldTargetName(world, target.id)}</b><small>{Math.round(target.position.x).toString().padStart(3, "0")}:{Math.round(target.position.y).toString().padStart(3, "0")}</small></button>)}</div>}
+        {!!latestReports.length && <div className="world-reports"><div className="world-force-title"><b>REPORTS</b></div>{latestReports.map((report) => { const copy = reportCopy(report, world); return <button onClick={() => focusTarget(report.targetId)} className={`world-report ${copy.good ? "good" : "bad"}`} key={report.id}><b>{copy.title}</b><span>{copy.detail}</span></button>; })}</div>}
       </aside>
     </div>
   </section>;
 }
 
 function MarchLine({ march, now, zoom }: { march: HeadlessMarch; now: number; zoom: number }) {
-  let progress = 0;
-  if (march.state === "outbound") progress = (now - march.dispatchedAt) / Math.max(1, march.arriveAt - march.dispatchedAt);
-  else if (march.state === "gathering") progress = 1;
-  else if (march.state === "returning") { const start = march.workUntil || march.arriveAt; progress = 1 - (now - start) / Math.max(1, march.returnAt - start); }
-  const safe = Math.max(0, Math.min(1, progress)); const x = march.origin.x + (march.destination.x - march.origin.x) * safe; const y = march.origin.y + (march.destination.y - march.origin.y) * safe;
+  const progress = marchMapProgress(march, now); const x = march.origin.x + (march.destination.x - march.origin.x) * progress; const y = march.origin.y + (march.destination.y - march.origin.y) * progress;
   const heading = march.state === "returning"
     ? Math.atan2(march.origin.y - march.destination.y, march.origin.x - march.destination.x)
     : Math.atan2(march.destination.y - march.origin.y, march.destination.x - march.origin.x);

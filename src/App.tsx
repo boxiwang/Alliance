@@ -12,6 +12,7 @@ import AlliancePicker from "./AlliancePicker";
 import ExpeditionLab from "./ExpeditionLab";
 import World from "./World";
 import { grantLocalGm, localGmRequested } from "./lib/gm";
+import { loadGame } from "./lib/gamestore";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "town" | "world";
 
@@ -25,21 +26,23 @@ export default function App() {
   }
   if (import.meta.env.DEV && params.has("town")) {
     const devSlot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
+    const gmQuery = params.has("gm") ? "&gm" : "";
     const devAddress = devSlot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${devSlot}`;
     const devProfile: Profile = {
       address: devAddress, name: "Ruglord Town Test", faction: null, factionSymbol: null,
       keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
     };
-    return <div className="page"><Town address={devAddress} profile={devProfile} onWorld={() => window.location.assign(`/?world&gm&slot=${devSlot}`)} /></div>;
+    return <div className="page"><Town address={devAddress} profile={devProfile} onWorld={() => window.location.assign(`/?world${gmQuery}&slot=${devSlot}`)} /></div>;
   }
   if (import.meta.env.DEV && params.has("world")) {
     const devSlot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
+    const gmQuery = params.has("gm") ? "&gm" : "";
     const devAddress = devSlot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${devSlot}`;
     const devProfile: Profile = {
       address: devAddress, name: "Ruglord World Test", faction: null, factionSymbol: null,
       keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
     };
-    return <div className="page"><World address={devAddress} profile={devProfile} onBack={() => window.location.assign("/")} /></div>;
+    return <div className="page"><World address={devAddress} profile={devProfile} onBack={() => window.location.assign(`/?town${gmQuery}&slot=${devSlot}`)} /></div>;
   }
 
   const [detected, setDetected] = useState<Eip6963ProviderDetail[]>([]);
@@ -66,6 +69,7 @@ export default function App() {
   const iconBySym = new Map(memes.map((m) => [(m.symbol || "").toUpperCase(), m.iconUrl]));
   const board = useMemo(() => topFactions(heldSymbols, iconBySym), [records]);
   const eth = records ? fromRaw(records.coinBalanceRaw, 18) : 0;
+  const currentKeepLevel = profile ? (loadGame(profile.address)?.buildings.keep.lvl ?? profile.keepLevel) : 1;
 
   async function pick(w: WalletButton) {
     setError("");
@@ -161,8 +165,8 @@ export default function App() {
         <div className="brand">
           <span className="crest">⚔️</span>
           <div>
-            <div className="bname">RUGLANDS</div>
-            <div className="bsub">on-chain strategy · beta</div>
+            <div className="bname">ALLIANCE</div>
+            <div className="bsub">on-chain civilization · local alpha</div>
           </div>
         </div>
         {address ? (
@@ -217,12 +221,9 @@ export default function App() {
             <div className="wl">
               <div className="k">Welcome back</div>
               <div className="pname">{profile.name}</div>
-              <div className="psub">
-                Personal Mode · Townhall Lv.{profile.keepLevel} ·{" "}
-                {profile.factionSymbol ? <>Alliance <b>${profile.factionSymbol}</b></> : "No alliance"}
-              </div>
+              <div className="psub">Townhall Lv.{currentKeepLevel}</div>
             </div>
-            <button className="cta" onClick={() => setStage("town")}>Enter the Frontier →</button>
+            <button className="cta" onClick={() => setStage("town")}>Open Command Center →</button>
           </div>
           {memes.length > 0 && (
             <div className="card">
@@ -234,18 +235,7 @@ export default function App() {
               />
             </div>
           )}
-          <div className={"solo-option" + (!profile.faction ? " active" : "")}>
-            <div className="solo-copy">
-              <span className="mode-label">PERSONAL MODE</span>
-              <b>{profile.faction ? "Leave your alliance" : "Playing without an alliance"}</b>
-              <span>Solo keeps your city progression and open-world play separate from alliance membership.</span>
-            </div>
-            {profile.faction ? (
-              <button className="solo-button" onClick={() => switchFaction(null, null)}>Leave alliance</button>
-            ) : (
-              <span className="solo-status">Active</span>
-            )}
-          </div>
+          {profile.faction && <button className="mini out center" onClick={() => switchFaction(null, null)}>Leave current alliance</button>}
           <button className="mini out center" onClick={resetDev}>(dev) start over</button>
         </section>
       )}
@@ -292,14 +282,13 @@ export default function App() {
             <div className="alliance-prompt">Select an alliance above to join it.</div>
           )}
 
-          {/* Solo is a personal play path, never an alliance card. */}
+          {/* Continuing alone is an entry action, never a synthetic alliance card. */}
           <div className="solo-option">
             <div className="solo-copy">
-              <span className="mode-label">PERSONAL MODE</span>
-              <b>Build without an alliance</b>
-              <span>Found your city, grow your troops and explore independently. You can join an alliance later without restarting.</span>
+              <b>Continue independently</b>
+              <span>Alliance membership can be added later.</span>
             </div>
-            <button className="solo-button" onClick={() => found(null)}>Start Solo →</button>
+            <button className="solo-button" onClick={() => found(null)}>Found Townhall →</button>
           </div>
 
           {/* top factions */}
@@ -338,7 +327,7 @@ export default function App() {
             <div className="fsummary">
               <div><span>Commander</span><b>{profile.name}</b></div>
               <div><span>Mode</span><b>Personal</b></div>
-              <div><span>Alliance</span><b>{profile.factionSymbol ? "$" + profile.factionSymbol : "None"}</b></div>
+              {profile.factionSymbol && <div><span>Alliance</span><b>${profile.factionSymbol}</b></div>}
               <div><span>Townhall</span><b>Lv.{profile.keepLevel}</b></div>
               <div><span>Protection</span><b>until Lv.10</b></div>
             </div>

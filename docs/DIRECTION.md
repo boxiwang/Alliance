@@ -1,10 +1,10 @@
-# RUGLANDS — Direction & Decisions
+# ALLIANCE — Direction & Decisions
 
 > Repo: **Alliance** · Standalone project (separate from Blockwick).
 > This is the single place to understand *what we're building and why*. Pair it with
 > `STATUS.md` (where we are right now) and the two sources of truth in `docs/`.
 
-Last updated: 2026-09-06.
+Last updated: 2026-09-07.
 
 ---
 

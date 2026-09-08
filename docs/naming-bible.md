@@ -1,4 +1,4 @@
-# RUGLANDS — Naming Bible (v0.1 draft)
+# ALLIANCE — Naming Bible (v0.1 draft)
 
 > On-chain meme-war SLG · theme: **Degen Cosmos** (crypto civilizations × hostile deep space)
 > Your wallet is your civilization. Your memecoin is your banner.
@@ -21,7 +21,7 @@
 
 | Key | Concept (anchor — don't change) | Themed Name ✏️ | Why / original |
 |---|---|---|---|
-| `meta.game_name` | The game's title | **RUGLANDS** | alt: WASTECHAIN / HODLOUT / REKT |
+| `meta.game_name` | The game's title | **ALLIANCE** | locked 2026-09-07 |
 | `meta.tagline` | One-line hook | **Your wallet is your bunker. Your memecoin is your tribe.** | |
 | `meta.chain` | The chain it runs on | **Robinhood Chain · 4663** | fixed (real) |
 

@@ -220,6 +220,7 @@ export interface HeadlessMarch {
   dispatchedAt: number;
   arriveAt: number;
   workUntil: number;
+  returnStartedAt: number;
   returnAt: number;
   completedAt: number;
   cargo: Partial<ResourceWallet>;
@@ -883,6 +884,7 @@ function opponentReport(
 function scheduleReturn(world: HeadlessWorld, march: HeadlessMarch, at: number): void {
   const travelMs = Math.max(0, march.arriveAt - march.dispatchedAt);
   march.state = "returning";
+  march.returnStartedAt = at;
   march.returnAt = at + travelMs;
   schedule(world, "march_return", march.id, march.returnAt);
 }
@@ -970,7 +972,7 @@ export function dispatchMarch(
     id, playerId: player.id, action: input.action, state: "outbound", targetId: target.id,
     origin: { ...home.position }, destination: { ...target.position }, force,
     commanderSnapshot: commander, balanceVersion: String(numbers.meta?.version ?? "unknown"), idempotencyKey: input.idempotencyKey,
-    dispatchedAt: now, arriveAt: now + travelMs, workUntil: 0, returnAt: 0, completedAt: 0,
+    dispatchedAt: now, arriveAt: now + travelMs, workUntil: 0, returnStartedAt: 0, returnAt: 0, completedAt: 0,
     cargo: {}, wounded: 0, woundedTroops: troopManifest(), dead: 0, outcome: null, reportIds: [],
   };
   world.marches[id] = march;
@@ -1229,7 +1231,7 @@ export function recallMarch(source: HeadlessWorld, marchId: string, playerId: st
   }
   const fullTravel = Math.max(0, march.arriveAt - march.dispatchedAt);
   const elapsed = Math.max(0, Math.min(fullTravel, now - march.dispatchedAt));
-  march.state = "returning"; march.outcome = "recalled"; march.returnAt = now + elapsed;
+  march.state = "returning"; march.outcome = "recalled"; march.returnStartedAt = now; march.returnAt = now + elapsed;
   schedule(world, "march_return", march.id, march.returnAt);
   addFeed(world, now, "march_recalled", march.targetId, playerId, { marchId, returnAt: march.returnAt });
   return world;

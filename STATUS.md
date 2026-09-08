@@ -1,12 +1,86 @@
-# STATUS — Alliance / RUGLANDS
+# STATUS — ALLIANCE
 
 **The handoff doc.** Update this every time work changes hands. Read `docs/DIRECTION.md`
 for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-06 · **by:** Codex (near-field growth + gathering rules)
-**Current focus:** Personal-city progression and the local World loop are now playable. Next is balance playtesting and shared-world/server architecture before hero/alliance layers.
+**Last updated:** 2026-09-07 · **by:** Codex (City/Star Map product-console pass)
+**Current focus:** Personal-city progression and the local World loop are playable and measurable together. Next is tuning the L1→10 account experience from the new ledger, then hardening shared-world/server authority before alliance layers.
+
+### ✦ Product-console visual/interaction pass (Codex)
+- The full site now shares a restrained CSS-only cosmic background; no image asset or runtime request was added.
+- **Might** is a prominent gold account metric in the sticky command bar, beside a unified segmented
+  **City / Star Map** control. Cash/Oil/Power, Energy, fleets, standing and wounded remain stable across views;
+  the top bar now keeps only current balances, uses larger labels and reserves a visible **Credits** purchase slot.
+- Wallet identity now generates a compact civilization sigil, and City gives the player's live **Civilization Core**
+  its own command landmark. The right inspector defaults to placeholder **Daily Tasks**, with a second **Signals**
+  tab assembled from real build, training, research, fleet and wounded state.
+- City gained a real two-slot **Build Queue** fed by active building timers. Idle, building name, target level,
+  remaining time and progress update from saved game state rather than mock data.
+- Building and Resource Network cards now show only identity, level/production and a compact status such as
+  `READY`, `NEEDS RESOURCES`, `BUILDERS BUSY` or the relevant TH lock. Selecting any unlocked building opens
+  its real upgrade surface in the right inspector.
+- Upgrade requirements are no longer squeezed into the small cards. The inspector gives Cash/Oil/Power separate
+  requirement cells with required and available amounts; sufficient cells turn green, shortages turn red, and
+  the action only turns green when resources, prerequisites, build slots and building-operation locks all pass.
+- Star Map copy was reduced to control/data language: shorter map status and coordinate controls, compact intel,
+  facts, fleet, saved-signal and report labels, and a minimal empty state. Mission results remain verbose enough
+  to explain outcomes.
+- Browser-verified City default, Townhall detail/upgrade, live Build Queue and Star Map target panel. Full repo
+  check: **105 tests + TypeScript + production build green**.
+
+### 🧭 Personal-mode navigation/UI mockup (Codex)
+- Product name is now **ALLIANCE** in the app chrome, page title, Balance Lab and naming sources. Existing
+  `ruglands:*` localStorage keys intentionally remain unchanged so test wallets do not lose progress.
+- Returning-player card now shows only the player name and the Townhall level read from the live saved game;
+  stale profile level and the meaningless “No alliance” label are gone. The prompted Personal Mode explainer
+  was removed, while Choose an Alliance remains untouched for its later dedicated pass.
+- City and Star Map now share one sticky **Command Nav** in the same screen position. It keeps player/TH/Might,
+  sector/home coordinates, Cash/Oil/Power balance + production, Energy, fleets, standing troops and wounded
+  visible through both views. The old duplicate World status bar and City resource deck were removed.
+- The nav inherits the higher-quality **City Liquidity / Resource Network** language: three color-coded balances
+  and stable metric cells. Production rates remain in Resource Network where they are actionable instead of being
+  repeated in the global bar. The old bottom-of-page “Enter the World” gateway is removed,
+  so building/research/training and outdoor actions behave like two views of one persistent account.
+- City is now a stable two-column workbench instead of a stack of every subsystem: equal-height, higher-contrast
+  building cards stay visible on the left while a non-modal sticky inspector on the right shows upgrade details,
+  Train/Promote, Hospital recovery or the Research tree. There is no backdrop or full-screen transition. The
+  permanent Training Grounds section is removed.
+- City copy now follows a strict **name / level / state / cost / time / unmet gate** hierarchy. Building blurbs,
+  duplicate facility headings, research teaching copy, empty bonus explanations and already-satisfied prerequisites
+  were removed. Locks and disabled controls carry the rules; hover titles preserve secondary explanations.
+- Bank/Oil Well/Power Plant now live in a compact **Resource Network** strip with production and click-through
+  upgrade status. Command and operational facilities are separate groups; cards use one integrated state footer
+  and send detailed requirements to the inspector. A dependency-free monochrome SVG set replaces inconsistent
+  building emoji.
+- Opening Research Institute now changes the same City workspace into a **220px facility rail + wide research
+  canvas**. It is not a modal or route change; other buildings in the rail remain clickable, and leaving research
+  restores the normal building grid plus inspector layout.
+- Research no longer has its own vertical scroll container: the selected category renders to full height and the
+  main City page owns vertical scrolling. Tree nodes are smaller but use larger type/level badges, tighter rows and
+  near-hidden non-focused connectors. Ordinary buildings now use a three-column 94px grid with larger labels,
+  replacing the previous oversized two-column cards and empty space.
+
+### 🧪 Integrated personal-mode simulator + dispatch closure (Codex)
+- Admin → Pacing now has a deterministic **whole-account simulator** alongside the original rush-TH model.
+  It runs two builders, the Research Institute, Army/Navy/Air queues and configurable full-planet gathering
+  against one resource wallet, with Growth/Balanced/Military strategies and TH10/TH30 targets.
+- The simulator reports a reconciled Cash/Oil/Power source/sink ledger, Warehouse overflow, queue utilization,
+  research branch completion/effective bonuses, end-state troop totals/Might and the dominant bottleneck.
+- Current bundled-number baseline (Balanced, 3 visits/day, 85% builder, 80% research, 75% training,
+  1 full planet/day): **TH10 ≈ 4.6d; TH30 ≈ 140d**. This does not replace the 3.0d/123d rush-TH
+  target; it exposes the cost of maintaining all personal-mode systems at the same time.
+- First actionable balance signal: Cash remains the dominant constraint. At TH10 training queues are only ~3%
+  utilized while research is ~78%; at TH30 Warehouse overflow is extremely high, so late economy/capacity
+  needs tuning rather than simply adding more production.
+- Pulled Claude's latest tactile World dispatch pass: empty-tile coordinates, per-tier sliders/MAX, selected
+  fleet totals, live harvest drain, rocket/ETA and live fleet/archive feedback. Fixed harvest preview/live drain
+  to include the wallet's Academy load modifier, and fixed recalled rockets to reverse from their actual
+  outbound position instead of visually teleporting.
+- Added integrated simulator and World rendering regression coverage. Browser-verified TH10/TH30 Admin output,
+  resource selection → MAX → Academy-aware estimated haul, dispatch rocket and live recall state.
+  Full repo check: **105 tests + TypeScript + production build green**.
 
 ### 🌌 Degen Cosmos World + intelligence UX (Codex)
 - Re-skinned the existing SVG World as an asset-free **onchain star map**: wallet civilization, resource
@@ -234,16 +308,16 @@ The 5 corrections:
 - **Playable coordinate World (local Personal Mode):** Town → World → select field/crew/rival → scout/gather/attack → timed outbound/work/return march → troop/resource/casualty settlement. The scalable headless engine is authoritative; a temporary local adapter persists it per wallet until the shared server exists.
 
 ## 🔜 Next up (immediate — for whoever picks this up)
-1. Add an Academy pacing/max-output simulator that runs research alongside TH1→30, reports resource contention,
-   completion dates and max city/gathering/march/combat values; tune the v0.8 seed from real play sessions.
-2. Add force presets (25%/50%/max), recommended counter composition and march-cap explanations to the
+1. Use the integrated simulator plus manual fresh-account sessions to tune the **L1→10 playable loop**:
+   decide whether 4–5 days for a balanced account is correct, then address early training starvation and
+   late Warehouse overflow without destroying Cash's intended role as the primary pinch.
+2. Add force presets (25%/50%/max), recommended counter composition and clearer march-cap explanations to the
    visual shell after the engine adapter is stable.
 3. Playtest target density, Wall damage/burn duration and Energy behavior; adjust declared target bands
    before retuning explicit values when the desired experience changes.
-4. Add resource source/sink breakdown to the pacing simulator, then playtest/tune the full L1→L10 city loop.
-5. Before a real multiplayer alpha: put this authority behind authenticated server commands, server time,
+4. Before a real multiplayer alpha: put this authority behind authenticated server commands, server time,
    atomic target locks and durable persistence. LocalStorage remains a test-only adapter.
-6. Art remains independent: lock/revise V3 chibi Degen Freeport and build one vertical slice when mechanics are stable enough.
+5. Art remains independent: lock/revise V3 chibi Degen Freeport and build one vertical slice when mechanics are stable enough.
 
 ## 🩹 Known issues / polish
 - `oldestSeen` (wallet age) reads null for contract addresses; tx-history endpoint shape

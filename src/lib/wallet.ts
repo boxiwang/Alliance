@@ -152,7 +152,7 @@ export async function connect(
 export async function signIn(provider: Eip1193Provider, address: string): Promise<string> {
   const nonce = Math.random().toString(36).slice(2, 10);
   const message =
-    `RUGLANDS wants to verify you own this wallet.\n\n` +
+    `ALLIANCE wants to verify you own this wallet.\n\n` +
     `Address: ${address}\n` +
     `Chain: Robinhood Chain (4663)\n` +
     `Nonce: ${nonce}\n` +
