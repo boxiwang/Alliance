@@ -20,7 +20,7 @@ export interface WorldGameSnapshot {
 }
 
 export interface LocalWorldSession {
-  version: 2;
+  version: 3;
   address: string;
   playerId: string;
   world: HeadlessWorld;
@@ -142,7 +142,7 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
   player.marchCapacity = Math.max(0, Math.floor(maxTroops(game)
     * (Number(numbers.global?.march?.capacityFractionOfMaxTroops) || 1)));
   const session: LocalWorldSession = {
-    version: 2, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
+    version: 3, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
   };
   return { session, game, changed: true };
 }
@@ -294,7 +294,7 @@ export function loadLocalWorldSession(address: string): LocalWorldSession | null
   try {
     const raw = localStorage.getItem(KEY(address));
     const parsed = raw ? JSON.parse(raw) : null;
-    return [1, 2].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
+    return [1, 2, 3].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
   } catch { return null; }
 }
 
@@ -315,9 +315,9 @@ function settleLegacyWorld(address: string, sourceGame: GameState, now: number):
 export function openLocalWorldSession(address: string, sourceGame: GameState, now = Date.now(), numbers: any): LocalWorldResult {
   const stored = loadLocalWorldSession(address);
   if (stored) {
-    if ((stored as any).version < 2) {
-      stored.world = redistributeWorldTargets(stored.world, now);
-      stored.version = 2;
+    if ((stored as any).version < 3) {
+      stored.world = redistributeWorldTargets(stored.world, now, numbers);
+      stored.version = 3;
     }
     return reconcile(stored, sourceGame, now, numbers);
   }

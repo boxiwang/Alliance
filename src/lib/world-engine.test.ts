@@ -4,7 +4,7 @@ import {
   DEFAULT_WORLD_ENGINE_CONFIG, HeadlessWorld, Point, ResourceEntity,
   advanceHeadlessWorld, advanceTargetLifecycle, breachCity, buildSpatialIndex, defeatMonster, depleteResource,
   dispatchMarch, distance, emptyCommanderSnapshot, energyAt, initHeadlessWorld, occupyResource,
-  populateWorld, queryNearby, recallMarch, spawnPlayer, spawnPlayers, worldCenter,
+  populateWorld, queryNearby, recallMarch, redistributeWorldTargets, spawnPlayer, spawnPlayers, worldCenter,
 } from "./world-engine";
 
 function minPairDistance(points: Point[]): number {
@@ -51,18 +51,35 @@ describe("headless world — scale and sparse spawning", () => {
     expect(nearby.every((entity) => entity.kind === "city" && distance(city.position, entity.position) <= 70)).toBe(true);
   });
 
-  it("distributes growth targets around every active civilization", () => {
-    let world = initHeadlessWorld("state-growth-halos", 1000);
-    world = spawnPlayers(world, Array.from({ length: 12 }, (_, index) => ({ id: `halo-${index}` })), 1000);
+  it("distributes neutral targets across the map and derives level from the inward zone", () => {
+    let world = initHeadlessWorld("state-radial-geography", 1000);
+    world = spawnPlayers(world, Array.from({ length: 12 }, (_, index) => ({ id: `player-${index}` })), 1000);
     world = populateWorld(world, 60, 24, 1000, defaults);
-    const cities = Object.values(world.entities).filter((entity) => entity.kind === "city");
-    cities.forEach((city) => {
-      const resources = queryNearby(world, city.position, 19, ["resource"]);
-      expect(resources.length).toBeGreaterThanOrEqual(5);
-      expect(new Set(resources.filter((entity) => entity.kind === "resource").map((entity) => entity.resource)))
-        .toEqual(new Set(["cash", "oil", "power"]));
-      expect(queryNearby(world, city.position, 27, ["monster"]).length).toBeGreaterThanOrEqual(2);
+    const targets = Object.values(world.entities).filter((entity) => entity.kind === "resource" || entity.kind === "monster");
+    const xs = targets.map((target) => target.position.x);
+    const ys = targets.map((target) => target.position.y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(400);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(400);
+    expect(new Set(targets.filter((entity) => entity.kind === "resource").map((entity) => entity.resource)))
+      .toEqual(new Set(["cash", "oil", "power"]));
+    targets.forEach((target) => {
+      expect(target.level).toBeGreaterThanOrEqual(target.zone * 2 - 1);
+      expect(target.level).toBeLessThanOrEqual(target.zone * 2);
     });
+  });
+
+  it("migrates stale halo targets and recalculates their level for the new coordinate", () => {
+    let world = spawnPlayers(initHeadlessWorld("state-radial-migration", 1000), [{ id: "player" }], 1000);
+    world = populateWorld(world, 12, 4, 1000, defaults);
+    const target = firstEntity(world, "resource");
+    const oldPosition = { ...target.position };
+    target.level = 10;
+    const migrated = redistributeWorldTargets(world, 2000, defaults);
+    const moved = migrated.entities[target.id] as ResourceEntity;
+    expect(moved.position).not.toEqual(oldPosition);
+    expect(moved.level).toBeGreaterThanOrEqual(moved.zone * 2 - 1);
+    expect(moved.level).toBeLessThanOrEqual(moved.zone * 2);
+    expect(moved.amount).toBe(moved.capacity);
   });
 
   it("advances 10,000 scheduled events deterministically in a 1,000-player State", () => {

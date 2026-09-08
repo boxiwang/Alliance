@@ -13,8 +13,9 @@ Implemented:
 
 - 1,024 deterministic farthest-first city anchors, five zones, Circle exclusion and spatial queries.
 - Resource, monster and city target lifecycles with respawn, burning and non-destructive relocation.
-- Neutral resources and monsters are distributed in growth halos around every active civilization;
-  respawns stay in the living civilization band instead of drifting into empty space.
+- Neutral resources and monsters are distributed uniformly across legal State coordinates rather than
+  generated around players. Their level is recalculated from the radial zone on every spawn: outer space
+  is L1–2 and difficulty/value rises by two levels per zone toward the Wormhole.
 - Population targets scale at three resource planets and one rogue planet per active civilization,
   with 240/120 young-State floors; each complete local resource cycle includes Cash, Oil and Power.
 - Account troop reservation, two march slots, per-march capacity, travel timing and recall.
@@ -94,7 +95,7 @@ push notifications, free-path movement and open-field interception.
 - One resource field cannot be occupied by two marches.
 - `home + marching + wounded + dead delta` conserves troops.
 - Depleted/defeated targets disappear and respawn at a new legal coordinate.
-- Every active city receives nearby neutral growth targets; field/rogue respawns remain near the
-  living population rather than becoming globally uniform.
+- Targets are not guaranteed per city. Initial fields and respawns remain globally distributed, and every
+  target's level must match its current radial zone instead of following the nearest player's progression.
 - Combat resolves and reports at arrival; loot reaches inventory only on return.
 - 10,000 scheduled events can be advanced deterministically in tests.

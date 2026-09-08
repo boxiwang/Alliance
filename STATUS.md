@@ -5,10 +5,19 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-08 · **by:** Codex (City operations/research clarity pass)
+**Last updated:** 2026-09-08 · **by:** Codex (Star Map radial-geography pass)
 **Current focus:** Personal-city progression and the local World loop are playable and measurable together. Next is tuning the L1→10 account experience from the new ledger, then hardening shared-world/server authority before alliance layers.
 
 ### ✦ Product-console visual/interaction pass (Codex)
+- Star Map geography no longer manufactures resource/rogue halos around each city. Targets are distributed
+  across the full legal map, and both initial spawn and respawn recalculate difficulty from radial geography:
+  outer zone L1–2, then +2 levels per inward zone toward the Wormhole. Existing local v1/v2 sessions migrate
+  once to this rule without touching active marches or Town progression.
+- Tactical planets now use integrated SVG surface emblems (coin stack, fuel drop, energy bolt and rogue skull)
+  plus subtle contouring instead of an emoji pasted over the sphere. Empty-tile coordinate labels stay at a
+  constant compact screen size even at 16× zoom, and troop-row `FILL MAX` is visibly styled/labeled as an action.
+- Depleted fields remain hidden, retain their configured respawn delay and return full at a new legal coordinate;
+  lifecycle and radial-level migration are covered by engine tests.
 - Star Map now shares City's exact `GameNav` without a World-specific variant. Its new black hole and slow-moving
   starfield live in the **page backdrop**, outside the draggable/zoomable SVG map, so camera movement never moves
   or scales the background effect. The Wormhole remains a separate actionable landmark inside map coordinates.
@@ -54,7 +63,7 @@ for the *why*; this file is the *where we are right now*.
   facts, fleet, saved-signal and report labels, and a minimal empty state. Mission results remain verbose enough
   to explain outcomes.
 - Browser-verified City default, Townhall detail/upgrade, all eight operation slots, compact Research tree/detail
-  and Star Map target panel. Full repo check: **107 tests + TypeScript + production build green**.
+  and Star Map target panel/radial geography. Full repo check: **108 tests + TypeScript + production build green**.
 
 ### 🧭 Personal-mode navigation/UI mockup (Codex)
 - Product name is now **ALLIANCE** in the app chrome, page title, Balance Lab and naming sources. Existing
@@ -125,9 +134,9 @@ for the *why*; this file is the *where we are right now*.
   state, real engine recall, capacity-aware MAX and arrival/return mission notifications.
 - `VIEW COORDS` is camera-only and leaves HOME unchanged. Real relocation is reserved for the future
   consumable **Warp Engine**; the current WARP control is visibly locked and never moves the player.
-- Resource and rogue targets now round-robin around every active civilization (resources 6–18 tiles,
-  rogues 10–26) and respawn into the living population band. Existing local World v1 saves migrate idle
-  targets once without resetting Town progress or changing active march destinations.
+- Resource and rogue targets are globally distributed neutral geography; this supersedes the earlier
+  per-civilization 6–18/10–26-tile halo rule. Existing local World v1/v2 saves migrate idle targets once without
+  resetting Town progress or changing active march destinations.
 - Mature-State density is now **3 resource planets + 1 rogue per civilization** (young-State floors remain
   240/120). Resource rounds rotate Cash/Oil/Power so a complete local cycle cannot randomly omit one economy.
 - All selectable targets show research-adjusted one-way march ETA. Resource levels now define an explicit

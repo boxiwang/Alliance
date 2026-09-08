@@ -531,53 +531,27 @@ function randomLegalPoint(world: HeadlessWorld, random: () => number, minimumCit
   throw new Error("Could not find a legal world-object coordinate.");
 }
 
-function randomLegalPointNear(
-  world: HeadlessWorld,
-  random: () => number,
-  anchor: Point,
-  minimumRadius: number,
-  maximumRadius: number,
-  minimumEntityDistance = 4,
-): Point {
-  const center = worldCenter(world.config);
-  const index = buildSpatialIndex(world);
-  for (let attempt = 0; attempt < 300; attempt += 1) {
-    const angle = random() * Math.PI * 2;
-    const radius = Math.sqrt(random()) * (maximumRadius - minimumRadius) + minimumRadius;
-    const point = { x: anchor.x + Math.cos(angle) * radius, y: anchor.y + Math.sin(angle) * radius };
-    if (point.x < 3 || point.y < 3 || point.x > world.config.width - 3 || point.y > world.config.height - 3) continue;
-    if (distance(point, center) <= world.config.circleReserveRadius) continue;
-    if (!queryNearby(world, point, minimumEntityDistance, undefined, index).length) return point;
-  }
-  return randomLegalPoint(world, random, minimumEntityDistance);
-}
-
-function cityPositions(world: HeadlessWorld): Point[] {
-  return Object.values(world.entities)
-    .filter((entity): entity is CityEntity => entity.kind === "city")
-    .map((city) => city.position);
-}
-
-function nearestCityPosition(world: HeadlessWorld, point: Point): Point | null {
-  const cities = cityPositions(world);
-  return cities.reduce<Point | null>((nearest, candidate) => !nearest
-    || distance(candidate, point) < distance(nearest, point) ? candidate : nearest, null);
-}
-
-function growthTargetPosition(
-  world: HeadlessWorld,
-  random: () => number,
-  kind: "resource" | "monster",
-  city: Point | null,
-): Point {
-  if (!city) return randomLegalPoint(world, random);
-  return kind === "resource"
-    ? randomLegalPointNear(world, random, city, 6, 18)
-    : randomLegalPointNear(world, random, city, 10, 26);
-}
-
 function targetLevel(zone: number, random: () => number): number {
   return Math.max(1, Math.min(10, zone * 2 - (random() < .5 ? 1 : 0)));
+}
+
+function tuneResourceForLevel(entity: ResourceEntity, level: number, numbers: any, refill: boolean): void {
+  entity.level = level;
+  entity.capacity = Number(numbers.gatherNodes?.levels?.[String(level)]?.totalSupply)
+    || 1000 * Math.pow(2, level - 1);
+  if (refill) entity.amount = entity.capacity;
+}
+
+function tuneMonsterForLevel(entity: MonsterEntity, level: number, numbers: any): void {
+  const row = numbers.world?.monsters?.levels?.[String(level)] ?? {};
+  entity.level = level;
+  entity.dominantArm = row.dominantArm ?? entity.dominantArm;
+  entity.power = Number(row.power) || Math.round(160 * Math.pow(1.72, level - 1));
+  entity.reward = {
+    cash: Number(row.reward?.["res.cash"]) || level * 350,
+    oil: Number(row.reward?.["res.oil"]) || level * 180,
+    power: Number(row.reward?.["res.power"]) || level * 180,
+  };
 }
 
 export function populateWorld(
@@ -591,11 +565,11 @@ export function populateWorld(
   const random = rng(hashText(`${world.stateId}:population:${world.nextEntitySeq}`));
   const resources: ResKey[] = ["cash", "oil", "power"];
   const arms: TroopKey[] = ["army", "navy", "air"];
-  const cities = cityPositions(world);
   for (let i = 0; i < resourceCount; i += 1) {
-    // Round-robin placement gives every civilization a local growth halo while
-    // keeping each target neutral and contestable. No empty grid tiles exist.
-    const position = growthTargetPosition(world, random, "resource", cities[i % cities.length] ?? null);
+    // Targets are neutral geography, not a halo generated around each player.
+    // Uniform map placement makes travel and relocation meaningful; only the
+    // radial zone controls difficulty and reward.
+    const position = randomLegalPoint(world, random);
     const zone = zoneForPoint(position, world.config);
     const level = targetLevel(zone, random);
     const capacity = Number(numbers.gatherNodes?.levels?.[String(level)]?.totalSupply)
@@ -603,15 +577,13 @@ export function populateWorld(
     const id = `resource-${world.nextEntitySeq++}`;
     world.entities[id] = {
       id, kind: "resource", state: "available", position, zone, spawnedAt: now, revision: 1,
-      resource: cities.length
-        ? resources[Math.floor(i / cities.length) % resources.length]
-        : resources[Math.floor(random() * resources.length)],
+      resource: resources[i % resources.length],
       level, amount: capacity, capacity,
       occupiedByMarchId: null, respawnAt: 0,
     };
   }
   for (let i = 0; i < monsterCount; i += 1) {
-    const position = growthTargetPosition(world, random, "monster", cities[i % cities.length] ?? null);
+    const position = randomLegalPoint(world, random);
     const zone = zoneForPoint(position, world.config);
     const level = targetLevel(zone, random);
     const id = `monster-${world.nextEntitySeq++}`;
@@ -687,48 +659,41 @@ export function breachCity(source: HeadlessWorld, cityId: string, actorId: strin
 function respawnTarget(world: HeadlessWorld, entity: ResourceEntity | MonsterEntity, now: number, numbers: any): void {
   const random = rng(hashText(`${world.stateId}:${entity.id}:${entity.revision}:${now}`));
   const oldPosition = entity.position;
-  // Refill the living growth band instead of allowing repeated respawns to
-  // drift all useful targets into empty deep space.
-  const position = growthTargetPosition(world, random, entity.kind, nearestCityPosition(world, oldPosition));
+  // Respawns return at a new globally distributed coordinate. Their level is
+  // derived again from the new radial zone, never inherited from the old tile.
+  const position = randomLegalPoint(world, random);
   entity.position = position; entity.zone = zoneForPoint(position, world.config);
   entity.spawnedAt = now; entity.revision += 1; entity.respawnAt = 0;
   const level = targetLevel(entity.zone, random);
-  entity.level = level;
   if (entity.kind === "resource") {
     entity.state = "available";
-    entity.capacity = Number(numbers.gatherNodes?.levels?.[String(level)]?.totalSupply)
-      || 1000 * Math.pow(2, level - 1);
-    entity.amount = entity.capacity; entity.occupiedByMarchId = null;
+    tuneResourceForLevel(entity, level, numbers, true);
+    entity.occupiedByMarchId = null;
   } else {
-    const row = numbers.world?.monsters?.levels?.[String(level)] ?? {};
     entity.state = "alive";
-    entity.dominantArm = row.dominantArm ?? entity.dominantArm;
-    entity.power = Number(row.power) || Math.round(160 * Math.pow(1.72, level - 1));
-    entity.reward = {
-      cash: Number(row.reward?.["res.cash"]) || level * 350,
-      oil: Number(row.reward?.["res.oil"]) || level * 180,
-      power: Number(row.reward?.["res.power"]) || level * 180,
-    };
+    tuneMonsterForLevel(entity, level, numbers);
     entity.engagedByMarchId = null;
   }
   addFeed(world, now, `${entity.kind}_respawned`, entity.id, null, { oldPosition, position, level });
 }
 
-/** One-time browser-local migration for maps created before civilization growth halos. */
-export function redistributeWorldTargets(source: HeadlessWorld, now = Date.now()): HeadlessWorld {
+/** One-time browser-local migration from player halos to neutral radial geography. */
+export function redistributeWorldTargets(source: HeadlessWorld, now = Date.now(), numbers: any = getN()): HeadlessWorld {
   const world = clone(source);
-  const random = rng(hashText(`${world.stateId}:growth-halo:v1`));
-  const cities = cityPositions(world);
+  const random = rng(hashText(`${world.stateId}:radial-geography:v1`));
   const activeTargetIds = new Set(Object.values(world.marches)
     .filter((march) => !["completed", "failed"].includes(march.state))
     .map((march) => march.targetId));
   const targets = Object.values(world.entities)
     .filter((entity): entity is ResourceEntity | MonsterEntity => entity.kind === "resource" || entity.kind === "monster");
   (["resource", "monster"] as const).forEach((kind) => {
-    targets.filter((entity) => entity.kind === kind).forEach((entity, index) => {
+    targets.filter((entity) => entity.kind === kind).forEach((entity) => {
       if (activeTargetIds.has(entity.id)) return;
-      entity.position = growthTargetPosition(world, random, kind, cities[index % cities.length] ?? null);
+      entity.position = randomLegalPoint(world, random);
       entity.zone = zoneForPoint(entity.position, world.config);
+      const level = targetLevel(entity.zone, random);
+      if (entity.kind === "resource") tuneResourceForLevel(entity, level, numbers, entity.state === "available");
+      else tuneMonsterForLevel(entity, level, numbers);
       entity.spawnedAt = now;
       entity.revision += 1;
     });

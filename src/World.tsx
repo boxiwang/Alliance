@@ -92,6 +92,20 @@ function WorldLevelBadge({ x, y, level }: { x: number; y: number; level: number 
   return <g className="world-level-badge"><circle cx={x + 6.5} cy={y + 6.2} r="3.25" /><text x={x + 6.5} y={y + 7.25}>{level}</text></g>;
 }
 
+function WorldSurfaceMark({ x, y, kind }: { x: number; y: number; kind: ResourceEntity["resource"] | "rogue" }) {
+  if (kind === "cash") return <g className="world-surface-mark cash">
+    <ellipse cx={x} cy={y - 1.9} rx="2.65" ry="1" />
+    <path d={`M ${x - 2.65} ${y - 1.9}v2.7c0 .55 1.2 1 2.65 1s2.65-.45 2.65-1v-2.7M ${x - 2.65} ${y - .55}c0 .55 1.2 1 2.65 1s2.65-.45 2.65-1`} />
+  </g>;
+  if (kind === "oil") return <path className="world-surface-mark oil" d={`M ${x} ${y - 3.6}C ${x - .65} ${y - 2.25} ${x - 2.55} ${y - .25} ${x - 2.55} ${y + 1.25}a2.55 2.55 0 0 0 5.1 0C ${x + 2.55} ${y - .25} ${x + .65} ${y - 2.25} ${x} ${y - 3.6}Z`} />;
+  if (kind === "power") return <path className="world-surface-mark power" d={`M ${x + .65} ${y - 3.8}L ${x - 2.5} ${y + .35}h2.05l-.55 3.45 3.55-4.75H ${x + .4}Z`} />;
+  return <g className="world-surface-mark rogue">
+    <path d={`M ${x - 3} ${y + .4}v-1.05a3 3 0 1 1 6 0V ${y + .4}l-1 1.05v1.65h-4V ${y + 1.45}Z`} />
+    <circle cx={x - 1.05} cy={y - .55} r=".55" /><circle cx={x + 1.05} cy={y - .55} r=".55" />
+    <path d={`M ${x - .7} ${y + 2.05}v1.05M ${x + .7} ${y + 2.05}v1.05`} />
+  </g>;
+}
+
 function WorldEntityGlyph({ entity, detailZoom, occupation }: { entity: SelectableEntity; detailZoom: boolean; occupation: ResourceOccupationDisposition }) {
   const x = entity.position.x;
   const y = entity.position.y;
@@ -103,14 +117,14 @@ function WorldEntityGlyph({ entity, detailZoom, occupation }: { entity: Selectab
       <circle cx={x} cy={y} r={radius} fill={RESOURCE_GRADIENT[entity.resource]} />
       <ellipse cx={x} cy={y} rx={radius * 1.22} ry={radius * .35} transform={`rotate(-18 ${x} ${y})`} fill="none" stroke={color} strokeWidth=".55" opacity=".68" />
       <circle cx={x - radius * .3} cy={y - radius * .32} r={radius * .18} fill="#f3fdff" opacity=".68" />
-      {detailZoom && <text x={x} y={y + 2.35} className="world-planet-emoji">{RESOURCE_EMOJI[entity.resource]}</text>}
+      {detailZoom && <><path d={`M ${x - 5.5} ${y + 1.8}Q ${x} ${y + 4.7} ${x + 5.5} ${y + 1.1}`} className="world-planet-contour" /><WorldSurfaceMark x={x} y={y} kind={entity.resource} /></>}
       {detailZoom && <WorldLevelBadge x={x} y={y} level={entity.level} />}
     </g>;
   }
   if (entity.kind === "city") {
     return <g><polygon points={`${x},${y - 4.1} ${x + 3.6},${y - 2} ${x + 3.6},${y + 2} ${x},${y + 4.1} ${x - 3.6},${y + 2} ${x - 3.6},${y - 2}`} fill={color} />{detailZoom && <WorldLevelBadge x={x} y={y} level={entity.townhallLevel} />}</g>;
   }
-  if (detailZoom) return <g className="world-rogue-glyph"><circle cx={x} cy={y} r="7.2" /><ellipse cx={x} cy={y} rx="8.5" ry="2.4" transform={`rotate(16 ${x} ${y})`} /><text x={x} y={y + 2.4}>💀</text><WorldLevelBadge x={x} y={y} level={entity.level} /></g>;
+  if (detailZoom) return <g className="world-rogue-glyph"><circle cx={x} cy={y} r="7.2" /><ellipse cx={x} cy={y} rx="8.5" ry="2.4" transform={`rotate(16 ${x} ${y})`} /><path d={`M ${x - 5.4} ${y + 1.7}Q ${x} ${y + 4.5} ${x + 5.4} ${y + 1}`} className="world-planet-contour" /><WorldSurfaceMark x={x} y={y} kind="rogue" /><WorldLevelBadge x={x} y={y} level={entity.level} /></g>;
   return <path d={`M ${x} ${y - 4.2} L ${x + 4} ${y + 3.4} H ${x - 4} Z`} fill={color} />;
 }
 
@@ -495,7 +509,7 @@ export default function World({ address, profile, onBack }: { address: string; p
           </g>
           {tileMark && <g className="world-tile-mark" pointerEvents="none">
             <rect x={tileMark.x} y={tileMark.y} width="1" height="1" className="world-tile-cell" />
-            <g transform={`translate(${tileMark.x + .5} ${tileMark.y + .5}) scale(${markerScale}) translate(${-(tileMark.x + .5)} ${-(tileMark.y + .5)})`}>
+            <g transform={`translate(${tileMark.x + .5} ${tileMark.y + .5}) scale(${1 / zoom}) translate(${-(tileMark.x + .5)} ${-(tileMark.y + .5)})`}>
               <path d={`M ${tileMark.x + .5 - 6} ${tileMark.y + .5} h 3.5 M ${tileMark.x + .5 + 2.5} ${tileMark.y + .5} h 3.5 M ${tileMark.x + .5} ${tileMark.y + .5 - 6} v 3.5 M ${tileMark.x + .5} ${tileMark.y + .5 + 2.5} v 3.5`} className="world-tile-cross" />
               <text x={tileMark.x + .5} y={tileMark.y + .5 - 7.5} className="world-tile-coord">{tileMark.x.toString().padStart(3, "0")}:{tileMark.y.toString().padStart(3, "0")}</text>
             </g>
@@ -539,7 +553,7 @@ export default function World({ address, profile, onBack }: { address: string; p
               return <div className="world-force-row" key={`${arm}-${tier}`}>
                 <span>{TROOPS_META[arm].emoji} {TROOPS_META[arm].label} T{tier}<small><b>{compact(displayTroops(sel))}</b> / {compact(displayTroops(qty))}</small></span>
                 <input type="range" min="0" max={rowMax} step="1" value={sel} onChange={(event) => setTroop(arm, tier, Number(event.target.value))} disabled={rowMax <= 0} />
-                <button onClick={() => maxTroop(arm, tier, rowMax)}>MAX</button>
+                <button className="world-force-max" title={`Fill ${TROOPS_META[arm].label} T${tier} to its maximum`} aria-label={`Fill ${TROOPS_META[arm].label} tier ${tier} to maximum`} onClick={() => maxTroop(arm, tier, rowMax)}>FILL MAX</button>
               </div>;
             }))}
             {totalTroops(viewGame) === 0 && <div className="world-no-force">NO TROOPS</div>}
