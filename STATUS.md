@@ -21,6 +21,10 @@ for the *why*; this file is the *where we are right now*.
   model now; legacy saves remain compatible while server/NPC alliance data can populate the same field later.
 - Fleet movement uses a larger directional triangle cursor rather than a tiny rocket emoji. It rotates from the actual
   outbound/return heading, retains route/ETA feedback and changes to the combat color for hostile marches.
+- Deep Tactical zoom now reaches **16×** (previously 8×) through multiplicative button/wheel steps. Ordinary markers
+  remain stable through Field view, then grow gently up to 2× screen size at maximum zoom so planet bodies, emoji and
+  level badges become readable without turning into oversized map overlays. Grid strokes, sector rings and star points
+  retain constant screen weight at deep zoom instead of inflating into distracting bars and blobs.
 - The right console now defaults to live nearest signals and real sensor events, opens the existing target/dispatch
   controls on selection, and returns to signals through an explicit close.
 - City now renders a deterministic, randomly distributed Canvas starfield instead of tiled CSS dots: three depth

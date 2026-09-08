@@ -39,6 +39,20 @@ const RESOURCE_GRADIENT = { cash: "url(#world-planet-cash)", oil: "url(#world-pl
 const ARCHIVE_HIDDEN_OUTCOMES = new Set(["gathering_started", "gathering_completed"]);
 
 type SignalCluster = { id: string; kind: "resource" | "monster"; position: Point; count: number };
+export const WORLD_MIN_ZOOM = 1;
+export const WORLD_MAX_ZOOM = 16;
+
+export function worldMarkerScale(zoom: number): number {
+  const safeZoom = Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, zoom));
+  // Preserve stable markers through Field view, then let them grow gently in
+  // deep Tactical view. At 16× a target is 2× its Field screen size, not 16×.
+  const tacticalBoost = safeZoom <= 3 ? 1 : Math.min(2, 1 + Math.log2(safeZoom / 3) * .45);
+  return tacticalBoost / safeZoom;
+}
+
+function steppedWorldZoom(value: number, direction: "in" | "out", factor: number): number {
+  return Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, direction === "in" ? value * factor : value / factor));
+}
 
 export function clusterWorldSignals(entities: SelectableEntity[], cellSize = 44): SignalCluster[] {
   const buckets = new Map<string, { kind: "resource" | "monster"; x: number; y: number; count: number }>();
@@ -305,7 +319,7 @@ export default function World({ address, profile, onBack }: { address: string; p
   const strategicZoom = zoom < 1.45;
   const playerSearchZoom = zoom >= 2.35;
   const detailZoom = zoom >= 3;
-  const markerScale = 1 / zoom;
+  const markerScale = worldMarkerScale(zoom);
   const importantScale = (strategicZoom ? 1.6 : 1.18) / zoom;
   const filteredTargets = useMemo(() => targets.filter((entity) => layers[entity.kind]
     && !(entity.kind === "resource" && entity.state === "depleted")
@@ -426,15 +440,15 @@ export default function World({ address, profile, onBack }: { address: string; p
     <div className="world-layout">
       <div className="world-map-shell">
         <div className="world-map-status"><b>{zoomLabel}</b><em>{Math.round(zoom * 100)}%</em></div>
-        <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button onClick={() => setCamera(center)}>WORMHOLE</button><button aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(8, value + .35))}>＋</button><button aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(1, value - .35))}>－</button></div>
+        <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button onClick={() => setCamera(center)}>WORMHOLE</button><button aria-label="Zoom in" onClick={() => setZoom((value) => steppedWorldZoom(value, "in", 1.35))}>＋</button><button aria-label="Zoom out" onClick={() => setZoom((value) => steppedWorldZoom(value, "out", 1.35))}>－</button></div>
         <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>GO</button><button type="button" className="world-warp-locked" onClick={() => setMessage("Relocation requires a Warp Engine consumable. Warp travel is not enabled in this MVP build.")}>WARP 🔒</button></form>
         <div className="world-coordinate world-coordinate-x">X {Math.round(viewX).toString().padStart(3, "0")} — {Math.round(viewX + viewport.width).toString().padStart(3, "0")}</div>
         <div className="world-coordinate world-coordinate-y">Y {Math.round(viewY).toString().padStart(3, "0")} — {Math.round(viewY + viewport.height).toString().padStart(3, "0")}</div>
-        <svg className="world-map world-map-v2" viewBox={viewBox} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { drag.current = null; }} onWheel={(event) => { event.preventDefault(); setZoom((value) => Math.max(1, Math.min(8, value + (event.deltaY < 0 ? .22 : -.22)))); }}>
+        <svg className="world-map world-map-v2" viewBox={viewBox} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { drag.current = null; }} onWheel={(event) => { event.preventDefault(); setZoom((value) => steppedWorldZoom(value, event.deltaY < 0 ? "in" : "out", 1.14)); }}>
           <defs>
-            <pattern id="world-micro-grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" stroke="#17344a" strokeWidth=".25" opacity=".34" /></pattern>
-            <pattern id="world-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#2e7892" strokeWidth=".48" opacity=".52" /><circle cx="0" cy="0" r=".7" fill="#41dffc" opacity=".5" /></pattern>
-            <pattern id="world-stars" width="64" height="64" patternUnits="userSpaceOnUse"><circle cx="7" cy="13" r=".42" fill="#c9f4ff" opacity=".72"/><circle cx="43" cy="8" r=".25" fill="#a8c8ff" opacity=".55"/><circle cx="27" cy="47" r=".35" fill="#e2d4ff" opacity=".64"/><circle cx="58" cy="36" r=".18" fill="#fff" opacity=".8"/><circle cx="12" cy="59" r=".2" fill="#73dfff" opacity=".48"/></pattern>
+            <pattern id="world-micro-grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" stroke="#17344a" strokeWidth={.25 / zoom} opacity=".34" /></pattern>
+            <pattern id="world-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#2e7892" strokeWidth={.48 / zoom} opacity=".52" /><circle cx="0" cy="0" r={.7 / zoom} fill="#41dffc" opacity=".5" /></pattern>
+            <pattern id="world-stars" width="64" height="64" patternUnits="userSpaceOnUse"><circle cx="7" cy="13" r={.42 / zoom} fill="#c9f4ff" opacity=".72"/><circle cx="43" cy="8" r={.25 / zoom} fill="#a8c8ff" opacity=".55"/><circle cx="27" cy="47" r={.35 / zoom} fill="#e2d4ff" opacity=".64"/><circle cx="58" cy="36" r={.18 / zoom} fill="#fff" opacity=".8"/><circle cx="12" cy="59" r={.2 / zoom} fill="#73dfff" opacity=".48"/></pattern>
             <radialGradient id="world-ground" cx="58%" cy="42%"><stop offset="0" stopColor="#152044"/><stop offset=".34" stopColor="#0b1532"/><stop offset=".72" stopColor="#060c20"/><stop offset="1" stopColor="#02050e"/></radialGradient>
             <radialGradient id="world-nebula" cx="50%" cy="50%"><stop offset="0" stopColor="#7a49d8" stopOpacity=".16"/><stop offset=".48" stopColor="#215e9b" stopOpacity=".07"/><stop offset="1" stopColor="#030711" stopOpacity="0"/></radialGradient>
             <radialGradient id="circle-core"><stop offset="0" stopColor="#010208" stopOpacity="1"/><stop offset=".22" stopColor="#09051d" stopOpacity="1"/><stop offset=".48" stopColor="#a35cff" stopOpacity=".42"/><stop offset=".72" stopColor="#38d9ff" stopOpacity=".16"/><stop offset="1" stopColor="#1d123a" stopOpacity="0"/></radialGradient>

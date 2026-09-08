@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import defaults from "../docs/numbers.json";
-import { clusterWorldSignals, gatherCarryWithAccount, marchMapProgress, recommendedGatherForce, resourceOccupationDisposition } from "./World";
+import { WORLD_MAX_ZOOM, clusterWorldSignals, gatherCarryWithAccount, marchMapProgress, recommendedGatherForce, resourceOccupationDisposition, worldMarkerScale } from "./World";
 import type { MonsterEntity, ResourceEntity } from "./lib/world-engine";
 
 describe("World strategic signal clusters", () => {
@@ -70,5 +70,11 @@ describe("World march rendering", () => {
     expect(marchMapProgress(recalled, 20)).toBeCloseTo(.2);
     expect(marchMapProgress(recalled, 30)).toBeCloseTo(.1);
     expect(marchMapProgress(recalled, 40)).toBe(0);
+  });
+
+  it("allows deep tactical zoom while growing markers only modestly", () => {
+    expect(WORLD_MAX_ZOOM).toBe(16);
+    expect(worldMarkerScale(3) * 3).toBeCloseTo(1);
+    expect(worldMarkerScale(16) * 16).toBeCloseTo(2);
   });
 });
