@@ -5,8 +5,11 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-08 · **by:** Codex (Star Map identity, load and rogue-combat pass)
-**Current focus:** Personal-city progression and the local World loop are playable and measurable together. Immediate work is fresh-player rogue guidance plus visible L1→L5/gathering playtests; then tune the full L1→10 account before server authority and alliance layers. Short handoff: `HANDOFF.md`.
+**Last updated:** 2026-09-08 · **by:** Claude (world-experience fixes: load crash, combat, rogue distribution + on-demand local supply, scout recon, map legibility)
+**Current focus:** Local World loop is playable, non-stalling and legible. Next: fresh L1→L5 + gather/scout playtests from the UI, tune the full L1→10 account, then server authority (incl. outer-ring spawn for new joiners) and alliance layers. **Full details of the latest pass are in `HANDOFF.md` → "Latest changes (Claude, 2026-09-08)".**
+
+### 🛠 World-experience fixes (Claude, 2026-09-08)
+Built on Codex's Star Map pass; `npm run check` = 110 tests + build green, `balance:world` = 0 issues. Highlights (see `HANDOFF.md` for the full list): fixed the old-save load white-screen (config refresh on load + spacing fallback); fixed combat so a winner's casualties are bounded by enemy strength (more troops no longer means more losses); reworked rogue/resource geography to low-outer/high-inner with a guaranteed 1–30 ladder + level-preserving respawn; added `ensureLocalTargets` so a player's next-level rogue and low resources are always generated near them on demand (capped, low-level only, inner circle stays scarce); NEXT ROGUE + rogue lock guidance; scout is now a fast unarmed recon of rival cities with a per-arm/per-tier/per-resource report; entity spacing + name-plate/march-line legibility.
 
 ### ⚔ Star Map player identity + load/PvE closure (Codex)
 - Rival test civilizations now read like players, not map resources: tactical view shows a Kingshot-shaped

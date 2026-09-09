@@ -1,0 +1,393 @@
+<title>ALLIANCE City Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme: dark;
+  --void:#06090F; --void-2:#080C16;
+  --panel:#0C111E; --panel-hi:#111829; --panel-2:#0E1524;
+  --line:rgba(150,172,220,.10); --line-2:rgba(150,172,220,.18);
+  --ink:#EBEFF9; --ink-2:#98A2BC; --ink-3:#57617D;
+  --accent:#8E97FF; --accent-2:#C3C8FF; --accent-dim:rgba(142,151,255,.16); --accent-glow:rgba(142,151,255,.40);
+  --cash:#4FE0A6; --oil:#F5B45E; --power:#5BC8F5;
+  --ok:#4FE0A6; --warn:#F5B45E; --bad:#FF6B82;
+  --r-sm:8px; --r:12px; --r-lg:16px;
+  --sp:clamp(16px,2.4vw,26px);
+  --sans:"Sora",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--void);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;
+  line-height:1.45;overflow-x:hidden}
+#stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+.aurora{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(120% 70% at 82% -8%, rgba(142,151,255,.12), transparent 55%),
+    radial-gradient(90% 55% at 8% 4%, rgba(91,200,245,.06), transparent 50%),
+    radial-gradient(120% 90% at 50% 120%, rgba(120,90,220,.10), transparent 60%);}
+.wrap{position:relative;z-index:1;max-width:1220px;margin:0 auto;padding:0 var(--sp) 60px}
+
+/* ── Command rail ─────────────────────────────── */
+.rail{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:22px 26px;flex-wrap:wrap;
+  padding:14px 0;margin:0 0 20px;
+  background:linear-gradient(180deg,rgba(6,9,15,.92),rgba(6,9,15,.72));backdrop-filter:blur(12px);
+  box-shadow:0 1px 0 var(--line),0 18px 24px -22px #000}
+.crest{display:flex;align-items:center;gap:12px;min-width:0}
+.crest .mark{width:34px;height:34px;flex:none;border-radius:9px;border:1px solid var(--line-2);
+  display:grid;place-items:center;background:radial-gradient(circle at 50% 40%,var(--accent-dim),transparent 70%);
+  box-shadow:0 0 22px -6px var(--accent-glow) inset}
+.crest .mark svg{width:19px;height:19px;color:var(--accent-2)}
+.crest .who b{font-weight:600;font-size:15px;letter-spacing:.02em;display:block}
+.crest .who span{font:500 10.5px/1.4 var(--mono);color:var(--ink-3);letter-spacing:.12em;text-transform:uppercase}
+.metrics{display:flex;align-items:stretch;gap:0;margin-left:auto;flex-wrap:wrap}
+.cell{display:flex;flex-direction:column;gap:3px;padding:2px 16px;border-left:1px solid var(--line)}
+.cell:first-child{border-left:0}
+.cell .k{font:500 9px/1 var(--mono);letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase;
+  display:flex;align-items:center;gap:5px}
+.cell .k i{width:6px;height:6px;border-radius:50%;background:var(--c,var(--accent))}
+.cell .v{font:500 15px/1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.cell .d{font:500 9.5px/1 var(--mono);color:var(--ink-2)}
+.cell .d.pos{color:var(--cash)}
+
+/* ── console layout ───────────────────────────── */
+.console{display:grid;grid-template-columns:minmax(0,1fr) 338px;gap:22px;align-items:start}
+.city-top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.seg{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.seg button{border:0;background:transparent;color:var(--ink-3);font:600 11px/1 var(--sans);letter-spacing:.08em;
+  text-transform:uppercase;padding:8px 15px;border-radius:7px;cursor:pointer;transition:.18s}
+.seg button.on{background:var(--accent-dim);color:var(--accent-2);box-shadow:0 0 0 1px var(--line-2)}
+.seg button:not(.on):hover{color:var(--ink-2)}
+
+.queue{display:flex;align-items:center;gap:9px}
+.qlabel{font:500 9px/1 var(--mono);letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase}
+.slot{display:flex;align-items:center;gap:9px;height:40px;padding:0 13px 0 10px;border:1px solid var(--line);
+  border-radius:9px;background:var(--panel);min-width:150px}
+.slot.free{border-style:dashed;color:var(--ink-3);justify-content:center;min-width:96px;cursor:pointer}
+.slot.free:hover{border-color:var(--line-2);color:var(--ink-2)}
+.slot .ring{width:22px;height:22px;flex:none}
+.slot .qi b{font-weight:600;font-size:11.5px;display:block;line-height:1.3}
+.slot .qi span{font:500 10px/1 var(--mono);color:var(--accent-2);letter-spacing:.04em}
+
+/* ── building groups + tiles ──────────────────── */
+.group{margin-bottom:22px}
+.group-head{display:flex;align-items:center;gap:12px;margin:0 2px 11px}
+.group-head h2{font:600 10px/1 var(--sans);letter-spacing:.2em;color:var(--ink-2);text-transform:uppercase;margin:0}
+.group-head .rule{flex:1;height:1px;background:var(--line)}
+.group-head .n{font:500 10px/1 var(--mono);color:var(--ink-3)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px}
+.tile{position:relative;overflow:hidden;text-align:left;cursor:pointer;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--panel);
+  padding:13px 13px 14px;display:flex;flex-direction:column;gap:9px;min-height:112px;
+  transition:border-color .16s,background .16s,transform .16s}
+.tile:hover{background:var(--panel-hi);border-color:var(--line-2)}
+.tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tile.sel{border-color:var(--accent);background:var(--panel-hi);
+  box-shadow:0 0 0 1px var(--accent),0 10px 30px -18px var(--accent-glow)}
+.tile.locked{opacity:.5}
+.tile .row1{display:flex;align-items:flex-start;justify-content:space-between}
+.tile .g{width:26px;height:26px;color:var(--ink-2)}
+.tile.sel .g,.tile:hover .g{color:var(--accent-2)}
+.tile .lv{font:600 12px/1 var(--mono);color:var(--ink);letter-spacing:.02em}
+.tile .lv small{color:var(--ink-3);font-weight:400}
+.tile .nm{font-weight:600;font-size:14px;letter-spacing:.01em;margin-top:auto}
+.tile .st{font:500 10px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);
+  display:flex;align-items:center;gap:6px}
+.tile .st.up{color:var(--accent-2)}
+.tile .st.ready{color:var(--ok)}
+.tile .st .dot{width:5px;height:5px;border-radius:50%;background:currentColor;
+  box-shadow:0 0 7px currentColor}
+.tile .bar{position:absolute;left:0;bottom:0;height:2px;background:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+.tile .tag{font:500 8.5px/1 var(--mono);letter-spacing:.12em;color:var(--ink-3);
+  border:1px solid var(--line);border-radius:5px;padding:3px 5px}
+
+/* ── inspector ────────────────────────────────── */
+.inspector{position:sticky;top:78px;border:1px solid var(--line-2);border-radius:var(--r-lg);
+  background:linear-gradient(180deg,var(--panel-2),var(--panel));overflow:hidden}
+.ins-glow{height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.7}
+.ins-pad{padding:20px 19px}
+.ins-head{display:flex;align-items:center;gap:14px}
+.ins-head .disc{width:52px;height:52px;flex:none;border-radius:13px;border:1px solid var(--line-2);
+  display:grid;place-items:center;background:radial-gradient(circle at 50% 35%,var(--accent-dim),transparent 72%)}
+.ins-head .disc svg{width:27px;height:27px;color:var(--accent-2)}
+.ins-head .ey{font:500 9.5px/1 var(--mono);letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase}
+.ins-head h3{margin:6px 0 0;font-weight:600;font-size:19px;letter-spacing:.01em}
+.lvline{display:flex;align-items:baseline;gap:9px;margin:19px 0 4px}
+.lvline .big{font:300 40px/.9 var(--mono);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.lvline .arw{font:500 14px/1 var(--mono);color:var(--ink-3)}
+.lvline .nxt{font:500 22px/1 var(--mono);color:var(--accent-2)}
+.lvline .max{font:500 11px/1 var(--mono);color:var(--ink-3);letter-spacing:.14em;text-transform:uppercase;align-self:center}
+.hair{height:1px;background:var(--line);margin:18px 0}
+.klabel{font:500 9.5px/1 var(--mono);letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase;margin-bottom:11px}
+.cost{display:flex;flex-direction:column;gap:9px}
+.cost .cr{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
+.cost .cr i{width:7px;height:7px;border-radius:50%;background:var(--c);flex:none;box-shadow:0 0 8px var(--c)}
+.cost .cr .rk{font:500 11px/1 var(--sans);color:var(--ink-2);letter-spacing:.02em;width:52px;text-transform:capitalize}
+.cost .cr .rv{font:500 13px/1 var(--mono);color:var(--ink);margin-left:auto}
+.cost .cr.short .rv{color:var(--bad)}
+.cost .cr .tick{font:500 10px/1 var(--mono);color:var(--ok);width:16px;text-align:center}
+.cost .cr.short .tick{color:var(--bad)}
+.metaline{display:flex;justify-content:space-between;align-items:center;margin-top:15px;
+  font:500 11px/1 var(--mono);color:var(--ink-2)}
+.metaline .t{color:var(--ink)}
+.gate{display:flex;align-items:center;gap:8px;margin-top:14px;padding:9px 11px;border-radius:9px;
+  border:1px solid rgba(245,180,94,.28);background:rgba(245,180,94,.07);
+  font:500 10.5px/1.3 var(--mono);color:var(--warn);letter-spacing:.03em}
+.act{width:100%;margin-top:17px;padding:14px;border:1px solid transparent;border-radius:11px;cursor:pointer;
+  font:600 12px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;transition:.16s;
+  background:var(--accent);color:#0a0d18;box-shadow:0 8px 26px -12px var(--accent-glow)}
+.act:hover{background:var(--accent-2)}
+.act.ghost{background:transparent;border-color:var(--line-2);color:var(--ink-2);box-shadow:none}
+.act.ghost:hover{border-color:var(--accent);color:var(--accent-2)}
+.act:disabled{background:var(--panel-hi);color:var(--ink-3);box-shadow:none;cursor:not-allowed}
+
+/* contextual blocks */
+.ctx{margin-top:2px}
+.prod{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;
+  border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.prod .pv{font:500 20px/1 var(--mono);color:var(--ink)}
+.prod .pv b{color:var(--c);font-weight:600}
+.prod .pk{font:500 9.5px/1.5 var(--mono);letter-spacing:.12em;color:var(--ink-3);text-transform:uppercase;text-align:right}
+.meter{height:5px;border-radius:3px;background:var(--panel-hi);overflow:hidden;margin-top:12px;border:1px solid var(--line)}
+.meter i{display:block;height:100%;background:linear-gradient(90deg,var(--c),color-mix(in oklab,var(--c),#fff 25%))}
+.troops{display:flex;flex-direction:column;gap:7px}
+.trow{display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}
+.trow .tt{font:600 11px/1 var(--mono);color:var(--accent-2);width:26px}
+.trow .tn{font-size:11.5px;color:var(--ink-2)}
+.trow .tc{margin-left:auto;font:500 12px/1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.rtree{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rbranch{padding:11px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);text-align:center}
+.rbranch .rn{font:600 10px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.rbranch .rp{font:500 16px/1 var(--mono);margin-top:8px}
+.rbranch .rp.done{color:var(--ok)} .rbranch .rp.mid{color:var(--accent-2)} .rbranch .rp.low{color:var(--ink-2)}
+
+/* ring */
+.ring circle{fill:none;stroke-width:2.4}
+.ring .bg{stroke:var(--line-2)} .ring .fg{stroke:var(--accent);stroke-linecap:round;
+  filter:drop-shadow(0 0 3px var(--accent-glow));transition:stroke-dashoffset 1s linear}
+
+.foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;
+  font:500 10px/1.5 var(--mono);letter-spacing:.1em;color:var(--ink-3);text-transform:uppercase}
+
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:20;opacity:0;
+  padding:12px 20px;border-radius:11px;border:1px solid var(--line-2);background:var(--panel-hi);
+  font:500 12px/1 var(--mono);color:var(--ink);letter-spacing:.03em;pointer-events:none;
+  box-shadow:0 20px 50px -20px #000;transition:.25s}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media(max-width:960px){.console{grid-template-columns:1fr}.inspector{position:static}
+  .metrics{width:100%;margin-left:0;justify-content:flex-start}.cell{padding-left:0;padding-right:14px;border-left:0}
+  .cell:not(:first-child){padding-left:14px;border-left:1px solid var(--line)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}.ring .fg{transition:none}}
+</style>
+
+<canvas id="stars"></canvas>
+<div class="aurora"></div>
+
+<div class="wrap">
+  <header class="rail">
+    <div class="crest">
+      <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l7 4v10l-7 4-7-4V7z"/><circle cx="12" cy="12" r="2.4"/></svg></div>
+      <div class="who"><b>RUGLORD</b><span>Sector 4663 &middot; 807:008</span></div>
+    </div>
+    <div class="metrics" id="metrics"></div>
+  </header>
+
+  <div class="console">
+    <section class="city">
+      <div class="city-top">
+        <div class="seg"><button class="on" data-view="city">City</button><button data-view="map">Star Map</button></div>
+        <div class="queue">
+          <span class="qlabel">Build Queue</span>
+          <div class="slot" id="qslot"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="10"/><circle class="fg" id="qring" cx="12" cy="12" r="10" transform="rotate(-90 12 12)"/></svg><div class="qi"><b id="qname">Reactor</b><span id="qtime">00:41:02</span></div></div>
+          <div class="slot free" id="qfree">+ Builder</div>
+        </div>
+      </div>
+      <div id="groups"></div>
+      <div class="foot"><span>ALLIANCE &middot; City Console &mdash; design mockup</span><span>Cosmos build &middot; v0.mock</span></div>
+    </section>
+
+    <aside class="inspector">
+      <div class="ins-glow"></div>
+      <div class="ins-pad" id="inspector"></div>
+    </aside>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const fmt=n=>{n=Math.round(n);if(n>=1e6)return (n/1e6).toFixed(2).replace(/\.?0+$/,'')+"M";if(n>=1e3)return (n/1e3).toFixed(1).replace(/\.0$/,'')+"K";return ""+n;};
+const dur=s=>{s=Math.max(0,Math.floor(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;const p=v=>String(v).padStart(2,'0');return h?`${p(h)}:${p(m)}:${p(x)}`:`${p(m)}:${p(x)}`;};
+
+const WALLET={cash:2290000,oil:1710000,power:1660000};
+const METRICS=[
+  {k:"Townhall",v:"14",d:"Might 26.4M"},
+  {k:"Cash",c:"var(--cash)",v:"2.29M",d:"+128K/h",pos:1},
+  {k:"Oil",c:"var(--oil)",v:"1.71M",d:"+96K/h",pos:1},
+  {k:"Power",c:"var(--power)",v:"1.66M",d:"+90K/h",pos:1},
+  {k:"Energy",v:"100",d:"/ 100"},
+  {k:"Fleets",v:"1",d:"/ 2"},
+  {k:"Troops",v:"67.0K",d:"1.2K wounded"},
+];
+const G={ // glyph paths
+ keep:'<path d="M12 3l7 4v10l-7 4-7-4V7z"/><circle cx="12" cy="12" r="2.4"/>',
+ monument:'<path d="M12 3l2.2 6.5L12 21l-2.2-11.5z"/><path d="M8 21h8"/>',
+ bank:'<path d="M4 9l8-5 8 5"/><path d="M5.5 9v8M9 9v8M15 9v8M18.5 9v8"/><path d="M4 20h16"/>',
+ oilwell:'<path d="M12 3s5 5.6 5 9.2A5 5 0 0 1 7 12.2C7 8.6 12 3 12 3z"/>',
+ powerplant:'<circle cx="12" cy="12" r="8"/><path d="M12.6 7l-3.4 6.2H12l-.9 4 3.6-6.4h-2.8z"/>',
+ storage:'<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/><path d="M12 12v8"/>',
+ armyCamp:'<path d="M5 18L12 5l7 13z"/><path d="M9.2 18v2.4M14.8 18v2.4"/>',
+ navalBase:'<path d="M4 15c2.4 3 5.6 4 8 4s5.6-1 8-4"/><path d="M6.5 12l5.5-2.6 5.5 2.6"/><path d="M12 4.5V12"/>',
+ airfield:'<path d="M12 3c3 2.2 4.2 6.2 4.2 9.2L12 15l-4.2-2.8C7.8 9.2 9 5.2 12 3z"/><path d="M7.8 13.5 5.8 18M16.2 13.5 18.2 18"/>',
+ academy:'<circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(28 12 12)"/>',
+ hospital:'<rect x="5" y="5" width="14" height="14" rx="3.5"/><path d="M12 9v6M9 12h6"/>',
+ wall:'<path d="M4 9h3V6h3v3h4V6h3v3h3v11H4z"/><path d="M12 12v8"/>',
+ watchtower:'<path d="M9.4 21 10.6 12M14.6 21 13.4 12"/><circle cx="12" cy="8.5" r="3"/><path d="M6 6.5 4 4.5M18 6.5l2-2"/>',
+ embassy:'<path d="M6 21V4l9.5 3.2L6 10.4"/><path d="M6 21h12"/>',
+};
+const B=[
+ {key:"keep",grp:"Command",nm:"Command Nexus",ey:"Townhall",lv:14,kind:"command",up:{cash:1850000,oil:1200000,power:1050000,sec:51600},might:"26.4M"},
+ {key:"monument",grp:"Command",nm:"Monument",ey:"Server Beacon",lv:9,kind:"special",tag:"SERVER"},
+ {key:"bank",grp:"Resource Network",nm:"Exchange",ey:"Cash",lv:12,kind:"economy",res:"cash",prod:128000,fill:.42,up:{cash:640000,oil:210000,power:180000,sec:16920}},
+ {key:"oilwell",grp:"Resource Network",nm:"Extractor",ey:"Oil",lv:13,kind:"economy",res:"oil",prod:96000,fill:.66,up:{cash:720000,oil:0,power:220000,sec:19800}},
+ {key:"powerplant",grp:"Resource Network",nm:"Reactor",ey:"Power",lv:11,kind:"economy",res:"power",prod:90000,fill:.31,state:"up",upTo:12,left:2462,total:4200,up:{cash:560000,oil:190000,power:0,sec:14760}},
+ {key:"storage",grp:"Resource Network",nm:"Vault",ey:"Warehouse",lv:14,kind:"economy",res:"cash",prod:0,fill:.78,cap:1,up:{cash:900000,oil:300000,power:260000,sec:23400}},
+ {key:"armyCamp",grp:"Military",nm:"Barracks",ey:"Army",lv:12,kind:"military",arm:"Vanguard",tiers:[["T8","Vanguard","32.4K"],["T7","Line Inf.","18.0K"]],up:{cash:820000,oil:280000,power:250000,sec:21600}},
+ {key:"navalBase",grp:"Military",nm:"Drydock",ey:"Navy",lv:9,kind:"military",arm:"Corvette",tiers:[["T6","Corvette","9.1K"],["T5","Skiff","6.4K"]],up:{cash:540000,oil:210000,power:160000,sec:12600}},
+ {key:"airfield",grp:"Military",nm:"Hangar",ey:"Air",lv:10,kind:"military",arm:"Interceptor",tiers:[["T7","Interceptor","7.8K"],["T6","Drone","5.1K"]],up:{cash:610000,oil:220000,power:200000,sec:14400}},
+ {key:"academy",grp:"Infrastructure",nm:"Institute",ey:"Research",lv:11,kind:"academy"},
+ {key:"hospital",grp:"Infrastructure",nm:"Med Bay",ey:"Hospital",lv:10,kind:"support",note:"Recovering 1.2K",up:{cash:480000,oil:150000,power:140000,sec:11700}},
+ {key:"wall",grp:"Infrastructure",nm:"Bulwark",ey:"Wall",lv:13,kind:"support",note:"Integrity 100%",up:{cash:700000,oil:240000,power:210000,sec:18900}},
+ {key:"watchtower",grp:"Infrastructure",nm:"Watchtower",ey:"Recon",lv:8,kind:"support",note:"3 tasks ready",up:{cash:300000,oil:90000,power:80000,sec:7200}},
+ {key:"embassy",grp:"Infrastructure",nm:"Embassy",ey:"Reinforce",lv:7,kind:"support",gate:"Command Nexus Lv.10",up:{cash:280000,oil:80000,power:70000,sec:6600}},
+];
+const RES_C={cash:"var(--cash)",oil:"var(--oil)",power:"var(--power)"};
+let sel="keep";
+const svg=(k,cls)=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${G[k]}</svg>`;
+
+// metrics
+document.getElementById('metrics').innerHTML=METRICS.map(m=>
+ `<div class="cell"><span class="k">${m.c?`<i style="--c:${m.c}"></i>`:''}${m.k}</span><span class="v">${m.v}</span><span class="d ${m.pos?'pos':''}">${m.d}</span></div>`).join('');
+
+// groups + tiles
+const ORDER=["Command","Resource Network","Military","Infrastructure"];
+document.getElementById('groups').innerHTML=ORDER.map(g=>{
+  const items=B.filter(b=>b.grp===g);
+  const tiles=items.map(b=>{
+    let st,cls="";
+    if(b.state==="up"){st=`<span class="st up"><span class="dot"></span>Lv.${b.lv}&rarr;${b.upTo} &middot; <span data-tile-timer="${b.key}">${dur(b.left)}</span></span>`;}
+    else if(b.gate){st=`<span class="st">Locked</span>`;cls="locked";}
+    else if(b.kind==="special"){st=`<span class="st">Server</span>`;}
+    else{st=`<span class="st ready"><span class="dot"></span>Ready</span>`;}
+    const bar=b.state==="up"?`<div class="bar" data-tile-bar="${b.key}" style="width:${(1-b.left/b.total)*100}%"></div>`:"";
+    const right=b.tag?`<span class="tag">${b.tag}</span>`:`<span class="lv">Lv.<small>&#8202;</small>${b.lv}</span>`;
+    return `<button class="tile ${cls}" data-key="${b.key}"><div class="row1">${svg(b.key,'g')}${right}</div><div class="nm">${b.nm}</div>${st}${bar}</button>`;
+  }).join('');
+  return `<div class="group"><div class="group-head"><h2>${g}</h2><div class="rule"></div><span class="n">${items.length}</span></div><div class="tiles">${tiles}</div></div>`;
+}).join('');
+
+// inspector
+function inspect(k){
+  sel=k;const b=B.find(x=>x.key===k);
+  document.querySelectorAll('.tile').forEach(t=>t.classList.toggle('sel',t.dataset.key===k));
+  const el=document.getElementById('inspector');
+  let head=`<div class="ins-head"><div class="disc">${svg(k,'')}</div><div><div class="ey">${b.ey}</div><h3>${b.nm}</h3></div></div>`;
+  let body="";
+  if(b.kind==="special"){
+    body=`<div class="lvline"><span class="big">${b.lv}</span><span class="max">Server-driven</span></div>
+      <div class="hair"></div><div class="klabel">Status</div>
+      <div class="metaline"><span>Server progress</span><span class="t">62%</span></div>
+      <div class="metaline"><span>Next reward tier</span><span class="t">TH15 wave</span></div>
+      <button class="act ghost" disabled>Not player-upgraded</button>`;
+  } else {
+    const up=b.up, aff=r=>(WALLET[r]===undefined?true:WALLET[r]>=up[r]);
+    const rows=["cash","oil","power"].filter(r=>up[r]>0).map(r=>{
+      const ok=aff(r);return `<div class="cr ${ok?'':'short'}"><i style="--c:${RES_C[r]}"></i><span class="rk">${r}</span><span class="rv">${fmt(up[r])}</span><span class="tick">${ok?'&#10003;':'&#33;'}</span></div>`;
+    }).join('');
+    const cur=b.state==="up"?b.lv:b.lv, nxt=b.state==="up"?b.upTo:b.lv+1;
+    const lvline=b.state==="up"
+      ? `<div class="lvline"><span class="big">${cur}</span><span class="arw">&rarr;</span><span class="nxt">${nxt}</span><span class="max" style="margin-left:auto;color:var(--accent-2)">Upgrading</span></div>`
+      : `<div class="lvline"><span class="big">${cur}</span><span class="arw">&rarr;</span><span class="nxt">${nxt}</span></div>`;
+
+    let ctx="";
+    if(b.kind==="economy"){
+      const prod=b.prod>0?`<div class="prod"><span class="pv"><b style="--c:${RES_C[b.res]}">+${fmt(b.prod)}</b></span><span class="pk">${b.res} / hour</span></div>`
+        :`<div class="prod"><span class="pv">${Math.round(b.fill*100)}%</span><span class="pk">storage<br>used</span></div>`;
+      ctx=`<div class="ctx">${prod}<div class="meter"><i style="--c:${RES_C[b.res]};width:${b.fill*100}%"></i></div></div>`;
+    } else if(b.kind==="military"){
+      ctx=`<div class="ctx"><div class="troops">${b.tiers.map(t=>`<div class="trow"><span class="tt">${t[0]}</span><span class="tn">${t[1]}</span><span class="tc">${t[2]}</span></div>`).join('')}</div></div>`;
+    } else if(b.kind==="academy"){
+      ctx=`<div class="ctx"><div class="rtree">
+        <div class="rbranch"><div class="rn">Economy</div><div class="rp done">100%</div></div>
+        <div class="rbranch"><div class="rn">Battle</div><div class="rp mid">58%</div></div>
+        <div class="rbranch"><div class="rn">Develop</div><div class="rp low">31%</div></div></div></div>`;
+    } else if(b.note){
+      ctx=`<div class="ctx"><div class="prod"><span class="pv" style="font-size:14px">${b.note}</span><span class="pk">status</span></div></div>`;
+    }
+
+    const gate=b.gate?`<div class="gate">&#9888; Requires ${b.gate}</div>`:"";
+    const timeStr = b.state==="up" ? `<span data-ins-timer="${b.key}">${dur(b.left)}</span>` : dur(up.sec);
+    let action;
+    if(b.state==="up") action=`<button class="act ghost" data-act="cancel" data-k="${k}">Cancel upgrade</button>`;
+    else if(b.gate) action=`<button class="act" disabled>Prerequisite unmet</button>`;
+    else if(b.kind==="military") action=`<button class="act ghost" data-act="train" data-k="${k}">Train ${b.arm}</button><button class="act" data-act="up" data-k="${k}">Upgrade &rarr; Lv.${nxt}</button>`;
+    else if(b.kind==="academy") action=`<button class="act" data-act="open" data-k="${k}">Open research canvas</button>`;
+    else action=`<button class="act" data-act="up" data-k="${k}">Upgrade &rarr; Lv.${nxt}</button>`;
+
+    body=`${lvline}${ctx?'<div class="hair"></div>'+ctx:''}<div class="hair"></div>
+      <div class="klabel">Upgrade cost</div><div class="cost">${rows}</div>
+      <div class="metaline"><span>Build time</span><span class="t">${timeStr}</span></div>
+      ${gate}${action}`;
+  }
+  el.innerHTML=head+body;
+}
+document.getElementById('groups').addEventListener('click',e=>{const t=e.target.closest('.tile');if(t)inspect(t.dataset.key);});
+document.getElementById('inspector').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-act]');if(!btn)return;const a=btn.dataset.act,b=B.find(x=>x.key===btn.dataset.k);
+  if(a==="up"){ if(queue.length>=2){toast("Build queue full — free a builder");return;}
+    b.state="up";b.upTo=b.lv+1;b.total=b.up.sec;b.left=b.up.sec;queue.push(b.key);syncQueue();inspect(b.key);toast(`${b.nm} upgrade started`);}
+  else if(a==="cancel"){b.state=null;queue=queue.filter(q=>q!==b.key);syncQueue();inspect(b.key);toast(`${b.nm} upgrade cancelled`);}
+  else if(a==="train")toast(`Training ${b.arm} — opens roster`);
+  else if(a==="open")toast("Research canvas — full-width view");
+});
+document.getElementById('qfree').addEventListener('click',()=>toast("Second builder idle — pick a building to upgrade"));
+document.querySelectorAll('.seg button').forEach(bn=>bn.addEventListener('click',()=>{
+  if(bn.dataset.view==="map"){toast("Star Map is its own screen — this mockup is the City");return;}
+}));
+
+// build queue state + timers
+let queue=["powerplant"];
+function syncQueue(){
+  const first=queue[0]?B.find(b=>b.key===queue[0]):null;
+  document.getElementById('qslot').style.display=first?'':'none';
+  if(first){document.getElementById('qname').textContent=first.nm;}
+}
+const C=2*Math.PI*10;
+document.getElementById('qring').style.strokeDasharray=C;
+function tick(){
+  B.forEach(b=>{if(b.state==="up"){b.left=Math.max(0,b.left-1);
+    const tt=document.querySelector(`[data-tile-timer="${b.key}"]`);if(tt)tt.textContent=dur(b.left);
+    const bar=document.querySelector(`[data-tile-bar="${b.key}"]`);if(bar)bar.style.width=((1-b.left/b.total)*100)+"%";
+    const it=document.querySelector(`[data-ins-timer="${b.key}"]`);if(it)it.textContent=dur(b.left);
+    if(b.left===0){b.state=null;queue=queue.filter(q=>q!==b.key);b.lv=b.upTo;syncQueue();if(sel===b.key)inspect(b.key);toast(`${b.nm} reached Lv.${b.lv}`);}
+  }});
+  const q=queue[0]?B.find(b=>b.key===queue[0]):null;
+  if(q&&q.state==="up"){document.getElementById('qtime').textContent=dur(q.left);
+    document.getElementById('qring').style.strokeDashoffset=C*(q.left/q.total);}
+}
+setInterval(tick,1000);
+
+let toastT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200);}
+
+// starfield
+const cv=document.getElementById('stars'),cx=cv.getContext('2d');let stars=[],rm=matchMedia('(prefers-reduced-motion:reduce)').matches;
+function resize(){cv.width=innerWidth;cv.height=innerHeight;const n=Math.round(innerWidth*innerHeight/9000);
+  stars=Array.from({length:n},()=>({x:Math.random()*cv.width,y:Math.random()*cv.height,r:Math.random()*1.1+.2,a:Math.random(),s:Math.random()*.02+.004}));}
+function draw(){cx.clearRect(0,0,cv.width,cv.height);for(const st of stars){if(!rm){st.a+=st.s;if(st.a>1||st.a<0)st.s*=-1;}
+  cx.globalAlpha=.15+Math.abs(st.a)*.5;cx.fillStyle=st.r>1?'#c3c8ff':'#dfe6ff';cx.beginPath();cx.arc(st.x,st.y,st.r,0,7);cx.fill();}
+  cx.globalAlpha=1;if(!rm)requestAnimationFrame(draw);}
+addEventListener('resize',resize);resize();draw();
+
+syncQueue();inspect("keep");
+</script>

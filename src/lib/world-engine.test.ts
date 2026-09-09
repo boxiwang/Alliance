@@ -371,19 +371,19 @@ describe("headless world — march authority and feedback", () => {
 
   it("recalls an outbound march and returns all reserved troops", () => {
     let world = spawnPlayer(populateWorld(initHeadlessWorld("state-recall", 1000), 1, 0, 1000), {
-      id: "gatherer", troops: { army: { "1": 100 }, navy: {}, air: {} },
+      id: "gatherer", troops: { army: { "1": 1 }, navy: {}, air: {} },
     }, 1000);
     const node = firstEntity(world, "resource");
     const sent = dispatchMarch(world, {
       playerId: "gatherer", targetId: node.id, action: "gather",
-      force: { army: { "1": 100 }, navy: {}, air: {} }, idempotencyKey: "recall-1",
+      force: { army: { "1": 1 }, navy: {}, air: {} }, idempotencyKey: "recall-1",
     }, 2000);
     expect(sent.ok).toBe(true);
     if (!sent.ok) return;
     expect(sent.world.players.gatherer.troops.army["1"]).toBe(0);
     world = recallMarch(sent.world, sent.march.id, "gatherer", 3000);
     world = advanceHeadlessWorld(world, world.marches[sent.march.id].returnAt);
-    expect(world.players.gatherer.troops.army["1"]).toBe(100);
+    expect(world.players.gatherer.troops.army["1"]).toBe(1);
     expect(world.marches[sent.march.id].state).toBe("completed");
   });
 });

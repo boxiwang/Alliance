@@ -1,0 +1,1718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Alliance City Console Mock</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Alliance City Console Mock" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Alliance City Console Mock&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --radius: var(--border-radius-lg, 12.5px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: 5px;
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: superellipse(1.5);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress {
+  display: flex;
+  height: 6px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 6px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: superellipse(1.5);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control,
+  .form-select {
+    font-size: max(16px, var(--font-size-normal));
+  }
+
+  .form-control[type=&quot;file&quot;]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type=&quot;color&quot;] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;week&quot;]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: &quot;&quot;;
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+
+  .form-range::-webkit-slider-runnable-track {
+    height: 44px;
+  }
+
+  .form-range::-moz-range-track {
+    height: 44px;
+  }
+
+  .form-range::-webkit-slider-thumb {
+    margin-top: 12px;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: 16px !important;
+  height: 16px !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;section id=&quot;alliance-city-hybrid-mock&quot; aria-label=&quot;Alliance City Console mockup&quot;&gt;
+  &lt;style&gt;
+    @import url(&quot;https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap&quot;);
+    #alliance-city-hybrid-mock{
+      position:relative;overflow:hidden;width:100%;min-height:720px;padding:16px;
+      color:#ebeff9;background:#06090f;
+      font-family:&quot;IBM Plex Sans&quot;,system-ui,sans-serif;
+    }
+    #alliance-city-hybrid-mock::before{
+      content:&quot;&quot;;position:absolute;inset:0;pointer-events:none;
+      background-image:
+        radial-gradient(120% 70% at 82% -8%,rgba(142,151,255,.12),transparent 55%),
+        radial-gradient(90% 55% at 8% 4%,rgba(91,200,245,.06),transparent 50%),
+        radial-gradient(120% 90% at 50% 120%,rgba(120,90,220,.10),transparent 60%);
+    }
+    #alliance-city-hybrid-mock::after{
+      content:&quot;&quot;;position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.16;
+      background-image:repeating-linear-gradient(115deg,rgba(255,255,255,.018) 0,rgba(255,255,255,.018) 1px,transparent 1px,transparent 4px);
+      mix-blend-mode:soft-light;
+    }
+    #alliance-city-hybrid-mock .alliance-star-canvas{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none}
+    #alliance-city-hybrid-mock button{font:inherit}
+    #alliance-city-hybrid-mock .alliance-shell{position:relative;z-index:1;max-width:1240px;margin:0 auto}
+    #alliance-city-hybrid-mock .alliance-nav{
+      position:relative;overflow:hidden;border:1px solid rgba(126,151,206,.14);border-radius:14px;
+      background:rgba(8,12,22,.92);box-shadow:0 18px 60px rgba(0,0,0,.34),inset 0 1px rgba(255,255,255,.025);backdrop-filter:blur(18px);
+    }
+    #alliance-city-hybrid-mock .alliance-nav-head{display:flex;align-items:stretch;justify-content:space-between;gap:14px;padding:10px 11px 10px 15px;border-bottom:1px solid rgba(93,195,224,.1)}
+    #alliance-city-hybrid-mock .alliance-identity{display:flex;min-width:0;align-items:center;gap:10px}
+    #alliance-city-hybrid-mock .alliance-mark{position:relative;width:36px;height:36px;display:grid;flex:0 0 auto;place-items:center;overflow:hidden;border:1px solid rgba(156,166,255,.28);border-radius:10px;background:conic-gradient(from 35deg,#161b38,#766deb,#172a3c,#53d2dc,#161b38);box-shadow:inset 0 0 14px rgba(7,9,18,.78),0 0 18px rgba(126,112,255,.1)}
+    #alliance-city-hybrid-mock .alliance-mark::before{content:&quot;&quot;;position:absolute;width:17px;height:17px;border:1px solid rgba(232,237,255,.65);border-radius:50%;box-shadow:0 0 9px rgba(151,160,255,.8)}
+    #alliance-city-hybrid-mock .alliance-mark::after{content:&quot;&quot;;position:absolute;width:25px;height:8px;border:1px solid rgba(232,237,255,.65);border-radius:50%;transform:rotate(-28deg)}
+    #alliance-city-hybrid-mock .alliance-mark i{width:4px;height:4px;border-radius:50%;background:#fff;box-shadow:0 0 6px #fff}
+    #alliance-city-hybrid-mock .alliance-who{display:flex;min-width:0;flex-direction:column}
+    #alliance-city-hybrid-mock .alliance-who small{color:#74819d;font:500 8px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.16em}
+    #alliance-city-hybrid-mock .alliance-who b{overflow:hidden;color:#eef2fb;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+    #alliance-city-hybrid-mock .alliance-who span{color:#607c8e;font:400 9px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.06em}
+    #alliance-city-hybrid-mock .alliance-nav-actions{display:flex;align-items:stretch;gap:8px}
+    #alliance-city-hybrid-mock .alliance-might{min-width:120px;display:flex;justify-content:center;flex-direction:column;padding:6px 12px;border:1px solid rgba(241,191,92,.28);border-radius:9px;background:linear-gradient(135deg,rgba(241,191,92,.11),rgba(118,81,192,.05));box-shadow:inset 2px 0 #f1bf5c,0 8px 28px rgba(0,0,0,.13)}
+    #alliance-city-hybrid-mock .alliance-might small{color:#a98549;font:500 8px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.16em}
+    #alliance-city-hybrid-mock .alliance-might b{color:#ffd57b;font:700 22px &quot;Chakra Petch&quot;,sans-serif;letter-spacing:.02em}
+    #alliance-city-hybrid-mock .alliance-switch{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:3px;border:1px solid rgba(150,172,220,.12);border-radius:10px;background:#0c111e}
+    #alliance-city-hybrid-mock .alliance-switch button{min-width:110px;display:flex;align-items:center;justify-content:center;gap:7px;padding:8px 11px;border:1px solid transparent;border-radius:6px;background:transparent;color:#597487;font-size:11px;font-weight:500;cursor:pointer}
+    #alliance-city-hybrid-mock .alliance-switch button.is-active{border-color:rgba(150,172,220,.18);background:rgba(142,151,255,.16);color:#c3c8ff;box-shadow:0 0 0 1px rgba(150,172,220,.08)}
+    #alliance-city-hybrid-mock .alliance-economy-bar{display:grid;grid-template-columns:minmax(360px,1.5fr) minmax(300px,1fr) 124px;gap:1px;padding:1px;background:rgba(150,172,220,.08)}
+    #alliance-city-hybrid-mock .alliance-resource-cluster{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:rgba(150,172,220,.07)}
+    #alliance-city-hybrid-mock .alliance-resource-balance{--balance-color:#8e97ff;min-width:0;min-height:52px;display:grid;grid-template-columns:29px minmax(0,1fr);align-items:center;gap:8px;padding:9px 11px;background:linear-gradient(145deg,rgba(17,24,41,.98),rgba(9,15,28,.98))}
+    #alliance-city-hybrid-mock .alliance-resource-symbol{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:color-mix(in srgb,var(--balance-color) 9%,transparent);color:var(--balance-color)}
+    #alliance-city-hybrid-mock .alliance-resource-symbol svg{width:15px;height:15px}
+    #alliance-city-hybrid-mock .alliance-resource-main{height:100%;display:grid;min-width:0;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+    #alliance-city-hybrid-mock .alliance-resource-main small{color:#7d88a1;font:500 9.5px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.11em}
+    #alliance-city-hybrid-mock .alliance-resource-main b{overflow:hidden;color:#f0f4fc;font:700 17px &quot;Chakra Petch&quot;,sans-serif;letter-spacing:.02em;text-overflow:ellipsis;white-space:nowrap}
+    #alliance-city-hybrid-mock .alliance-operation-cluster{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:rgba(150,172,220,.07)}
+    #alliance-city-hybrid-mock .alliance-operation{min-width:0;display:flex;justify-content:center;flex-direction:column;gap:3px;padding:9px 8px;background:#090f1c}
+    #alliance-city-hybrid-mock .alliance-operation small{color:#737e98;font:500 8.5px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.09em}
+    #alliance-city-hybrid-mock .alliance-operation b{overflow:hidden;color:#dfe5f2;font:700 13px &quot;Chakra Petch&quot;,sans-serif;text-overflow:ellipsis;white-space:nowrap}
+    #alliance-city-hybrid-mock .alliance-operation.wounded b{color:#ff8296}
+    #alliance-city-hybrid-mock .alliance-currency{display:grid;grid-template-columns:25px 1fr 21px;align-items:center;gap:7px;padding:8px 9px;border:0;background:linear-gradient(145deg,rgba(142,151,255,.15),rgba(65,50,126,.11));color:#e8eaff;text-align:left;cursor:pointer}
+    #alliance-city-hybrid-mock .alliance-currency:hover{background:linear-gradient(145deg,rgba(142,151,255,.22),rgba(65,50,126,.16))}
+    #alliance-city-hybrid-mock .alliance-currency&gt;i{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:rgba(142,151,255,.12);color:#c3c8ff}
+    #alliance-city-hybrid-mock .alliance-currency&gt;i svg{width:14px;height:14px}
+    #alliance-city-hybrid-mock .alliance-currency&gt;span{display:flex;flex-direction:column}
+    #alliance-city-hybrid-mock .alliance-currency small{color:#8b94af;font:500 8.5px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.1em}
+    #alliance-city-hybrid-mock .alliance-currency b{font:700 15px &quot;Chakra Petch&quot;,sans-serif}
+    #alliance-city-hybrid-mock .alliance-currency strong{width:20px;height:20px;display:grid;place-items:center;border-radius:6px;background:#8e97ff;color:#090c16;font-size:15px;font-weight:700}
+    #alliance-city-hybrid-mock .alliance-citybar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:17px 1px 15px}
+    #alliance-city-hybrid-mock .alliance-citybar&gt;span{color:#7d87a1;font:600 10px &quot;IBM Plex Sans&quot;,sans-serif;letter-spacing:.19em}
+    #alliance-city-hybrid-mock .alliance-builders{display:flex;align-items:center;gap:6px}
+    #alliance-city-hybrid-mock .alliance-builder-label{margin-right:3px;color:#57617d;font:500 9px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.16em}
+    #alliance-city-hybrid-mock .alliance-builder{min-width:156px;height:40px;display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:8px;padding:0 12px 0 9px;border:1px solid rgba(150,172,220,.11);border-radius:9px;background:#0c111e;color:#ebeff9;text-align:left;cursor:pointer}
+    #alliance-city-hybrid-mock .alliance-builder:hover{border-color:rgba(150,172,220,.2);background:#111829}
+    #alliance-city-hybrid-mock .alliance-builder.idle{min-width:96px;display:flex;justify-content:center;border-style:dashed;color:#57617d;font:500 9px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-ring{width:22px;height:22px;transform:rotate(-90deg)}
+    #alliance-city-hybrid-mock .alliance-ring circle{fill:none;stroke-width:2.3}
+    #alliance-city-hybrid-mock .alliance-ring .track{stroke:rgba(117,157,181,.13)}
+    #alliance-city-hybrid-mock .alliance-ring .value{stroke:#8e97ff;stroke-linecap:round;filter:drop-shadow(0 0 3px rgba(142,151,255,.4))}
+    #alliance-city-hybrid-mock .alliance-builder div{display:flex;min-width:0;flex-direction:column}
+    #alliance-city-hybrid-mock .alliance-builder div b{overflow:hidden;font-size:11px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+    #alliance-city-hybrid-mock .alliance-builder div small,#alliance-city-hybrid-mock .alliance-builder time{color:#98a2bc;font:500 9px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-layout{display:grid;grid-template-columns:minmax(0,1fr) 338px;align-items:start;gap:20px}
+    #alliance-city-hybrid-mock .alliance-directory{display:flex;min-width:0;flex-direction:column;gap:13px}
+    #alliance-city-hybrid-mock .alliance-core-node{position:relative;min-height:116px;display:grid;grid-template-columns:82px minmax(0,1fr) auto;align-items:center;gap:18px;overflow:hidden;padding:15px 18px;border:1px solid rgba(142,151,255,.24);border-radius:15px;background:linear-gradient(105deg,rgba(18,24,43,.97),rgba(12,17,31,.95) 58%,rgba(39,31,76,.76));color:#eef2fb;text-align:left;cursor:pointer;box-shadow:0 20px 46px -34px rgba(95,103,255,.75),inset 0 1px rgba(255,255,255,.035);transition:border-color .18s,transform .18s,box-shadow .18s}
+    #alliance-city-hybrid-mock .alliance-core-node::after{content:&quot;&quot;;position:absolute;width:310px;height:310px;right:-126px;top:-160px;border:1px solid rgba(142,151,255,.09);border-radius:50%;box-shadow:0 0 0 28px rgba(142,151,255,.025),0 0 0 58px rgba(142,151,255,.015);pointer-events:none}
+    #alliance-city-hybrid-mock .alliance-core-node:hover,#alliance-city-hybrid-mock .alliance-core-node.is-selected{border-color:rgba(142,151,255,.62);transform:translateY(-1px);box-shadow:0 22px 52px -32px rgba(95,103,255,.78),inset 0 1px rgba(255,255,255,.045)}
+    #alliance-city-hybrid-mock .alliance-core-emblem{position:relative;width:70px;height:70px;display:grid;place-items:center;border-radius:50%;background:radial-gradient(circle,rgba(171,178,255,.18) 0 20%,rgba(96,108,220,.08) 21% 43%,transparent 44%);color:#d8dcff}
+    #alliance-city-hybrid-mock .alliance-core-emblem::before,#alliance-city-hybrid-mock .alliance-core-emblem::after{content:&quot;&quot;;position:absolute;border:1px solid rgba(166,176,255,.36);border-radius:50%}
+    #alliance-city-hybrid-mock .alliance-core-emblem::before{width:56px;height:22px;transform:rotate(-24deg);animation:alliance-orbit 13s linear infinite}
+    #alliance-city-hybrid-mock .alliance-core-emblem::after{width:39px;height:39px;border-style:dashed;animation:alliance-orbit 18s linear reverse infinite}
+    #alliance-city-hybrid-mock .alliance-core-emblem svg{width:22px;height:22px;filter:drop-shadow(0 0 8px rgba(179,184,255,.5))}
+    #alliance-city-hybrid-mock .alliance-core-copy{display:flex;min-width:0;flex-direction:column}
+    #alliance-city-hybrid-mock .alliance-core-copy small{color:#8993b3;font:500 8px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.17em}
+    #alliance-city-hybrid-mock .alliance-core-copy b{margin:3px 0 6px;font-size:20px;font-weight:600;letter-spacing:-.01em}
+    #alliance-city-hybrid-mock .alliance-core-copy span{display:flex;align-items:center;gap:7px;color:#53e0aa;font:500 8px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.11em}
+    #alliance-city-hybrid-mock .alliance-core-copy span::before{content:&quot;&quot;;width:5px;height:5px;border-radius:50%;background:#53e0aa;box-shadow:0 0 8px #53e0aa}
+    #alliance-city-hybrid-mock .alliance-core-metrics{position:relative;z-index:1;display:flex;align-items:center;gap:24px;padding-right:9px}
+    #alliance-city-hybrid-mock .alliance-core-metric{display:flex;flex-direction:column;gap:2px;min-width:66px}
+    #alliance-city-hybrid-mock .alliance-core-metric small{color:#697793;font:500 8px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.12em}
+    #alliance-city-hybrid-mock .alliance-core-metric b{font:700 19px &quot;Chakra Petch&quot;,sans-serif}
+    #alliance-city-hybrid-mock .alliance-core-enter{width:29px;height:29px;display:grid;place-items:center;border-radius:50%;background:rgba(142,151,255,.12);color:#c3c8ff;font-size:18px}
+    @keyframes alliance-orbit{to{transform:rotate(336deg)}}
+    #alliance-city-hybrid-mock .alliance-group-head{display:flex;align-items:center;gap:9px;margin:0 2px 7px}
+    #alliance-city-hybrid-mock .alliance-group-head b{color:#98a2bc;font-size:10px;font-weight:600;letter-spacing:.19em;text-transform:uppercase}
+    #alliance-city-hybrid-mock .alliance-group-head i{height:1px;flex:1;background:rgba(150,172,220,.1)}
+    #alliance-city-hybrid-mock .alliance-group-head span{color:#57617d;font:500 9px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-resource-grid,#alliance-city-hybrid-mock .alliance-building-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+    #alliance-city-hybrid-mock .alliance-building-grid.is-two{grid-template-columns:repeat(2,minmax(0,1fr))}
+    #alliance-city-hybrid-mock .alliance-resource-node,#alliance-city-hybrid-mock .alliance-building-node{position:relative;min-width:0;overflow:hidden;border:1px solid transparent;border-radius:11px;background:rgba(13,18,32,.91);color:#ebeff9;text-align:left;cursor:pointer;box-shadow:inset 0 1px rgba(255,255,255,.025);transition:background .16s,border-color .16s,transform .16s,box-shadow .16s}
+    #alliance-city-hybrid-mock .alliance-resource-node:hover,#alliance-city-hybrid-mock .alliance-building-node:hover{border-color:rgba(150,172,220,.18);background:#111829;transform:translateY(-1px);box-shadow:0 12px 28px -22px rgba(117,125,255,.35),inset 0 1px rgba(255,255,255,.035)}
+    #alliance-city-hybrid-mock .alliance-resource-node.is-selected,#alliance-city-hybrid-mock .alliance-building-node.is-selected{border-color:#8e97ff;background:#111829;box-shadow:0 0 0 1px #8e97ff,0 12px 30px -20px rgba(142,151,255,.4)}
+    #alliance-city-hybrid-mock .alliance-resource-node{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:8px;padding:9px 10px}
+    #alliance-city-hybrid-mock .alliance-resource-node .glyph,#alliance-city-hybrid-mock .alliance-building-node .glyph{width:29px;height:29px;display:grid;place-items:center;border-radius:8px;background:rgba(142,151,255,.07);color:#98a2bc}
+    #alliance-city-hybrid-mock .glyph svg{width:16px;height:16px}
+    #alliance-city-hybrid-mock .alliance-resource-copy{display:flex;min-width:0;flex-direction:column}
+    #alliance-city-hybrid-mock .alliance-resource-copy small{color:var(--node-color);font:500 7px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.12em}
+    #alliance-city-hybrid-mock .alliance-resource-copy b{overflow:hidden;font-size:12px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+    #alliance-city-hybrid-mock .alliance-resource-copy em{color:var(--node-color);font:400 8px &quot;IBM Plex Mono&quot;,monospace;font-style:normal}
+    #alliance-city-hybrid-mock .alliance-resource-node&gt;span:last-child{color:#8da2af;font:400 9px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-building-node{min-height:82px;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 12px}
+    #alliance-city-hybrid-mock .alliance-building-node.is-busy::after{content:&quot;&quot;;position:absolute;inset:auto 0 0;height:1px;background:linear-gradient(90deg,transparent,#5bc8f5,transparent);animation:alliance-scan 3.2s ease-in-out infinite}
+    #alliance-city-hybrid-mock .alliance-building-copy{display:flex;min-width:0;flex-direction:column;gap:5px}
+    #alliance-city-hybrid-mock .alliance-building-copy&gt;strong{overflow:hidden;font-size:13px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+    #alliance-city-hybrid-mock .alliance-building-meta{display:flex;align-items:center;gap:9px;color:#8da2af;font:500 9px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-building-meta b{width:21px;height:21px;display:grid;place-items:center;border-radius:50%;background:rgba(142,151,255,.06);color:#74819d;font-size:13px}
+    @keyframes alliance-scan{0%,100%{opacity:.25;transform:translateX(-38%)}50%{opacity:.85;transform:translateX(38%)}}
+    #alliance-city-hybrid-mock .alliance-node-state{display:flex;align-items:center;gap:6px;color:#597384;font:500 8px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.09em;text-transform:uppercase}
+    #alliance-city-hybrid-mock .alliance-node-state i{width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 7px currentColor}
+    #alliance-city-hybrid-mock .alliance-node-state.ready{color:#53e0aa}
+    #alliance-city-hybrid-mock .alliance-node-state.active{color:#5bc8f5}
+    #alliance-city-hybrid-mock .alliance-node-state.upgrading{color:#f1bf5c}
+    #alliance-city-hybrid-mock .alliance-node-state.training{color:#5bc8f5}
+    #alliance-city-hybrid-mock .alliance-node-state.healing{color:#53e0aa}
+    #alliance-city-hybrid-mock .alliance-node-state.active i{animation:alliance-pulse 1.8s ease-in-out infinite}
+    #alliance-city-hybrid-mock .alliance-node-state.locked{color:#596675}
+    @keyframes alliance-pulse{50%{opacity:.32;box-shadow:0 0 13px currentColor}}
+    #alliance-city-hybrid-mock .alliance-inspector{position:sticky;top:12px;overflow:hidden;border:1px solid rgba(150,172,220,.15);border-radius:16px;background:linear-gradient(180deg,rgba(14,21,36,.97),rgba(10,15,27,.98));box-shadow:0 22px 58px rgba(0,0,0,.36),inset 0 1px rgba(255,255,255,.025);backdrop-filter:blur(16px)}
+    #alliance-city-hybrid-mock .alliance-inspector::before{content:&quot;&quot;;display:block;height:2px;background:linear-gradient(90deg,transparent,#8e97ff,transparent);opacity:.75}
+    #alliance-city-hybrid-mock .alliance-inspector-content{padding:19px}
+    #alliance-city-hybrid-mock .alliance-inspector-head{display:flex;align-items:center;gap:13px}
+    #alliance-city-hybrid-mock .alliance-inspector-icon{width:50px;height:50px;display:grid;flex:0 0 auto;place-items:center;border:1px solid rgba(150,172,220,.18);border-radius:13px;background:radial-gradient(circle at 50% 35%,rgba(142,151,255,.16),transparent 72%);color:#c3c8ff}
+    #alliance-city-hybrid-mock .alliance-inspector-icon svg{width:21px;height:21px}
+    #alliance-city-hybrid-mock .alliance-inspector-head div{display:flex;min-width:0;flex-direction:column}
+    #alliance-city-hybrid-mock .alliance-inspector-head small{color:#5a788a;font:500 8px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.15em;text-transform:uppercase}
+    #alliance-city-hybrid-mock .alliance-inspector-head b{overflow:hidden;font-size:19px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+    #alliance-city-hybrid-mock .alliance-inspector-close{width:30px;height:30px;display:grid;flex:0 0 auto;margin-left:auto;place-items:center;border:1px solid rgba(150,172,220,.14);border-radius:50%;background:transparent;color:#69738d;font-size:18px;cursor:pointer}
+    #alliance-city-hybrid-mock .alliance-inspector-close:hover{border-color:rgba(150,172,220,.28);color:#c3c8ff}
+    #alliance-city-hybrid-mock .alliance-level{display:flex;align-items:baseline;gap:9px;margin:18px 0}
+    #alliance-city-hybrid-mock .alliance-level b{color:#f1fbff;font:700 40px &quot;Chakra Petch&quot;,sans-serif}
+    #alliance-city-hybrid-mock .alliance-level span{color:#557285;font:400 13px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-level strong{color:#c3c8ff;font:700 24px &quot;Chakra Petch&quot;,sans-serif}
+    #alliance-city-hybrid-mock .alliance-context{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;padding:10px 11px;border:1px solid rgba(92,135,159,.15);border-radius:8px;background:rgba(255,255,255,.018)}
+    #alliance-city-hybrid-mock .alliance-context span{color:#678394;font:400 9px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.08em}
+    #alliance-city-hybrid-mock .alliance-context b{font:600 13px &quot;Chakra Petch&quot;,sans-serif}
+    #alliance-city-hybrid-mock .alliance-section-label{margin:14px 0 8px;color:#587589;font:500 8px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.15em}
+    #alliance-city-hybrid-mock .alliance-costs{display:flex;flex-direction:column;gap:1px}
+    #alliance-city-hybrid-mock .alliance-cost{display:grid;grid-template-columns:8px 1fr auto 18px;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid rgba(92,135,159,.11)}
+    #alliance-city-hybrid-mock .alliance-cost&gt;i{width:7px;height:7px;border-radius:50%;background:var(--cost-color);box-shadow:0 0 7px var(--cost-color)}
+    #alliance-city-hybrid-mock .alliance-cost span{color:#8299a7;font-size:10px}
+    #alliance-city-hybrid-mock .alliance-cost div{display:flex;flex-direction:column;align-items:flex-end}
+    #alliance-city-hybrid-mock .alliance-cost b{color:#e5f1f6;font:700 13px &quot;Chakra Petch&quot;,sans-serif}
+    #alliance-city-hybrid-mock .alliance-cost small{color:#536c7c;font:400 7px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-cost strong{color:#53e0aa;font:500 11px &quot;IBM Plex Mono&quot;,monospace;text-align:center}
+    #alliance-city-hybrid-mock .alliance-cost.short b,#alliance-city-hybrid-mock .alliance-cost.short strong{color:#ff748b}
+    #alliance-city-hybrid-mock .alliance-build-time{display:flex;align-items:center;justify-content:space-between;margin:12px 0;color:#688394;font:400 9px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-build-time b{color:#cce5ee;font-weight:500}
+    #alliance-city-hybrid-mock .alliance-gate{margin-bottom:9px;padding:8px 9px;border:1px solid rgba(255,180,84,.23);border-radius:6px;background:rgba(255,180,84,.055);color:#e8aa59;font:400 8px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-upgrade{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px;border:1px solid rgba(72,232,173,.36);border-radius:8px;background:linear-gradient(90deg,rgba(49,187,134,.18),rgba(20,84,67,.09));color:#83f0bc;font-size:10px;font-weight:500;cursor:pointer}
+    #alliance-city-hybrid-mock .alliance-upgrade:disabled{border-color:rgba(98,129,148,.15);background:rgba(255,255,255,.02);color:#536b79;cursor:not-allowed}
+    #alliance-city-hybrid-mock .alliance-toast{min-height:18px;margin-top:8px;color:#6d8a9b;font:400 8px &quot;IBM Plex Mono&quot;,monospace;text-align:center}
+    #alliance-city-hybrid-mock .alliance-feed-status{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;color:#68738c;font:500 8px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.11em}
+    #alliance-city-hybrid-mock .alliance-feed-status span:first-child{display:flex;align-items:center;gap:7px;color:#53e0aa}
+    #alliance-city-hybrid-mock .alliance-feed-status span:first-child::before{content:&quot;&quot;;width:5px;height:5px;border-radius:50%;background:#53e0aa;box-shadow:0 0 8px #53e0aa}
+    #alliance-city-hybrid-mock .alliance-feed-tabs{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:16px;padding:3px;border-radius:8px;background:rgba(4,7,14,.48)}
+    #alliance-city-hybrid-mock .alliance-feed-tabs button{padding:7px;border:0;border-radius:6px;background:transparent;color:#68738c;font:500 8px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.1em;cursor:pointer}
+    #alliance-city-hybrid-mock .alliance-feed-tabs button.is-active{background:rgba(142,151,255,.12);color:#c3c8ff;box-shadow:inset 0 0 0 1px rgba(142,151,255,.12)}
+    #alliance-city-hybrid-mock .alliance-daily-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+    #alliance-city-hybrid-mock .alliance-daily-head div{display:flex;flex-direction:column;gap:4px}
+    #alliance-city-hybrid-mock .alliance-daily-head small{color:#57617d;font:500 9px &quot;IBM Plex Mono&quot;,monospace;letter-spacing:.16em}
+    #alliance-city-hybrid-mock .alliance-daily-head b{font-size:19px;font-weight:600}
+    #alliance-city-hybrid-mock .alliance-daily-head strong{color:#c3c8ff;font:700 20px &quot;Chakra Petch&quot;,sans-serif}
+    #alliance-city-hybrid-mock .alliance-daily-progress{height:4px;margin-bottom:15px;overflow:hidden;border-radius:3px;background:rgba(150,172,220,.1)}
+    #alliance-city-hybrid-mock .alliance-daily-progress i{display:block;width:38%;height:100%;background:linear-gradient(90deg,#8e97ff,#c3c8ff)}
+    #alliance-city-hybrid-mock .alliance-task-list{display:flex;flex-direction:column;gap:7px}
+    #alliance-city-hybrid-mock .alliance-task{display:grid;grid-template-columns:23px minmax(0,1fr) auto;align-items:center;gap:9px;padding:10px 9px;border:1px solid rgba(150,172,220,.1);border-radius:9px;background:#0c111e}
+    #alliance-city-hybrid-mock .alliance-task&gt;span:first-child{width:22px;height:22px;display:grid;place-items:center;border-radius:50%;background:rgba(142,151,255,.1);color:#8e97ff;font:600 10px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-task.done&gt;span:first-child{background:rgba(79,224,166,.11);color:#4fe0a6}
+    #alliance-city-hybrid-mock .alliance-task div{display:flex;min-width:0;flex-direction:column;gap:2px}
+    #alliance-city-hybrid-mock .alliance-task b{overflow:hidden;font-size:11px;font-weight:500;text-overflow:ellipsis;white-space:nowrap}
+    #alliance-city-hybrid-mock .alliance-task small,#alliance-city-hybrid-mock .alliance-task&gt;span:last-child{color:#69738d;font:500 8px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-task.done&gt;span:last-child{color:#4fe0a6}
+    #alliance-city-hybrid-mock .alliance-task.done:first-child{animation:alliance-task-arrive .7s ease-out both}
+    @keyframes alliance-task-arrive{0%{border-color:rgba(79,224,166,.5);box-shadow:0 0 22px rgba(79,224,166,.12)}100%{border-color:rgba(150,172,220,.1);box-shadow:none}}
+    #alliance-city-hybrid-mock .alliance-signal-list{display:flex;flex-direction:column;gap:2px}
+    #alliance-city-hybrid-mock .alliance-signal{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;padding:11px 3px;border-bottom:1px solid rgba(150,172,220,.08)}
+    #alliance-city-hybrid-mock .alliance-signal time{color:#56617a;font:500 8px &quot;IBM Plex Mono&quot;,monospace}
+    #alliance-city-hybrid-mock .alliance-signal span{color:#a8b0c3;font-size:10px;line-height:1.45}
+    #alliance-city-hybrid-mock .alliance-signal b{color:#dce2f0;font-weight:600}
+    @media(prefers-reduced-motion:reduce){#alliance-city-hybrid-mock .alliance-star-canvas{display:none}#alliance-city-hybrid-mock *{animation:none!important}}
+    @media(max-width:760px){
+      #alliance-city-hybrid-mock{padding:10px}
+      #alliance-city-hybrid-mock .alliance-nav-head{align-items:stretch;flex-direction:column}
+      #alliance-city-hybrid-mock .alliance-nav-actions{display:grid;grid-template-columns:auto minmax(0,1fr)}
+      #alliance-city-hybrid-mock .alliance-economy-bar{grid-template-columns:1fr 124px}
+      #alliance-city-hybrid-mock .alliance-resource-cluster{grid-column:1/-1}
+      #alliance-city-hybrid-mock .alliance-citybar{align-items:flex-start;flex-direction:column}
+      #alliance-city-hybrid-mock .alliance-builders{width:100%;flex-wrap:wrap}
+      #alliance-city-hybrid-mock .alliance-layout{grid-template-columns:1fr}
+      #alliance-city-hybrid-mock .alliance-inspector{position:relative;top:0;grid-row:1}
+      #alliance-city-hybrid-mock .alliance-directory{grid-row:2}
+      #alliance-city-hybrid-mock .alliance-core-node{grid-template-columns:66px minmax(0,1fr)}
+      #alliance-city-hybrid-mock .alliance-core-metrics{grid-column:1/-1;justify-content:flex-start;padding-left:3px}
+    }
+    @media(max-width:430px){
+      #alliance-city-hybrid-mock .alliance-nav-actions{grid-template-columns:1fr}
+      #alliance-city-hybrid-mock .alliance-switch button{min-width:0}
+      #alliance-city-hybrid-mock .alliance-economy-bar{grid-template-columns:1fr}
+      #alliance-city-hybrid-mock .alliance-resource-cluster,#alliance-city-hybrid-mock .alliance-operation-cluster{grid-template-columns:repeat(2,minmax(0,1fr))}
+      #alliance-city-hybrid-mock .alliance-resource-grid,#alliance-city-hybrid-mock .alliance-building-grid{grid-template-columns:1fr}
+      #alliance-city-hybrid-mock .alliance-building-grid.is-two{grid-template-columns:1fr}
+      #alliance-city-hybrid-mock .alliance-builder{min-width:100%;flex:1}
+    }
+  &lt;/style&gt;
+
+  &lt;canvas class=&quot;alliance-star-canvas&quot; aria-hidden=&quot;true&quot;&gt;&lt;/canvas&gt;
+  &lt;div class=&quot;alliance-shell&quot;&gt;
+    &lt;nav class=&quot;alliance-nav&quot; aria-label=&quot;Game status and view&quot;&gt;
+      &lt;div class=&quot;alliance-nav-head&quot;&gt;
+        &lt;div class=&quot;alliance-identity&quot;&gt;
+          &lt;span class=&quot;alliance-mark&quot; aria-label=&quot;Wallet-generated civilization sigil&quot;&gt;&lt;i&gt;&lt;/i&gt;&lt;/span&gt;
+          &lt;span class=&quot;alliance-who&quot;&gt;&lt;small&gt;ALLIANCE // CIV-087&lt;/small&gt;&lt;b&gt;Ruglord Town Test&lt;/b&gt;&lt;span&gt;CORE 14 · SECTOR DEV1 · HOME 087:008&lt;/span&gt;&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;alliance-nav-actions&quot;&gt;
+          &lt;span class=&quot;alliance-might&quot;&gt;&lt;small&gt;MIGHT&lt;/small&gt;&lt;b&gt;26.40M&lt;/b&gt;&lt;/span&gt;
+          &lt;span class=&quot;alliance-switch&quot; aria-label=&quot;Game view&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;is-active&quot; data-view=&quot;city&quot;&gt;&lt;i data-lucide=&quot;building-2&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;CITY&lt;/button&gt;
+            &lt;button type=&quot;button&quot; data-view=&quot;map&quot;&gt;&lt;i data-lucide=&quot;radar&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;STAR MAP&lt;/button&gt;
+          &lt;/span&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;alliance-economy-bar&quot;&gt;
+        &lt;div class=&quot;alliance-resource-cluster&quot;&gt;
+          &lt;span class=&quot;alliance-resource-balance&quot; style=&quot;--balance-color:#53e0aa&quot;&gt;&lt;i class=&quot;alliance-resource-symbol&quot;&gt;&lt;i data-lucide=&quot;banknote&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/i&gt;&lt;span class=&quot;alliance-resource-main&quot;&gt;&lt;small&gt;CASH&lt;/small&gt;&lt;b&gt;2.29M&lt;/b&gt;&lt;/span&gt;&lt;/span&gt;
+          &lt;span class=&quot;alliance-resource-balance&quot; style=&quot;--balance-color:#f5b45e&quot;&gt;&lt;i class=&quot;alliance-resource-symbol&quot;&gt;&lt;i data-lucide=&quot;droplet&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/i&gt;&lt;span class=&quot;alliance-resource-main&quot;&gt;&lt;small&gt;OIL&lt;/small&gt;&lt;b&gt;1.71M&lt;/b&gt;&lt;/span&gt;&lt;/span&gt;
+          &lt;span class=&quot;alliance-resource-balance&quot; style=&quot;--balance-color:#5bc8f5&quot;&gt;&lt;i class=&quot;alliance-resource-symbol&quot;&gt;&lt;i data-lucide=&quot;zap&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/i&gt;&lt;span class=&quot;alliance-resource-main&quot;&gt;&lt;small&gt;POWER&lt;/small&gt;&lt;b&gt;1.66M&lt;/b&gt;&lt;/span&gt;&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div class=&quot;alliance-operation-cluster&quot;&gt;
+          &lt;span class=&quot;alliance-operation&quot;&gt;&lt;small&gt;ENERGY&lt;/small&gt;&lt;b&gt;100/100&lt;/b&gt;&lt;/span&gt;
+          &lt;span class=&quot;alliance-operation&quot;&gt;&lt;small&gt;FLEETS&lt;/small&gt;&lt;b&gt;1/2&lt;/b&gt;&lt;/span&gt;
+          &lt;span class=&quot;alliance-operation&quot;&gt;&lt;small&gt;STANDING&lt;/small&gt;&lt;b&gt;67.00K&lt;/b&gt;&lt;/span&gt;
+          &lt;span class=&quot;alliance-operation wounded&quot;&gt;&lt;small&gt;WOUNDED&lt;/small&gt;&lt;b&gt;1.20K&lt;/b&gt;&lt;/span&gt;
+        &lt;/div&gt;
+        &lt;button type=&quot;button&quot; class=&quot;alliance-currency&quot; aria-label=&quot;Buy game credits&quot;&gt;&lt;i&gt;&lt;i data-lucide=&quot;gem&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/i&gt;&lt;span&gt;&lt;small&gt;CREDITS&lt;/small&gt;&lt;b&gt;0&lt;/b&gt;&lt;/span&gt;&lt;strong&gt;＋&lt;/strong&gt;&lt;/button&gt;
+      &lt;/div&gt;
+    &lt;/nav&gt;
+
+    &lt;div class=&quot;alliance-citybar&quot;&gt;
+      &lt;span&gt;CITY&lt;/span&gt;
+      &lt;div class=&quot;alliance-builders&quot;&gt;
+        &lt;span class=&quot;alliance-builder-label&quot;&gt;BUILD QUEUE 1/2&lt;/span&gt;
+        &lt;button type=&quot;button&quot; class=&quot;alliance-builder&quot; data-select=&quot;powerplant&quot;&gt;
+          &lt;svg class=&quot;alliance-ring&quot; viewBox=&quot;0 0 28 28&quot; aria-label=&quot;Power Plant upgrade 58 percent complete&quot;&gt;&lt;circle class=&quot;track&quot; cx=&quot;14&quot; cy=&quot;14&quot; r=&quot;11&quot;/&gt;&lt;circle class=&quot;value&quot; cx=&quot;14&quot; cy=&quot;14&quot; r=&quot;11&quot; stroke-dasharray=&quot;69.1&quot; stroke-dashoffset=&quot;29&quot;/&gt;&lt;/svg&gt;
+          &lt;div&gt;&lt;b&gt;Power Plant → LV.12&lt;/b&gt;&lt;small&gt;UPGRADING&lt;/small&gt;&lt;/div&gt;&lt;time&gt;00:41:02&lt;/time&gt;
+        &lt;/button&gt;
+        &lt;button type=&quot;button&quot; class=&quot;alliance-builder idle&quot;&gt;＋ IDLE&lt;/button&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+
+    &lt;div class=&quot;alliance-layout&quot;&gt;
+      &lt;div class=&quot;alliance-directory&quot;&gt;
+        &lt;button type=&quot;button&quot; class=&quot;alliance-core-node&quot; id=&quot;alliance-core-node&quot; data-select=&quot;keep&quot;&gt;
+          &lt;span class=&quot;alliance-core-emblem&quot;&gt;&lt;i data-lucide=&quot;orbit&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+          &lt;span class=&quot;alliance-core-copy&quot;&gt;&lt;small&gt;CIVILIZATION CORE&lt;/small&gt;&lt;b&gt;Ruglord Prime&lt;/b&gt;&lt;span&gt;ONLINE&lt;/span&gt;&lt;/span&gt;
+          &lt;span class=&quot;alliance-core-metrics&quot;&gt;
+            &lt;span class=&quot;alliance-core-metric&quot;&gt;&lt;small&gt;CORE LEVEL&lt;/small&gt;&lt;b&gt;14&lt;/b&gt;&lt;/span&gt;
+            &lt;span class=&quot;alliance-core-metric&quot;&gt;&lt;small&gt;SHIELD&lt;/small&gt;&lt;b&gt;100%&lt;/b&gt;&lt;/span&gt;
+            &lt;span class=&quot;alliance-core-enter&quot;&gt;›&lt;/span&gt;
+          &lt;/span&gt;
+        &lt;/button&gt;
+        &lt;section class=&quot;alliance-group&quot;&gt;
+          &lt;header class=&quot;alliance-group-head&quot;&gt;&lt;b&gt;RESOURCE NETWORK&lt;/b&gt;&lt;i&gt;&lt;/i&gt;&lt;span&gt;3&lt;/span&gt;&lt;/header&gt;
+          &lt;div class=&quot;alliance-resource-grid&quot; id=&quot;alliance-resource-grid&quot;&gt;&lt;/div&gt;
+        &lt;/section&gt;
+        &lt;section class=&quot;alliance-group&quot;&gt;
+          &lt;header class=&quot;alliance-group-head&quot;&gt;&lt;b&gt;COMMAND&lt;/b&gt;&lt;i&gt;&lt;/i&gt;&lt;span&gt;2&lt;/span&gt;&lt;/header&gt;
+          &lt;div class=&quot;alliance-building-grid is-two&quot; id=&quot;alliance-command-grid&quot;&gt;&lt;/div&gt;
+        &lt;/section&gt;
+        &lt;section class=&quot;alliance-group&quot;&gt;
+          &lt;header class=&quot;alliance-group-head&quot;&gt;&lt;b&gt;MILITARY&lt;/b&gt;&lt;i&gt;&lt;/i&gt;&lt;span&gt;3&lt;/span&gt;&lt;/header&gt;
+          &lt;div class=&quot;alliance-building-grid&quot; id=&quot;alliance-military-grid&quot;&gt;&lt;/div&gt;
+        &lt;/section&gt;
+        &lt;section class=&quot;alliance-group&quot;&gt;
+          &lt;header class=&quot;alliance-group-head&quot;&gt;&lt;b&gt;INFRASTRUCTURE&lt;/b&gt;&lt;i&gt;&lt;/i&gt;&lt;span&gt;5&lt;/span&gt;&lt;/header&gt;
+          &lt;div class=&quot;alliance-building-grid&quot; id=&quot;alliance-infrastructure-grid&quot;&gt;&lt;/div&gt;
+        &lt;/section&gt;
+      &lt;/div&gt;
+      &lt;aside class=&quot;alliance-inspector&quot; aria-live=&quot;polite&quot; aria-label=&quot;Selected building details&quot;&gt;
+        &lt;div class=&quot;alliance-inspector-content&quot; id=&quot;alliance-building-detail&quot;&gt;&lt;/div&gt;
+      &lt;/aside&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;script&gt;
+    (() =&gt; {
+      const root = document.getElementById(&quot;alliance-city-hybrid-mock&quot;);
+      const resources = { cash: 2290000, oil: 1710000, power: 1660000 };
+      const colors = { cash: &quot;#53e0aa&quot;, oil: &quot;#f5b45e&quot;, power: &quot;#5bc8f5&quot; };
+      const buildings = [
+        { key:&quot;bank&quot;, group:&quot;resource&quot;, name:&quot;Bank&quot;, kind:&quot;Cash&quot;, icon:&quot;landmark&quot;, level:12, state:&quot;READY&quot;, production:&quot;+128.00K/HR&quot;, cost:{cash:640000,oil:210000,power:180000}, time:&quot;04:42:00&quot;, context:&quot;OUTPUT +128.00K/HR&quot; },
+        { key:&quot;oilwell&quot;, group:&quot;resource&quot;, name:&quot;Oil Well&quot;, kind:&quot;Oil&quot;, icon:&quot;droplet&quot;, level:13, state:&quot;READY&quot;, production:&quot;+96.00K/HR&quot;, cost:{cash:720000,oil:1850000,power:220000}, time:&quot;05:30:00&quot;, context:&quot;OUTPUT +96.00K/HR&quot; },
+        { key:&quot;powerplant&quot;, group:&quot;resource&quot;, name:&quot;Power Plant&quot;, kind:&quot;Power&quot;, icon:&quot;zap&quot;, level:11, state:&quot;UPGRADING&quot;, production:&quot;+90.00K/HR&quot;, cost:{cash:560000,oil:190000,power:420000}, time:&quot;00:41:02&quot;, context:&quot;OUTPUT +90.00K/HR&quot; },
+        { key:&quot;keep&quot;, group:&quot;command&quot;, name:&quot;Townhall&quot;, kind:&quot;Command&quot;, icon:&quot;building-2&quot;, level:14, state:&quot;READY&quot;, cost:{cash:1850000,oil:1200000,power:1050000}, time:&quot;14:20:00&quot;, context:&quot;ACCOUNT CAP · TH15&quot; },
+        { key:&quot;storage&quot;, group:&quot;command&quot;, name:&quot;Warehouse&quot;, kind:&quot;Storage&quot;, icon:&quot;package&quot;, level:14, state:&quot;READY&quot;, cost:{cash:900000,oil:300000,power:260000}, time:&quot;06:30:00&quot;, context:&quot;CAPACITY 8.40M&quot; },
+        { key:&quot;wall&quot;, group:&quot;command&quot;, name:&quot;Defense Shield&quot;, kind:&quot;Defense&quot;, icon:&quot;shield&quot;, level:13, state:&quot;READY&quot;, cost:{cash:700000,oil:240000,power:210000}, time:&quot;05:15:00&quot;, context:&quot;INTEGRITY 100%&quot; },
+        { key:&quot;armyCamp&quot;, group:&quot;military&quot;, name:&quot;Army Camp&quot;, kind:&quot;Army&quot;, icon:&quot;tent-tree&quot;, level:12, state:&quot;READY&quot;, cost:{cash:820000,oil:280000,power:250000}, time:&quot;06:00:00&quot;, context:&quot;T8 · 50.40K TROOPS&quot; },
+        { key:&quot;navalBase&quot;, group:&quot;military&quot;, name:&quot;Naval Base&quot;, kind:&quot;Navy&quot;, icon:&quot;anchor&quot;, level:9, state:&quot;READY&quot;, cost:{cash:540000,oil:210000,power:160000}, time:&quot;03:30:00&quot;, context:&quot;T6 · 15.50K TROOPS&quot; },
+        { key:&quot;airfield&quot;, group:&quot;military&quot;, name:&quot;Airfield&quot;, kind:&quot;Air&quot;, icon:&quot;plane&quot;, level:10, state:&quot;TRAINING&quot;, cost:{cash:610000,oil:220000,power:200000}, time:&quot;04:00:00&quot;, context:&quot;T7 · 12.90K TROOPS&quot;, blocked:&quot;TRAINING IN PROGRESS&quot; },
+        { key:&quot;academy&quot;, group:&quot;infrastructure&quot;, name:&quot;Research Institute&quot;, kind:&quot;Research&quot;, icon:&quot;atom&quot;, level:11, state:&quot;READY&quot;, cost:{cash:760000,oil:280000,power:360000}, time:&quot;05:20:00&quot;, context:&quot;DEVELOP 42% · ECONOMY 37% · BATTLE 31%&quot; },
+        { key:&quot;hospital&quot;, group:&quot;infrastructure&quot;, name:&quot;Hospital&quot;, kind:&quot;Recovery&quot;, icon:&quot;cross&quot;, level:10, state:&quot;HEALING&quot;, cost:{cash:480000,oil:150000,power:140000}, time:&quot;03:15:00&quot;, context:&quot;1.20K WOUNDED&quot;, blocked:&quot;HEALING IN PROGRESS&quot; },
+        { key:&quot;watchtower&quot;, group:&quot;infrastructure&quot;, name:&quot;Watchtower&quot;, kind:&quot;Recon&quot;, icon:&quot;radio-tower&quot;, level:8, state:&quot;READY&quot;, cost:{cash:300000,oil:90000,power:80000}, time:&quot;02:00:00&quot;, context:&quot;3 REPORTS&quot; },
+        { key:&quot;embassy&quot;, group:&quot;infrastructure&quot;, name:&quot;Embassy&quot;, kind:&quot;Alliance&quot;, icon:&quot;network&quot;, level:7, state:&quot;LOCKED&quot;, cost:{cash:280000,oil:80000,power:70000}, time:&quot;01:50:00&quot;, context:&quot;REINFORCEMENTS&quot;, blocked:&quot;ALLIANCE REQUIRED&quot; },
+        { key:&quot;monument&quot;, group:&quot;infrastructure&quot;, name:&quot;Monument&quot;, kind:&quot;Server&quot;, icon:&quot;sparkles&quot;, level:9, state:&quot;SERVER&quot;, cost:{}, time:&quot;—&quot;, context:&quot;SECTOR PROGRESS 62%&quot;, blocked:&quot;SERVER-DRIVEN&quot; }
+      ];
+      let selected = null;
+      let feedMode = &quot;daily&quot;;
+      const fmt = (value) =&gt; value &gt;= 1000000 ? `${(value / 1000000).toFixed(2)}M` : `${(value / 1000).toFixed(0)}K`;
+      const icon = (name) =&gt; `&lt;span class=&quot;glyph&quot;&gt;&lt;i data-lucide=&quot;${name}&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/span&gt;`;
+      const stateClass = (state) =&gt; state === &quot;READY&quot; ? &quot;ready&quot; : [&quot;UPGRADING&quot;,&quot;TRAINING&quot;,&quot;HEALING&quot;].includes(state) ? `active ${state.toLowerCase()}` : &quot;locked&quot;;
+
+      const resourceMarkup = (building) =&gt; `&lt;button type=&quot;button&quot; class=&quot;alliance-resource-node ${selected === building.key ? &quot;is-selected&quot; : &quot;&quot;}&quot; data-select=&quot;${building.key}&quot; style=&quot;--node-color:${colors[building.kind.toLowerCase()]}&quot;&gt;
+        ${icon(building.icon)}&lt;span class=&quot;alliance-resource-copy&quot;&gt;&lt;small&gt;${building.kind.toUpperCase()}&lt;/small&gt;&lt;b&gt;${building.name}&lt;/b&gt;&lt;em&gt;${building.production}&lt;/em&gt;&lt;/span&gt;&lt;span&gt;LV.${building.level}&lt;/span&gt;
+      &lt;/button&gt;`;
+      const buildingMarkup = (building) =&gt; `&lt;button type=&quot;button&quot; class=&quot;alliance-building-node ${selected === building.key ? &quot;is-selected&quot; : &quot;&quot;} ${[&quot;UPGRADING&quot;,&quot;TRAINING&quot;,&quot;HEALING&quot;].includes(building.state) ? &quot;is-busy&quot; : &quot;&quot;}&quot; data-select=&quot;${building.key}&quot;&gt;
+        ${icon(building.icon)}&lt;span class=&quot;alliance-building-copy&quot;&gt;&lt;strong&gt;${building.name}&lt;/strong&gt;&lt;span class=&quot;alliance-node-state ${stateClass(building.state)}&quot;&gt;&lt;i&gt;&lt;/i&gt;${building.state}&lt;/span&gt;&lt;/span&gt;&lt;span class=&quot;alliance-building-meta&quot;&gt;&lt;span&gt;LV.${building.level}&lt;/span&gt;&lt;b&gt;›&lt;/b&gt;&lt;/span&gt;
+      &lt;/button&gt;`;
+      function renderDirectory(){
+        root.querySelector(&quot;#alliance-resource-grid&quot;).innerHTML = buildings.filter((item) =&gt; item.group === &quot;resource&quot;).map(resourceMarkup).join(&quot;&quot;);
+        root.querySelector(&quot;#alliance-command-grid&quot;).innerHTML = buildings.filter((item) =&gt; item.group === &quot;command&quot; &amp;&amp; item.key !== &quot;keep&quot;).map(buildingMarkup).join(&quot;&quot;);
+        root.querySelector(&quot;#alliance-military-grid&quot;).innerHTML = buildings.filter((item) =&gt; item.group === &quot;military&quot;).map(buildingMarkup).join(&quot;&quot;);
+        root.querySelector(&quot;#alliance-infrastructure-grid&quot;).innerHTML = buildings.filter((item) =&gt; item.group === &quot;infrastructure&quot;).map(buildingMarkup).join(&quot;&quot;);
+        root.querySelector(&quot;#alliance-core-node&quot;).classList.toggle(&quot;is-selected&quot;,selected === &quot;keep&quot;);
+      }
+      function renderInspector(){
+        if(!selected){
+          const daily = `&lt;div class=&quot;alliance-daily-head&quot;&gt;&lt;div&gt;&lt;small&gt;DAILY OPERATIONS&lt;/small&gt;&lt;b&gt;Daily Tasks&lt;/b&gt;&lt;/div&gt;&lt;strong&gt;2 / 5&lt;/strong&gt;&lt;/div&gt;
+            &lt;div class=&quot;alliance-daily-progress&quot;&gt;&lt;i&gt;&lt;/i&gt;&lt;/div&gt;&lt;div class=&quot;alliance-task-list&quot;&gt;
+              &lt;div class=&quot;alliance-task done&quot;&gt;&lt;span&gt;✓&lt;/span&gt;&lt;div&gt;&lt;b&gt;Collect sector resources&lt;/b&gt;&lt;small&gt;500K / 500K&lt;/small&gt;&lt;/div&gt;&lt;span&gt;DONE&lt;/span&gt;&lt;/div&gt;
+              &lt;div class=&quot;alliance-task done&quot;&gt;&lt;span&gt;✓&lt;/span&gt;&lt;div&gt;&lt;b&gt;Train combat units&lt;/b&gt;&lt;small&gt;1,000 / 1,000&lt;/small&gt;&lt;/div&gt;&lt;span&gt;DONE&lt;/span&gt;&lt;/div&gt;
+              &lt;div class=&quot;alliance-task&quot;&gt;&lt;span&gt;3&lt;/span&gt;&lt;div&gt;&lt;b&gt;Complete expeditions&lt;/b&gt;&lt;small&gt;2 / 3&lt;/small&gt;&lt;/div&gt;&lt;span&gt;67%&lt;/span&gt;&lt;/div&gt;
+              &lt;div class=&quot;alliance-task&quot;&gt;&lt;span&gt;4&lt;/span&gt;&lt;div&gt;&lt;b&gt;Defeat a rogue fleet&lt;/b&gt;&lt;small&gt;0 / 1&lt;/small&gt;&lt;/div&gt;&lt;span&gt;0%&lt;/span&gt;&lt;/div&gt;
+              &lt;div class=&quot;alliance-task&quot;&gt;&lt;span&gt;5&lt;/span&gt;&lt;div&gt;&lt;b&gt;Use fleet energy&lt;/b&gt;&lt;small&gt;670 / 1,000&lt;/small&gt;&lt;/div&gt;&lt;span&gt;67%&lt;/span&gt;&lt;/div&gt;
+            &lt;/div&gt;`;
+          const signals = `&lt;div class=&quot;alliance-daily-head&quot;&gt;&lt;div&gt;&lt;small&gt;LOCAL SECTOR&lt;/small&gt;&lt;b&gt;Signal Log&lt;/b&gt;&lt;/div&gt;&lt;strong&gt;4&lt;/strong&gt;&lt;/div&gt;
+            &lt;div class=&quot;alliance-signal-list&quot;&gt;
+              &lt;div class=&quot;alliance-signal&quot;&gt;&lt;time&gt;NOW&lt;/time&gt;&lt;span&gt;&lt;b&gt;Power Plant&lt;/b&gt; upgrade is 58% complete.&lt;/span&gt;&lt;/div&gt;
+              &lt;div class=&quot;alliance-signal&quot;&gt;&lt;time&gt;04:18&lt;/time&gt;&lt;span&gt;Fleet 01 returned with &lt;b&gt;86.4K Cash&lt;/b&gt;.&lt;/span&gt;&lt;/div&gt;
+              &lt;div class=&quot;alliance-signal&quot;&gt;&lt;time&gt;03:52&lt;/time&gt;&lt;span&gt;Unknown civilization detected at &lt;b&gt;091:012&lt;/b&gt;.&lt;/span&gt;&lt;/div&gt;
+              &lt;div class=&quot;alliance-signal&quot;&gt;&lt;time&gt;02:47&lt;/time&gt;&lt;span&gt;&lt;b&gt;Rogue Planet Lv.8&lt;/b&gt; spawned nearby.&lt;/span&gt;&lt;/div&gt;
+            &lt;/div&gt;`;
+          root.querySelector(&quot;#alliance-building-detail&quot;).innerHTML = `
+            &lt;div class=&quot;alliance-feed-status&quot;&gt;&lt;span&gt;SYSTEMS NOMINAL&lt;/span&gt;&lt;span&gt;HOME 087:008&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;alliance-feed-tabs&quot;&gt;&lt;button type=&quot;button&quot; data-feed=&quot;daily&quot; class=&quot;${feedMode === &quot;daily&quot; ? &quot;is-active&quot; : &quot;&quot;}&quot;&gt;TODAY&lt;/button&gt;&lt;button type=&quot;button&quot; data-feed=&quot;signals&quot; class=&quot;${feedMode === &quot;signals&quot; ? &quot;is-active&quot; : &quot;&quot;}&quot;&gt;SIGNALS&lt;/button&gt;&lt;/div&gt;
+            ${feedMode === &quot;daily&quot; ? daily : signals}&lt;div class=&quot;alliance-toast&quot; id=&quot;alliance-toast&quot;&gt;&lt;/div&gt;`;
+          return;
+        }
+        const building = buildings.find((item) =&gt; item.key === selected);
+        const costRows = [&quot;cash&quot;,&quot;oil&quot;,&quot;power&quot;].filter((resource) =&gt; building.cost[resource]).map((resource) =&gt; {
+          const enough = resources[resource] &gt;= building.cost[resource];
+          return `&lt;div class=&quot;alliance-cost ${enough ? &quot;&quot; : &quot;short&quot;}&quot; style=&quot;--cost-color:${colors[resource]}&quot;&gt;&lt;i&gt;&lt;/i&gt;&lt;span&gt;${resource.toUpperCase()}&lt;/span&gt;&lt;div&gt;&lt;b&gt;${fmt(building.cost[resource])}&lt;/b&gt;&lt;small&gt;${fmt(resources[resource])} AVAILABLE&lt;/small&gt;&lt;/div&gt;&lt;strong&gt;${enough ? &quot;✓&quot; : &quot;!&quot;}&lt;/strong&gt;&lt;/div&gt;`;
+        }).join(&quot;&quot;);
+        const blocked = Boolean(building.blocked) || building.state === &quot;UPGRADING&quot;;
+        root.querySelector(&quot;#alliance-building-detail&quot;).innerHTML = `
+          &lt;header class=&quot;alliance-inspector-head&quot;&gt;&lt;span class=&quot;alliance-inspector-icon&quot;&gt;&lt;i data-lucide=&quot;${building.icon}&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/span&gt;&lt;div&gt;&lt;small&gt;${building.kind}&lt;/small&gt;&lt;b&gt;${building.name}&lt;/b&gt;&lt;/div&gt;&lt;button type=&quot;button&quot; class=&quot;alliance-inspector-close&quot; data-close aria-label=&quot;Close building details&quot;&gt;×&lt;/button&gt;&lt;/header&gt;
+          &lt;div class=&quot;alliance-level&quot;&gt;&lt;b&gt;${building.level}&lt;/b&gt;&lt;span&gt;→&lt;/span&gt;&lt;strong&gt;${building.level + 1}&lt;/strong&gt;&lt;/div&gt;
+          &lt;div class=&quot;alliance-context&quot;&gt;&lt;span&gt;STATUS&lt;/span&gt;&lt;b&gt;${building.context}&lt;/b&gt;&lt;/div&gt;
+          &lt;div class=&quot;alliance-section-label&quot;&gt;UPGRADE REQUIREMENTS&lt;/div&gt;
+          &lt;div class=&quot;alliance-costs&quot;&gt;${costRows || `&lt;div class=&quot;alliance-cost&quot;&gt;&lt;span&gt;NO PLAYER UPGRADE&lt;/span&gt;&lt;/div&gt;`}&lt;/div&gt;
+          &lt;div class=&quot;alliance-build-time&quot;&gt;&lt;span&gt;BUILD TIME&lt;/span&gt;&lt;b&gt;${building.time}&lt;/b&gt;&lt;/div&gt;
+          ${blocked ? `&lt;div class=&quot;alliance-gate&quot;&gt;${building.blocked || &quot;UPGRADE IN PROGRESS&quot;}&lt;/div&gt;` : &quot;&quot;}
+          &lt;button type=&quot;button&quot; class=&quot;alliance-upgrade&quot; ${blocked ? &quot;disabled&quot; : &quot;&quot;}&gt;&lt;span&gt;${blocked ? &quot;UNAVAILABLE&quot; : &quot;READY&quot;}&lt;/span&gt;&lt;b&gt;${blocked ? building.state : `UPGRADE → LV.${building.level + 1}`}&lt;/b&gt;&lt;/button&gt;
+          &lt;div class=&quot;alliance-toast&quot; id=&quot;alliance-toast&quot;&gt;&lt;/div&gt;`;
+      }
+      function refresh(){ renderDirectory(); renderInspector(); if (typeof lucide !== &quot;undefined&quot;) lucide.createIcons({attrs:{width:16,height:16}}); }
+      root.addEventListener(&quot;click&quot;, (event) =&gt; {
+        const feed = event.target.closest(&quot;[data-feed]&quot;);
+        if(feed){ feedMode = feed.dataset.feed; renderInspector(); return; }
+        const close = event.target.closest(&quot;[data-close]&quot;);
+        if(close){ selected = null; feedMode = &quot;daily&quot;; refresh(); return; }
+        const select = event.target.closest(&quot;[data-select]&quot;);
+        if(select){ selected = select.dataset.select; refresh(); return; }
+        const view = event.target.closest(&quot;[data-view]&quot;);
+        if(view){
+          root.querySelectorAll(&quot;[data-view]&quot;).forEach((button) =&gt; button.classList.toggle(&quot;is-active&quot;,button === view));
+          const toast = root.querySelector(&quot;#alliance-toast&quot;);
+          if(toast) toast.textContent = view.dataset.view === &quot;map&quot; ? &quot;STAR MAP remains the existing full-screen view.&quot; : &quot;CITY CONSOLE&quot;;
+          return;
+        }
+        const currency = event.target.closest(&quot;.alliance-currency&quot;);
+        if(currency){ const toast = root.querySelector(&quot;#alliance-toast&quot;); if(toast) toast.textContent = &quot;Premium currency purchase slot.&quot;; return; }
+        const upgrade = event.target.closest(&quot;.alliance-upgrade:not(:disabled)&quot;);
+        if(upgrade){ const toast = root.querySelector(&quot;#alliance-toast&quot;); if(toast) toast.textContent = &quot;Mock action · real build rules remain unchanged.&quot;; }
+      });
+      const starCanvas = root.querySelector(&quot;.alliance-star-canvas&quot;);
+      const starContext = starCanvas.getContext(&quot;2d&quot;);
+      let stars = [];
+      const reducedMotion = matchMedia(&quot;(prefers-reduced-motion: reduce)&quot;).matches;
+      function resizeStars(){
+        const ratio = Math.min(2, window.devicePixelRatio || 1);
+        const bounds = root.getBoundingClientRect();
+        starCanvas.width = Math.max(1, Math.round(bounds.width * ratio));
+        starCanvas.height = Math.max(1, Math.round(root.scrollHeight * ratio));
+        starContext.setTransform(ratio,0,0,ratio,0,0);
+        stars = Array.from({length:Math.round(bounds.width * root.scrollHeight / 9000)},() =&gt; ({
+          x:Math.random()*bounds.width,y:Math.random()*root.scrollHeight,r:Math.random()*.9+.2,a:Math.random(),
+          pulse:Math.random()*.002+.0008,direction:Math.random()&gt;.5?1:-1,
+          vx:(Math.random()*.008+.004)*(Math.random()&gt;.5?1:-1),vy:Math.random()*.006+.003
+        }));
+      }
+      function drawStars(){
+        const bounds = root.getBoundingClientRect();
+        starContext.clearRect(0,0,bounds.width,root.scrollHeight);
+        for(const star of stars){
+          if(!reducedMotion){
+            star.a += star.pulse * star.direction;if(star.a &gt; 1 || star.a &lt; 0) star.direction *= -1;
+            star.x += star.vx;star.y += star.vy;
+            if(star.x &lt; -2) star.x = bounds.width + 2;if(star.x &gt; bounds.width + 2) star.x = -2;
+            if(star.y &gt; root.scrollHeight + 2) star.y = -2;
+          }
+          starContext.globalAlpha = .18 + Math.abs(star.a) * .34;
+          starContext.fillStyle = star.r &gt; .85 ? &quot;#c3c8ff&quot; : &quot;#dfe6ff&quot;;
+          starContext.beginPath();starContext.arc(star.x,star.y,star.r,0,Math.PI*2);starContext.fill();
+        }
+        starContext.globalAlpha = 1;
+        if(!reducedMotion) requestAnimationFrame(drawStars);
+      }
+      new ResizeObserver(resizeStars).observe(root);
+      resizeStars();drawStars();
+      refresh();
+    })();
+  &lt;/script&gt;
+&lt;/section&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (target) =&gt;
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest(&quot;[data-tooltip]&quot;)
+      : null;
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) =&gt; {
+    lastPointerWasTouch =
+      event.type === &quot;pointerdown&quot; &amp;&amp; event.pointerType === &quot;touch&quot;;
+  };
+  const handleTouchClick = (event) =&gt; {
+    const isTouch = event.pointerType === &quot;touch&quot; || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch &amp;&amp; activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() =&gt; {
+      if (activeTrigger === trigger &amp;&amp; !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) =&gt; {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    document.removeEventListener(&quot;pointerover&quot;, handlePointerOpen);
+    document.removeEventListener(&quot;pointerdown&quot;, handlePointer);
+    document.removeEventListener(&quot;pointercancel&quot;, handlePointer);
+    document.removeEventListener(&quot;click&quot;, handleTouchClick);
+    document.removeEventListener(&quot;pointerout&quot;, handleLeave);
+    document.removeEventListener(&quot;focusin&quot;, handleFocusIn);
+    document.removeEventListener(&quot;focusout&quot;, handleLeave);
+    document.removeEventListener(&quot;keydown&quot;, handleKeyDown);
+    document.removeEventListener(&quot;contextmenu&quot;, handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener(&quot;pointerover&quot;, handlePointerOpen);
+  document.addEventListener(&quot;pointerdown&quot;, handlePointer);
+  document.addEventListener(&quot;pointercancel&quot;, handlePointer);
+  document.addEventListener(&quot;click&quot;, handleTouchClick);
+  document.addEventListener(&quot;pointerout&quot;, handleLeave);
+  document.addEventListener(&quot;focusin&quot;, handleFocusIn);
+  document.addEventListener(&quot;focusout&quot;, handleLeave);
+  document.addEventListener(&quot;keydown&quot;, handleKeyDown);
+  document.addEventListener(&quot;contextmenu&quot;, handleContextMenu);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+</body>
+</html>

@@ -1,8 +1,24 @@
 # ALLIANCE — current handoff
 
-**Updated:** 2026-09-08  
+**Updated:** 2026-09-08 (Claude — world-experience fixes on top of Codex's Star Map pass)
 **Scope:** Personal Mode first. Alliance gameplay and final art direction remain later layers.  
 **Environment:** local-only; do not deploy yet.
+
+## Latest changes (Claude, 2026-09-08)
+
+World Star Map + combat pass, all under `npm run check` (110 tests + build) and `npm run balance:world` (0 issues):
+
+- **Crash fix (load white-screen):** worlds persisted before a new `world.config` key existed (e.g. `minEntitySpacing`) threw on load/respawn. `openLocalWorldSession` now refreshes `world.config` from `numbers.json` on every load, and `randomLegalPoint` falls back to the default spacing. Old saves open again.
+- **Combat casualties fixed:** each side's loss now scales with the OPPONENT's power share (`lossFraction(own,enemy)`), winner ×`winnerLossMultiplier` (default 0.5). Overwhelming force now BOUNDS a winner's losses instead of inflating them — sending more troops past the victory threshold no longer raises casualties (verified: L5 rogue, 60K troops → ~6 dead, not ~1800).
+- **Rogue = neutral geography, low-outer / high-inner:** rewrote `zoneForPoint` (edge-normalised depth), level is now deterministic from radius (smooth ladder, no random gaps). `populateWorld` seeds a guaranteed ladder (`rogueMinPerLevel`/`resourceMinPerLevel` of every level) then area-fills; `respawnTarget` conserves level (a defeated Lx returns as Lx). Result: abundant low levels on the outer rim, scarce high levels near the wormhole; every level 1–30 always present.
+- **On-demand local supply (early game never stalls):** `ensureLocalTargets` (called on session open and every reconcile tick) keeps a floor of engageable rogues + low resources within `localGuaranteeRadius` of the player's city, and specifically ≥`localNextLevelFloor` of the player's NEXT level. If a rival takes them or they deplete, they refill next tick. Guarantee stops at `localGuaranteeMaxLevel` (12) so the inner circle stays scarce. Total counts are capped (`monsterCap`/`resourceCap`) so it never grows unbounded.
+- **NEXT ROGUE button + rogue lock:** map tool jumps to the nearest rogue the player may engage (level ≤ highest-defeated+1), never a higher one. Rogue panel shows `READY` / `DEFEAT Lx FIRST` and disables engaging a locked level. Rogues no longer offer SCAN (their type is public).
+- **Scout = fast unarmed recon:** scout travels `scoutSpeedMultiplier`× faster (both ways), carries no troops, and only targets rival CITIES. Its report now details garrison by arm (dominant highlighted), garrison by tier, and lootable resources per type (cash/oil/power) — in-city troops only (marching troops excluded).
+- **Entity spacing + map legibility:** `minEntitySpacing` (6) keeps every city/rogue/resource in its own cell; rival city name plates render only when selected (a compact level badge otherwise) so clustered cities never overlap text; own/rival name plate width is now adaptive + centred; harvest march lines are thinner with a 🚀 marker + live ETA (outbound and return); Live Fleets show `EN ROUTE / HARVESTING / RETURNING · countdown`; Mission Archive is results-only (no duplicate in-flight entries).
+
+New `numbers.json` knobs (all under `world.*`): `state.minEntitySpacing`; `march.scoutSpeedMultiplier`; `population.{resourceMinPerLevel,rogueMinPerLevel,localGuaranteeRadius,localGuaranteeMaxLevel,localRogueFloor,localNextLevelFloor,localResourceFloor,monsterCap,resourceCap}`; `combat.winnerLossMultiplier` (optional; defaults to 0.5).
+
+**Open design item (server slice):** new-player spawns must stay in the outer low-level ring; today the single local player is always the outermost city so this is fine, but a dense multiplayer State needs new joiners assigned to outer rings (not the next farthest-first inner cell). A separate UI mockup of a minimalist City screen lives at `docs/mockups/city-console-claude.html` (design reference only).
 
 ## Start here
 
@@ -69,8 +85,8 @@ The Vite port may increment when another local server is already running. Use th
 
 ### P0 — finish the first-session World loop
 
-1. Add **rogue progression guidance**: show `READY` or `DEFEAT Lx FIRST`, disable impossible dispatches and provide a “find next rogue” camera action. A fresh player must be able to locate L1 without manually combing 512×512.
-2. Run a fresh GM session through L1→L5 rogues and a complete gather/return cycle. Verify Energy, sequential unlock, victory/defeat, Medical Bay overflow, report copy, return settlement and respawn from the visible UI—not only unit tests.
+1. ~~Add rogue progression guidance + find-next-rogue.~~ **DONE (Claude, 2026-09-08)** — NEXT ROGUE tool, `READY`/`DEFEAT Lx FIRST` gating, and on-demand local rogue supply so L1 is always beside a fresh player. See "Latest changes".
+2. Run a fresh GM session through L1→L5 rogues and a complete gather/return cycle. Verify Energy, sequential unlock, victory/defeat, Medical Bay overflow, report copy, return settlement and respawn from the visible UI—not only unit tests. (Engine paths verified; still worth a manual UI playthrough.)
 3. Improve force selection without changing combat math: one recommended counter composition action, clear march-cap/load explanations and optional 25% / 50% / useful-max presets.
 
 ### P1 — tune Personal Mode as a game

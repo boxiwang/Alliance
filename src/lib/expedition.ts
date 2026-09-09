@@ -291,10 +291,14 @@ export function resolveCombat(
 
   const casualtyScaling = numbers.global.combat.casualtyScaling ?? 0;
   const woundedRatio = numbers.global.combat.woundedRatio ?? 0;
-  const loserLossPct = win ? lossFraction(dp, ap, casualtyScaling) : lossFraction(ap, dp, casualtyScaling);
-  const winnerLossPct = 0.5 * loserLossPct;
-  const attackerLossPct = win ? winnerLossPct : loserLossPct;
-  const defenderLossPct = win ? loserLossPct : winnerLossPct;
+  // Each side's loss fraction scales with the OPPONENT's share of total power, so the
+  // stronger side loses proportionally less. This keeps a winner's casualties bounded by
+  // enemy strength instead of climbing with fleet size — sending more troops past the
+  // victory threshold reduces losses, it never inflates them. The victor additionally
+  // takes only a fraction (winnerLossMultiplier) of that already-small share.
+  const winnerLossMultiplier = numbers.global.combat.winnerLossMultiplier ?? 0.5;
+  const attackerLossPct = lossFraction(ap, dp, casualtyScaling) * (win ? winnerLossMultiplier : 1);
+  const defenderLossPct = lossFraction(dp, ap, casualtyScaling) * (win ? 1 : winnerLossMultiplier);
 
   const attackerTotal = sumTroopCounts(attacker.troops);
   const attackerLosses = splitCasualties(attackerTotal * attackerLossPct, woundedRatio, attackerHospitalCapacity);

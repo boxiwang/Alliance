@@ -7,7 +7,7 @@ import {
 } from "./game";
 import type { DispatchMarchInput, HeadlessWorld, ResourceWallet, SpawnPlayerInput, TroopManifest } from "./world-engine";
 import {
-  advanceHeadlessWorld, dispatchMarch, initHeadlessWorld, populateWorld, recallMarch, redistributeWorldTargets, spawnPlayers,
+  advanceHeadlessWorld, dispatchMarch, ensureLocalTargets, initHeadlessWorld, populateWorld, recallMarch, redistributeWorldTargets, spawnPlayers,
   worldEngineConfig, zoneForPoint,
 } from "./world-engine";
 import { clearWorld as clearLegacyWorld, loadWorld as loadLegacyWorld, projectWorld as projectLegacyWorld } from "./world";
@@ -159,6 +159,7 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
   const monsters = Math.ceil(Math.max(Number(population.minimumMonsters) || 0,
     playerCount * (Number(population.monstersPerPlayer) || 0)));
   world = populateWorld(world, resources, monsters, now, numbers);
+  world = ensureLocalTargets(world, playerId, now, numbers);
   const player = world.players[playerId];
   player.accountModifiers = playerResearchModifiers(game);
   player.marchSlots = worldMarchSlots(game, numbers);
@@ -237,6 +238,7 @@ function reconcile(session: LocalWorldSession, sourceGame: GameState, now: numbe
   let game = project(sourceGame, now);
   const before = JSON.stringify(session.world);
   session.world = advanceHeadlessWorld(session.world, now, numbers);
+  session.world = ensureLocalTargets(session.world, session.playerId, now, numbers);
   applyExternalGameDelta(session, game);
   game = applyWorldPlayerToGame(session, game);
   updatePlayerMetadata(session, game, numbers);
@@ -339,6 +341,10 @@ function settleLegacyWorld(address: string, sourceGame: GameState, now: number):
 export function openLocalWorldSession(address: string, sourceGame: GameState, now = Date.now(), numbers: any): LocalWorldResult {
   const stored = loadLocalWorldSession(address);
   if (stored) {
+    // Config is derived from numbers.json, never authored per-world. Refresh it on load so a
+    // world persisted before a new config key existed (e.g. minEntitySpacing) picks it up
+    // instead of crashing on undefined during migration/respawn.
+    stored.world.config = worldEngineConfig(numbers);
     if ((stored as any).version < 4) {
       stored.world = redistributeWorldTargets(stored.world, now, numbers);
       retuneLocalNpcs(stored.world, numbers);
