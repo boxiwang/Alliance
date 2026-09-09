@@ -37,7 +37,8 @@ It is inert in a production build, and no wallet address is stored in this repo.
 ## Current state
 Phase 1 Personal Mode is playable locally: wallet/read-only onboarding → persistent City →
 building, training, promotion, research and healing → 512×512 Star Map → gather, scout,
-fight Frontier I's L1–20 rogues, raid test civilizations, recall and settle reports. The hidden `/?admin`
+fight Frontier I's L1–20 rogues, raid test civilizations, recall and settle reports. A shared Messages
+mock now switches between Alliance, World, System and direct-message views from the same command bar. The hidden `/?admin`
 route provides explicit level tables, validation and progression/World simulations. See
 `HANDOFF.md` for the exact boundary and next work.
 

@@ -61,8 +61,8 @@ the report is clean again.
 
 - Young/local State floor: **480 resource planets + 180 Rogues**.
 - Per active city after the floor: **3.2 planets + 1 Rogue**, capped at **3,200 + 1,000**.
-- At 1,000 players the 512×512 State contains 5,200 entities including cities, or roughly one
-  entity per 7 tiles by characteristic spacing.
+- At 1,000 players the circular 512×512 State contains 5,200 entities including cities, or roughly
+  6.2 tiles characteristic spacing inside its playable annulus.
 - Public targets are sector-balanced across 32×32-tile buckets, then assigned overlapping radial
   difficulty (±1 level). They are not generated around each player's city.
 - Defeated Rogue refill: randomized **3–10 minutes**. Depleted/retired planet refill: **5–15 minutes**.

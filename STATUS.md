@@ -8,10 +8,15 @@ for the *why*; this file is the *where we are right now*.
 **Last updated:** 2026-09-08 · **by:** Codex (Frontier I public ecology, L20 ceiling, sector-balanced density, randomized refill, search-first Deep Scan)
 **Current focus:** Local World loop is playable and now behaves like shared geography rather than a personal quest generator. Next: fresh L1→L5 + gather/scout playtests from the UI, tune the full L1→20 Frontier I account, design Wormhole graduation/Map II resources, then server authority and alliance layers. **Full details are in `HANDOFF.md` → "Latest changes (Codex, 2026-09-08)".**
 
+### 💬 Circular World + shared Messages mock (Codex, 2026-09-08)
+- Corrected the geometry mismatch: World rendering and every placement path now share one circular radius. Spawn grid 40 preserves 1,024 city slots after circle clipping; a full 5,200-entity State is acceptance-tested inside the circle.
+- Local World save v6 migrates square-corner cities and idle targets inside once without resetting City progression.
+- Added `MESSAGES` beside City / Star Map in the shared command bar. The interactive UI mock covers Alliance, World, System and PM channels, plus coordinates, rally cards, context panels and local composing. It has no backend yet.
+
 ### 🌌 Frontier I public ecology (Codex, 2026-09-08)
 - Frontier I exposes Rogues **L1–20** and resource planets **L1–8**. Higher explicit rows remain reserved for Map II rather than leaking into the starting State.
 - Removed the reconcile-time `ensureLocalTargets` quest bubble. Public targets are distributed through 32×32 ecology sectors, trend upward toward the Wormhole with ±1 level overlap, and do not react to an individual kill.
-- Young State floor: 480 planets + 180 Rogues. At 1,000 active cities: 3,200 planets + 1,000 Rogues (hard caps), about seven tiles per entity including cities.
+- Young State floor: 480 planets + 180 Rogues. At 1,000 active cities: 3,200 planets + 1,000 Rogues (hard caps), about 6.2 tiles characteristic spacing inside the circular annulus.
 - Rogue recycling is randomly delayed 3–10 minutes; planet recycling 5–15 minutes. Level is conserved, coordinate changes, and population stays stable.
 - `NEXT ROGUE` searches the public ecology first. An explicit click can Deep Scan only L1–6 when no matching target exists within 55 tiles; discovered targets appear 28–50 tiles away and are limited per player/per level with a 10-minute cooldown.
 - `numbers.json` schema is **v0.10**. Admin World exposes the population, cap, level ceiling, sector, Deep Scan and lifecycle windows. Engine coverage is 116 tests; balance remains clean at L1–20.

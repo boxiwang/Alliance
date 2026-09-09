@@ -11,7 +11,7 @@ import { gmFillTroops, grantLocalGm, hasLocalGm, localGmRequested } from "./lib/
 import type {
   CityEntity, HeadlessMarch, MonsterEntity, Point, ResourceEntity, WorldReport,
 } from "./lib/world-engine";
-import { distance, energyAt, worldCenter, worldRogueMaxLevel } from "./lib/world-engine";
+import { distance, energyAt, isInsidePlayableWorld, worldCenter, worldPlayableRadius, worldRogueMaxLevel } from "./lib/world-engine";
 import { carryCapacity, resolveCombat } from "./lib/expedition";
 import type { LocalWorldSession } from "./lib/world-adapter";
 import {
@@ -262,7 +262,7 @@ function reportCopy(report: WorldReport, world: LocalWorldSession["world"]): { t
   return { title: `${report.outcome === "victory" ? "Victory" : report.outcome === "defeat" ? "Defeat" : "Battle result"} at ${target}`, detail: `${compact(displayTroops(wounded))} wounded · ${compact(displayTroops(dead))} dead.`, good };
 }
 
-export default function World({ address, profile, onBack }: { address: string; profile: Profile; onBack: () => void }) {
+export default function World({ address, profile, onBack, onMessages = () => {} }: { address: string; profile: Profile; onBack: () => void; onMessages?: () => void }) {
   const N = useMemo(() => getN(), []);
   const initial = useMemo(() => openLocalWorldSession(address, loadGame(address) || initGame(address), Date.now(), N), [address, N]);
   const [game, setGame] = useState<GameState>(() => initial.game);
@@ -332,7 +332,7 @@ export default function World({ address, profile, onBack }: { address: string; p
   const viewY = camera.y - viewport.height / 2;
   const viewBox = `${viewX} ${viewY} ${viewport.width} ${viewport.height}`;
   const center = worldCenter(world.config);
-  const worldRadius = Math.hypot(world.config.width / 2, world.config.height / 2);
+  const worldRadius = worldPlayableRadius(world.config);
   const player = world.players[session.playerId];
   const marchSpeed = Math.max(.01, 1 + (Number(N.global?.accountModifiers?.marchSpeedBonus) || 0)
     + (Number(player.accountModifiers.marchSpeedBonus) || 0));
@@ -475,7 +475,8 @@ export default function World({ address, profile, onBack }: { address: string; p
   function viewCoordinates() {
     const x = Number(coordinateDraft.x); const y = Number(coordinateDraft.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) { setMessage("Enter a valid X and Y coordinate."); return; }
-    const point = { x: Math.max(0, Math.min(world.config.width, x)), y: Math.max(0, Math.min(world.config.height, y)) };
+    const point = { x, y };
+    if (!isInsidePlayableWorld(point, world.config, 0)) { setMessage("Those coordinates are outside the circular Frontier."); return; }
     setCamera(point); setSelectedId(null); setMessage(`Viewing sector ${Math.round(point.x).toString().padStart(3, "0")}:${Math.round(point.y).toString().padStart(3, "0")}. Your civilization has not moved.`);
   }
   function recall(marchId: string) {
@@ -515,7 +516,7 @@ export default function World({ address, profile, onBack }: { address: string; p
       resources={viewGame.res}
       energy={energy} energyCap={world.config.energyCap} activeFleets={activeMarches.length} fleetCap={player.marchSlots}
       standing={totalTroops(viewGame)} wounded={viewGame.wounded} might={mightBreakdown(viewGame).total}
-      onCity={onBack} onWorld={() => {}} />
+      onCity={onBack} onWorld={() => {}} onMessages={onMessages} />
     {gm && <div className="world-gm-strip"><span>LOCAL GM</span><button onClick={fillTroops}>FILL TROOPS</button><button onClick={finishMarches} disabled={!activeMarches.length}>RESOLVE FLEETS</button></div>}
     {message && <div className="world-message">{message}</div>}
     <div className="world-layout">

@@ -89,6 +89,7 @@ push notifications, free-path movement and open-field interception.
 ## Headless acceptance gates
 
 - 1,000 cities spawn without overlap or entry into the Circle reserve.
+- Cities, public targets, Deep Scan discoveries and respawns all remain inside one circular playable boundary.
 - Early players are farther apart than the final dense population.
 - Nearby queries do not scan or return the whole map.
 - One idempotency key cannot dispatch or reward twice.

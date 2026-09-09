@@ -3,9 +3,9 @@ import defaults from "../../docs/numbers.json";
 import {
   DEFAULT_WORLD_ENGINE_CONFIG, HeadlessWorld, Point, ResourceEntity,
   advanceHeadlessWorld, advanceTargetLifecycle, breachCity, buildSpatialIndex, defeatMonster, depleteResource,
-  dispatchMarch, distance, emptyCommanderSnapshot, energyAt, initHeadlessWorld, occupyResource,
+  dispatchMarch, distance, emptyCommanderSnapshot, energyAt, initHeadlessWorld, migrateWorldToCircularBoundary, occupyResource,
   populateWorld, queryNearby, recallMarch, redistributeWorldTargets, scanForRogue, spawnPlayer, spawnPlayers, worldCenter,
-  worldDepth, worldResourceMaxLevel, worldRogueMaxLevel,
+  isInsidePlayableWorld, worldDepth, worldPlayableRadius, worldResourceMaxLevel, worldRogueMaxLevel,
 } from "./world-engine";
 
 function minPairDistance(points: Point[]): number {
@@ -29,7 +29,10 @@ describe("headless world — scale and sparse spawning", () => {
     const positions = cities.map((city) => city.position);
     expect(cities).toHaveLength(1000);
     expect(new Set(positions.map((point) => `${point.x}:${point.y}`)).size).toBe(1000);
-    positions.forEach((point) => expect(distance(point, worldCenter(world.config))).toBeGreaterThan(world.config.circleReserveRadius));
+    positions.forEach((point) => {
+      expect(distance(point, worldCenter(world.config))).toBeGreaterThan(world.config.circleReserveRadius);
+      expect(isInsidePlayableWorld(point, world.config, world.config.cityFootprint + 1)).toBe(true);
+    });
     expect(minPairDistance(positions)).toBeGreaterThan(11);
   });
 
@@ -39,6 +42,16 @@ describe("headless world — scale and sparse spawning", () => {
     const dense = base.spawnAnchors.slice(0, 1000);
     expect(minPairDistance(early)).toBeGreaterThan(minPairDistance(dense) * 2);
   });
+
+  it("fits the full 1,000-city ecology inside the circular Frontier", () => {
+    let world = spawnPlayers(initHeadlessWorld("state-circle-capacity", 1000),
+      Array.from({ length: 1000 }, (_, index) => ({ id: `capacity-${index}` })), 1000);
+    world = populateWorld(world, defaults.world.population.resourceCap, defaults.world.population.monsterCap, 1000, defaults);
+    const entities = Object.values(world.entities).filter((entity) => entity.kind !== "poi");
+    expect(entities).toHaveLength(5200);
+    expect(entities.every((entity) => isInsidePlayableWorld(entity.position, world.config,
+      entity.kind === "city" ? world.config.cityFootprint + 1 : 3))).toBe(true);
+  }, 30_000);
 
   it("supports bounded nearby queries by kind", () => {
     let world = initHeadlessWorld("state-query", 1000);
@@ -63,7 +76,15 @@ describe("headless world — scale and sparse spawning", () => {
     expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(400);
     expect(new Set(targets.filter((entity) => entity.kind === "resource").map((entity) => entity.resource)))
       .toEqual(new Set(["cash", "oil", "power"]));
+    const center = worldCenter(world.config);
+    const outerRadius = worldPlayableRadius(world.config);
+    const occupiedWedges = new Set(targets.map((target) => {
+      const angle = Math.atan2(target.position.y - center.y, target.position.x - center.x) + Math.PI;
+      return Math.floor(angle / (Math.PI * 2) * 8);
+    }));
+    expect(occupiedWedges.size).toBe(8);
     targets.forEach((target) => {
+      expect(distance(target.position, center)).toBeLessThanOrEqual(outerRadius);
       const maxLevel = target.kind === "resource" ? worldResourceMaxLevel(defaults) : worldRogueMaxLevel(defaults);
       const radialLevel = Math.max(1, Math.min(maxLevel, 1 + Math.floor(worldDepth(target.position, world.config) * maxLevel)));
       expect(target.level).toBeGreaterThanOrEqual(1);
@@ -83,6 +104,18 @@ describe("headless world — scale and sparse spawning", () => {
     expect(moved.position).not.toEqual(oldPosition);
     expect(moved.level).toBe(worldResourceMaxLevel(defaults));
     expect(moved.amount).toBe(moved.capacity);
+  });
+
+  it("moves legacy square-edge entities into the circular world boundary", () => {
+    let world = spawnPlayer(initHeadlessWorld("state-circle-migration", 1000), { id: "corner" }, 1000);
+    world = populateWorld(world, 1, 1, 1000, defaults);
+    const city = world.entities[world.players.corner.cityId];
+    const resource = firstEntity(world, "resource");
+    city.position = { x: 0, y: 0 };
+    resource.position = { x: 512, y: 512 };
+    const migrated = migrateWorldToCircularBoundary(world, 2000, defaults);
+    expect(isInsidePlayableWorld(migrated.entities[city.id].position, migrated.config, migrated.config.cityFootprint + 1)).toBe(true);
+    expect(isInsidePlayableWorld(migrated.entities[resource.id].position, migrated.config)).toBe(true);
   });
 
   it("caps Frontier I at resource L8 and Rogue L20 while keeping every rung present", () => {

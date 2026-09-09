@@ -42,7 +42,7 @@ export const DEFAULT_WORLD_ENGINE_CONFIG: WorldEngineConfig = {
   width: 512,
   height: 512,
   maxPlayers: 1024,
-  spawnGrid: 34,
+  spawnGrid: 40,
   spawnJitter: 1.25,
   circleReserveRadius: 38,
   spatialCellSize: 16,
@@ -356,6 +356,15 @@ export function worldCenter(config: WorldEngineConfig = DEFAULT_WORLD_ENGINE_CON
 
 export function distance(a: Point, b: Point): number { return Math.hypot(a.x - b.x, a.y - b.y); }
 
+/** One shared circular boundary for rendering, spawning, scanning and respawning. */
+export function worldPlayableRadius(config: WorldEngineConfig = DEFAULT_WORLD_ENGINE_CONFIG, inset = 3): number {
+  return Math.max(config.circleReserveRadius + 1, Math.min(config.width, config.height) / 2 - Math.max(0, inset));
+}
+
+export function isInsidePlayableWorld(point: Point, config: WorldEngineConfig = DEFAULT_WORLD_ENGINE_CONFIG, inset = 3): boolean {
+  return distance(point, worldCenter(config)) <= worldPlayableRadius(config, inset);
+}
+
 // Depth 0 = the outer region (the big-area rim where fresh players sit, LOW level), depth 1 = the
 // inner reserve by the wormhole (small area, HIGH level). Normalised to the map edge (half-width),
 // not the diagonal, so the abundant outer band is genuinely low-level instead of corner-only.
@@ -363,7 +372,7 @@ export function worldDepth(point: Point, config: WorldEngineConfig = DEFAULT_WOR
   const center = worldCenter(config);
   const radial = distance(point, center);
   const rIn = config.circleReserveRadius;
-  const rEdge = Math.min(config.width, config.height) / 2;
+  const rEdge = worldPlayableRadius(config);
   return Math.max(0, Math.min(1, (rEdge - radial) / Math.max(1, rEdge - rIn)));
 }
 
@@ -394,6 +403,7 @@ export function generateSpawnAnchors(stateId: string, config: WorldEngineConfig 
   const stepX = config.width / config.spawnGrid;
   const stepY = config.height / config.spawnGrid;
   const center = worldCenter(config);
+  const outerRadius = worldPlayableRadius(config, config.cityFootprint + 1);
   const candidates: Point[] = [];
   for (let row = 0; row < config.spawnGrid; row += 1) {
     for (let col = 0; col < config.spawnGrid; col += 1) {
@@ -401,7 +411,8 @@ export function generateSpawnAnchors(stateId: string, config: WorldEngineConfig 
         x: (col + .5) * stepX + (random() * 2 - 1) * config.spawnJitter,
         y: (row + .5) * stepY + (random() * 2 - 1) * config.spawnJitter,
       };
-      if (distance(point, center) > config.circleReserveRadius + config.cityFootprint) candidates.push(point);
+      const radial = distance(point, center);
+      if (radial > config.circleReserveRadius + config.cityFootprint && radial <= outerRadius) candidates.push(point);
     }
   }
   if (candidates.length < config.maxPlayers) throw new Error("Spawn grid cannot hold configured maxPlayers outside the Circle reserve.");
@@ -554,6 +565,7 @@ export function queryNearby(
 function randomLegalPoint(world: HeadlessWorld, random: () => number, minimumSpacing = world.config.minEntitySpacing): Point {
   const center = worldCenter(world.config);
   const index = buildSpatialIndex(world);
+  const outerRadius = worldPlayableRadius(world.config);
   // Every entity claims a clear cell: reject points within `minimumSpacing` of any other
   // city/resource/rogue so markers and name plates keep breathing room. If a dense State
   // can't satisfy the full spacing, relax it in steps rather than throwing.
@@ -562,8 +574,10 @@ function randomLegalPoint(world: HeadlessWorld, random: () => number, minimumSpa
   const step = Math.max(1, spacingBase / 4);
   for (let spacing = spacingBase; spacing >= 1; spacing -= step) {
     for (let attempt = 0; attempt < 200; attempt += 1) {
-      const point = { x: 3 + random() * (world.config.width - 6), y: 3 + random() * (world.config.height - 6) };
-      if (distance(point, center) <= world.config.circleReserveRadius) continue;
+      const angle = random() * Math.PI * 2;
+      const radial = Math.sqrt(world.config.circleReserveRadius ** 2
+        + random() * (outerRadius ** 2 - world.config.circleReserveRadius ** 2));
+      const point = { x: center.x + Math.cos(angle) * radial, y: center.y + Math.sin(angle) * radial };
       if (!queryNearby(world, point, spacing, undefined, index).length) return point;
     }
   }
@@ -585,13 +599,16 @@ function sectorBalancedLegalPoint(
 ): Point {
   const center = worldCenter(world.config);
   const index = buildSpatialIndex(world);
+  const outerRadius = worldPlayableRadius(world.config);
   const spacing = Number.isFinite(world.config.minEntitySpacing) && world.config.minEntitySpacing > 0
     ? world.config.minEntitySpacing : DEFAULT_WORLD_ENGINE_CONFIG.minEntitySpacing;
   let best: Point | null = null;
   let bestCount = Number.POSITIVE_INFINITY;
   for (let attempt = 0; attempt < 24; attempt += 1) {
-    const point = { x: 3 + random() * (world.config.width - 6), y: 3 + random() * (world.config.height - 6) };
-    if (distance(point, center) <= world.config.circleReserveRadius) continue;
+    const angle = random() * Math.PI * 2;
+    const radial = Math.sqrt(world.config.circleReserveRadius ** 2
+      + random() * (outerRadius ** 2 - world.config.circleReserveRadius ** 2));
+    const point = { x: center.x + Math.cos(angle) * radial, y: center.y + Math.sin(angle) * radial };
     if (queryNearby(world, point, spacing, undefined, index).length) continue;
     const count = sectorCounts.get(sectorKey(point, sectorSize)) || 0;
     if (count < bestCount) { best = point; bestCount = count; }
@@ -631,7 +648,7 @@ function sampledLevelForPoint(point: Point, config: WorldEngineConfig, maxLevel:
 function radialPointForLevel(world: HeadlessWorld, level: number, maxLevel: number, random: () => number): Point {
   const center = worldCenter(world.config);
   const rIn = world.config.circleReserveRadius;
-  const rEdge = Math.min(world.config.width, world.config.height) / 2;
+  const rEdge = worldPlayableRadius(world.config);
   const minSpacing = Number.isFinite(world.config.minEntitySpacing) && world.config.minEntitySpacing > 0
     ? world.config.minEntitySpacing : DEFAULT_WORLD_ENGINE_CONFIG.minEntitySpacing;
   const index = buildSpatialIndex(world);
@@ -642,7 +659,7 @@ function radialPointForLevel(world: HeadlessWorld, level: number, maxLevel: numb
       const radial = Math.max(rIn + 1, rEdge - depth * (rEdge - rIn));
       const angle = random() * Math.PI * 2;
       const point = { x: center.x + Math.cos(angle) * radial, y: center.y + Math.sin(angle) * radial };
-      if (point.x < 3 || point.x > world.config.width - 3 || point.y < 3 || point.y > world.config.height - 3) continue;
+      if (!isInsidePlayableWorld(point, world.config)) continue;
       if (distance(point, center) <= world.config.circleReserveRadius) continue;
       if (!queryNearby(world, point, spacing, undefined, index).length) return point;
     }
@@ -706,7 +723,7 @@ function nearbyLegalPoint(world: HeadlessWorld, origin: Point, minRadius: number
       const highSq = Math.max(lowSq, maxRadius * maxRadius);
       const dist = Math.sqrt(lowSq + random() * (highSq - lowSq));
       const point = { x: origin.x + Math.cos(angle) * dist, y: origin.y + Math.sin(angle) * dist };
-      if (point.x < 3 || point.x > world.config.width - 3 || point.y < 3 || point.y > world.config.height - 3) continue;
+      if (!isInsidePlayableWorld(point, world.config)) continue;
       if (distance(point, center) <= world.config.circleReserveRadius) continue;
       if (!queryNearby(world, point, spacing, undefined, index).length) return point;
     }
@@ -941,6 +958,57 @@ export function redistributeWorldTargets(source: HeadlessWorld, now = Date.now()
       entity.spawnedAt = now;
       entity.revision += 1;
     });
+  });
+  return world;
+}
+
+/**
+ * One-time migration for saves created while the renderer used a diagonal circle around
+ * square spawn coordinates. Existing in-bounds cities stay put; out-of-bounds cities and
+ * idle targets move into the same circular boundary used by all new population calls.
+ */
+export function migrateWorldToCircularBoundary(source: HeadlessWorld, now = Date.now(), numbers: any = getN()): HeadlessWorld {
+  const world = clone(source);
+  world.spawnAnchors = generateSpawnAnchors(world.stateId, world.config);
+  const usedAnchors = new Set<number>();
+  const players = Object.values(world.players).sort((left, right) => left.joinedAt - right.joinedAt || left.id.localeCompare(right.id));
+  players.forEach((player) => {
+    const city = world.entities[player.cityId];
+    if (!city || city.kind !== "city") return;
+    let bestIndex = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    world.spawnAnchors.forEach((anchor, index) => {
+      if (usedAnchors.has(index)) return;
+      const candidateDistance = distance(anchor, city.position);
+      if (candidateDistance < bestDistance) { bestIndex = index; bestDistance = candidateDistance; }
+    });
+    if (bestIndex < 0) throw new Error("Circular World has no free city anchor.");
+    usedAnchors.add(bestIndex);
+    player.spawnIndex = bestIndex;
+    if (!isInsidePlayableWorld(city.position, world.config, world.config.cityFootprint + 1)) {
+      city.position = { ...world.spawnAnchors[bestIndex] };
+      city.zone = zoneForPoint(city.position, world.config);
+      city.revision += 1;
+      addFeed(world, now, "city_boundary_migrated", city.id, player.id, { position: city.position });
+    }
+  });
+  world.spawnCursor = world.spawnAnchors.findIndex((_, index) => !usedAnchors.has(index));
+  if (world.spawnCursor < 0) world.spawnCursor = 0;
+
+  const activeTargetIds = new Set(Object.values(world.marches)
+    .filter((march) => !["completed", "failed"].includes(march.state))
+    .map((march) => march.targetId));
+  const random = rng(hashText(`${world.stateId}:circular-boundary:v1`));
+  Object.values(world.entities).forEach((entity) => {
+    if ((entity.kind !== "resource" && entity.kind !== "monster")
+      || activeTargetIds.has(entity.id)
+      || isInsidePlayableWorld(entity.position, world.config)) return;
+    const maxLevel = entity.kind === "resource" ? worldResourceMaxLevel(numbers) : worldRogueMaxLevel(numbers);
+    const level = Math.max(1, Math.min(maxLevel, entity.level));
+    entity.position = radialPointForLevel(world, level, maxLevel, random);
+    entity.zone = zoneForPoint(entity.position, world.config);
+    entity.spawnedAt = now;
+    entity.revision += 1;
   });
   return world;
 }

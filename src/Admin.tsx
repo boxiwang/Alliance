@@ -556,7 +556,7 @@ function WorldWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: 
         </div>
       </div>
       <div className="adm-rule-grid">
-        <RuleGroup icon="🗺️" title="State size" description="Capacity and spacing for one shared World State.">
+        <RuleGroup icon="🗺️" title="State size" description="Capacity and spacing inside one circular World State.">
           <NumberSetting {...p(["world", "state", "width"])} label="Map width" help="Horizontal coordinate size." suffix="tiles" />
           <NumberSetting {...p(["world", "state", "height"])} label="Map height" help="Vertical coordinate size." suffix="tiles" />
           <NumberSetting {...p(["world", "state", "maxPlayers"])} label="Maximum cities" help="Hard player capacity for one State." />

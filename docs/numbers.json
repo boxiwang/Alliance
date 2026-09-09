@@ -4830,7 +4830,7 @@
   "world": {
     "rings": 10,
     "spawnRing": 10,
-    "note": "Frontier I is the Townhall 1-20 world. New civilizations begin at the outer edge and progress toward the central Wormhole. Rogue L21+ and resource planets L9+ belong to later maps.",
+    "note": "Frontier I is a circular Townhall 1-20 world. New civilizations begin at the outer edge and progress toward the central Wormhole. Cities, targets, Deep Scan and respawns share one playable radius. Rogue L21+ and resource planets L9+ belong to later maps.",
     "centerOpensBy": "server_progression",
     "ecology": {
       "mapId": "map.frontier-1",
@@ -4849,7 +4849,7 @@
       "width": 512,
       "height": 512,
       "maxPlayers": 1024,
-      "spawnGrid": 34,
+      "spawnGrid": 40,
       "spawnJitter": 1.25,
       "circleReserveRadius": 38,
       "spatialCellSize": 16,
@@ -4866,7 +4866,7 @@
       "rogueMinPerLevel": 5,
       "monsterCap": 1000,
       "resourceCap": 3200,
-      "capacityNote": "At 1,000 active cities this targets 3,200 resource planets and 1,000 rogues. Including cities, the 512x512 map averages roughly 7 tiles per entity; a 48-city local map starts with 480 resources and 180 rogues."
+      "capacityNote": "At 1,000 active cities this targets 3,200 resource planets and 1,000 rogues. The playable annulus has radius 253 around a 38-tile Core reserve, giving roughly 6.2 tiles characteristic spacing across 5,200 entities; a 48-city local map starts with 480 resources and 180 rogues."
     },
     "lifecycle": {
       "resourceRespawnSec": 600,

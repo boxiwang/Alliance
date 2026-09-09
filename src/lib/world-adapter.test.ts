@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import defaults from "../../docs/numbers.json";
 import { initGame } from "./gamestore";
 import { gmFillTroops } from "./gm";
-import { distance, worldCenter } from "./world-engine";
+import { distance, worldCenter, worldPlayableRadius } from "./world-engine";
 import {
   advanceLocalWorldSession, createLocalWorldSession, dispatchLocalWorldMarch,
   finishLocalWorldMarches, loadLocalWorldSession, openLocalWorldSession, recallLocalWorldMarch, saveLocalWorldSession,
@@ -47,7 +47,7 @@ describe("local GameState ↔ headless World adapter", () => {
     const city = result.session.world.entities[result.session.world.players[result.session.playerId].cityId];
     expect(city.kind).toBe("city");
     expect(distance(city.position, worldCenter(result.session.world.config)))
-      .toBeGreaterThan(result.session.world.config.width * .6);
+      .toBeGreaterThan(worldPlayableRadius(result.session.world.config) * .9);
     expect(Object.keys(result.session.world.players)).toHaveLength(3);
   });
 

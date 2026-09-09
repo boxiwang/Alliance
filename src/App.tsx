@@ -11,10 +11,11 @@ import Admin from "./Admin";
 import AlliancePicker from "./AlliancePicker";
 import ExpeditionLab from "./ExpeditionLab";
 import World from "./World";
+import Messages from "./Messages";
 import { grantLocalGm, localGmRequested } from "./lib/gm";
 import { loadGame } from "./lib/gamestore";
 
-type Stage = "connect" | "start" | "resume" | "founded" | "town" | "world";
+type Stage = "connect" | "start" | "resume" | "founded" | "town" | "world" | "messages";
 
 export default function App() {
   const params = new URLSearchParams(window.location.search);
@@ -29,20 +30,32 @@ export default function App() {
     const gmQuery = params.has("gm") ? "&gm" : "";
     const devAddress = devSlot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${devSlot}`;
     const devProfile: Profile = {
-      address: devAddress, name: "Ruglord Town Test", faction: null, factionSymbol: null,
+      address: devAddress, name: "Ruglord1070273", faction: "0x0000000000000000000000000000000000orbit", factionSymbol: "ORBT",
       keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
     };
-    return <div className="page"><Town address={devAddress} profile={devProfile} onWorld={() => window.location.assign(`/?world${gmQuery}&slot=${devSlot}`)} /></div>;
+    return <div className="page"><Town address={devAddress} profile={devProfile} onWorld={() => window.location.assign(`/?world${gmQuery}&slot=${devSlot}`)} onMessages={() => window.location.assign(`/?messages${gmQuery}&slot=${devSlot}`)} /></div>;
   }
   if (import.meta.env.DEV && params.has("world")) {
     const devSlot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
     const gmQuery = params.has("gm") ? "&gm" : "";
     const devAddress = devSlot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${devSlot}`;
     const devProfile: Profile = {
-      address: devAddress, name: "Ruglord World Test", faction: null, factionSymbol: null,
+      address: devAddress, name: "Ruglord1070273", faction: "0x0000000000000000000000000000000000orbit", factionSymbol: "ORBT",
       keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
     };
-    return <div className="page"><World address={devAddress} profile={devProfile} onBack={() => window.location.assign(`/?town${gmQuery}&slot=${devSlot}`)} /></div>;
+    return <div className="page"><World address={devAddress} profile={devProfile} onBack={() => window.location.assign(`/?town${gmQuery}&slot=${devSlot}`)} onMessages={() => window.location.assign(`/?messages${gmQuery}&slot=${devSlot}`)} /></div>;
+  }
+  if (import.meta.env.DEV && params.has("messages")) {
+    const devSlot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
+    const gmQuery = params.has("gm") ? "&gm" : "";
+    const devAddress = devSlot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${devSlot}`;
+    const devProfile: Profile = {
+      address: devAddress, name: "Ruglord1070273", faction: "0x0000000000000000000000000000000000orbit", factionSymbol: "ORBT",
+      keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
+    };
+    return <div className="page"><Messages address={devAddress} profile={devProfile}
+      onCity={() => window.location.assign(`/?town${gmQuery}&slot=${devSlot}`)}
+      onWorld={() => window.location.assign(`/?world${gmQuery}&slot=${devSlot}`)} /></div>;
   }
 
   const [detected, setDetected] = useState<Eip6963ProviderDetail[]>([]);
@@ -316,8 +329,9 @@ export default function App() {
         </section>
       )}
 
-      {stage === "town" && profile && <Town address={address} profile={profile} onWorld={() => setStage("world")} />}
-      {stage === "world" && profile && <World address={address} profile={profile} onBack={() => setStage("town")} />}
+      {stage === "town" && profile && <Town address={address} profile={profile} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} />}
+      {stage === "world" && profile && <World address={address} profile={profile} onBack={() => setStage("town")} onMessages={() => setStage("messages")} />}
+      {stage === "messages" && profile && <Messages address={address} profile={profile} onCity={() => setStage("town")} onWorld={() => setStage("world")} />}
 
       {stage === "founded" && profile && (
         <section className="mid">

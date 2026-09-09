@@ -7,7 +7,7 @@ import {
 } from "./game";
 import type { DispatchMarchInput, HeadlessWorld, ResourceWallet, SpawnPlayerInput, TroopManifest } from "./world-engine";
 import {
-  advanceHeadlessWorld, dispatchMarch, initHeadlessWorld, populateWorld, recallMarch, redistributeWorldTargets, scanForRogue, spawnPlayers,
+  advanceHeadlessWorld, dispatchMarch, initHeadlessWorld, migrateWorldToCircularBoundary, populateWorld, recallMarch, redistributeWorldTargets, scanForRogue, spawnPlayers,
   worldEngineConfig, zoneForPoint,
 } from "./world-engine";
 import { clearWorld as clearLegacyWorld, loadWorld as loadLegacyWorld, projectWorld as projectLegacyWorld } from "./world";
@@ -20,7 +20,7 @@ export interface WorldGameSnapshot {
 }
 
 export interface LocalWorldSession {
-  version: 5;
+  version: 6;
   address: string;
   playerId: string;
   world: HeadlessWorld;
@@ -168,7 +168,7 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
   player.marchCapacity = Math.max(0, Math.floor(maxTroops(game)
     * (Number(numbers.global?.march?.capacityFractionOfMaxTroops) || 1)));
   const session: LocalWorldSession = {
-    version: 5, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
+    version: 6, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
   };
   return { session, game, changed: true };
 }
@@ -341,7 +341,7 @@ export function loadLocalWorldSession(address: string): LocalWorldSession | null
   try {
     const raw = localStorage.getItem(KEY(address));
     const parsed = raw ? JSON.parse(raw) : null;
-    return [1, 2, 3, 4, 5].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
+    return [1, 2, 3, 4, 5, 6].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
   } catch { return null; }
 }
 
@@ -375,7 +375,11 @@ export function openLocalWorldSession(address: string, sourceGame: GameState, no
     if ((stored as any).version < 5) {
       stored.world = redistributeWorldTargets(stored.world, now, numbers);
       retuneLocalNpcs(stored.world, numbers);
-      stored.version = 5;
+      (stored as any).version = 5;
+    }
+    if ((stored as any).version < 6) {
+      stored.world = migrateWorldToCircularBoundary(stored.world, now, numbers);
+      stored.version = 6;
     }
     return reconcile(stored, sourceGame, now, numbers);
   }

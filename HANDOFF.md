@@ -8,9 +8,10 @@
 
 Frontier I ecology/progression pass:
 
+- **One circular World boundary:** rendering, city anchors, public population, Deep Scan and respawn now share an inscribed 253-tile playable radius instead of mixing a diagonal visual circle with square-generated coordinates. The city candidate grid is 40×40 before circle clipping, preserving 1,024-city capacity. Local World v5 saves migrate out-of-bounds cities and idle targets once.
 - **Frontier I has a deliberate ceiling:** this first 512×512 map supports Command Core / Rogue progression through **L20**, with resource planets through **L8**. Rogue L21–30 and resource rows L9–10 stay in the data for later maps; they do not spawn here. Reaching and holding the Wormhole is the future passage to a harder map, where higher targets and potentially map-specific upgrade resources can begin.
 - **Public ecology, not personal spawn bubbles:** target population is generated independently of any player's progress and spread with 32×32 ecology-sector balancing plus radial difficulty and ±1 level overlap. Levels still trend upward toward the Wormhole without looking like perfect rings. Killing L3 never causes L4 to appear beside that player.
-- **Stable density at young and full population:** a young/local State holds 480 resource planets + 180 Rogues. Population then scales toward **3.2 planets + 1 Rogue per active city**, capped at 3,200 + 1,000 for a 1,000-player State. Including cities, that is ~7 map tiles per entity on a 512×512 State.
+- **Stable density at young and full population:** a young/local State holds 480 resource planets + 180 Rogues. Population then scales toward **3.2 planets + 1 Rogue per active city**, capped at 3,200 + 1,000 for a 1,000-player State. Including cities, the circular playable annulus has ~6.2 tiles characteristic spacing across 5,200 entities.
 - **Delayed, randomized recycling:** defeated Rogues return after 3–10 minutes; depleted/retired resource planets return after 5–15 minutes, at a new legal coordinate and at the same level. Refill is scheduled map ecology, not a response to an individual player's next unlock.
 - **NEXT ROGUE is search-first:** it selects a nearby public target of the next legal level. Only an explicit click may use the early-game Deep Scan safety valve for L1–6 when none exists within 55 tiles. A discovered Rogue appears 28–50 tiles away, and each player/level has one target plus a 10-minute cooldown; ordinary reconcile ticks never manufacture targets.
 - **Balanced rows remain reusable:** the existing explicit Rogue L1–30 combat/reward rows are preserved. The executable Frontier I ruler now validates L1–20 only: a 60%-filled matching fleet holds ~57% projected win chance and prepared wins stay below 2% casualties.
@@ -80,13 +81,19 @@ The Vite port may increment when another local server is already running. Use th
 - Selecting a rogue force shows estimated victory/defeat and wounded/dead before dispatch.
 - Scouting, city attacks, recall, immutable arrival/return reports and troop conservation are wired through the same headless engine.
 
+### Messages mock
+
+- City / Star Map / Messages share the exact same command navigation and live account bar.
+- Browser-local interaction mock includes Alliance, World, System and PM channels, unread state, pinned orders, coordinate shares, rally cards, contextual alliance/player panels and a local compose interaction.
+- This is intentionally UI-only: no message persistence, moderation, realtime transport, voice or server authority exists yet.
+
 ### Balance/data
 
 - `docs/numbers.json` is schema v0.10 and remains the only gameplay-number source.
 - Admin edits local overrides; team changes still require Export → replace `docs/numbers.json` → commit.
 - Current World ruler: a 60%-filled mixed fleet at matching Command Core level has ~57% PvE win ratio and ~1.5–1.8% winning casualties.
 - `npm run balance:world` currently reports zero issues across Frontier I's 20 rogue levels.
-- Unit coverage currently includes 116 tests; rerun `npm run check` before each handoff.
+- Unit coverage includes a full circular 5,200-entity capacity test; rerun `npm run check` before each handoff.
 
 ## Next work, in order
 
