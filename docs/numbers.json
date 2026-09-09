@@ -2,7 +2,7 @@
   "meta": {
     "project": "ALLIANCE",
     "phase": "personal-mode MVP · Slice 1 · in-city",
-    "version": "0.9",
+    "version": "0.10",
     "reference": "CoC-early pacing; economy redefined to Cash/Oil/Power + Navy/Army/Air per owner spec",
     "curve": "Explicit per-level tables. Times are seconds; production is per hour.",
     "note": "Explicit city, troop, World and Academy tables. Academy and troop training use Kingshot-shaped gates, capacities and queue math adapted to ALLIANCE resources and combat."
@@ -4830,8 +4830,21 @@
   "world": {
     "rings": 10,
     "spawnRing": 10,
-    "note": "Concentric world: ring 10 = outer edge (newbie spawn), ring 1 = center (the Circle). Node/monster level ~ (11-ring). Inner rings open via server progression (stub now).",
+    "note": "Frontier I is the Townhall 1-20 world. New civilizations begin at the outer edge and progress toward the central Wormhole. Rogue L21+ and resource planets L9+ belong to later maps.",
     "centerOpensBy": "server_progression",
+    "ecology": {
+      "mapId": "map.frontier-1",
+      "sectorSize": 32,
+      "rogueMaxLevel": 20,
+      "resourceMaxLevel": 8,
+      "levelJitter": 1,
+      "deepScanSummonMaxLevel": 6,
+      "deepScanExistingRadius": 55,
+      "deepScanSpawnMinRadius": 28,
+      "deepScanSpawnMaxRadius": 50,
+      "deepScanCooldownSec": 600,
+      "note": "The public ecology is independent of personal progression. NEXT ROGUE finds an existing target first; only L1-6 may be discovered on demand through an explicit player scan."
+    },
     "state": {
       "width": 512,
       "height": 512,
@@ -4845,23 +4858,23 @@
     },
     "population": {
       "localNpcCities": 47,
-      "resourceFieldsPerPlayer": 6,
-      "monstersPerPlayer": 2,
-      "minimumResourceFields": 360,
-      "minimumMonsters": 220,
-      "resourceMinPerLevel": 4,
-      "rogueMinPerLevel": 3,
-      "localGuaranteeRadius": 55,
-      "localGuaranteeMaxLevel": 12,
-      "localRogueFloor": 6,
-      "localNextLevelFloor": 3,
-      "localResourceFloor": 6,
-      "monsterCap": 900,
-      "resourceCap": 1400
+      "resourceFieldsPerPlayer": 3.2,
+      "monstersPerPlayer": 1,
+      "minimumResourceFields": 480,
+      "minimumMonsters": 180,
+      "resourceMinPerLevel": 6,
+      "rogueMinPerLevel": 5,
+      "monsterCap": 1000,
+      "resourceCap": 3200,
+      "capacityNote": "At 1,000 active cities this targets 3,200 resource planets and 1,000 rogues. Including cities, the 512x512 map averages roughly 7 tiles per entity; a 48-city local map starts with 480 resources and 180 rogues."
     },
     "lifecycle": {
       "resourceRespawnSec": 600,
       "monsterRespawnSec": 600,
+      "resourceRespawnMinSec": 300,
+      "resourceRespawnMaxSec": 900,
+      "monsterRespawnMinSec": 180,
+      "monsterRespawnMaxSec": 600,
       "burnDurationSec": 1800
     },
     "energy": {
@@ -4893,7 +4906,7 @@
       "dailyEnergyAttacksMax": 30
     },
     "monsters": {
-      "note": "Thirty rogue levels. Each row targets a 57% win ratio for a 60%-filled mixed fleet at the matching Command Core level. Power rises with unlocked troop tiers; rewards map every three rogue levels to one resource-planet tier. Combat losses are wounded first up to Medical Bay capacity, with overflow becoming permanent deaths.",
+      "note": "The table preserves thirty reusable rogue rows, but Frontier I exposes only L1-20. L21-30 are reserved for later maps. Each row targets a 57% win ratio for a 60%-filled mixed fleet at the matching Command Core level. Combat losses are wounded first up to Medical Bay capacity, with overflow becoming permanent deaths.",
       "casualtyScaling": 0.06,
       "woundedRatio": 1,
       "levels": {
@@ -5201,7 +5214,7 @@
     }
   },
   "gatherNodes": {
-    "note": "Leveled outdoor resource planets 1-10. A planet yields one resource. Dispatch is limited by march headcount, while useful fleet size is determined by the actual per-tier troop load needed to carry the remaining supply. Academy and future hero load bonuses apply account-wide. Planets below retireBelowFraction retire after the occupying march leaves, then respawn at a new globally distributed coordinate with level derived from distance to the Core.",
+    "note": "Reusable outdoor resource-planet rows 1-10; Frontier I exposes only L1-8. A planet yields one resource. Useful fleet size is determined by actual per-tier troop load. Academy and future hero load bonuses apply account-wide. Planets below retireBelowFraction retire after the occupying march leaves, then return after the randomized ecology delay at a new sector-balanced coordinate while conserving level.",
     "carryFromTroopLoad": true,
     "heroCarryBonus": 0,
     "academyGatherSpeedMaxBonus": 1.5,

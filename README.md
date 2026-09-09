@@ -18,7 +18,7 @@ signature. It never requests a fund-moving transaction.
 ```bash
 npm install
 npm run dev     # http://localhost:5173 — open in a browser that has a wallet extension
-npm run check   # typecheck + 110 local tests + production build
+npm run check   # typecheck + local tests + production build
 ```
 
 ## Local GM testing
@@ -37,7 +37,7 @@ It is inert in a production build, and no wallet address is stored in this repo.
 ## Current state
 Phase 1 Personal Mode is playable locally: wallet/read-only onboarding → persistent City →
 building, training, promotion, research and healing → 512×512 Star Map → gather, scout,
-fight L1–30 rogues, raid test civilizations, recall and settle reports. The hidden `/?admin`
+fight Frontier I's L1–20 rogues, raid test civilizations, recall and settle reports. The hidden `/?admin`
 route provides explicit level tables, validation and progression/World simulations. See
 `HANDOFF.md` for the exact boundary and next work.
 

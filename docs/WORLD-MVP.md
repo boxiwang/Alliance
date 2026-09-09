@@ -94,8 +94,10 @@ push notifications, free-path movement and open-field interception.
 - One idempotency key cannot dispatch or reward twice.
 - One resource field cannot be occupied by two marches.
 - `home + marching + wounded + dead delta` conserves troops.
-- Depleted/defeated targets disappear and respawn at a new legal coordinate.
-- Targets are not guaranteed per city. Initial fields and respawns remain globally distributed, and every
-  target's level must match its current radial zone instead of following the nearest player's progression.
+- Depleted/defeated targets disappear and return at a new legal coordinate after their randomized ecology window.
+- Targets are not guaranteed per city. Public population remains independent of personal progression,
+  sector-balanced across the State and broadly follows radial difficulty with one-level overlap.
+- Frontier I exposes Rogue L1–20 and planet L1–8. A kill never creates the player's next Rogue; the
+  explicit `NEXT ROGUE` action searches public targets first and may Deep Scan only L1–6 as an anti-stall valve.
 - Combat resolves and reports at arrival; loot reaches inventory only on return.
 - 10,000 scheduled events can be advanced deterministically in tests.

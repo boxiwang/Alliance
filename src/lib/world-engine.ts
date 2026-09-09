@@ -24,6 +24,10 @@ export interface WorldEngineConfig {
   travelSecondsPerTile: number;
   resourceRespawnSec: number;
   monsterRespawnSec: number;
+  resourceRespawnMinSec: number;
+  resourceRespawnMaxSec: number;
+  monsterRespawnMinSec: number;
+  monsterRespawnMaxSec: number;
   burnDurationSec: number;
   energyCap: number;
   energyRegenSec: number;
@@ -49,6 +53,10 @@ export const DEFAULT_WORLD_ENGINE_CONFIG: WorldEngineConfig = {
   travelSecondsPerTile: 6,
   resourceRespawnSec: 10 * 60,
   monsterRespawnSec: 10 * 60,
+  resourceRespawnMinSec: 5 * 60,
+  resourceRespawnMaxSec: 15 * 60,
+  monsterRespawnMinSec: 3 * 60,
+  monsterRespawnMaxSec: 10 * 60,
   burnDurationSec: 30 * 60,
   energyCap: 100,
   energyRegenSec: 6 * 60,
@@ -84,6 +92,10 @@ export function worldEngineConfig(numbers: any = getN()): WorldEngineConfig {
     travelSecondsPerTile: value(march.baseTravelSecondsPerTile, DEFAULT_WORLD_ENGINE_CONFIG.travelSecondsPerTile),
     resourceRespawnSec: value(lifecycle.resourceRespawnSec, DEFAULT_WORLD_ENGINE_CONFIG.resourceRespawnSec),
     monsterRespawnSec: value(lifecycle.monsterRespawnSec, DEFAULT_WORLD_ENGINE_CONFIG.monsterRespawnSec),
+    resourceRespawnMinSec: value(lifecycle.resourceRespawnMinSec, DEFAULT_WORLD_ENGINE_CONFIG.resourceRespawnMinSec),
+    resourceRespawnMaxSec: value(lifecycle.resourceRespawnMaxSec, DEFAULT_WORLD_ENGINE_CONFIG.resourceRespawnMaxSec),
+    monsterRespawnMinSec: value(lifecycle.monsterRespawnMinSec, DEFAULT_WORLD_ENGINE_CONFIG.monsterRespawnMinSec),
+    monsterRespawnMaxSec: value(lifecycle.monsterRespawnMaxSec, DEFAULT_WORLD_ENGINE_CONFIG.monsterRespawnMaxSec),
     burnDurationSec: value(lifecycle.burnDurationSec, DEFAULT_WORLD_ENGINE_CONFIG.burnDurationSec),
     energyCap: value(energy.cap, DEFAULT_WORLD_ENGINE_CONFIG.energyCap),
     energyRegenSec: value(energy.regenSecPerPoint, DEFAULT_WORLD_ENGINE_CONFIG.energyRegenSec),
@@ -201,6 +213,9 @@ export interface HeadlessPlayer {
   energyStored: number;
   energyUpdatedAt: number;
   highestMonsterDefeated: number;
+  /** Per-level safety valve state: scanning L2 never consumes the L3 scan. */
+  deepScanCooldowns: Record<string, number>;
+  deepScanTargetIds: Record<string, string>;
   marchSlots: number;
   marchCapacity: number;
   accountModifiers: MarchModifiers;
@@ -481,7 +496,8 @@ function spawnPlayerMutable(world: HeadlessWorld, input: SpawnPlayerInput, now: 
   world.players[input.id] = {
     id: input.id, allianceId: input.allianceId ?? null, cityId, joinedAt: now, spawnIndex, troops, wounded: troopCount(woundedTroops), woundedTroops, dead: 0,
     resources, energyStored: world.config.energyCap, energyUpdatedAt: now,
-    highestMonsterDefeated: 0, marchSlots: world.config.marchSlots,
+    highestMonsterDefeated: 0, deepScanCooldowns: {}, deepScanTargetIds: {},
+    marchSlots: world.config.marchSlots,
     marchCapacity: world.config.marchCapacity, accountModifiers: modifiers(), reportIds: [],
   };
   addFeed(world, now, "player_spawned", cityId, input.id, { spawnIndex, position });
@@ -554,8 +570,61 @@ function randomLegalPoint(world: HeadlessWorld, random: () => number, minimumSpa
   throw new Error("Could not find a legal world-object coordinate.");
 }
 
-const ROGUE_MAX_LEVEL = 30;
-const RESOURCE_MAX_LEVEL = 10;
+function sectorKey(point: Point, sectorSize: number): string {
+  return `${Math.floor(point.x / sectorSize)}:${Math.floor(point.y / sectorSize)}`;
+}
+
+// "Power of several choices" keeps public targets evenly distributed by map
+// sector without producing a rigid lattice. It is cheap, deterministic, and
+// leaves enough local randomness for the star map to feel organic.
+function sectorBalancedLegalPoint(
+  world: HeadlessWorld,
+  random: () => number,
+  sectorCounts: Map<string, number>,
+  sectorSize: number,
+): Point {
+  const center = worldCenter(world.config);
+  const index = buildSpatialIndex(world);
+  const spacing = Number.isFinite(world.config.minEntitySpacing) && world.config.minEntitySpacing > 0
+    ? world.config.minEntitySpacing : DEFAULT_WORLD_ENGINE_CONFIG.minEntitySpacing;
+  let best: Point | null = null;
+  let bestCount = Number.POSITIVE_INFINITY;
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const point = { x: 3 + random() * (world.config.width - 6), y: 3 + random() * (world.config.height - 6) };
+    if (distance(point, center) <= world.config.circleReserveRadius) continue;
+    if (queryNearby(world, point, spacing, undefined, index).length) continue;
+    const count = sectorCounts.get(sectorKey(point, sectorSize)) || 0;
+    if (count < bestCount) { best = point; bestCount = count; }
+    if (count === 0) break;
+  }
+  return best || randomLegalPoint(world, random);
+}
+
+const ROGUE_DATA_MAX_LEVEL = 30;
+const RESOURCE_DATA_MAX_LEVEL = 10;
+
+export function worldRogueMaxLevel(numbers: any = getN()): number {
+  return Math.max(1, Math.min(ROGUE_DATA_MAX_LEVEL,
+    Math.floor(Number(numbers.world?.ecology?.rogueMaxLevel) || 20)));
+}
+
+export function worldResourceMaxLevel(numbers: any = getN()): number {
+  return Math.max(1, Math.min(RESOURCE_DATA_MAX_LEVEL,
+    Math.floor(Number(numbers.world?.ecology?.resourceMaxLevel) || 8)));
+}
+
+function levelJitter(numbers: any): number {
+  return Math.max(0, Math.min(3, Math.floor(Number(numbers.world?.ecology?.levelJitter) || 0)));
+}
+
+function sampledLevelForPoint(point: Point, config: WorldEngineConfig, maxLevel: number, random: () => number, jitter: number): number {
+  const base = levelForPoint(point, config, maxLevel);
+  if (jitter <= 0) return base;
+  // Triangular noise keeps the radial progression legible while letting adjacent
+  // levels overlap, so the map does not look like twenty perfect contour lines.
+  const offset = Math.round((random() - random()) * jitter);
+  return Math.max(1, Math.min(maxLevel, base + offset));
+}
 
 // Place a target on the radial ring for a SPECIFIC level (low level -> outer, high -> inner) so
 // guaranteed-ladder seeds and same-level respawns keep their geography. levelForPoint(result)===level.
@@ -622,9 +691,9 @@ function addMonsterEntity(world: HeadlessWorld, position: Point, level: number, 
   world.entities[id] = entity;
 }
 
-// A legal point within `radius` of a center (uniform in the disc), for spawning newbie targets
-// right next to a player. Relaxes spacing rather than throwing on a crowded local area.
-function nearbyLegalPoint(world: HeadlessWorld, origin: Point, radius: number, random: () => number): Point {
+// A legal point in an annulus around a city. This is used only after an explicit
+// low-level Deep Scan, never as a per-tick reaction to player progression.
+function nearbyLegalPoint(world: HeadlessWorld, origin: Point, minRadius: number, maxRadius: number, random: () => number): Point {
   const center = worldCenter(world.config);
   const minSpacing = Number.isFinite(world.config.minEntitySpacing) && world.config.minEntitySpacing > 0
     ? world.config.minEntitySpacing : DEFAULT_WORLD_ENGINE_CONFIG.minEntitySpacing;
@@ -633,7 +702,9 @@ function nearbyLegalPoint(world: HeadlessWorld, origin: Point, radius: number, r
   for (let spacing = minSpacing; spacing >= 1; spacing -= step) {
     for (let attempt = 0; attempt < 120; attempt += 1) {
       const angle = random() * Math.PI * 2;
-      const dist = Math.sqrt(random()) * radius;
+      const lowSq = minRadius * minRadius;
+      const highSq = Math.max(lowSq, maxRadius * maxRadius);
+      const dist = Math.sqrt(lowSq + random() * (highSq - lowSq));
       const point = { x: origin.x + Math.cos(angle) * dist, y: origin.y + Math.sin(angle) * dist };
       if (point.x < 3 || point.x > world.config.width - 3 || point.y < 3 || point.y > world.config.height - 3) continue;
       if (distance(point, center) <= world.config.circleReserveRadius) continue;
@@ -643,49 +714,72 @@ function nearbyLegalPoint(world: HeadlessWorld, origin: Point, radius: number, r
   return randomLegalPoint(world, random);
 }
 
-// Keep a fresh player's neighbourhood playable: guarantee a small local supply of engageable
-// (low-level) rogues and resources near their city, spawning on demand when they run low or are
-// taken by rivals. High levels / the inner circle are intentionally NOT topped up — scarcity there
-// is the endgame. Total counts are capped so on-demand spawning cannot grow the world unbounded.
-export function ensureLocalTargets(source: HeadlessWorld, playerId: string, now = Date.now(), numbers: any = getN()): HeadlessWorld {
+export interface RogueScanResult {
+  world: HeadlessWorld;
+  targetId: string | null;
+  spawned: boolean;
+  error?: "player_not_found" | "rogue_level_locked" | "frontier_complete" | "rogue_unavailable";
+}
+
+// Search the public ecology first. Only an explicit scan for an early-game Rogue
+// may discover a new target near the city. This is the same invisible safety valve
+// used by mature SLGs: the world never spawns L(n+1) merely because L(n) died.
+export function scanForRogue(
+  source: HeadlessWorld,
+  playerId: string,
+  requestedLevel: number,
+  now = Date.now(),
+  numbers: any = getN(),
+): RogueScanResult {
   const world = clone(source);
   const player = world.players[playerId];
-  if (!player) return world;
+  if (!player) return { world, targetId: null, spawned: false, error: "player_not_found" };
   const city = world.entities[player.cityId];
-  if (!city || city.kind !== "city") return world;
+  if (!city || city.kind !== "city") return { world, targetId: null, spawned: false, error: "player_not_found" };
+  const maxLevel = worldRogueMaxLevel(numbers);
+  const level = Math.max(1, Math.floor(requestedLevel));
+  if (player.highestMonsterDefeated >= maxLevel) return { world, targetId: null, spawned: false, error: "frontier_complete" };
+  if (level > Math.min(maxLevel, player.highestMonsterDefeated + 1)) {
+    return { world, targetId: null, spawned: false, error: "rogue_level_locked" };
+  }
+
+  const ecology = numbers.world?.ecology ?? {};
   const pop = numbers.world?.population ?? {};
-  const radius = Number(pop.localGuaranteeRadius) || 55;
-  const maxLevel = Math.max(1, Math.floor(Number(pop.localGuaranteeMaxLevel) || 12));
-  const rogueFloor = Math.max(0, Math.floor(Number(pop.localRogueFloor) || 6));
-  const nextLevelFloor = Math.max(0, Math.floor(Number(pop.localNextLevelFloor) || 3));
-  const resourceFloor = Math.max(0, Math.floor(Number(pop.localResourceFloor) || 6));
-  const monsterCap = Math.max(0, Math.floor(Number(pop.monsterCap) || (Number(pop.minimumMonsters) || 220) * 3));
-  const resourceCap = Math.max(0, Math.floor(Number(pop.resourceCap) || (Number(pop.minimumResourceFields) || 360) * 3));
-  const nextLevel = Math.min(ROGUE_MAX_LEVEL, maxLevel, player.highestMonsterDefeated + 1);
-  const random = rng(hashText(`${world.stateId}:local:${playerId}:${Math.floor(now / 1000)}`));
-  const near = (p: Point) => distance(p, city.position) <= radius;
-  const resources: ResKey[] = ["cash", "oil", "power"];
-
-  const all = () => Object.values(world.entities);
-  const monsterTotal = () => all().filter((e) => e.kind === "monster").length;
-  const resourceTotal = () => all().filter((e) => e.kind === "resource").length;
-
-  // Rogues: enough engageable ones nearby, and specifically enough of the exact next level.
-  const nearRogues = all().filter((e): e is MonsterEntity => e.kind === "monster" && e.state === "alive" && e.level <= nextLevel && near(e.position));
-  const nextLevelNear = nearRogues.filter((r) => r.level === nextLevel).length;
-  const rogueSpawns = Math.max(rogueFloor - nearRogues.length, nextLevelFloor - nextLevelNear);
-  for (let i = 0; i < rogueSpawns && monsterTotal() < monsterCap; i += 1) {
-    const level = i < (nextLevelFloor - nextLevelNear) ? nextLevel : 1 + Math.floor(random() * nextLevel);
-    addMonsterEntity(world, nearbyLegalPoint(world, city.position, radius, random), Math.max(1, level), now, numbers, random);
+  const existingRadius = Math.max(1, Number(ecology.deepScanExistingRadius) || 55);
+  const candidates = Object.values(world.entities)
+    .filter((entity): entity is MonsterEntity => entity.kind === "monster" && entity.state === "alive" && entity.level === level)
+    .sort((left, right) => distance(city.position, left.position) - distance(city.position, right.position));
+  const nearest = candidates[0];
+  if (nearest && distance(city.position, nearest.position) <= existingRadius) {
+    return { world, targetId: nearest.id, spawned: false };
   }
 
-  // Resources: enough low-level available fields nearby.
-  const nearResources = all().filter((e): e is ResourceEntity => e.kind === "resource" && e.state === "available" && e.level <= maxLevel && near(e.position));
-  for (let i = nearResources.length; i < resourceFloor && resourceTotal() < resourceCap; i += 1) {
-    const level = 1 + Math.floor(random() * Math.min(maxLevel, nextLevel + 2));
-    addResourceEntity(world, nearbyLegalPoint(world, city.position, radius, random), Math.max(1, level), resources[i % resources.length], now, numbers);
+  const summonMax = Math.max(0, Math.min(maxLevel, Math.floor(Number(ecology.deepScanSummonMaxLevel) || 6)));
+  const levelKey = String(level);
+  const cooldownUntil = Number(player.deepScanCooldowns?.[levelKey]) || 0;
+  const previousTargetId = player.deepScanTargetIds?.[levelKey];
+  const previous = previousTargetId ? world.entities[previousTargetId] : null;
+  if (previous?.kind === "monster" && previous.state === "alive" && previous.level === level) {
+    return { world, targetId: previous.id, spawned: false };
   }
-  return world;
+  const monsterCap = Math.max(0, Math.floor(Number(pop.monsterCap) || 1000));
+  const monsterTotal = Object.values(world.entities).filter((entity) => entity.kind === "monster").length;
+  if (level > summonMax || now < cooldownUntil || monsterTotal >= monsterCap) {
+    if (nearest) return { world, targetId: nearest.id, spawned: false };
+    return { world, targetId: null, spawned: false, error: "rogue_unavailable" };
+  }
+
+  const minRadius = Math.max(8, Number(ecology.deepScanSpawnMinRadius) || 28);
+  const maxRadius = Math.max(minRadius, Number(ecology.deepScanSpawnMaxRadius) || 50);
+  const cooldownSec = Math.max(0, Number(ecology.deepScanCooldownSec) || 600);
+  const random = rng(hashText(`${world.stateId}:deep-scan:${playerId}:${level}:${Math.floor(now / 1000)}`));
+  const position = nearbyLegalPoint(world, city.position, minRadius, maxRadius, random);
+  addMonsterEntity(world, position, level, now, numbers, random);
+  const targetId = `monster-${world.nextEntitySeq - 1}`;
+  player.deepScanCooldowns[levelKey] = now + cooldownSec * 1000;
+  player.deepScanTargetIds[levelKey] = targetId;
+  addFeed(world, now, "rogue_deep_scan", targetId, playerId, { level, position, cooldownUntil: player.deepScanCooldowns[levelKey] });
+  return { world, targetId, spawned: true };
 }
 
 export function populateWorld(
@@ -699,32 +793,58 @@ export function populateWorld(
   const random = rng(hashText(`${world.stateId}:population:${world.nextEntitySeq}`));
   const resources: ResKey[] = ["cash", "oil", "power"];
   const pop = numbers.world?.population ?? {};
+  const resourceMaxLevel = worldResourceMaxLevel(numbers);
+  const rogueMaxLevel = worldRogueMaxLevel(numbers);
+  const jitter = levelJitter(numbers);
+  const sectorSize = Math.max(8, Math.floor(Number(numbers.world?.ecology?.sectorSize) || 32));
+  const resourceSectors = new Map<string, number>();
+  const rogueSectors = new Map<string, number>();
+  const markSector = (counts: Map<string, number>, point: Point) => {
+    const key = sectorKey(point, sectorSize);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  };
   const resourceMinPerLevel = Math.max(0, Math.floor(Number(pop.resourceMinPerLevel) || 0));
   const rogueMinPerLevel = Math.max(0, Math.floor(Number(pop.rogueMinPerLevel) || 0));
 
   let resourceIdx = 0;
-  const placeResource = (position: Point) => addResourceEntity(world, position, levelForPoint(position, world.config, RESOURCE_MAX_LEVEL), resources[resourceIdx++ % resources.length], now, numbers);
-  const placeMonster = (position: Point) => addMonsterEntity(world, position, levelForPoint(position, world.config, ROGUE_MAX_LEVEL), now, numbers, random);
+  const placeResource = (position: Point, level = sampledLevelForPoint(position, world.config, resourceMaxLevel, random, jitter)) => {
+    addResourceEntity(world, position, level, resources[resourceIdx++ % resources.length], now, numbers);
+    markSector(resourceSectors, position);
+  };
+  const placeMonster = (position: Point, level = sampledLevelForPoint(position, world.config, rogueMaxLevel, random, jitter)) => {
+    addMonsterEntity(world, position, level, now, numbers, random);
+    markSector(rogueSectors, position);
+  };
 
   // Guaranteed ladder: at least `minPerLevel` of every level (capped by the requested count),
   // each seeded on its own radial ring, so a player can always find the next level to clear and
   // no rung ever goes missing.
   let placedResources = 0;
-  for (let level = 1; level <= RESOURCE_MAX_LEVEL && placedResources < resourceCount; level += 1)
-    for (let k = 0; k < resourceMinPerLevel && placedResources < resourceCount; k += 1) { placeResource(radialPointForLevel(world, level, RESOURCE_MAX_LEVEL, random)); placedResources += 1; }
+  for (let level = 1; level <= resourceMaxLevel && placedResources < resourceCount; level += 1)
+    for (let k = 0; k < resourceMinPerLevel && placedResources < resourceCount; k += 1) { placeResource(radialPointForLevel(world, level, resourceMaxLevel, random), level); placedResources += 1; }
   let placedMonsters = 0;
-  for (let level = 1; level <= ROGUE_MAX_LEVEL && placedMonsters < monsterCount; level += 1)
-    for (let k = 0; k < rogueMinPerLevel && placedMonsters < monsterCount; k += 1) { placeMonster(radialPointForLevel(world, level, ROGUE_MAX_LEVEL, random)); placedMonsters += 1; }
+  for (let level = 1; level <= rogueMaxLevel && placedMonsters < monsterCount; level += 1)
+    for (let k = 0; k < rogueMinPerLevel && placedMonsters < monsterCount; k += 1) { placeMonster(radialPointForLevel(world, level, rogueMaxLevel, random), level); placedMonsters += 1; }
 
   // Fill the remainder uniformly; because outer rings carry far more area, this weights the world
   // toward abundant low-level targets in the outer region and leaves the inner circle scarce/high.
-  for (; placedResources < resourceCount; placedResources += 1) placeResource(randomLegalPoint(world, random));
-  for (; placedMonsters < monsterCount; placedMonsters += 1) placeMonster(randomLegalPoint(world, random));
+  for (; placedResources < resourceCount; placedResources += 1) placeResource(sectorBalancedLegalPoint(world, random, resourceSectors, sectorSize));
+  for (; placedMonsters < monsterCount; placedMonsters += 1) placeMonster(sectorBalancedLegalPoint(world, random, rogueSectors, sectorSize));
   return world;
 }
 
 function schedule(world: HeadlessWorld, type: ScheduledWorldEvent["type"], entityId: string, at: number): void {
   world.scheduledEvents.push({ id: `scheduled-${world.nextEventSeq++}`, type, entityId, at, processedAt: 0 });
+}
+
+function targetRespawnAt(world: HeadlessWorld, kind: "resource" | "monster", entityId: string, revision: number, now: number): number {
+  const fallback = kind === "resource" ? world.config.resourceRespawnSec : world.config.monsterRespawnSec;
+  const configuredMin = kind === "resource" ? world.config.resourceRespawnMinSec : world.config.monsterRespawnMinSec;
+  const configuredMax = kind === "resource" ? world.config.resourceRespawnMaxSec : world.config.monsterRespawnMaxSec;
+  const min = Number.isFinite(configuredMin) ? Math.max(0, configuredMin) : fallback;
+  const max = Number.isFinite(configuredMax) ? Math.max(min, configuredMax) : Math.max(min, fallback);
+  const random = rng(hashText(`${world.stateId}:respawn:${kind}:${entityId}:${revision}:${now}`));
+  return now + Math.round(min + random() * (max - min)) * 1000;
 }
 
 export function occupyResource(source: HeadlessWorld, resourceId: string, marchId: string, now = Date.now()): { world: HeadlessWorld; ok: boolean } {
@@ -744,7 +864,7 @@ export function depleteResource(source: HeadlessWorld, resourceId: string, amoun
   entity.revision += 1;
   if (entity.amount === 0) {
     entity.state = "depleted"; entity.occupiedByMarchId = null;
-    entity.respawnAt = now + world.config.resourceRespawnSec * 1000;
+    entity.respawnAt = targetRespawnAt(world, "resource", entity.id, entity.revision, now);
     schedule(world, "resource_respawn", entity.id, entity.respawnAt);
     addFeed(world, now, "resource_depleted", entity.id, null, { respawnAt: entity.respawnAt });
   }
@@ -756,7 +876,7 @@ export function defeatMonster(source: HeadlessWorld, monsterId: string, actorId:
   const entity = world.entities[monsterId];
   if (!entity || entity.kind !== "monster" || entity.state === "defeated") return world;
   entity.state = "defeated"; entity.engagedByMarchId = null; entity.revision += 1;
-  entity.respawnAt = now + world.config.monsterRespawnSec * 1000;
+  entity.respawnAt = targetRespawnAt(world, "monster", entity.id, entity.revision, now);
   schedule(world, "monster_respawn", entity.id, entity.respawnAt);
   addFeed(world, now, "monster_defeated", entity.id, actorId, { level: entity.level, respawnAt: entity.respawnAt });
   return world;
@@ -781,8 +901,8 @@ function respawnTarget(world: HeadlessWorld, entity: ResourceEntity | MonsterEnt
   const oldPosition = entity.position;
   // Conserve the per-level population: a defeated/depleted target returns at the SAME level,
   // repositioned on that level's ring elsewhere, so no rogue/resource level ever disappears.
-  const maxLevel = entity.kind === "resource" ? RESOURCE_MAX_LEVEL : ROGUE_MAX_LEVEL;
-  const level = entity.level;
+  const maxLevel = entity.kind === "resource" ? worldResourceMaxLevel(numbers) : worldRogueMaxLevel(numbers);
+  const level = Math.max(1, Math.min(maxLevel, entity.level));
   const position = radialPointForLevel(world, level, maxLevel, random);
   entity.position = position; entity.zone = zoneForPoint(position, world.config);
   entity.spawnedAt = now; entity.revision += 1; entity.respawnAt = 0;
@@ -812,11 +932,12 @@ export function redistributeWorldTargets(source: HeadlessWorld, now = Date.now()
     targets.filter((entity) => entity.kind === kind).forEach((entity) => {
       if (activeTargetIds.has(entity.id)) return;
       // Keep each target's level and re-seat it on that level's ring (low outer / high inner).
-      const maxLevel = entity.kind === "resource" ? RESOURCE_MAX_LEVEL : ROGUE_MAX_LEVEL;
-      entity.position = radialPointForLevel(world, entity.level, maxLevel, random);
+      const maxLevel = entity.kind === "resource" ? worldResourceMaxLevel(numbers) : worldRogueMaxLevel(numbers);
+      const level = Math.max(1, Math.min(maxLevel, entity.level));
+      entity.position = radialPointForLevel(world, level, maxLevel, random);
       entity.zone = zoneForPoint(entity.position, world.config);
-      if (entity.kind === "resource") tuneResourceForLevel(entity, entity.level, numbers, entity.state === "available");
-      else tuneMonsterForLevel(entity, entity.level, numbers);
+      if (entity.kind === "resource") tuneResourceForLevel(entity, level, numbers, entity.state === "available");
+      else tuneMonsterForLevel(entity, level, numbers);
       entity.spawnedAt = now;
       entity.revision += 1;
     });
@@ -876,7 +997,7 @@ function retireResource(world: HeadlessWorld, target: ResourceEntity, at: number
   if (target.capacity <= 0 || target.amount / target.capacity >= resourceRetireFraction(numbers)) return false;
   target.state = "depleted";
   target.occupiedByMarchId = null;
-  target.respawnAt = at + world.config.resourceRespawnSec * 1000;
+  target.respawnAt = targetRespawnAt(world, "resource", target.id, target.revision, at);
   target.revision += 1;
   schedule(world, "resource_respawn", target.id, target.respawnAt);
   addFeed(world, at, "resource_retired", target.id, null, {
@@ -1184,7 +1305,8 @@ function arriveMonster(world: HeadlessWorld, march: HeadlessMarch, target: Monst
   march.dead += combat.attackerLosses.dead;
   march.outcome = combat.win ? "victory" : "defeat";
   if (combat.win) {
-    target.state = "defeated"; target.engagedByMarchId = null; target.respawnAt = at + world.config.monsterRespawnSec * 1000;
+    target.state = "defeated"; target.engagedByMarchId = null;
+    target.respawnAt = targetRespawnAt(world, "monster", target.id, target.revision, at);
     target.revision += 1;
     schedule(world, "monster_respawn", target.id, target.respawnAt);
     march.cargo = clone(target.reward);
@@ -1300,7 +1422,7 @@ function processGatherComplete(world: HeadlessWorld, march: HeadlessMarch, at: n
   target.revision += 1;
   if (target.amount <= 0) {
     target.amount = 0; target.state = "depleted";
-    target.respawnAt = at + world.config.resourceRespawnSec * 1000;
+    target.respawnAt = targetRespawnAt(world, "resource", target.id, target.revision, at);
     schedule(world, "resource_respawn", target.id, target.respawnAt);
   } else if (!retireResource(world, target, at, numbers)) target.state = "available";
   march.outcome = "gathered";

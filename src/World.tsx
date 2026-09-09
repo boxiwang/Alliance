@@ -11,12 +11,12 @@ import { gmFillTroops, grantLocalGm, hasLocalGm, localGmRequested } from "./lib/
 import type {
   CityEntity, HeadlessMarch, MonsterEntity, Point, ResourceEntity, WorldReport,
 } from "./lib/world-engine";
-import { distance, energyAt, worldCenter } from "./lib/world-engine";
+import { distance, energyAt, worldCenter, worldRogueMaxLevel } from "./lib/world-engine";
 import { carryCapacity, resolveCombat } from "./lib/expedition";
 import type { LocalWorldSession } from "./lib/world-adapter";
 import {
   advanceLocalWorldSession, dispatchLocalWorldMarch, finishLocalWorldMarches,
-  localWorldTargetName, openLocalWorldSession, recallLocalWorldMarch, saveLocalWorldSession,
+  localWorldTargetName, openLocalWorldSession, recallLocalWorldMarch, saveLocalWorldSession, scanLocalWorldRogue,
 } from "./lib/world-adapter";
 import GameNav from "./GameNav";
 import CosmicBackdrop from "./CosmicBackdrop";
@@ -166,6 +166,8 @@ const ERROR_COPY: Record<string, string> = {
   resource_force_exceeds_need: "This fleet contains troops whose load would go unused. Use the minimum useful fleet.",
   insufficient_troops: "Some selected troops are no longer standing in the city.", target_unavailable: "Another march reached that target first.",
   monster_level_locked: "Defeat the previous monster level first.", insufficient_energy: "Not enough Energy for this hunt.",
+  rogue_level_locked: "Defeat the previous Rogue level first.", frontier_complete: "Frontier I is complete. The Wormhole is ready for a future map.",
+  rogue_unavailable: "No matching Rogue signal is currently available.",
   target_shielded: "That city is protected by a shield.",
 };
 
@@ -343,8 +345,11 @@ export default function World({ address, profile, onBack }: { address: string; p
   const forceLimit = marchCapacity;
   const energy = energyAt(player, now, world.config);
   // Rogues unlock sequentially: you may engage up to (highest defeated + 1).
-  const nextRogueLevel = player.highestMonsterDefeated + 1;
-  const rogueLocked = !!selected && selected.kind === "monster" && selected.level > nextRogueLevel;
+  const rogueMaxLevel = worldRogueMaxLevel(N);
+  const frontierComplete = player.highestMonsterDefeated >= rogueMaxLevel;
+  const nextRogueLevel = Math.min(rogueMaxLevel, player.highestMonsterDefeated + 1);
+  const rogueLocked = !!selected && selected.kind === "monster"
+    && (selected.level > nextRogueLevel || selected.level > rogueMaxLevel);
   const selectedCarry = selected?.kind === "resource" ? gatherCarryWithAccount(selection, player.accountModifiers, N) : 0;
   const expectedHarvest = selected?.kind === "resource" ? Math.floor(Math.min(selectedCarry, selected.amount)) : 0;
   // While a harvest march works this planet, show its liquidity draining in real time
@@ -448,17 +453,17 @@ export default function World({ address, profile, onBack }: { address: string; p
     setSelectedId(target.id); setCamera({ ...target.position }); setZoom((value) => Math.max(value, target.kind === "city" ? 2.65 : 2.1)); setMessage("");
   }
   function findNextRogue() {
-    // Only ever surface a rogue the player is ALLOWED to engage (level <= highest defeated + 1),
-    // and never jump to a higher-level one. Prefer the exact next level (progression), otherwise
-    // the highest engageable level available; among those, pick the nearest.
-    const req = player.highestMonsterDefeated + 1;
-    const engageable = targets.filter((t): t is MonsterEntity => t.kind === "monster" && t.state === "alive" && t.level <= req);
-    if (!engageable.length) { setMessage(`No L${req} rogue in range yet — try panning outward.`); return; }
-    const targetLevel = engageable.some((r) => r.level === req) ? req : Math.max(...engageable.map((r) => r.level));
-    const best = engageable.filter((r) => r.level === targetLevel)
-      .sort((a, b) => distance(playerCity.position, a.position) - distance(playerCity.position, b.position))[0];
-    focusTarget(best.id);
-    setMessage(targetLevel === req ? `Next rogue to clear: L${best.level}` : `No L${req} nearby — nearest engageable is L${best.level}`);
+    if (frontierComplete) { setCamera(center); setMessage("Frontier I complete. Hold the Wormhole to enter the next map when it opens."); return; }
+    const result = scanLocalWorldRogue(session, viewGame, nextRogueLevel, Date.now(), N);
+    if (result.error || !result.targetId) { setMessage(ERROR_COPY[result.error || "rogue_unavailable"] || "No Rogue signal found."); return; }
+    commit(result);
+    const target = result.session.world.entities[result.targetId];
+    if (!target || target.kind !== "monster") return;
+    setSelectedId(target.id); setSelection(emptySelection()); setCamera({ ...target.position });
+    setZoom((value) => Math.max(value, 2.1)); setTileMark(null);
+    setMessage(result.spawned
+      ? `Deep Scan discovered an uncharted L${target.level} Rogue signal.`
+      : `Tracking the nearest L${target.level} Rogue signal.`);
   }
   function toggleLayer(layer: WorldLayer) {
     setLayers((current) => ({ ...current, [layer]: !current[layer] }));
@@ -516,7 +521,7 @@ export default function World({ address, profile, onBack }: { address: string; p
     <div className="world-layout">
       <div className="world-map-shell">
         <div className="world-map-status"><b>{zoomLabel}</b><em>{Math.round(zoom * 100)}%</em></div>
-        <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button onClick={() => setCamera(center)}>WORMHOLE</button><button onClick={findNextRogue}>NEXT ROGUE</button><button aria-label="Zoom in" onClick={() => setZoom((value) => steppedWorldZoom(value, "in", 1.35))}>＋</button><button aria-label="Zoom out" onClick={() => setZoom((value) => steppedWorldZoom(value, "out", 1.35))}>－</button></div>
+        <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button onClick={() => setCamera(center)}>WORMHOLE</button><button onClick={findNextRogue}>{frontierComplete ? "CORE READY" : `NEXT ROGUE · L${nextRogueLevel}`}</button><button aria-label="Zoom in" onClick={() => setZoom((value) => steppedWorldZoom(value, "in", 1.35))}>＋</button><button aria-label="Zoom out" onClick={() => setZoom((value) => steppedWorldZoom(value, "out", 1.35))}>－</button></div>
         <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>GO</button><button type="button" className="world-warp-locked" onClick={() => setMessage("Relocation requires a Warp Engine consumable. Warp travel is not enabled in this MVP build.")}>WARP 🔒</button></form>
         <div className="world-coordinate world-coordinate-x">X {Math.round(viewX).toString().padStart(3, "0")} — {Math.round(viewX + viewport.width).toString().padStart(3, "0")}</div>
         <div className="world-coordinate world-coordinate-y">Y {Math.round(viewY).toString().padStart(3, "0")} — {Math.round(viewY + viewport.height).toString().padStart(3, "0")}</div>
@@ -582,7 +587,7 @@ export default function World({ address, profile, onBack }: { address: string; p
         </svg>
         {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
         <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")}><i className="city" />CIVILIZATIONS</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>
-        <div className="world-map-hint">{world.config.width}×{world.config.height} · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS</div>
+        <div className="world-map-hint">FRONTIER I · ROGUE L1–{rogueMaxLevel} · {world.config.width}×{world.config.height} · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS</div>
       </div>
       <aside className={`world-side ${selected ? "target-open" : "signals-open"}`}>
         <div className="world-intel-header"><b>{selected ? "TARGET INTEL" : "NEARBY SIGNALS"}</b><span><i />LIVE</span>{selected && <button aria-label="Close target intel" onClick={() => { setSelectedId(null); setSelection(emptySelection()); }}>×</button>}</div>

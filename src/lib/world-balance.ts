@@ -3,7 +3,7 @@
 import type { TroopKey } from "./game";
 import { TROOP_ORDER } from "./game";
 import { carryCapacity, resolveCombat, resolveGather, type Force, type RivalTarget } from "./expedition";
-import { worldEngineConfig, type ResourceWallet, type TroopManifest } from "./world-engine";
+import { worldEngineConfig, worldResourceMaxLevel, worldRogueMaxLevel, type ResourceWallet, type TroopManifest } from "./world-engine";
 
 export interface WorldBalanceIssue {
   severity: "error" | "warning";
@@ -103,11 +103,13 @@ function pveNumbers(numbers: any): any {
 
 function recommendedPopulation(numbers: any, players: number): { resources: number; monsters: number } {
   const population = numbers.world?.population ?? {};
+  const resources = Math.ceil(Math.max(Number(population.minimumResourceFields) || 0,
+    players * (Number(population.resourceFieldsPerPlayer) || 0)));
+  const monsters = Math.ceil(Math.max(Number(population.minimumMonsters) || 0,
+    players * (Number(population.monstersPerPlayer) || 0)));
   return {
-    resources: Math.ceil(Math.max(Number(population.minimumResourceFields) || 0,
-      players * (Number(population.resourceFieldsPerPlayer) || 0))),
-    monsters: Math.ceil(Math.max(Number(population.minimumMonsters) || 0,
-      players * (Number(population.monstersPerPlayer) || 0))),
+    resources: Math.min(resources, Math.max(0, Number(population.resourceCap) || resources)),
+    monsters: Math.min(monsters, Math.max(0, Number(population.monsterCap) || monsters)),
   };
 }
 
@@ -117,8 +119,10 @@ export function simulateWorldBalance(numbers: any): WorldBalanceReport {
   const stages: WorldStageScenario[] = [];
   const issues: WorldBalanceIssue[] = [];
   const tunedPve = pveNumbers(numbers);
+  const rogueMaxLevel = worldRogueMaxLevel(numbers);
+  const resourceMaxLevel = worldResourceMaxLevel(numbers);
 
-  for (let level = 1; level <= 30; level += 1) {
+  for (let level = 1; level <= rogueMaxLevel; level += 1) {
     const monster = numbers.world?.monsters?.levels?.[String(level)] ?? {};
     const expectedTownhall = Number(monster.expectedTownhall) || level;
     const tier = bestTier(numbers, expectedTownhall);
@@ -141,7 +145,7 @@ export function simulateWorldBalance(numbers: any): WorldBalanceReport {
     const strong = fight(1.25);
     const force = mixedForce(referenceTroops, tier);
     const carry = carryCapacity(force, numbers);
-    const resourceLevel = Math.max(1, Math.min(10, Math.ceil(level / 3)));
+    const resourceLevel = Math.max(1, Math.min(resourceMaxLevel, Math.ceil(level / 3)));
     const node = numbers.gatherNodes?.levels?.[String(resourceLevel)] ?? {};
     const gather = resolveGather({
       kind: "node", level: resourceLevel, resource: "cash", remaining: Number(node.totalSupply) || 0,
@@ -195,7 +199,7 @@ export function simulateWorldBalance(numbers: any): WorldBalanceReport {
     }
   }
 
-  const pvp: PvpStageScenario[] = [5, 10, 15, 20, 25, 30].map((townhall) => {
+  const pvp: PvpStageScenario[] = [5, 10, 15, 20].filter((townhall) => townhall <= rogueMaxLevel).map((townhall) => {
     const tier = bestTier(numbers, townhall);
     const troopsPerSide = Math.max(1, Math.floor(totalCapacity(numbers, townhall) * fill));
     const force = mixedForce(troopsPerSide, tier);

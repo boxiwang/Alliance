@@ -5,11 +5,19 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-08 · **by:** Claude (world-experience fixes: load crash, combat, rogue distribution + on-demand local supply, scout recon, map legibility)
-**Current focus:** Local World loop is playable, non-stalling and legible. Next: fresh L1→L5 + gather/scout playtests from the UI, tune the full L1→10 account, then server authority (incl. outer-ring spawn for new joiners) and alliance layers. **Full details of the latest pass are in `HANDOFF.md` → "Latest changes (Claude, 2026-09-08)".**
+**Last updated:** 2026-09-08 · **by:** Codex (Frontier I public ecology, L20 ceiling, sector-balanced density, randomized refill, search-first Deep Scan)
+**Current focus:** Local World loop is playable and now behaves like shared geography rather than a personal quest generator. Next: fresh L1→L5 + gather/scout playtests from the UI, tune the full L1→20 Frontier I account, design Wormhole graduation/Map II resources, then server authority and alliance layers. **Full details are in `HANDOFF.md` → "Latest changes (Codex, 2026-09-08)".**
+
+### 🌌 Frontier I public ecology (Codex, 2026-09-08)
+- Frontier I exposes Rogues **L1–20** and resource planets **L1–8**. Higher explicit rows remain reserved for Map II rather than leaking into the starting State.
+- Removed the reconcile-time `ensureLocalTargets` quest bubble. Public targets are distributed through 32×32 ecology sectors, trend upward toward the Wormhole with ±1 level overlap, and do not react to an individual kill.
+- Young State floor: 480 planets + 180 Rogues. At 1,000 active cities: 3,200 planets + 1,000 Rogues (hard caps), about seven tiles per entity including cities.
+- Rogue recycling is randomly delayed 3–10 minutes; planet recycling 5–15 minutes. Level is conserved, coordinate changes, and population stays stable.
+- `NEXT ROGUE` searches the public ecology first. An explicit click can Deep Scan only L1–6 when no matching target exists within 55 tiles; discovered targets appear 28–50 tiles away and are limited per player/per level with a 10-minute cooldown.
+- `numbers.json` schema is **v0.10**. Admin World exposes the population, cap, level ceiling, sector, Deep Scan and lifecycle windows. Engine coverage is 116 tests; balance remains clean at L1–20.
 
 ### 🛠 World-experience fixes (Claude, 2026-09-08)
-Built on Codex's Star Map pass; `npm run check` = 110 tests + build green, `balance:world` = 0 issues. Highlights (see `HANDOFF.md` for the full list): fixed the old-save load white-screen (config refresh on load + spacing fallback); fixed combat so a winner's casualties are bounded by enemy strength (more troops no longer means more losses); reworked rogue/resource geography to low-outer/high-inner with a guaranteed 1–30 ladder + level-preserving respawn; added `ensureLocalTargets` so a player's next-level rogue and low resources are always generated near them on demand (capped, low-level only, inner circle stays scarce); NEXT ROGUE + rogue lock guidance; scout is now a fast unarmed recon of rival cities with a per-arm/per-tier/per-resource report; entity spacing + name-plate/march-line legibility.
+Built on Codex's Star Map pass; `npm run check` = 110 tests + build green, `balance:world` = 0 issues at that commit. Highlights: fixed the old-save load white-screen; bounded winner casualties by enemy strength; established low-outer/high-inner geography and level-preserving respawn; added the NEXT ROGUE/lock guidance; made scout a fast unarmed rival-city recon; improved entity spacing and name-plate/march-line legibility. Its reconcile-time local-supply rule was superseded by the public-ecology pass above.
 
 ### ⚔ Star Map player identity + load/PvE closure (Codex)
 - Rival test civilizations now read like players, not map resources: tactical view shows a Kingshot-shaped

@@ -4,7 +4,8 @@ import {
   DEFAULT_WORLD_ENGINE_CONFIG, HeadlessWorld, Point, ResourceEntity,
   advanceHeadlessWorld, advanceTargetLifecycle, breachCity, buildSpatialIndex, defeatMonster, depleteResource,
   dispatchMarch, distance, emptyCommanderSnapshot, energyAt, initHeadlessWorld, occupyResource,
-  populateWorld, queryNearby, recallMarch, redistributeWorldTargets, spawnPlayer, spawnPlayers, worldCenter,
+  populateWorld, queryNearby, recallMarch, redistributeWorldTargets, scanForRogue, spawnPlayer, spawnPlayers, worldCenter,
+  worldDepth, worldResourceMaxLevel, worldRogueMaxLevel,
 } from "./world-engine";
 
 function minPairDistance(points: Point[]): number {
@@ -63,9 +64,11 @@ describe("headless world — scale and sparse spawning", () => {
     expect(new Set(targets.filter((entity) => entity.kind === "resource").map((entity) => entity.resource)))
       .toEqual(new Set(["cash", "oil", "power"]));
     targets.forEach((target) => {
-      const levelsPerZone = target.kind === "resource" ? 2 : 6;
-      expect(target.level).toBeGreaterThanOrEqual((target.zone - 1) * levelsPerZone + 1);
-      expect(target.level).toBeLessThanOrEqual(target.zone * levelsPerZone);
+      const maxLevel = target.kind === "resource" ? worldResourceMaxLevel(defaults) : worldRogueMaxLevel(defaults);
+      const radialLevel = Math.max(1, Math.min(maxLevel, 1 + Math.floor(worldDepth(target.position, world.config) * maxLevel)));
+      expect(target.level).toBeGreaterThanOrEqual(1);
+      expect(target.level).toBeLessThanOrEqual(maxLevel);
+      expect(Math.abs(target.level - radialLevel)).toBeLessThanOrEqual(defaults.world.ecology.levelJitter);
     });
   });
 
@@ -78,9 +81,62 @@ describe("headless world — scale and sparse spawning", () => {
     const migrated = redistributeWorldTargets(world, 2000, defaults);
     const moved = migrated.entities[target.id] as ResourceEntity;
     expect(moved.position).not.toEqual(oldPosition);
-    expect(moved.level).toBeGreaterThanOrEqual(moved.zone * 2 - 1);
-    expect(moved.level).toBeLessThanOrEqual(moved.zone * 2);
+    expect(moved.level).toBe(worldResourceMaxLevel(defaults));
     expect(moved.amount).toBe(moved.capacity);
+  });
+
+  it("caps Frontier I at resource L8 and Rogue L20 while keeping every rung present", () => {
+    const resourceMinimum = defaults.world.ecology.resourceMaxLevel * defaults.world.population.resourceMinPerLevel;
+    const rogueMinimum = defaults.world.ecology.rogueMaxLevel * defaults.world.population.rogueMinPerLevel;
+    const world = populateWorld(initHeadlessWorld("frontier-one-ladder", 1000), resourceMinimum, rogueMinimum, 1000, defaults);
+    const resources = Object.values(world.entities).filter((entity) => entity.kind === "resource");
+    const rogues = Object.values(world.entities).filter((entity) => entity.kind === "monster");
+    expect(new Set(resources.map((entity) => entity.level))).toEqual(new Set(Array.from({ length: 8 }, (_, index) => index + 1)));
+    expect(new Set(rogues.map((entity) => entity.level))).toEqual(new Set(Array.from({ length: 20 }, (_, index) => index + 1)));
+    expect(Math.max(...resources.map((entity) => entity.level))).toBe(8);
+    expect(Math.max(...rogues.map((entity) => entity.level))).toBe(20);
+  });
+
+  it("discovers a low Rogue only after an explicit scan and reuses that signal", () => {
+    let world = spawnPlayer(initHeadlessWorld("deep-scan", 1000), { id: "newcomer" }, 1000);
+    expect(Object.values(world.entities).filter((entity) => entity.kind === "monster")).toHaveLength(0);
+    const first = scanForRogue(world, "newcomer", 1, 2000, defaults);
+    expect(first.error).toBeUndefined();
+    expect(first.spawned).toBe(true);
+    expect(first.targetId).not.toBeNull();
+    world = first.world;
+    const target = world.entities[first.targetId!];
+    const city = world.entities[world.players.newcomer.cityId];
+    expect(target.kind).toBe("monster");
+    expect(distance(city.position, target.position)).toBeGreaterThanOrEqual(defaults.world.ecology.deepScanSpawnMinRadius);
+    expect(distance(city.position, target.position)).toBeLessThanOrEqual(defaults.world.ecology.deepScanSpawnMaxRadius);
+    const second = scanForRogue(world, "newcomer", 1, 2001, defaults);
+    expect(second.spawned).toBe(false);
+    expect(second.targetId).toBe(first.targetId);
+    expect(Object.values(second.world.entities).filter((entity) => entity.kind === "monster")).toHaveLength(1);
+  });
+
+  it("keeps Deep Scan cooldowns independent for each early Rogue level", () => {
+    let world = spawnPlayer(initHeadlessWorld("deep-scan-levels", 1000), { id: "climber" }, 1000);
+    const levelOne = scanForRogue(world, "climber", 1, 2000, defaults);
+    expect(levelOne.spawned).toBe(true);
+    world = levelOne.world;
+    world.players.climber.highestMonsterDefeated = 1;
+    const levelTwo = scanForRogue(world, "climber", 2, 2001, defaults);
+    expect(levelTwo.error).toBeUndefined();
+    expect(levelTwo.spawned).toBe(true);
+    expect(levelTwo.targetId).not.toBe(levelOne.targetId);
+  });
+
+  it("does not summon advanced Rogues and marks Frontier I complete after L20", () => {
+    let world = spawnPlayer(initHeadlessWorld("deep-scan-cap", 1000), { id: "traveler" }, 1000);
+    world.players.traveler.highestMonsterDefeated = 6;
+    const advanced = scanForRogue(world, "traveler", 7, 2000, defaults);
+    expect(advanced.error).toBe("rogue_unavailable");
+    expect(advanced.spawned).toBe(false);
+    expect(Object.values(advanced.world.entities).filter((entity) => entity.kind === "monster")).toHaveLength(0);
+    world.players.traveler.highestMonsterDefeated = 20;
+    expect(scanForRogue(world, "traveler", 20, 3000, defaults).error).toBe("frontier_complete");
   });
 
   it("advances 10,000 scheduled events deterministically in a 1,000-player State", () => {
@@ -115,6 +171,8 @@ describe("headless world — target lifecycle", () => {
     world = depleteResource(first.world, resource.id, resource.amount, 3000);
     expect((world.entities[resource.id] as ResourceEntity).state).toBe("depleted");
     const respawnAt = (world.entities[resource.id] as ResourceEntity).respawnAt;
+    expect(respawnAt).toBeGreaterThanOrEqual(3000 + defaults.world.lifecycle.resourceRespawnMinSec * 1000);
+    expect(respawnAt).toBeLessThanOrEqual(3000 + defaults.world.lifecycle.resourceRespawnMaxSec * 1000);
     world = advanceTargetLifecycle(world, respawnAt);
     const respawned = world.entities[resource.id] as ResourceEntity;
     expect(respawned.state).toBe("available");
@@ -128,6 +186,8 @@ describe("headless world — target lifecycle", () => {
     const oldPosition = { ...monster.position };
     world = defeatMonster(world, monster.id, "hunter", 2000);
     expect(firstEntity(world, "monster").state).toBe("defeated");
+    expect(firstEntity(world, "monster").respawnAt).toBeGreaterThanOrEqual(2000 + defaults.world.lifecycle.monsterRespawnMinSec * 1000);
+    expect(firstEntity(world, "monster").respawnAt).toBeLessThanOrEqual(2000 + defaults.world.lifecycle.monsterRespawnMaxSec * 1000);
     world = advanceTargetLifecycle(world, firstEntity(world, "monster").respawnAt);
     expect(firstEntity(world, "monster").state).toBe("alive");
     expect(firstEntity(world, "monster").position).not.toEqual(oldPosition);

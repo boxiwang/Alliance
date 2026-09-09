@@ -51,6 +51,16 @@ describe("local GameState ↔ headless World adapter", () => {
     expect(Object.keys(result.session.world.players)).toHaveLength(3);
   });
 
+  it("does not create a next-level Rogue merely because personal progression changes", () => {
+    const now = 1_800_000_000_000;
+    const base = createLocalWorldSession("0xecology", game("0xecology", now), now, numbers());
+    const before = Object.values(base.session.world.entities).filter((entity) => entity.kind === "monster").length;
+    base.session.world.players[base.session.playerId].highestMonsterDefeated = 3;
+    const advanced = advanceLocalWorldSession(base.session, base.game, now + 1000, numbers());
+    const after = Object.values(advanced.session.world.entities).filter((entity) => entity.kind === "monster").length;
+    expect(after).toBe(before);
+  });
+
   it("reserves GameState troops, resolves gathering, and delivers the same engine result back", () => {
     const now = 1_800_000_000_000;
     const base = createLocalWorldSession("0xgather2", game("0xgather2", now), now, numbers());

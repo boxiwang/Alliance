@@ -1,22 +1,29 @@
 # ALLIANCE — current handoff
 
-**Updated:** 2026-09-08 (Claude — world-experience fixes on top of Codex's Star Map pass)
+**Updated:** 2026-09-08 (Codex — Frontier I public-ecology pass on top of Claude's world fixes)
 **Scope:** Personal Mode first. Alliance gameplay and final art direction remain later layers.  
 **Environment:** local-only; do not deploy yet.
 
-## Latest changes (Claude, 2026-09-08)
+## Latest changes (Codex, 2026-09-08)
 
-World Star Map + combat pass, all under `npm run check` (110 tests + build) and `npm run balance:world` (0 issues):
+Frontier I ecology/progression pass:
+
+- **Frontier I has a deliberate ceiling:** this first 512×512 map supports Command Core / Rogue progression through **L20**, with resource planets through **L8**. Rogue L21–30 and resource rows L9–10 stay in the data for later maps; they do not spawn here. Reaching and holding the Wormhole is the future passage to a harder map, where higher targets and potentially map-specific upgrade resources can begin.
+- **Public ecology, not personal spawn bubbles:** target population is generated independently of any player's progress and spread with 32×32 ecology-sector balancing plus radial difficulty and ±1 level overlap. Levels still trend upward toward the Wormhole without looking like perfect rings. Killing L3 never causes L4 to appear beside that player.
+- **Stable density at young and full population:** a young/local State holds 480 resource planets + 180 Rogues. Population then scales toward **3.2 planets + 1 Rogue per active city**, capped at 3,200 + 1,000 for a 1,000-player State. Including cities, that is ~7 map tiles per entity on a 512×512 State.
+- **Delayed, randomized recycling:** defeated Rogues return after 3–10 minutes; depleted/retired resource planets return after 5–15 minutes, at a new legal coordinate and at the same level. Refill is scheduled map ecology, not a response to an individual player's next unlock.
+- **NEXT ROGUE is search-first:** it selects a nearby public target of the next legal level. Only an explicit click may use the early-game Deep Scan safety valve for L1–6 when none exists within 55 tiles. A discovered Rogue appears 28–50 tiles away, and each player/level has one target plus a 10-minute cooldown; ordinary reconcile ticks never manufacture targets.
+- **Balanced rows remain reusable:** the existing explicit Rogue L1–30 combat/reward rows are preserved. The executable Frontier I ruler now validates L1–20 only: a 60%-filled matching fleet holds ~57% projected win chance and prepared wins stay below 2% casualties.
+
+Claude's immediately preceding pass remains in place:
 
 - **Crash fix (load white-screen):** worlds persisted before a new `world.config` key existed (e.g. `minEntitySpacing`) threw on load/respawn. `openLocalWorldSession` now refreshes `world.config` from `numbers.json` on every load, and `randomLegalPoint` falls back to the default spacing. Old saves open again.
 - **Combat casualties fixed:** each side's loss now scales with the OPPONENT's power share (`lossFraction(own,enemy)`), winner ×`winnerLossMultiplier` (default 0.5). Overwhelming force now BOUNDS a winner's losses instead of inflating them — sending more troops past the victory threshold no longer raises casualties (verified: L5 rogue, 60K troops → ~6 dead, not ~1800).
-- **Rogue = neutral geography, low-outer / high-inner:** rewrote `zoneForPoint` (edge-normalised depth), level is now deterministic from radius (smooth ladder, no random gaps). `populateWorld` seeds a guaranteed ladder (`rogueMinPerLevel`/`resourceMinPerLevel` of every level) then area-fills; `respawnTarget` conserves level (a defeated Lx returns as Lx). Result: abundant low levels on the outer rim, scarce high levels near the wormhole; every level 1–30 always present.
-- **On-demand local supply (early game never stalls):** `ensureLocalTargets` (called on session open and every reconcile tick) keeps a floor of engageable rogues + low resources within `localGuaranteeRadius` of the player's city, and specifically ≥`localNextLevelFloor` of the player's NEXT level. If a rival takes them or they deplete, they refill next tick. Guarantee stops at `localGuaranteeMaxLevel` (12) so the inner circle stays scarce. Total counts are capped (`monsterCap`/`resourceCap`) so it never grows unbounded.
 - **NEXT ROGUE button + rogue lock:** map tool jumps to the nearest rogue the player may engage (level ≤ highest-defeated+1), never a higher one. Rogue panel shows `READY` / `DEFEAT Lx FIRST` and disables engaging a locked level. Rogues no longer offer SCAN (their type is public).
 - **Scout = fast unarmed recon:** scout travels `scoutSpeedMultiplier`× faster (both ways), carries no troops, and only targets rival CITIES. Its report now details garrison by arm (dominant highlighted), garrison by tier, and lootable resources per type (cash/oil/power) — in-city troops only (marching troops excluded).
 - **Entity spacing + map legibility:** `minEntitySpacing` (6) keeps every city/rogue/resource in its own cell; rival city name plates render only when selected (a compact level badge otherwise) so clustered cities never overlap text; own/rival name plate width is now adaptive + centred; harvest march lines are thinner with a 🚀 marker + live ETA (outbound and return); Live Fleets show `EN ROUTE / HARVESTING / RETURNING · countdown`; Mission Archive is results-only (no duplicate in-flight entries).
 
-New `numbers.json` knobs (all under `world.*`): `state.minEntitySpacing`; `march.scoutSpeedMultiplier`; `population.{resourceMinPerLevel,rogueMinPerLevel,localGuaranteeRadius,localGuaranteeMaxLevel,localRogueFloor,localNextLevelFloor,localResourceFloor,monsterCap,resourceCap}`; `combat.winnerLossMultiplier` (optional; defaults to 0.5).
+New ecology knobs are under `world.ecology`, `world.population` and `world.lifecycle`. All are organized in the Admin **World** tab.
 
 **Open design item (server slice):** new-player spawns must stay in the outer low-level ring; today the single local player is always the outermost city so this is fine, but a dense multiplayer State needs new joiners assigned to outer rings (not the next farthest-first inner cell). A separate UI mockup of a minimalist City screen lives at `docs/mockups/city-console-claude.html` (design reference only).
 
@@ -68,31 +75,31 @@ The Vite port may increment when another local server is already running. Use th
 - Cash/Oil/Power planets show level, occupancy state, travel time and remaining supply.
 - Per-tier troop load is authoritative. `AUTO MIN` and `FILL MAX` stop at the smallest useful gathering fleet.
 - Resource planets below 25% retire after a fleet leaves; depleted planets respawn full at a new legal coordinate.
-- Rogue planets use explicit L1–30 power/reward rows: L1–6 outermost, L25–30 nearest the Wormhole.
+- Frontier I exposes Rogue L1–20 and resource-planet L1–8. Explicit Rogue L21–30 and resource L9–10 rows are retained for later maps.
 - Rogue combat reserves real troops and Energy, resolves on arrival, applies wounded/dead through Medical Bay capacity, respawns defeated targets and delivers rewards only on return.
 - Selecting a rogue force shows estimated victory/defeat and wounded/dead before dispatch.
 - Scouting, city attacks, recall, immutable arrival/return reports and troop conservation are wired through the same headless engine.
 
 ### Balance/data
 
-- `docs/numbers.json` is schema v0.9 and remains the only gameplay-number source.
+- `docs/numbers.json` is schema v0.10 and remains the only gameplay-number source.
 - Admin edits local overrides; team changes still require Export → replace `docs/numbers.json` → commit.
 - Current World ruler: a 60%-filled mixed fleet at matching Command Core level has ~57% PvE win ratio and ~1.5–1.8% winning casualties.
-- `npm run balance:world` currently reports zero issues across all 30 rogue levels.
-- `npm run check` currently passes 110 tests, TypeScript and the production build.
+- `npm run balance:world` currently reports zero issues across Frontier I's 20 rogue levels.
+- Unit coverage currently includes 116 tests; rerun `npm run check` before each handoff.
 
 ## Next work, in order
 
 ### P0 — finish the first-session World loop
 
-1. ~~Add rogue progression guidance + find-next-rogue.~~ **DONE (Claude, 2026-09-08)** — NEXT ROGUE tool, `READY`/`DEFEAT Lx FIRST` gating, and on-demand local rogue supply so L1 is always beside a fresh player. See "Latest changes".
+1. ~~Add rogue progression guidance + find-next-rogue.~~ **DONE** — NEXT ROGUE is public-search-first, with explicit L1–6 Deep Scan only as an early-game safety valve. See "Latest changes".
 2. Run a fresh GM session through L1→L5 rogues and a complete gather/return cycle. Verify Energy, sequential unlock, victory/defeat, Medical Bay overflow, report copy, return settlement and respawn from the visible UI—not only unit tests. (Engine paths verified; still worth a manual UI playthrough.)
 3. Improve force selection without changing combat math: one recommended counter composition action, clear march-cap/load explanations and optional 25% / 50% / useful-max presets.
 
 ### P1 — tune Personal Mode as a game
 
 4. Playtest the full Command Core L1→10 account loop. Decide whether the balanced-account target should remain ~4–5 days; then tune early troop starvation, Cash pressure and late Warehouse overflow in the integrated simulator.
-5. Playtest target density and travel: time-to-nearest useful planet/rogue, L1 availability, resource competition, Energy cadence, city raid damage and burn duration. Change target bands before changing explicit numbers.
+5. Playtest target density and travel: time-to-nearest useful planet/rogue, L1 availability, resource competition, randomized refill cadence, Energy cadence, city raid damage and burn duration. Tune the ecology controls before changing combat rows.
 6. Turn report history into a clearer battle report: force composition, power comparison, counters, casualties, rewards and return state. Keep the current engine result authoritative.
 
 ### P2 — prepare a real multiplayer alpha
@@ -110,7 +117,7 @@ The Vite port may increment when another local server is already running. Use th
 ## Known gaps
 
 - Current NPCs are browser-local test stand-ins, not synchronized players.
-- Sequential rogue progression is enforced by the engine but still needs the P0 map guidance above.
+- The Wormhole graduation/next-map system is designed but not implemented; Frontier I completion currently focuses the Wormhole and explains that the next sector is pending.
 - Alliance, rally, chat, resource-tile PvP, reinforcements, usable relocation items, heroes and world bosses are not implemented.
 - Wallet login is display-only `personal_sign`; production auth must support smart wallets/EIP-1271.
 - Blockscout proxy is development-only and needs a server/Worker proxy before deployment.

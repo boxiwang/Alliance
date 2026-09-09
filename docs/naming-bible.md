@@ -353,10 +353,10 @@ visible; "discovery" = scouting a target for intel.
 | Key | Concept (anchor — don't change) | Themed ✏️ | Why / original |
 |---|---|---|---|
 | `sys.expedition` | Send troops (+hero later) to a world target → march time by distance → resolve (scout / gather / combat) → return | | tasks 2+3 engine |
-| `world.rings` | Concentric sector: ring 10 = outer edge (newbie spawn), ring 1 = center (the Wormhole); planet/rogue level ≈ 11−ring; inner rings open via server progression | | data in `numbers.json → world` |
+| `world.rings` | Concentric sector: outer edge = beginner space, center = the Wormhole; Frontier I exposes resource L1–8 / Rogue L1–20 with overlapping radial difficulty, and later maps continue progression | | data in `numbers.json → world` |
 | `map.no_fog` | No persistent fog-of-war; map visible, discovery via scouting intel | | genre-standard (RoK/WoS/Last War) |
 | `action.scout` | Scout a target = intel recon (reveal level / garrison / supply), not fog-clearing | | (was §? — reframed) |
-| `map.gather_node` | Leveled outdoor resource nodes 1–10 (data `numbers.json → gatherNodes`); each yields ONE resource; carry = Σ troop.load (+ hero); high difficulty, **Academy research speeds gathering** | | task 3 |
+| `map.gather_node` | Leveled outdoor resource nodes; Frontier I exposes L1–8 while reusable data rows extend to L10; each yields ONE resource; carry = Σ troop.load (+ hero); **Academy research speeds gathering** | | task 3 |
 | `combat.counter` | air > army, army > navy, navy > air; winner arm +10% atk (data `global.combat.counter`) | | |
 | `hero.carry` | Hero carry / expedition-bonus hook (0 until the hero system, task 4) | | |
 | `endgame.circle` | Center = **the Wormhole**: hold the surrounding transit zone for cumulative time → unlock passage to the next sector; being beaten out pushes you outward. **Seniority cohort treadmill** — time (not just money) earns a dominance window over newer entrants. Guardrails: an F2P slow-lane always advances (no hard wall); stakes = hold-time/position, never permanent loss; per weight-class realm; anti-bully diminishing rewards push graduation. Phase-2, server-authoritative, sits on `sys.expedition`. | **The Wormhole** | Cosmic reframing of the same locked mechanic; Key intentionally unchanged |

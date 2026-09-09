@@ -7,6 +7,8 @@ describe("Personal World balance scenarios", () => {
   it("keeps every reference PvE and gathering stage inside its declared target band", () => {
     const report = simulateWorldBalance(defaults);
     expect(report.issues).toEqual([]);
+    expect(report.stages).toHaveLength(defaults.world.ecology.rogueMaxLevel);
+    expect(report.stages[report.stages.length - 1]?.monsterLevel).toBe(20);
     report.stages.forEach((stage) => {
       expect(stage.weakWinRatio).toBeLessThan(.5);
       expect(stage.standardWinRatio).toBeGreaterThanOrEqual(defaults.world.balanceTargets.standardPveWinRatioMin);
@@ -15,6 +17,12 @@ describe("Personal World balance scenarios", () => {
       expect(stage.gatherHours).toBeGreaterThanOrEqual(defaults.world.balanceTargets.fullNodeGatherHoursMin);
       expect(stage.gatherHours).toBeLessThanOrEqual(defaults.world.balanceTargets.fullNodeGatherHoursMax);
     });
+  });
+
+  it("keeps a full Frontier inside the measured map population budget", () => {
+    const report = simulateWorldBalance(defaults);
+    expect(report.economy.populationAt1000).toEqual({ resources: 3200, monsters: 1000 });
+    expect(report.economy.populationAt50).toEqual({ resources: 480, monsters: 180 });
   });
 
   it("keeps equal-progression city attacks consistently defender-favored", () => {
@@ -30,12 +38,16 @@ describe("Personal World balance scenarios", () => {
     const numbers: any = structuredClone(defaults);
     numbers.world.state.width = 640;
     numbers.world.lifecycle.monsterRespawnSec = 777;
+    numbers.world.lifecycle.monsterRespawnMinSec = 123;
+    numbers.world.lifecycle.monsterRespawnMaxSec = 987;
     numbers.world.energy.monsterAttackCost = 13;
     numbers.world.cityCombat.minimumWallDamageOnWin = 222;
     numbers.global.march.marchQueueSlots = 4;
     const config = worldEngineConfig(numbers);
     expect(config.width).toBe(640);
     expect(config.monsterRespawnSec).toBe(777);
+    expect(config.monsterRespawnMinSec).toBe(123);
+    expect(config.monsterRespawnMaxSec).toBe(987);
     expect(config.monsterEnergyCost).toBe(13);
     expect(config.minimumWallDamageOnWin).toBe(222);
     expect(config.marchSlots).toBe(4);

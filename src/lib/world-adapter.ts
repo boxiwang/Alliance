@@ -7,7 +7,7 @@ import {
 } from "./game";
 import type { DispatchMarchInput, HeadlessWorld, ResourceWallet, SpawnPlayerInput, TroopManifest } from "./world-engine";
 import {
-  advanceHeadlessWorld, dispatchMarch, ensureLocalTargets, initHeadlessWorld, populateWorld, recallMarch, redistributeWorldTargets, spawnPlayers,
+  advanceHeadlessWorld, dispatchMarch, initHeadlessWorld, populateWorld, recallMarch, redistributeWorldTargets, scanForRogue, spawnPlayers,
   worldEngineConfig, zoneForPoint,
 } from "./world-engine";
 import { clearWorld as clearLegacyWorld, loadWorld as loadLegacyWorld, projectWorld as projectLegacyWorld } from "./world";
@@ -20,7 +20,7 @@ export interface WorldGameSnapshot {
 }
 
 export interface LocalWorldSession {
-  version: 4;
+  version: 5;
   address: string;
   playerId: string;
   world: HeadlessWorld;
@@ -158,8 +158,9 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
     playerCount * (Number(population.resourceFieldsPerPlayer) || 0)));
   const monsters = Math.ceil(Math.max(Number(population.minimumMonsters) || 0,
     playerCount * (Number(population.monstersPerPlayer) || 0)));
-  world = populateWorld(world, resources, monsters, now, numbers);
-  world = ensureLocalTargets(world, playerId, now, numbers);
+  const resourceCap = Math.max(0, Math.floor(Number(population.resourceCap) || resources));
+  const monsterCap = Math.max(0, Math.floor(Number(population.monsterCap) || monsters));
+  world = populateWorld(world, Math.min(resources, resourceCap), Math.min(monsters, monsterCap), now, numbers);
   const player = world.players[playerId];
   player.accountModifiers = playerResearchModifiers(game);
   player.marchSlots = worldMarchSlots(game, numbers);
@@ -167,7 +168,7 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
   player.marchCapacity = Math.max(0, Math.floor(maxTroops(game)
     * (Number(numbers.global?.march?.capacityFractionOfMaxTroops) || 1)));
   const session: LocalWorldSession = {
-    version: 4, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
+    version: 5, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
   };
   return { session, game, changed: true };
 }
@@ -238,7 +239,6 @@ function reconcile(session: LocalWorldSession, sourceGame: GameState, now: numbe
   let game = project(sourceGame, now);
   const before = JSON.stringify(session.world);
   session.world = advanceHeadlessWorld(session.world, now, numbers);
-  session.world = ensureLocalTargets(session.world, session.playerId, now, numbers);
   applyExternalGameDelta(session, game);
   game = applyWorldPlayerToGame(session, game);
   updatePlayerMetadata(session, game, numbers);
@@ -270,6 +270,27 @@ export function advanceLocalWorldSession(
   numbers: any,
 ): LocalWorldResult {
   return reconcile(clone(sourceSession), sourceGame, now, numbers);
+}
+
+export function scanLocalWorldRogue(
+  sourceSession: LocalWorldSession,
+  sourceGame: GameState,
+  requestedLevel: number,
+  now = Date.now(),
+  numbers: any,
+): LocalWorldResult & { targetId: string | null; spawned: boolean } {
+  const prepared = reconcile(clone(sourceSession), sourceGame, now, numbers);
+  const result = scanForRogue(prepared.session.world, prepared.session.playerId, requestedLevel, now, numbers);
+  prepared.session.world = result.world;
+  updatePlayerMetadata(prepared.session, prepared.game, numbers);
+  prepared.session.syncedGame = snapshotWorldGame(prepared.game);
+  return {
+    ...prepared,
+    changed: prepared.changed || result.spawned,
+    targetId: result.targetId,
+    spawned: result.spawned,
+    error: result.error,
+  };
 }
 
 export function recallLocalWorldMarch(
@@ -320,7 +341,7 @@ export function loadLocalWorldSession(address: string): LocalWorldSession | null
   try {
     const raw = localStorage.getItem(KEY(address));
     const parsed = raw ? JSON.parse(raw) : null;
-    return [1, 2, 3, 4].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
+    return [1, 2, 3, 4, 5].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
   } catch { return null; }
 }
 
@@ -345,10 +366,16 @@ export function openLocalWorldSession(address: string, sourceGame: GameState, no
     // world persisted before a new config key existed (e.g. minEntitySpacing) picks it up
     // instead of crashing on undefined during migration/respawn.
     stored.world.config = worldEngineConfig(numbers);
-    if ((stored as any).version < 4) {
+    Object.values(stored.world.players).forEach((player) => {
+      player.deepScanCooldowns = player.deepScanCooldowns && typeof player.deepScanCooldowns === "object"
+        ? player.deepScanCooldowns : {};
+      player.deepScanTargetIds = player.deepScanTargetIds && typeof player.deepScanTargetIds === "object"
+        ? player.deepScanTargetIds : {};
+    });
+    if ((stored as any).version < 5) {
       stored.world = redistributeWorldTargets(stored.world, now, numbers);
       retuneLocalNpcs(stored.world, numbers);
-      stored.version = 4;
+      stored.version = 5;
     }
     return reconcile(stored, sourceGame, now, numbers);
   }

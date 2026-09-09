@@ -562,18 +562,34 @@ function WorldWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: 
           <NumberSetting {...p(["world", "state", "maxPlayers"])} label="Maximum cities" help="Hard player capacity for one State." />
           <NumberSetting {...p(["world", "state", "circleReserveRadius"])} label="Circle reserve radius" help="No cities or normal targets spawn inside this central area." suffix="tiles" />
           <NumberSetting {...p(["world", "state", "spatialCellSize"])} label="Nearby-query cell size" help="Technical spatial lookup bucket; usually leave at 16." suffix="tiles" />
+          <NumberSetting {...p(["world", "state", "minEntitySpacing"])} label="Minimum target spacing" help="Preferred breathing room between cities, planets and Rogues." suffix="tiles" />
         </RuleGroup>
-        <RuleGroup icon="✦" title="Target population" description="Recommended live targets scale with the number of players but never fall below the minimum.">
+        <RuleGroup icon="✦" title="Public ecology" description="The shared map population is independent of any one player's progress.">
           <NumberSetting {...p(["world", "population", "localNpcCities"])} label="Local test cities" help="NPC rivals generated only by the temporary offline adapter." />
-          <NumberSetting {...p(["world", "population", "resourceFieldsPerPlayer"])} label="Fields per player" help="Resource fields maintained for every active city." step={0.05} />
-          <NumberSetting {...p(["world", "population", "monstersPerPlayer"])} label="Monsters per player" help="PvE targets maintained for every active city." step={0.05} />
+          <NumberSetting {...p(["world", "population", "resourceFieldsPerPlayer"])} label="Planets / active player" help="Population target before the map-wide cap." step={0.05} />
+          <NumberSetting {...p(["world", "population", "monstersPerPlayer"])} label="Rogues / active player" help="Population target before the map-wide cap." step={0.05} />
           <NumberSetting {...p(["world", "population", "minimumResourceFields"])} label="Minimum fields" help="Keeps a young State from feeling empty." />
           <NumberSetting {...p(["world", "population", "minimumMonsters"])} label="Minimum monsters" help="Keeps a young State from feeling empty." />
+          <NumberSetting {...p(["world", "population", "resourceCap"])} label="Planet cap" help="Maximum resource planets in one 512×512 map." />
+          <NumberSetting {...p(["world", "population", "monsterCap"])} label="Rogue cap" help="Maximum Rogues in one 512×512 map." />
+        </RuleGroup>
+        <RuleGroup icon="◎" title="Frontier progression" description="Frontier I ends at the Wormhole; higher content belongs to later maps.">
+          <NumberSetting {...p(["world", "ecology", "rogueMaxLevel"])} label="Highest Rogue" help="Maximum Rogue level naturally present in this map." />
+          <NumberSetting {...p(["world", "ecology", "resourceMaxLevel"])} label="Highest resource planet" help="Higher planet levels are reserved for the next map." />
+          <NumberSetting {...p(["world", "ecology", "levelJitter"])} label="Radial level overlap" help="Lets adjacent levels overlap instead of forming perfect rings." />
+          <NumberSetting {...p(["world", "ecology", "sectorSize"])} label="Ecology sector size" help="Balances public targets across the map without forming a perfect grid." suffix="tiles" />
+          <NumberSetting {...p(["world", "ecology", "deepScanSummonMaxLevel"])} label="Deep Scan summon ceiling" help="Only these early Rogue levels may be discovered on demand." />
+          <NumberSetting {...p(["world", "ecology", "deepScanExistingRadius"])} label="Nearby scan radius" help="Existing targets inside this range are used before discovery." suffix="tiles" />
+          <NumberSetting {...p(["world", "ecology", "deepScanSpawnMinRadius"])} label="Discovery minimum distance" help="A discovered Rogue never appears directly beside the city." suffix="tiles" />
+          <NumberSetting {...p(["world", "ecology", "deepScanSpawnMaxRadius"])} label="Discovery maximum distance" help="Maximum distance for an early-game discovered Rogue." suffix="tiles" />
+          <NumberSetting {...p(["world", "ecology", "deepScanCooldownSec"])} label="Deep Scan cooldown" help="Prevents repeated personal target generation." suffix="seconds" />
         </RuleGroup>
         <RuleGroup icon="⏱️" title="Travel & lifecycle" description="How long marches, empty targets and attacked cities remain in each state.">
           <NumberSetting {...p(["global", "march", "baseTravelSecondsPerTile"])} label="Travel / tile" help="One-way travel time before bonuses." suffix="seconds" />
-          <NumberSetting {...p(["world", "lifecycle", "resourceRespawnSec"])} label="Field respawn" help="Delay before a depleted field moves and returns." suffix="seconds" />
-          <NumberSetting {...p(["world", "lifecycle", "monsterRespawnSec"])} label="Monster respawn" help="Delay before a defeated monster moves and returns." suffix="seconds" />
+          <NumberSetting {...p(["world", "lifecycle", "resourceRespawnMinSec"])} label="Planet respawn minimum" help="Random refill window begins here." suffix="seconds" />
+          <NumberSetting {...p(["world", "lifecycle", "resourceRespawnMaxSec"])} label="Planet respawn maximum" help="Random refill window ends here." suffix="seconds" />
+          <NumberSetting {...p(["world", "lifecycle", "monsterRespawnMinSec"])} label="Rogue respawn minimum" help="Random refill window begins here." suffix="seconds" />
+          <NumberSetting {...p(["world", "lifecycle", "monsterRespawnMaxSec"])} label="Rogue respawn maximum" help="Random refill window ends here." suffix="seconds" />
           <NumberSetting {...p(["world", "lifecycle", "burnDurationSec"])} label="City burn duration" help="Recovery window after a successful raid." suffix="seconds" />
         </RuleGroup>
         <RuleGroup icon="⚡" title="Energy" description="Limits repeat monster attacks without blocking scouting, gathering or PvP.">

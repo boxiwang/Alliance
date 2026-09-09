@@ -103,17 +103,18 @@ mobile/WalletConnect wallets.
 - Phaser living-map: https://claude.ai/code/artifact/620b7d2e-2b4b-4161-81a3-979551ebdaed
 - **The real beta lives in this repo** (`/src`) — wallet connect + read + start screen.
 
-## 9. World map & endgame — the Wormhole (candidate, Phase-2)
+## 9. World map & progression — Frontier I and the Wormhole
 Personal mode is **async single-player PvP** on a shared **concentric world**: five radial zones run
-from the outer edge to the center. Resource planets rise from L1–2 to L9–10; rogues rise from L1–6
-to L25–30. Inner zones open via
-server progression. **No fog-of-war** — the map is visible; scouting = intel on a target.
+from the outer edge to the center. **Frontier I** supports Command Core/Rogue progression through
+L20 and resource planets through L8. Explicit higher rows remain reserved for later maps instead of
+appearing in the starting world. **No fog-of-war** — the map is visible; scouting = intel on a target.
 
 **The Wormhole (endgame progression loop):** the center is a contested transit zone. Hold position
 around the wormhole for cumulative time → **graduate/teleport to the next sector**; being beaten out bumps you
 outward. It's a **seniority cohort treadmill** — the longer you stay on a map the stronger you are
 vs newer entrants, so **time (not just money) earns a "whale moment"** before you graduate and
-become the newcomer again. Guardrails (keep our pillars intact): an F2P **slow-lane always advances**
+become the newcomer again. A later map may introduce higher Rogues, higher resource planets and a
+new progression resource needed for post-L20 city growth. Guardrails (keep our pillars intact): an F2P **slow-lane always advances**
 (no hard wall); stakes = **circle-time/position, never permanent loss** (non-destructive); **per
 weight-class realm**; **anti-bully diminishing rewards** push veterans to graduate instead of camping
 newbies. Server-authoritative; sits on the `sys.expedition` engine (tasks 2+3). Not in the current
@@ -125,8 +126,10 @@ fixed world **center = the Wormhole**. The outdoor view is reached **from the To
 Entering X/Y is a free camera inspection action and never moves the player's civilization. Actual
 relocation requires a consumable `item.warp_engine`; the MVP exposes the locked affordance but does
 not yet grant or consume that item. Every target reports distance and research-adjusted one-way ETA.
-Neutral planets/rogues are maintained around active civilizations so early growth does not depend on
-a lucky uniform-map spawn.
+Neutral planets/Rogues form one public ecology independent of personal progression. The population
+manager balances targets across map sectors and refills them after randomized delays. `NEXT ROGUE`
+searches this public population first; only an explicit early-game Deep Scan may discover an L1–6
+target when none is reasonably nearby. A kill never directly spawns the next level.
 Dispatched troops are **account-bound** (your standing army; limited by single-march capacity +
 `marchQueueSlots`; out until they return). **Gather speed is an account-wide passive** from Academy
 research + heroes (`global.accountModifiers`), applied automatically — never chosen at a node.
