@@ -1,10 +1,24 @@
 # ALLIANCE — current handoff
 
-**Updated:** 2026-09-08 (Codex — Frontier I public-ecology pass on top of Claude's world fixes)
+**Updated:** 2026-09-08 (Claude — Comms page landed + hosting/monetization plans, on top of Codex's Frontier I)
 **Scope:** Personal Mode first. Alliance gameplay and final art direction remain later layers.  
 **Environment:** local-only; do not deploy yet.
 
+## Latest changes (Claude, 2026-09-08 — Comms page + plans)
+
+- **Comms (Task-1 chat) frontend landed** in `src/Messages.tsx` (`/?messages&gm&slot=N`, or the COMMS nav tab), replacing the earlier mock. Reuses the real `GameNav` (nav identical across City/Star Map/Comms), `CosmicBackdrop`, and the app's font/colour tokens. Features: Cosmos (server-wide) / Alliance / System channels + Contacts + DMs; **Alliance = one rail tab** with **General / War Room** sub-tabs in the thread (War Room is off by default, gated on alliance management, and each op is a fresh session that clears on end); **System is a filterable notification log** (Military/Economy/Security), not a conversation; actionable **coordinate & rally chips**; **own messages right-aligned** like a real chat app; **alliance tag prefixes every name** (`[ORBT] Name`); safety by design — links stripped, per-message report/mute on hover, repeated messages auto-collapse, verified-holder ✓ badge; minimal copy throughout. CSS is scoped under `.comms-page` in `styles.css`.
+- **This is frontend + a LOCAL stub only** (channels/threads seeded, your sends echo locally). It is NOT real multiplayer chat yet — that needs the server adapter below. The seam to build next is a `chat-adapter` (listChannels / getHistory / send / subscribe / presence / report / mute) so the server swap doesn't touch the page, exactly like World's `world-adapter`.
+- **Still to wire:** System channel → real local game events (currently sample); a **mini-chat** dock on City & Star Map (Alliance⇄Cosmos toggle, click jumps into full Comms); the `chat-adapter` server implementation.
+- **Note:** the earlier Comms mock's `.messages-*` / `.chat-*` / `.channel-*` / `.context-*` CSS in `styles.css` is now unused (dead) — safe to prune later.
+
+### Hosting & monetization (decisions, not yet built)
+- **Free hosting stack = Cloudflare** (Pages + Workers + **Durable Objects** SQLite + WebSockets + D1 + R2). DO is on the **free** Workers plan (SQLite-backed) → realtime chat rooms + world shards for $0. Free ceilings: 100k requests/day (incl. each WS message), 100k row writes/day, 5M reads/day, 5GB. Binding limit is requests/day → roughly **~300–1,000 DAU** before the $5/mo Workers Paid plan. So: keep building locally now; deploy to CF free tier only when going multiplayer; pay only at real scale.
+- **Design levers to stay free:** hibernatable WebSockets, event-driven (not constant-alarm) world ticks, batched writes, anti-spam (already in Comms).
+- **Monetization proposal:** `docs/MONETIZATION.md` (Credits currency; time/convenience + shields/Warp + cosmetics/identity + VIP + season pass; never sell raw power; token-native items gated behind an economic/security review). Proposal only — no items built; `Credits` + `Warp Engine` are just hooks.
+
 ## Latest changes (Codex, 2026-09-08)
+
+Frontier I ecology/progression pass:
 
 Frontier I ecology/progression pass:
 

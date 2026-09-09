@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { Profile } from "./lib/profile";
 import { mightBreakdown, project, totalTroops, worldMarchSlots } from "./lib/game";
 import { initGame, loadGame } from "./lib/gamestore";
@@ -7,143 +7,262 @@ import { energyAt } from "./lib/world-engine";
 import GameNav from "./GameNav";
 import CosmicBackdrop from "./CosmicBackdrop";
 
-type ChannelId = "alliance" | "world" | "system" | "dm-nyx" | "dm-whale";
-type ChatMessage = { id: string; author: string; time: string; body: string; tag?: string; own?: boolean; event?: "rally" | "coords" };
+// Comms is Task-1 chat. This is the frontend + a LOCAL adapter: channels/threads are seeded and
+// your own sends echo locally. A server adapter (Cloudflare Durable Objects) replaces the data
+// layer later without changing this page — same seam as World's world-adapter.
+type ChannelId = "cosmos" | "alliance" | "system" | "contacts" | "dm-nyx" | "dm-whale";
+type AllianceTab = "general" | "warroom";
+type ChatMessage = {
+  a?: string; f?: string; v?: boolean; t?: string; b?: string; tag?: string; own?: boolean;
+  pin?: string; spam?: number; blocked?: string; sys?: "mil" | "eco" | "sec";
+  coord?: { c: string; k: string }; rally?: boolean;
+};
 
-const CHANNELS: Array<{ id: ChannelId; group: "channels" | "direct"; icon: string; label: string; detail: string; unread?: number; online?: boolean }> = [
-  { id: "alliance", group: "channels", icon: "◇", label: "Alliance", detail: "ORBITAL", unread: 8 },
-  { id: "world", group: "channels", icon: "◎", label: "World", detail: "SECTOR 00DEV1", unread: 3 },
-  { id: "system", group: "channels", icon: "⌁", label: "System", detail: "COMBAT · BUILD · ECONOMY", unread: 1 },
-  { id: "dm-nyx", group: "direct", icon: "N", label: "NyxValidator", detail: "online", online: true },
-  { id: "dm-whale", group: "direct", icon: "W", label: "WhaleSignal", detail: "12m ago" },
+const FACTION: Record<string, string> = { ORBT: "#38d9ff", PEPE: "#43f2a1", DOGE: "#ffb454", MOG: "#aa82ff", WIF: "#7cc0ff" };
+const fcol = (t?: string) => (t && FACTION[t]) || "#8aa9b9";
+// War Room is off by default; alliance management spins one up with a fresh history each time.
+const ALLIANCE_MANAGEMENT = true;
+const WARROOM_ACTIVE = true;
+
+const CHANNELS: Array<{ id: ChannelId; icon: string; label: string; detail: string; unread?: number; mention?: boolean }> = [
+  { id: "cosmos", icon: "◎", label: "Cosmos", detail: "Sector 00DEV1", unread: 3 },
+  { id: "alliance", icon: "◇", label: "Alliance", detail: "[ORBT] Orbital", unread: 8, mention: true },
+  { id: "system", icon: "⌁", label: "System", detail: "", unread: 1 },
+];
+const DMS: Array<{ id: ChannelId; icon: string; label: string; detail: string; faction: string }> = [
+  { id: "dm-nyx", icon: "N", label: "NyxValidator", detail: "online", faction: "ORBT" },
+  { id: "dm-whale", icon: "W", label: "WhaleSignal", detail: "12m ago", faction: "MOG" },
+];
+const CONTACTS = [
+  { a: "NyxValidator", f: "ORBT", v: true, on: true, note: "2 fleets" },
+  { a: "WhaleSignal", f: "MOG", v: true, on: true, note: "air ×2" },
+  { a: "VoidRunner", f: "ORBT", v: true, on: true, note: "idle" },
+  { a: "GreenOrbit", f: "PEPE", v: true, on: false, note: "3h ago" },
+  { a: "MuchCommand", f: "DOGE", on: false, note: "1d ago" },
 ];
 
-const THREADS: Record<ChannelId, ChatMessage[]> = {
-  alliance: [
-    { id: "a1", author: "SYSTEM", time: "19:42", tag: "PINNED", body: "Wormhole watch begins at 20:00 UTC. Keep one fleet available." },
-    { id: "a2", author: "NyxValidator", time: "19:47", tag: "OFFICER", body: "Rogue activity is rising on the east arc. Farm west until the rally leaves." },
-    { id: "a3", author: "WhaleSignal", time: "19:51", body: "Shared a target", event: "coords" },
-    { id: "a4", author: "Ruglord1070273", time: "19:53", body: "I can cover the second march. Send the rally when ready.", own: true },
-    { id: "a5", author: "NyxValidator", time: "19:55", tag: "RALLY", body: "WORMHOLE SENTINEL · L18", event: "rally" },
+const THREADS: Record<string, ChatMessage[]> = {
+  cosmos: [
+    { a: "GreenOrbit", f: "PEPE", v: true, t: "19:38", b: "Cash planets respawned all along the north-west arc — go go go" },
+    { a: "MuchCommand", f: "DOGE", v: true, t: "19:44", b: "anyone else seeing the L12 rogue cluster near 312:094?" },
+    { a: "GreenOrbit", f: "PEPE", t: "19:44", b: "repeat", spam: 3 },
+    { a: "NyxValidator", f: "ORBT", v: true, t: "19:48", b: "confirmed via scout — leave the occupied Power planet alone" },
+    { a: "VoidCat", f: "MOG", v: true, t: "19:52", b: "gg to whoever held 201:177 with half a fleet 🫡" },
+    { a: "NoName", f: "WIF", t: "19:53", b: "free cash here → dexpump·win/x", blocked: "external link removed" },
   ],
-  world: [
-    { id: "w1", author: "[PEPE] GreenOrbit", time: "19:38", body: "Cash planets respawned around the north-west arc." },
-    { id: "w2", author: "[DOGE] MuchCommand", time: "19:44", body: "Anyone else seeing the L12 Rogue cluster near 312:094?" },
-    { id: "w3", author: "[ORBT] NyxValidator", time: "19:48", body: "Yes. Public signal confirmed — leave the occupied Power planet alone." },
-    { id: "w4", author: "[MOG] VoidCat", time: "19:52", body: "GG to whoever defended 201:177 with half a fleet." },
+  general: [
+    { pin: "Wormhole watch 20:00 UTC — keep one fleet free. Full brief on the Alliance page." },
+    { a: "NyxValidator", f: "ORBT", v: true, tag: "officer", t: "19:47", b: "Rogue activity rising on the east arc. Farm west until the rally leaves." },
+    { a: "WhaleSignal", f: "MOG", v: true, t: "19:51", b: "Shared a target", coord: { c: "284:119", k: "Cash Planet · L8 · unoccupied" } },
+    { a: "Ruglord", f: "ORBT", own: true, t: "19:53", b: "I can cover the second march. Ping me when the rally opens." },
+    { a: "NyxValidator", f: "ORBT", v: true, tag: "officer", t: "19:55", b: "Spinning up a War Room for the Wormhole Sentinel — jump to that tab if you're bringing air." },
+  ],
+  warroom: [
+    { a: "NyxValidator", f: "ORBT", v: true, tag: "officer", t: "19:56", b: "Target is air-dominant. Bring air, we counter with army. Staggered arrival." },
+    { a: "WhaleSignal", f: "MOG", v: true, t: "19:57", b: "2 air fleets ready, 40K T8" },
+    { a: "NyxValidator", f: "ORBT", v: true, t: "19:58", b: "Rally below. Recommended fleet is pre-filled — one tap to join.", rally: true },
   ],
   system: [
-    { id: "s1", author: "FLEET", time: "19:57", tag: "RETURNED", body: "Harvest complete · Oil Planet L7 · +4.20M Oil" },
-    { id: "s2", author: "COMBAT", time: "19:31", tag: "VICTORY", body: "Rogue Planet L6 defeated · 1.20K wounded · report ready" },
-    { id: "s3", author: "CITY", time: "18:46", tag: "COMPLETE", body: "Research Institute reached L8" },
-    { id: "s4", author: "SECURITY", time: "17:20", tag: "SHIELD", body: "Civilization shield has 1d 12h remaining" },
+    { sys: "eco", tag: "Returned", t: "19:57", b: "Harvest complete · Oil Planet L7 · +4.20M Oil" },
+    { sys: "mil", tag: "Victory", t: "19:31", b: "Rogue Planet L6 defeated · 1.20K wounded · report ready" },
+    { sys: "eco", tag: "Complete", t: "18:46", b: "Research Institute reached L8" },
+    { sys: "sec", tag: "Shield", t: "17:20", b: "Civilization shield has 1d 12h remaining" },
+    { sys: "mil", tag: "Under attack", t: "16:10", b: "WhaleSignal requested reinforcement at 201:177" },
   ],
   "dm-nyx": [
-    { id: "n1", author: "NyxValidator", time: "19:21", body: "Are you joining the Wormhole watch tonight?" },
-    { id: "n2", author: "Ruglord1070273", time: "19:24", body: "Yes. I should have two fleets free by then.", own: true },
-    { id: "n3", author: "NyxValidator", time: "19:25", body: "Perfect. I’ll put you on the east approach." },
+    { a: "NyxValidator", f: "ORBT", v: true, t: "19:21", b: "Joining the Wormhole watch tonight?" },
+    { a: "Ruglord", f: "ORBT", own: true, t: "19:24", b: "Yes, two fleets free by then." },
+    { a: "NyxValidator", f: "ORBT", v: true, t: "19:25", b: "Perfect — you're on the east approach." },
   ],
   "dm-whale": [
-    { id: "p1", author: "WhaleSignal", time: "18:02", body: "Found an unoccupied L8 Cash planet. Sending coordinates." },
-    { id: "p2", author: "WhaleSignal", time: "18:03", body: "TARGET · 284:119", event: "coords" },
-    { id: "p3", author: "Ruglord1070273", time: "18:05", body: "Saved. Thanks.", own: true },
+    { a: "WhaleSignal", f: "MOG", v: true, t: "18:02", b: "Found an unoccupied L8 cash planet, sending coords" },
+    { a: "WhaleSignal", f: "MOG", v: true, t: "18:03", b: "Target", coord: { c: "284:119", k: "Cash Planet · L8" } },
+    { a: "Ruglord", f: "ORBT", own: true, t: "18:05", b: "saved, thanks 🙏" },
   ],
 };
 
 export default function Messages({ address, profile, onCity, onWorld }: { address: string; profile: Profile; onCity: () => void; onWorld: () => void }) {
-  const [channelId, setChannelId] = useState<ChannelId>("alliance");
+  const [active, setActive] = useState<ChannelId>("alliance");
+  const [allianceTab, setAllianceTab] = useState<AllianceTab>("general");
+  const [sysFilter, setSysFilter] = useState<"all" | "mil" | "eco" | "sec">("all");
   const [draft, setDraft] = useState("");
-  const [sent, setSent] = useState<Record<ChannelId, ChatMessage[]>>({ alliance: [], world: [], system: [], "dm-nyx": [], "dm-whale": [] });
+  const [sent, setSent] = useState<Record<string, ChatMessage[]>>({});
+
+  // Live account status for the shared command nav (kept from the previous integration).
   const now = Date.now();
   const game = project(loadGame(address) || initGame(address), now);
   const stored = loadLocalWorldSession(address);
   const player = stored?.world.players[stored.playerId];
   const city = player ? stored?.world.entities[player.cityId] : null;
-  const activeFleets = player ? Object.values(stored!.world.marches).filter((march) => march.playerId === player.id && !["completed", "failed"].includes(march.state)).length : 0;
+  const activeFleets = player ? Object.values(stored!.world.marches).filter((m) => m.playerId === player.id && !["completed", "failed"].includes(m.state)).length : 0;
   const energy = player ? energyAt(player, now, stored!.world.config) : 100;
   const energyCap = stored?.world.config.energyCap ?? 100;
   const fleetCap = player?.marchSlots ?? worldMarchSlots(game);
   const location = city?.kind === "city"
     ? `SECTOR ${stored!.world.stateId.slice(-6).toUpperCase()} · HOME ${Math.round(city.position.x).toString().padStart(3, "0")}:${Math.round(city.position.y).toString().padStart(3, "0")}`
-    : "SECTOR 00DEV1 · HOME ---:---";
-  const channel = CHANNELS.find((item) => item.id === channelId)!;
-  const messages = [...THREADS[channelId], ...sent[channelId]];
-  const isSystem = channelId === "system";
-  const context = useMemo(() => channelId === "alliance" ? "alliance" : channelId === "world" ? "world" : channelId === "system" ? "system" : "direct", [channelId]);
+    : "SECTOR 00DEV1";
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
+  const isAlliance = active === "alliance";
+  const isSystem = active === "system";
+  const isDM = active.startsWith("dm");
+  const isWar = isAlliance && allianceTab === "warroom";
+  const key = isAlliance ? allianceTab : active;
+  const dm = DMS.find((d) => d.id === active);
+
+  const messages = useMemo(() => {
+    let list = [...(THREADS[key] ?? []), ...(sent[key] ?? [])];
+    if (isSystem && sysFilter !== "all") list = list.filter((m) => m.sys === sysFilter);
+    return list;
+  }, [key, sent, isSystem, sysFilter]);
+
+  function send() {
     const body = draft.trim();
-    if (!body || isSystem) return;
-    const message: ChatMessage = { id: `local-${Date.now()}`, author: profile.name, time: "NOW", body, own: true };
-    setSent((current) => ({ ...current, [channelId]: [...current[channelId], message] }));
+    if (!body || isSystem || active === "contacts") return;
+    setSent((cur) => ({ ...cur, [key]: [...(cur[key] ?? []), { a: profile.name || "Ruglord", f: profile.factionSymbol || "ORBT", own: true, t: "now", b: body }] }));
     setDraft("");
   }
 
-  return <section className="messages-page">
+  const channelMeta = CHANNELS.find((c) => c.id === active);
+  const headTitle = isAlliance ? "Alliance · Orbital" : isDM && dm ? `[${dm.faction}] ${dm.label}` : active === "contacts" ? "Contacts" : channelMeta?.label ?? "";
+  const headDetail = isAlliance ? "[ORBT] Orbital" : isDM && dm ? dm.detail : active === "contacts" ? "5 friends · 3 online" : channelMeta?.detail ?? "";
+  const headIcon = isAlliance ? "◇" : isDM && dm ? dm.icon : active === "contacts" ? "❋" : channelMeta?.icon ?? "◎";
+  const headColor = isDM && dm ? fcol(dm.faction) : isWar ? "var(--gold)" : "var(--cyan)";
+
+  return <section className="comms-page">
     <CosmicBackdrop />
+    <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="messages" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
       resources={game.res} energy={energy} energyCap={energyCap} activeFleets={activeFleets} fleetCap={fleetCap}
       standing={totalTroops(game)} wounded={game.wounded} might={mightBreakdown(game).total}
       onCity={onCity} onWorld={onWorld} onMessages={() => {}} />
-    <div className="messages-shell">
-      <aside className="messages-rail">
-        <header><span>COMMS</span><button aria-label="New direct message">＋</button></header>
-        <label className="messages-search"><span>⌕</span><input aria-label="Search messages" placeholder="Search" /></label>
-        <ChannelGroup title="CHANNELS" channels={CHANNELS.filter((item) => item.group === "channels")} active={channelId} onSelect={setChannelId} />
-        <ChannelGroup title="DIRECT MESSAGES" channels={CHANNELS.filter((item) => item.group === "direct")} active={channelId} onSelect={setChannelId} />
-        <div className="messages-voice"><i /><div><b>VOICE LINK</b><span>3 connected</span></div><button>JOIN</button></div>
+
+    <div className="comms">
+      {/* LEFT — channels */}
+      <aside className="col">
+        <div className="cm-search">⌕ Search people &amp; channels</div>
+        <div className="cm-grp">Channels</div>
+        {CHANNELS.map((c) => <button key={c.id} className={`chan ${active === c.id ? "on" : ""}`} onClick={() => setActive(c.id)}>
+          <span className="ci" style={c.id === "alliance" ? { color: "var(--cyan)" } : undefined}>{c.icon}</span>
+          <span className="cx"><b>{c.label}</b>{c.detail && <span>{c.detail}</span>}</span>
+          {c.unread ? <span className={`badge ${c.mention ? "mention" : ""}`}>{c.mention ? `@${c.unread}` : c.unread}</span> : null}
+        </button>)}
+        <div className="cm-grp" style={{ marginTop: 12 }}>Direct</div>
+        <button className={`chan contacts-row ${active === "contacts" ? "on" : ""}`} onClick={() => setActive("contacts")}>
+          <span className="ci contacts-ci">❋</span><span className="cx"><b>Contacts</b><span>3 online</span></span>
+        </button>
+        {DMS.map((c) => <button key={c.id} className={`chan ${active === c.id ? "on" : ""}`} onClick={() => setActive(c.id)}>
+          <span className="ci" style={{ color: fcol(c.faction) }}>{c.icon}</span>
+          <span className="cx"><b>[{c.faction}] {c.label}</b><span>{c.detail}</span></span>
+        </button>)}
       </aside>
 
-      <main className="messages-thread">
-        <header className="messages-thread-head">
-          <div><span>{channel.icon}</span><div><b>{channel.label}</b><small>{channel.detail}</small></div></div>
-          <nav><button>⌕</button><button>⋯</button></nav>
-        </header>
-        {channelId === "alliance" && <div className="messages-pinned"><span>PINNED ORDER</span><b>Hold the east Wormhole approach · 20:00 UTC</b><button>VIEW</button></div>}
-        <div className={`messages-stream ${isSystem ? "system-stream" : ""}`}>
-          <div className="messages-day"><span>TODAY · SEPT 8</span></div>
-          {messages.map((message) => <MessageRow key={message.id} message={message} system={isSystem} />)}
+      {/* CENTER — active thread */}
+      <section className="col col-mid">
+        <div className="thread-head">
+          <div className="th-icon" style={{ color: headColor, borderColor: "color-mix(in srgb,currentColor 45%,transparent)" }}>{headIcon}</div>
+          <div className="th-t"><b>{headTitle}</b><span>{headDetail}</span></div>
+          <div className="th-actions"><button className="cm-icon">☆</button><button className="cm-icon">⋯</button></div>
         </div>
-        {!isSystem ? <form className="messages-compose" onSubmit={submit}>
-          <button type="button" aria-label="Add attachment">＋</button>
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} aria-label={`Message ${channel.label}`} placeholder={`Message ${channel.label}`} />
-          <button type="button" aria-label="Add emoji">☺</button>
-          <button className="send" aria-label="Send message">➤</button>
-        </form> : <div className="messages-system-footer"><span>System events are generated by verified game actions.</span><button>FILTER</button></div>}
-      </main>
 
-      <aside className="messages-context">
-        {context === "alliance" && <AllianceContext />}
-        {context === "world" && <WorldContext />}
-        {context === "system" && <SystemContext />}
-        {context === "direct" && <DirectContext channel={channel} />}
-      </aside>
+        {isAlliance && <div className="subtabs">
+          <button className={allianceTab === "general" ? "on" : ""} onClick={() => setAllianceTab("general")}>◇ General</button>
+          <button className={`${allianceTab === "warroom" ? "on" : ""} ${ALLIANCE_MANAGEMENT ? "" : "locked"}`}
+            title={ALLIANCE_MANAGEMENT ? "" : "Requires alliance management"}
+            onClick={() => ALLIANCE_MANAGEMENT && setAllianceTab("warroom")}>⚔ War Room {ALLIANCE_MANAGEMENT ? (WARROOM_ACTIVE ? <span className="live-dot" /> : null) : "🔒"}</button>
+        </div>}
+        {isWar && <div className="warroom-strip">⚔ Wormhole Sentinel op<span className="who">6 fleets · Nyx, Whale +4</span></div>}
+        {isSystem && <div className="sysfilter">{(["all", "mil", "eco", "sec"] as const).map((f) => <button key={f} className={f === sysFilter ? "on" : ""} onClick={() => setSysFilter(f)}>{({ all: "All", mil: "Military", eco: "Economy", sec: "Security" } as const)[f]}</button>)}</div>}
+
+        {active === "contacts"
+          ? <div className="stream">{CONTACTS.map((c, i) => <div className="contact" key={i}>
+              <div className="av" style={{ color: fcol(c.f) }}>{c.a.slice(0, 1)}</div>
+              <div className="cbd"><div className="meta"><span className="tick" style={{ color: fcol(c.f), background: `${fcol(c.f)}1a` }}>[{c.f}]</span><span className="nm">{c.a}</span>{c.v && <span className="vbadge">✓</span>}</div>
+                <div className="cnote"><span className={`dot ${c.on ? "on" : ""}`} />{c.note}</div></div>
+              <button className="cmsg">Message</button>
+            </div>)}</div>
+          : <div className="stream">
+              {isWar && <div className="spam">⚔ Fresh op session · clears when the op ends</div>}
+              {messages.map((m, i) => <MessageRow key={i} m={m} />)}
+              {messages.length === 0 && <div className="spam">{isWar ? "No active op — a War Room opens fresh when an officer starts one." : "No messages yet."}</div>}
+            </div>}
+
+        {!isSystem && active !== "contacts" && <div className="compose">
+          <div className="safety"><span><i>🚫</i> Links off</span></div>
+          <div className="box">
+            <button className="attach" title="Share coordinate / report / start rally">+</button>
+            <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Message · @mention · attach a coordinate, report or rally with +" />
+            <button className="cm-send" onClick={send}>Send</button>
+          </div>
+        </div>}
+      </section>
+
+      {/* RIGHT — context */}
+      <aside className="col"><div className="ctx">{renderContext(active, allianceTab, dm)}</div></aside>
     </div>
   </section>;
 }
 
-function ChannelGroup({ title, channels, active, onSelect }: { title: string; channels: typeof CHANNELS; active: ChannelId; onSelect: (id: ChannelId) => void }) {
-  return <section className="channel-group"><h3>{title}</h3>{channels.map((channel) => <button className={active === channel.id ? "active" : ""} onClick={() => onSelect(channel.id)} key={channel.id}>
-    <span className="channel-glyph">{channel.icon}{channel.online && <i />}</span><span><b>{channel.label}</b><small>{channel.detail}</small></span>{channel.unread ? <em>{channel.unread}</em> : null}
-  </button>)}</section>;
-}
-
-function MessageRow({ message, system }: { message: ChatMessage; system: boolean }) {
-  if (system) return <article className="system-event"><span className={`system-icon ${message.author.toLowerCase()}`}>{message.author.slice(0, 1)}</span><div><header><b>{message.author}</b><em>{message.tag}</em><time>{message.time}</time></header><p>{message.body}</p></div><button>VIEW</button></article>;
-  return <article className={`chat-message ${message.own ? "own" : ""}`}>
-    <span className="chat-avatar">{message.author.slice(0, 1)}</span><div><header><b>{message.author}</b>{message.tag && <em>{message.tag}</em>}<time>{message.time}</time></header><p>{message.body}</p>
-      {message.event === "coords" && <button className="chat-coords"><span>◎</span><b>284:119</b><small>OPEN ON STAR MAP</small></button>}
-      {message.event === "rally" && <button className="chat-rally"><span>⚔</span><div><b>JOIN RALLY</b><small>02:14 · 3/8 fleets</small></div><strong>OPEN</strong></button>}
+function MessageRow({ m }: { m: ChatMessage }) {
+  if (m.pin) return <div className="pinned"><b>PINNED</b><span>{m.pin}</span></div>;
+  if (m.spam) return <div className="spam"><b>[{m.f}] {m.a}</b> sent the same message {m.spam}× · collapsed</div>;
+  if (m.sys) return <div className={`logrow ${m.sys}`}><span className="lg-tag">{m.tag}</span><span className="lg-b">{m.b}</span><span className="lg-t">{m.t}</span></div>;
+  return <div className={`msg ${m.own ? "own" : ""}`}>
+    <div className="av" style={m.own ? undefined : { color: fcol(m.f) }}>{(m.a ?? "?").slice(0, 1)}</div>
+    <div className="bd">
+      <div className="meta">
+        {m.f && <span className="tick" style={{ color: fcol(m.f), background: `${fcol(m.f)}1a` }}>[{m.f}]</span>}
+        <span className="nm">{m.a}</span>
+        {m.v && <span className="vbadge" title="verified holder">✓</span>}
+        {m.tag && <span className={`mtag ${m.tag}`}>{m.tag}</span>}
+        <span className="mtime">{m.t}</span>
+      </div>
+      <div className="txt">{m.b}</div>
+      {m.coord && <div className="chip-coord"><div className="cc-i">◈</div><div className="cc-t"><b>{m.coord.c}</b><span>{m.coord.k}</span></div><div className="cc-act"><button>Scout</button><button>Gather</button><button className="go">Open ▸</button></div></div>}
+      {m.rally && <div className="chip-rally"><div className="rr-top"><b>Wormhole Sentinel</b><span className="rr-lv">L18</span></div>
+        <div className="rr-meta"><span>Fills in <b>4m 40s</b></span><span className="rr-counter">Counter: bring Army ▸ Air</span></div>
+        <div className="rr-meta"><span>Fleets <b>3 / 6</b></span><span>Your rec: <b>Army T8 ×42K</b></span></div>
+        <div className="rr-bar"><i /></div><button className="rr-join">Join with recommended fleet →</button></div>}
+      {m.blocked && <div className="spam" style={{ marginTop: 5 }}>🚫 {m.blocked}</div>}
+      <div className="row-actions"><button>Reply</button><button>Report</button><button>Mute</button></div>
     </div>
-  </article>;
+  </div>;
 }
 
-function AllianceContext() { return <><ContextHead eyebrow="ALLIANCE" title="ORBITAL" detail="[ORBT] · 184 members" /><div className="alliance-presence"><span><i />38 ONLINE</span><b>RANK #12</b></div><ContextSection title="OBJECTIVE"><div className="context-objective"><span>WORMHOLE CONTROL</span><b>68%</b><i><em /></i><small>17h 24m held this cycle</small></div></ContextSection><ContextSection title="ONLINE NOW"><Roster name="NyxValidator" role="OFFICER"/><Roster name="WhaleSignal" role="VANGUARD"/><Roster name="VoidRunner" role="MEMBER"/><button className="context-link">VIEW ALL 38</button></ContextSection><ContextSection title="QUICK LINKS"><button className="context-action">⚔ Rally board <span>3</span></button><button className="context-action">◎ Alliance coordinates</button><button className="context-action">▤ Shared reports</button></ContextSection></>; }
-function WorldContext() { return <><ContextHead eyebrow="PUBLIC NETWORK" title="SECTOR 00DEV1" detail="1,024 civilizations"/><ContextSection title="ACTIVE REGIONS"><Signal label="North-west arc" value="HIGH TRAFFIC" tone="green"/><Signal label="Wormhole perimeter" value="CONTESTED" tone="red"/><Signal label="Outer south rim" value="QUIET" tone="blue"/></ContextSection><ContextSection title="WORLD RULES"><p className="context-copy">Public messages are visible across this World State. Coordinates and reports can be shared directly into the Star Map.</p><button className="context-link">COMMUNITY RULES</button></ContextSection></>; }
-function SystemContext() { return <><ContextHead eyebrow="ACCOUNT LOG" title="SYSTEM" detail="Verified game events"/><ContextSection title="VISIBLE EVENTS"><label className="context-check"><input type="checkbox" defaultChecked/> Combat</label><label className="context-check"><input type="checkbox" defaultChecked/> Fleets</label><label className="context-check"><input type="checkbox" defaultChecked/> City &amp; research</label><label className="context-check"><input type="checkbox" defaultChecked/> Alliance activity</label></ContextSection><ContextSection title="UNREAD"><div className="system-count"><b>1</b><span>new event</span></div><button className="context-link">MARK ALL READ</button></ContextSection></>; }
-function DirectContext({ channel }: { channel: (typeof CHANNELS)[number] }) { return <><ContextHead eyebrow="DIRECT MESSAGE" title={channel.label} detail={channel.detail}/><div className="direct-profile"><span>{channel.icon}</span><b>CORE 17</b><small>[ORBT] ORBITAL</small></div><ContextSection title="PLAYER"><Signal label="Might" value="24.8M" tone="gold"/><Signal label="Last seen" value={channel.online ? "ONLINE" : "12M AGO"} tone={channel.online ? "green" : "blue"}/></ContextSection><ContextSection title="ACTIONS"><button className="context-action">◎ View civilization</button><button className="context-action">☆ Add contact</button><button className="context-action danger">! Block / report</button></ContextSection></>; }
-function ContextHead({ eyebrow, title, detail }: { eyebrow: string; title: string; detail: string }) { return <header className="context-head"><span>{eyebrow}</span><b>{title}</b><small>{detail}</small></header>; }
-function ContextSection({ title, children }: { title: string; children: React.ReactNode }) { return <section className="context-section"><h3>{title}</h3>{children}</section>; }
-function Roster({ name, role }: { name: string; role: string }) { return <div className="context-roster"><span>{name.slice(0, 1)}<i /></span><div><b>{name}</b><small>{role}</small></div></div>; }
-function Signal({ label, value, tone }: { label: string; value: string; tone: string }) { return <div className="context-signal"><span>{label}</span><b className={tone}>{value}</b></div>; }
+function renderContext(active: ChannelId, allianceTab: AllianceTab, dm?: { label: string; detail: string; faction: string }) {
+  if (active === "cosmos") return <>
+    <div className="ct-title">Factions online</div>
+    <div className="factions">{["ORBT", "PEPE", "DOGE", "MOG", "WIF"].map((f) => <span key={f} className="fchip" style={{ color: fcol(f) }}><i style={{ background: fcol(f) }} />{f}</span>)}</div>
+  </>;
+  if (active === "alliance") {
+    const roster: Array<[string, string, string]> = [["NyxValidator", "ORBT", "2 fleets"], ["WhaleSignal", "MOG", "air ×2"], ["VoidRunner", "ORBT", "idle"], ["Ruglord", "ORBT", "you"]];
+    return <>
+      <div className="ct-hero"><b>ORBITAL</b><span>[ORBT] · rank #12</span></div>
+      <div className="ct-title">The Wormhole</div>
+      <div className="obj"><div className="ob-l"><span>Sector control</span><b style={{ color: "var(--ink)" }}>66%</b></div><div className="ob-bar"><i style={{ width: "66%" }} /></div></div>
+      <div className="ct-title">{allianceTab === "warroom" ? "In this op" : "Online"}</div>
+      <div className="roster">{roster.map((r, i) => <div className="rm" key={i}><span className="dot on" /><span style={{ color: fcol(r[1]) }}>●</span>{r[0]}<span className="rm-f">{r[2]}</span></div>)}</div>
+      <div className="ct-title">Quick links</div>
+      <div className="qlinks"><div className="ql">⚔ Rally board <span className="qbadge">2</span></div><div className="ql">◈ Shared coordinates</div><div className="ql">▤ Shared reports</div><div className="ql">⚙ Alliance page ▸</div></div>
+    </>;
+  }
+  if (active === "system") return <>
+    <div className="ct-title">Notify me for</div>
+    <div className="roster">
+      <div className="rm"><span className="dot on" />Under attack<span className="rm-f">on</span></div>
+      <div className="rm"><span className="dot on" />Rally opened<span className="rm-f">on</span></div>
+      <div className="rm"><span className="dot on" />Reinforcement<span className="rm-f">on</span></div>
+      <div className="rm"><span className="dot" />Harvest returned<span className="rm-f">off</span></div>
+    </div>
+  </>;
+  if (active === "contacts") return <>
+    <div className="ct-title">Requests</div>
+    <div className="roster"><div className="rm"><span style={{ color: fcol("WIF") }}>●</span>SolSniper<span className="rm-f" style={{ color: "var(--cyan)" }}>accept</span></div></div>
+    <div className="ct-title">Add friend</div>
+    <div className="cm-search" style={{ margin: 0 }}>⌕ Player name</div>
+  </>;
+  return <>
+    <div className="ct-hero"><b>{dm?.label}</b><span style={{ color: fcol(dm?.faction) }}>[{dm?.faction}] · {dm?.detail}</span></div>
+    <div className="ct-title">Actions</div>
+    <div className="qlinks"><div className="ql">◈ Share a coordinate</div><div className="ql">▤ Share a report</div><div className="ql" style={{ color: "var(--err)" }}>⃠ Block / mute</div></div>
+  </>;
+}

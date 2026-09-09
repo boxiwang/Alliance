@@ -5,8 +5,8 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-08 · **by:** Codex (Frontier I public ecology, L20 ceiling, sector-balanced density, randomized refill, search-first Deep Scan)
-**Current focus:** Local World loop is playable and now behaves like shared geography rather than a personal quest generator. Next: fresh L1→L5 + gather/scout playtests from the UI, tune the full L1→20 Frontier I account, design Wormhole graduation/Map II resources, then server authority and alliance layers. **Full details are in `HANDOFF.md` → "Latest changes (Codex, 2026-09-08)".**
+**Last updated:** 2026-09-08 · **by:** Claude (Comms/Task-1 chat page landed as frontend + local stub; hosting + monetization plans) — on top of Codex's Frontier I ecology
+**Current focus:** Comms page is live at `/?messages` (real GameNav, refined design, local stub only — not real multiplayer yet). Next: define the `chat-adapter` seam and wire System→real events + a City/Star-Map mini-chat; separately, tune the L1→20 Frontier I account and playtest. Hosting = Cloudflare free tier when going multiplayer (~300–1,000 DAU before paying). Monetization proposal in `docs/MONETIZATION.md`. **Full details in `HANDOFF.md` → "Latest changes (Claude, 2026-09-08 — Comms page + plans)".**
 
 ### 💬 Circular World + shared Messages mock (Codex, 2026-09-08)
 - Corrected the geometry mismatch: World rendering and every placement path now share one circular radius. Spawn grid 40 preserves 1,024 city slots after circle clipping; a full 5,200-entity State is acceptance-tested inside the circle.

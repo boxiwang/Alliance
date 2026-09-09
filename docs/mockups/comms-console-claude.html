@@ -1,0 +1,506 @@
+<title>ALLIANCE Comms Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* ── tokens copied from the app (src/styles.css) so this mockup matches every other page ── */
+:root{
+  color-scheme:dark;
+  --bg:#0b1020; --bg2:#111931; --bg3:#17213c;
+  --line:#28324e; --line2:#1c2540;
+  --ink:#dbe2f3; --ink2:#93a1c2; --ink3:#647293;
+  --gold:#e8b24c; --gold2:#a67c34; --ok:#46c081; --err:#e5593d; --world-green:#43f2a1;
+  --sans:"IBM Plex Sans",system-ui,sans-serif;
+  --hud:"Chakra Petch",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",monospace;
+  --cash:#43f2a1; --oil:#ffb454; --power:#38d9ff; --cyan:#38d9ff; --violet:#aa82ff;
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;overflow-x:hidden;background-color:#040813;color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+.wrap{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:12px var(--sp,20px) 60px}
+/* cosmos backdrop — ported from CosmicBackdrop.tsx so Comms matches City & Star Map */
+.cosmic-backdrop{position:fixed;inset:0;z-index:-2;overflow:hidden;pointer-events:none;background:linear-gradient(145deg,rgba(2,5,13,.4),rgba(8,13,30,.2))}
+.cosmic-nebula{position:absolute;inset:-10%;opacity:.9;background:radial-gradient(50% 42% at 78% 16%,rgba(122,73,216,.16),transparent 60%),radial-gradient(46% 46% at 10% 90%,rgba(56,120,146,.13),transparent 60%)}
+.cosmic-backdrop canvas{position:absolute;inset:0}
+.world-page-black-hole{position:fixed;z-index:-1;top:clamp(118px,18vh,210px);right:clamp(-230px,-9vw,-88px);width:clamp(460px,48vw,760px);aspect-ratio:1;pointer-events:none;opacity:.58;filter:saturate(1.16);animation:hole-drift 96s ease-in-out infinite alternate}
+.world-page-black-hole>i{position:absolute}
+.world-page-hole-glow{inset:2%;border-radius:50%;background:radial-gradient(circle at 50% 50%,transparent 0 17%,rgba(4,5,14,.9) 22%,rgba(120,72,207,.44) 25%,rgba(58,165,222,.2) 31%,rgba(78,49,158,.13) 43%,transparent 68%);filter:blur(17px)}
+.world-page-accretion{inset:25% 1%;border:2px solid rgba(164,126,255,.43);border-radius:50%;background:conic-gradient(from 20deg,transparent 0 10%,rgba(66,202,255,.07) 18%,rgba(187,126,255,.4) 29%,rgba(252,196,119,.3) 37%,transparent 48%,rgba(72,189,255,.24) 67%,rgba(166,110,255,.38) 79%,transparent 94%);box-shadow:0 0 18px rgba(155,102,255,.3),0 0 54px rgba(60,169,230,.2),inset 0 0 20px rgba(224,184,255,.2);filter:blur(.6px);transform:rotate(-14deg) scaleY(.34);animation:accretion-spin 72s linear infinite}
+.world-page-hole-core{inset:35%;border-radius:50%;background:radial-gradient(circle at 44% 38%,#060511 0,#010208 46%,#000 72%);box-shadow:0 0 0 2px rgba(214,183,255,.2),0 0 24px 7px rgba(130,80,220,.27),0 0 92px 22px rgba(43,139,201,.15)}
+@keyframes hole-drift{to{transform:translate3d(-5vw,4vh,0) scale(1.045)}}
+@keyframes accretion-spin{to{transform:rotate(346deg) scaleY(.34)}}
+@media(prefers-reduced-motion:reduce){.world-page-black-hole,.world-page-accretion{animation:none}}
+
+/* ── command-nav — replicated verbatim from GameNav.tsx / styles.css, COMMS tab added ── */
+.command-nav{position:sticky;top:8px;z-index:40;overflow:hidden;border:1px solid rgba(56,217,255,.22);border-radius:13px;background:rgba(5,12,26,.94);box-shadow:0 16px 46px rgba(0,0,0,.4),inset 0 1px rgba(255,255,255,.025);backdrop-filter:blur(16px)}
+.command-nav-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:8px 9px 8px 14px;border-bottom:1px solid rgba(56,217,255,.1);background:linear-gradient(100deg,rgba(56,217,255,.035),rgba(107,76,202,.035))}
+.command-identity-wrap{display:flex;min-width:0;align-items:center;gap:10px}
+.command-sigil{position:relative;width:36px;height:36px;display:grid;flex:0 0 auto;place-items:center;overflow:hidden;border:1px solid rgba(156,166,255,.28);border-radius:10px;background:conic-gradient(from 35deg,#161b38,#766deb,#172a3c,#53d2dc,#161b38);box-shadow:inset 0 0 14px rgba(7,9,18,.78),0 0 18px rgba(126,112,255,.12)}
+.command-sigil i{width:4px;height:4px;border-radius:50%;background:#fff;box-shadow:0 0 6px #fff}
+.command-identity{min-width:0;display:flex;flex-direction:column;gap:2px}
+.command-identity>span{font:700 7px var(--mono);letter-spacing:.17em;color:#4e8297}
+.command-identity>div{display:flex;align-items:baseline;gap:9px}
+.command-identity>div>b{overflow:hidden;color:#e8f8ff;font:650 12px var(--hud);text-overflow:ellipsis;white-space:nowrap}
+.command-identity>div>em{font:7px var(--mono);font-style:normal;letter-spacing:.07em;color:#698092}
+.command-identity>small{font:7px var(--mono);letter-spacing:.07em;color:#536d80}
+.command-nav-controls{display:flex;align-items:stretch;gap:8px}
+.command-might{min-width:116px;display:flex;justify-content:center;flex-direction:column;padding:6px 12px;border:1px solid rgba(232,178,76,.3);border-radius:8px;background:linear-gradient(135deg,rgba(232,178,76,.1),rgba(128,74,210,.07));box-shadow:inset 2px 0 var(--gold)}
+.command-might small{font:700 7px var(--mono);letter-spacing:.15em;color:#a88449}
+.command-might b{font:750 19px var(--hud);letter-spacing:.015em;color:#ffd478;text-shadow:0 0 18px rgba(232,178,76,.18)}
+.command-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:3px;border:1px solid rgba(56,217,255,.15);border-radius:9px;background:rgba(2,8,18,.55)}
+.command-tabs button{position:relative;min-width:116px;display:grid;grid-template-columns:21px 1fr;column-gap:7px;padding:8px 10px;border:1px solid transparent;border-radius:6px;background:transparent;color:#5f788a;text-align:left;cursor:pointer}
+.command-tabs button>span{align-self:center;font-size:14px}
+.command-tabs button>b{align-self:center;font:700 8.5px var(--hud);letter-spacing:.1em}
+.command-tabs button:hover{color:#a9eaff}
+.command-tabs button.active{border-color:rgba(56,217,255,.28);background:linear-gradient(100deg,rgba(56,217,255,.18),rgba(95,78,198,.11));color:#dffaff;box-shadow:inset 2px 0 #38d9ff,0 5px 18px rgba(0,0,0,.18)}
+.command-tabs .pip{position:absolute;top:-4px;right:-4px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:var(--err);color:#150a0c;font:700 8px var(--mono);display:grid;place-items:center}
+.command-network{display:grid;grid-template-columns:repeat(3,minmax(125px,1.15fr)) repeat(4,minmax(70px,.68fr)) 116px;gap:1px;padding:1px;background:rgba(56,217,255,.06)}
+.command-resource{position:relative;min-height:52px;display:grid;grid-template-columns:29px minmax(0,1fr);align-items:center;gap:8px;padding:9px 11px;background:linear-gradient(145deg,color-mix(in srgb,var(--resource) 5%,#081124),#070e1d);box-shadow:inset 2px 0 color-mix(in srgb,var(--resource) 46%,transparent)}
+.command-resource-icon{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:color-mix(in srgb,var(--resource) 8%,transparent);color:var(--resource)}
+.command-resource-icon svg{width:15px;height:15px}
+.command-resource>div{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+.command-resource>div>small{font:700 7px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--resource)}
+.command-resource>div>b{font:750 16px var(--hud);color:#eaf9ff}
+.command-metric{--resource:#38d9ff;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:9px 8px;background:linear-gradient(145deg,color-mix(in srgb,var(--resource) 5%,#081124),#070e1d);box-shadow:inset 2px 0 color-mix(in srgb,var(--resource) 46%,transparent)}
+.command-metric>small{font:700 7px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--resource)}
+.command-metric>b{font:750 13px var(--hud);color:#eaf9ff}
+.command-credits{display:grid;grid-template-columns:25px 1fr 21px;align-items:center;gap:7px;padding:8px 9px;border:0;background:linear-gradient(145deg,rgba(142,151,255,.15),rgba(65,50,126,.11));color:#e8eaff;text-align:left;cursor:pointer}
+.command-credits>span{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;background:rgba(142,151,255,.12);color:#c3c8ff;font-size:15px}
+.command-credits>div{display:flex;min-width:0;flex-direction:column}
+.command-credits small{font:700 8.5px var(--mono);letter-spacing:.1em;color:#9aa2d8}
+.command-credits b{font:750 15px var(--hud)}
+.command-credits strong{width:20px;height:20px;display:grid;place-items:center;border-radius:6px;background:#8e97ff;color:#090c16;font-size:15px}
+
+/* ── comms layout ── */
+.comms{display:grid;grid-template-columns:220px minmax(0,1fr) 264px;gap:12px;align-items:start;margin-top:12px}
+.col{border:1px solid var(--line);border-radius:13px;background:var(--bg2);min-height:560px}
+.col-mid{display:flex;flex-direction:column;min-height:600px;background:var(--bg2)}
+.icon-btn{width:26px;height:26px;border:1px solid var(--line);border-radius:7px;background:var(--bg3);color:var(--ink2);cursor:pointer;font-size:13px;display:grid;place-items:center}
+
+/* left rail */
+.search{margin:12px;display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink3);font:11px var(--mono)}
+.grp{margin:8px 13px 3px;font:700 8px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink3)}
+.chan{width:100%;display:flex;align-items:center;gap:9px;padding:9px 12px;border:0;border-left:2px solid transparent;background:transparent;color:var(--ink2);cursor:pointer;text-align:left;font-family:var(--sans)}
+.chan:hover{background:var(--bg3)}
+.chan.on{background:linear-gradient(100deg,rgba(56,217,255,.12),rgba(95,78,198,.07));border-left-color:var(--cyan);color:var(--ink)}
+.chan .ci{width:24px;height:24px;flex:none;border-radius:7px;display:grid;place-items:center;font:600 11px var(--mono);background:var(--bg3);border:1px solid var(--line)}
+.chan .cx{min-width:0;flex:1}
+.chan .cx b{display:block;font:600 12.5px var(--hud);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chan .cx span{font:8.5px var(--mono);color:var(--ink3);letter-spacing:.06em;text-transform:uppercase}
+.chan .badge{min-width:17px;height:17px;padding:0 4px;border-radius:9px;font:700 9px var(--mono);display:grid;place-items:center;background:var(--bg3);color:var(--ink2);border:1px solid var(--line)}
+.chan .badge.mention{background:var(--cyan);color:#04121a;border-color:transparent}
+.chan.contacts-row{background:rgba(56,217,255,.045);border-bottom:1px solid var(--line);margin-bottom:2px}
+.chan.contacts-row:hover{background:rgba(56,217,255,.09)}
+.chan.contacts-row.on{background:linear-gradient(100deg,rgba(56,217,255,.14),rgba(95,78,198,.08));border-left-color:var(--cyan)}
+.chan.contacts-row .contacts-ci{background:rgba(56,217,255,.1);border-color:rgba(56,217,255,.32);color:var(--cyan)}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok);vertical-align:middle;margin-left:2px;animation:live-pulse 1.6s ease-in-out infinite}
+@keyframes live-pulse{50%{opacity:.35}}
+.mini-body{cursor:pointer}
+.rail-note{margin:12px;padding:9px 10px;border:1px dashed var(--line);border-radius:8px;font:9.5px/1.55 var(--mono);color:var(--ink3)}
+.rail-note b{color:var(--ink2)}
+
+/* center thread */
+.thread-head{display:flex;align-items:center;gap:12px;padding:12px 15px;border-bottom:1px solid var(--line)}
+.thread-head .th-icon{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font:600 13px var(--mono);border:1px solid var(--line2)}
+.thread-head .th-t b{font:600 14px var(--hud);letter-spacing:.02em}
+.thread-head .th-t span{display:block;font:9px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
+.thread-head .th-actions{margin-left:auto;display:flex;gap:6px}
+/* alliance sub-tabs (General / War Room live here, not in the left rail) */
+.subtabs{display:flex;gap:4px;padding:9px 15px;border-bottom:1px solid var(--line);background:var(--bg)}
+.subtabs button{position:relative;display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--bg2);color:var(--ink3);font:700 9px var(--hud);letter-spacing:.09em;text-transform:uppercase;padding:6px 11px;border-radius:7px;cursor:pointer}
+.subtabs button.on{border-color:rgba(56,217,255,.3);color:#dffaff;background:linear-gradient(100deg,rgba(56,217,255,.16),rgba(95,78,198,.1));box-shadow:inset 2px 0 var(--cyan)}
+.subtabs button.locked{opacity:.6;cursor:help}
+.subtabs .lock{font-size:9px;color:var(--gold)}
+.warroom-strip{display:flex;align-items:center;gap:8px;padding:8px 15px;border-bottom:1px solid var(--line);background:rgba(232,178,76,.05);font:9.5px var(--mono);color:var(--gold);letter-spacing:.03em}
+.warroom-strip .who{margin-left:auto;color:var(--ink3)}
+.sysfilter{display:flex;gap:6px;padding:9px 15px;border-bottom:1px solid var(--line)}
+.sysfilter button{border:1px solid var(--line);background:var(--bg2);color:var(--ink3);font:700 8.5px var(--hud);letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:6px;cursor:pointer}
+.sysfilter button.on{border-color:var(--cyan);color:#dffaff;background:rgba(56,217,255,.12)}
+.stream{flex:1;overflow:auto;padding:14px 15px;display:flex;flex-direction:column;gap:12px}
+.pinned{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border:1px solid rgba(232,178,76,.28);background:rgba(232,178,76,.06);border-radius:9px;font-size:11.5px;color:var(--gold)}
+.pinned b{font:700 8px var(--mono);letter-spacing:.1em;padding:2px 5px;border:1px solid rgba(232,178,76,.4);border-radius:4px;flex:none}
+.msg{display:grid;grid-template-columns:30px 1fr;gap:10px}
+.msg .av{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font:600 11px var(--mono);border:1px solid var(--line2);background:var(--bg3)}
+.msg .meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.msg .nm{font:600 12px var(--hud);letter-spacing:.02em}
+.tick{font:600 9px var(--mono);padding:1px 5px;border-radius:4px;letter-spacing:.03em}
+.vbadge{color:var(--ok);font-size:10px}
+.mtag{font:700 8px var(--mono);letter-spacing:.08em;padding:2px 5px;border-radius:4px;border:1px solid var(--line2);color:var(--ink3);text-transform:uppercase}
+.mtag.officer{color:var(--cyan);border-color:rgba(56,217,255,.4)}
+.mtag.rally{color:var(--gold);border-color:rgba(232,178,76,.4)}
+.mtime{font:9.5px var(--mono);color:var(--ink3);margin-left:auto}
+.msg .txt{margin-top:3px;font-size:12.5px;color:var(--ink);line-height:1.5}
+/* your own messages sit on the right, like a real chat app */
+.msg.own{grid-template-columns:1fr}
+.msg.own .av{display:none}
+.msg.own .bd{display:flex;flex-direction:column;align-items:flex-end;text-align:right}
+.msg.own .meta{justify-content:flex-end}
+.msg.own .mtime{margin-left:8px}
+.msg.own .txt{align-self:flex-end;width:fit-content;max-width:86%;margin-top:4px;padding:8px 11px;text-align:left;background:rgba(56,217,255,.1);border:1px solid rgba(56,217,255,.22);border-radius:11px 11px 3px 11px}
+.msg.own .chip-coord,.msg.own .chip-rally{align-self:flex-end;width:86%}
+.msg.own .row-actions{justify-content:flex-end}
+.row-actions{opacity:0;display:flex;gap:5px;margin-top:5px;transition:.12s}
+.msg:hover .row-actions{opacity:1}
+.row-actions button{border:1px solid var(--line);background:var(--bg2);color:var(--ink3);font:8.5px var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:3px 6px;border-radius:5px;cursor:pointer}
+.row-actions button:hover{color:var(--err);border-color:rgba(229,89,61,.4)}
+.chip-coord,.chip-rally{margin-top:6px;border:1px solid var(--line2);border-radius:10px;background:var(--bg);overflow:hidden}
+.chip-coord{display:flex;align-items:center;gap:11px;padding:10px 12px}
+.chip-coord .cc-i{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;background:rgba(56,217,255,.12);color:var(--cyan);font-size:15px}
+.chip-coord .cc-t b{font:600 12px var(--mono)}
+.chip-coord .cc-t span{display:block;font:9.5px var(--mono);color:var(--ink3)}
+.chip-coord .cc-act{margin-left:auto;display:flex;gap:6px}
+.chip-coord .cc-act button{border:1px solid var(--line);background:var(--bg3);color:var(--ink2);font:700 9px var(--hud);letter-spacing:.05em;text-transform:uppercase;padding:6px 8px;border-radius:6px;cursor:pointer}
+.chip-coord .cc-act button.go{border-color:rgba(56,217,255,.4);color:#dffaff;background:rgba(56,217,255,.12)}
+.chip-rally{padding:12px}
+.chip-rally .rr-top{display:flex;align-items:center;gap:9px}
+.chip-rally .rr-top b{font:600 13px var(--hud)}
+.chip-rally .rr-lv{margin-left:auto;font:700 11px var(--mono);color:var(--gold)}
+.chip-rally .rr-meta{display:flex;gap:14px;margin:9px 0;font:9.5px var(--mono);color:var(--ink3)}
+.chip-rally .rr-meta b{color:var(--ink);font-weight:600}
+.chip-rally .rr-counter{color:var(--power)}
+.rr-bar{height:5px;border-radius:3px;background:var(--bg3);overflow:hidden;border:1px solid var(--line)}
+.rr-bar i{display:block;height:100%;width:50%;background:linear-gradient(90deg,var(--gold),#ffd89a)}
+.rr-join{width:100%;margin-top:10px;padding:11px;border:0;border-radius:9px;background:var(--gold);color:#20140a;font:700 11px var(--hud);letter-spacing:.09em;text-transform:uppercase;cursor:pointer}
+.spam{padding:7px 11px;border:1px dashed var(--line2);border-radius:8px;font:9.5px var(--mono);color:var(--ink3);text-align:center}
+.spam b{color:var(--ink2)}
+.logrow{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);border-left-width:2px;border-radius:8px;background:var(--bg)}
+.logrow .lg-tag{font:700 8px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.logrow .lg-b{flex:1;font-size:11.5px}
+.logrow .lg-t{font:9px var(--mono);color:var(--ink3)}
+.logrow.mil{border-left-color:var(--err)} .logrow.eco{border-left-color:var(--cash)} .logrow.sec{border-left-color:var(--violet)}
+.contact{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--line2)}
+.contact .cbd{min-width:0}
+.contact .cnote{display:flex;align-items:center;gap:6px;font:9.5px var(--mono);color:var(--ink3);margin-top:2px}
+.contact .cmsg{border:1px solid var(--line);background:var(--bg2);color:var(--ink2);font:700 9px var(--hud);letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;border-radius:7px;cursor:pointer}
+.contact .cmsg:hover{border-color:rgba(56,217,255,.4);color:#dffaff}
+.compose{border-top:1px solid var(--line);padding:11px 14px}
+.compose .safety{display:flex;align-items:center;gap:8px;font:9px var(--mono);color:var(--ink3);margin-bottom:8px;flex-wrap:wrap}
+.compose .safety i{color:var(--gold);font-style:normal}
+.compose .box{display:flex;align-items:center;gap:8px;border:1px solid var(--line2);border-radius:10px;background:var(--bg);padding:6px 6px 6px 12px}
+.compose input{flex:1;border:0;background:transparent;color:var(--ink);font:12px var(--sans);outline:none}
+.compose .attach{width:30px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:var(--ink2);cursor:pointer;font-size:15px}
+.compose .send{padding:8px 14px;border:0;border-radius:8px;background:var(--cyan);color:#04121a;font:700 10px var(--hud);letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+
+/* right context */
+.ctx{padding:15px}
+.ct-title{font:700 8px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);margin:0 0 10px}
+.ct-title:not(:first-child){margin-top:18px}
+.ct-hero{text-align:center;padding:6px 0 12px;border-bottom:1px solid var(--line)}
+.ct-hero b{font:600 16px var(--hud)}
+.ct-hero span{display:block;font:9.5px var(--mono);color:var(--ink3);letter-spacing:.09em;text-transform:uppercase;margin-top:2px}
+.obj{margin-top:8px}
+.obj .ob-l{display:flex;justify-content:space-between;font:9.5px var(--mono);color:var(--ink2);margin-bottom:5px}
+.obj .ob-bar{height:5px;border-radius:3px;background:var(--bg3);border:1px solid var(--line);overflow:hidden}
+.obj .ob-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),#8fe6ff)}
+.roster{display:flex;flex-direction:column;gap:6px}
+.rm{display:flex;align-items:center;gap:9px;font-size:11.5px}
+.rm .dot{width:7px;height:7px;border-radius:50%;background:var(--ink3)}
+.rm .dot.on{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.rm .rm-f{margin-left:auto;font:9px var(--mono);color:var(--ink3)}
+.qlinks{display:flex;flex-direction:column;gap:6px}
+.ql{display:flex;align-items:center;gap:9px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:11px;color:var(--ink2);cursor:pointer}
+.ql .qbadge{margin-left:auto;min-width:16px;height:16px;border-radius:8px;background:var(--err);color:#150a0c;font:700 9px var(--mono);display:grid;place-items:center;padding:0 4px}
+.factions{display:flex;flex-wrap:wrap;gap:6px}
+.fchip{display:flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--line);border-radius:20px;font:600 10px var(--mono);cursor:pointer}
+.fchip i{width:8px;height:8px;border-radius:50%}
+.ct-note{font:9.5px/1.55 var(--mono);color:var(--ink3);border-top:1px solid var(--line);padding-top:12px;margin-top:16px}
+.ct-note a{color:var(--cyan)}
+
+/* mini chat */
+.mini-wrap{margin-top:34px;padding-top:20px;border-top:1px solid var(--line)}
+.mini-lead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.mini-lead h2{font:600 15px var(--hud);margin:0}
+.mini-lead span{font:10px var(--mono);color:var(--ink3)}
+.mini-stage{position:relative;border:1px solid var(--line);border-radius:13px;min-height:230px;overflow:hidden;background:radial-gradient(120% 80% at 30% 0,rgba(56,120,146,.12),transparent 60%),#080d18}
+.mini-stage .ghost{position:absolute;inset:0;display:grid;place-items:center;color:var(--ink3);font:600 12px var(--mono);letter-spacing:.2em;text-transform:uppercase;opacity:.45}
+.mini{position:absolute;right:16px;bottom:16px;width:282px;border:1px solid rgba(56,217,255,.22);border-radius:12px;background:rgba(5,12,26,.94);backdrop-filter:blur(10px);box-shadow:0 20px 50px -22px #000;overflow:hidden}
+.mini-head{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line)}
+.mini-toggle{display:inline-flex;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--bg)}
+.mini-toggle button{border:0;background:transparent;color:var(--ink3);font:700 9px var(--hud);letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:5px;cursor:pointer}
+.mini-toggle button.on{background:rgba(56,217,255,.14);color:#dffaff}
+.mini-head .mh-x{margin-left:auto;color:var(--ink3);font:9px var(--mono)}
+.mini-body{padding:9px 10px;display:flex;flex-direction:column;gap:7px;max-height:120px;overflow:auto}
+.mini-line{font-size:10.5px;line-height:1.4}
+.mini-line b{font-weight:600;font-family:var(--hud)}
+.mini-foot{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--line)}
+.mini-foot input{flex:1;border:1px solid var(--line2);border-radius:7px;background:var(--bg);color:var(--ink);font:10.5px var(--sans);padding:6px 9px;outline:none}
+.mini-foot button{border:0;border-radius:7px;background:var(--cyan);color:#04121a;font:700 9px var(--hud);letter-spacing:.06em;text-transform:uppercase;padding:0 11px;cursor:pointer}
+
+.foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+@media(max-width:1000px){.comms{grid-template-columns:1fr}.col-mid{order:-1}.command-network{grid-template-columns:repeat(2,1fr)}.mini{position:static;width:auto;margin:16px}}
+</style>
+
+<div class="cosmic-backdrop" aria-hidden="true"><div class="cosmic-nebula"></div><canvas id="stars"></canvas></div>
+<div class="world-page-black-hole" aria-hidden="true"><i class="world-page-hole-glow"></i><i class="world-page-accretion"></i><i class="world-page-hole-core"></i></div>
+<div class="wrap">
+  <!-- NAV — identical to GameNav, COMMS tab added in the same style -->
+  <nav class="command-nav" aria-label="Game view and account status">
+    <div class="command-nav-head">
+      <div class="command-identity-wrap">
+        <span class="command-sigil"><i></i></span>
+        <div class="command-identity">
+          <span>ALLIANCE // CIV-8V5</span>
+          <div><b>Ruglord</b><em>CORE 14</em></div>
+          <small>Sector 00DEV1 · $PEPE · [ORBT] Orbital</small>
+        </div>
+      </div>
+      <div class="command-nav-controls">
+        <div class="command-might"><small>MIGHT</small><b>4.32K</b></div>
+        <div class="command-tabs">
+          <button><span>▦</span><b>CITY</b></button>
+          <button><span>◎</span><b>STAR MAP</b></button>
+          <button class="active"><span>✉</span><b>COMMS</b><span class="pip">9</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="command-network">
+      <div class="command-resource" style="--resource:#43f2a1"><span class="command-resource-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h18L12 4 3 9ZM5 10v7M9 10v7M15 10v7M19 10v7M3 20h18"/></svg></span><div><small>Cash</small><b>2.00M</b></div></div>
+      <div class="command-resource" style="--resource:#ffb454"><span class="command-resource-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3C9 7 6 10 6 14a6 6 0 0 0 12 0c0-4-3-7-6-11Z"/></svg></span><div><small>Oil</small><b>1.50M</b></div></div>
+      <div class="command-resource" style="--resource:#38d9ff"><span class="command-resource-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z"/></svg></span><div><small>Power</small><b>1.50M</b></div></div>
+      <div class="command-metric" style="--resource:#aa82ff"><small>Energy</small><b>100/100</b></div>
+      <div class="command-metric" style="--resource:#38d9ff"><small>Fleets</small><b>0/2</b></div>
+      <div class="command-metric" style="--resource:#43f2a1"><small>Standing</small><b>67.0K</b></div>
+      <div class="command-metric" style="--resource:#ff7188"><small>Wounded</small><b>0</b></div>
+      <button class="command-credits"><span>◇</span><div><small>CREDITS</small><b>0</b></div><strong>＋</strong></button>
+    </div>
+  </nav>
+
+  <div class="comms">
+    <aside class="col">
+      <div class="search">⌕ Search people &amp; channels</div>
+      <div class="grp">Channels</div>
+      <div id="chanlist"></div>
+      <div class="grp" style="margin-top:12px">Direct</div>
+      <div id="contactsbtn"></div>
+      <div id="dmlist"></div>
+    </aside>
+
+    <section class="col col-mid">
+      <div id="threadhead"></div>
+      <div class="stream" id="stream"></div>
+      <div class="compose">
+        <div class="safety"><span><i>🚫</i> Links off</span></div>
+        <div class="box">
+          <button class="attach" id="attach" title="Share coordinate / report / start rally">+</button>
+          <input id="draft" placeholder="Message  ·  @mention  ·  attach a coordinate, report or rally with +">
+          <button class="send" id="send">Send</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="col"><div class="ctx" id="ctx"></div></aside>
+  </div>
+
+  <div class="mini-wrap">
+    <div class="mini-lead"><h2>Mini-chat — docked on City &amp; Star Map</h2><span>quick toggle Alliance ⇄ Cosmos · DMs &amp; War Room stay in full Comms</span></div>
+    <div class="mini-stage">
+      <div class="ghost">City / Star Map behind</div>
+      <div class="mini">
+        <div class="mini-head">
+          <div class="mini-toggle"><button class="on" data-mini="alliance">Alliance</button><button data-mini="cosmos">Cosmos</button></div>
+          <span class="mh-x">↗ Comms</span>
+        </div>
+        <div class="mini-body" id="minibody"></div>
+        <div class="mini-foot"><input placeholder="Quick message…"><button>↑</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><span>ALLIANCE · Comms Console — design mockup</span><span>Nav &amp; type match the live app</span></div>
+</div>
+
+<script>
+const FACTION={ORBT:"#38d9ff",PEPE:"#43f2a1",DOGE:"#ffb454",MOG:"#aa82ff",WIF:"#7cc0ff",SYS:"#647293"};
+const fcol=t=>FACTION[t]||"#8aa9b9";
+const ALLIANCE_MANAGEMENT=true; // War Room only usable when alliance management is enabled
+
+const CHANNELS=[
+  {id:"cosmos",icon:"◎",label:"Cosmos",detail:"Sector 00DEV1",unread:3},
+  {id:"alliance",icon:"◇",label:"Alliance",detail:"[ORBT] Orbital",unread:8,mention:true},
+  {id:"system",icon:"⌁",label:"System",detail:"",unread:1},
+];
+const CONTACTS=[
+  {a:"NyxValidator",f:"ORBT",v:1,on:1,note:"2 fleets"},
+  {a:"WhaleSignal",f:"MOG",v:1,on:1,note:"air ×2"},
+  {a:"VoidRunner",f:"ORBT",v:1,on:1,note:"idle"},
+  {a:"GreenOrbit",f:"PEPE",v:1,on:0,note:"3h ago"},
+  {a:"MuchCommand",f:"DOGE",on:0,note:"1d ago"},
+];
+const DMS=[
+  {id:"dm-nyx",icon:"N",label:"NyxValidator",detail:"online",faction:"ORBT"},
+  {id:"dm-whale",icon:"W",label:"WhaleSignal",detail:"12m ago",faction:"MOG"},
+];
+const WARROOM_ACTIVE=true; // War Room is off by default; an op spins it up with a fresh history
+const THREADS={
+  cosmos:[
+    {a:"GreenOrbit",f:"PEPE",v:1,t:"19:38",b:"Cash planets respawned all along the north-west arc — go go go"},
+    {a:"MuchCommand",f:"DOGE",v:1,t:"19:44",b:"anyone else seeing the L12 rogue cluster near 312:094?"},
+    {a:"GreenOrbit",f:"PEPE",t:"19:44",b:"repeat",spam:3},
+    {a:"NyxValidator",f:"ORBT",v:1,t:"19:48",b:"confirmed via scout — leave the occupied Power planet alone"},
+    {a:"VoidCat",f:"MOG",v:1,t:"19:52",b:"gg to whoever held 201:177 with half a fleet 🫡"},
+    {a:"NoName",f:"WIF",t:"19:53",b:"free cash here → dexpump·win/x",blocked:"external link removed"},
+  ],
+  general:[
+    {pin:"Wormhole watch 20:00 UTC — keep one fleet free. Full brief on the Alliance page."},
+    {a:"NyxValidator",f:"ORBT",v:1,tag:"officer",t:"19:47",b:"Rogue activity rising on the east arc. Farm west until the rally leaves."},
+    {a:"WhaleSignal",f:"MOG",v:1,t:"19:51",b:"Shared a target",coord:{c:"284:119",k:"Cash Planet · L8 · unoccupied"}},
+    {a:"Ruglord",f:"ORBT",own:1,t:"19:53",b:"I can cover the second march. Ping me when the rally opens."},
+    {a:"NyxValidator",f:"ORBT",v:1,tag:"officer",t:"19:55",b:"Spinning up a War Room for the Wormhole Sentinel — jump to that tab if you're bringing air."},
+  ],
+  warroom:[
+    {a:"NyxValidator",f:"ORBT",v:1,tag:"officer",t:"19:56",b:"Target is air-dominant. Bring air, we counter with army. Staggered arrival."},
+    {a:"WhaleSignal",f:"MOG",v:1,t:"19:57",b:"2 air fleets ready, 40K T8"},
+    {a:"NyxValidator",f:"ORBT",v:1,t:"19:58",b:"Rally below. Recommended fleet is pre-filled — one tap to join.",rally:1},
+  ],
+  system:[
+    {sys:"eco",tag:"Returned",t:"19:57",b:"Harvest complete · Oil Planet L7 · +4.20M Oil"},
+    {sys:"mil",tag:"Victory",t:"19:31",b:"Rogue Planet L6 defeated · 1.20K wounded · report ready"},
+    {sys:"eco",tag:"Complete",t:"18:46",b:"Research Institute reached L8"},
+    {sys:"sec",tag:"Shield",t:"17:20",b:"Civilization shield has 1d 12h remaining"},
+    {sys:"mil",tag:"Under attack",t:"16:10",b:"WhaleSignal requested reinforcement at 201:177"},
+  ],
+  "dm-nyx":[
+    {a:"NyxValidator",f:"ORBT",v:1,t:"19:21",b:"Joining the Wormhole watch tonight?"},
+    {a:"Ruglord",f:"ORBT",own:1,t:"19:24",b:"Yes, two fleets free by then."},
+    {a:"NyxValidator",f:"ORBT",v:1,t:"19:25",b:"Perfect — you're on the east approach."},
+  ],
+  "dm-whale":[
+    {a:"WhaleSignal",f:"MOG",v:1,t:"18:02",b:"Found an unoccupied L8 cash planet, sending coords"},
+    {a:"WhaleSignal",f:"MOG",v:1,t:"18:03",b:"Target",coord:{c:"284:119",k:"Cash Planet · L8"}},
+    {a:"Ruglord",f:"ORBT",own:1,t:"18:05",b:"saved, thanks 🙏"},
+  ],
+};
+let active="alliance", allianceTab="general", sysFilter="all";
+const $=s=>document.querySelector(s);
+
+function renderChannels(){
+  $("#chanlist").innerHTML=CHANNELS.map(c=>`<button class="chan ${c.id===active?'on':''}" data-ch="${c.id}">
+    <span class="ci" ${c.id==='alliance'?'style="color:var(--cyan)"':''}>${c.icon}</span>
+    <span class="cx"><b>${c.label}</b><span>${c.detail}</span></span>
+    ${c.unread?`<span class="badge ${c.mention?'mention':''}">${c.mention?'@'+c.unread:c.unread}</span>`:''}
+  </button>`).join('');
+  $("#contactsbtn").innerHTML=`<button class="chan contacts-row ${active==='contacts'?'on':''}" data-ch="contacts">
+    <span class="ci contacts-ci">❋</span><span class="cx"><b>Contacts</b><span>3 online</span></span></button>`;
+  $("#dmlist").innerHTML=DMS.map(c=>`<button class="chan ${c.id===active?'on':''}" data-ch="${c.id}">
+    <span class="ci" style="color:${fcol(c.faction)}">${c.icon}</span>
+    <span class="cx"><b>[${c.faction}] ${c.label}</b><span>${c.detail}</span></span></button>`).join('');
+  document.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{active=b.dataset.ch;renderAll();});
+}
+function msgHTML(m){
+  if(m.pin) return `<div class="pinned"><b>PINNED</b><span>${m.pin}</span></div>`;
+  if(m.spam) return `<div class="spam"><b>[${m.f}] ${m.a}</b> sent the same message ${m.spam}× · collapsed</div>`;
+  if(m.sys) return `<div class="logrow ${m.sys}"><span class="lg-tag">${m.tag}</span><span class="lg-b">${m.b}</span><span class="lg-t">${m.t}</span></div>`;
+  let extra="";
+  if(m.coord) extra=`<div class="chip-coord"><div class="cc-i">◈</div><div class="cc-t"><b>${m.coord.c}</b><span>${m.coord.k}</span></div><div class="cc-act"><button>Scout</button><button>Gather</button><button class="go">Open ▸</button></div></div>`;
+  if(m.rally) extra=`<div class="chip-rally"><div class="rr-top"><b>Wormhole Sentinel</b><span class="rr-lv">L18</span></div>
+    <div class="rr-meta"><span>Fills in <b>4m 40s</b></span><span class="rr-counter">Counter: bring Army ▸ Air</span></div>
+    <div class="rr-meta"><span>Fleets <b>3 / 6</b></span><span>Your rec: <b>Army T8 ×42K</b></span></div>
+    <div class="rr-bar"><i></i></div><button class="rr-join">Join with recommended fleet →</button></div>`;
+  const blocked=m.blocked?`<div class="spam" style="margin-top:5px">🚫 ${m.blocked}</div>`:"";
+  return `<div class="msg ${m.own?'own':''}"><div class="av" style="${m.own?'':'color:'+fcol(m.f)}">${m.a.slice(0,1).toUpperCase()}</div>
+    <div class="bd"><div class="meta">
+      ${m.f?`<span class="tick" style="color:${fcol(m.f)};background:${fcol(m.f)}1a">[${m.f}]</span>`:''}
+      <span class="nm">${m.a}</span>
+      ${m.v?'<span class="vbadge" title="verified holder">✓</span>':''}
+      ${m.tag?`<span class="mtag ${m.tag}">${m.tag}</span>`:''}
+      <span class="mtime">${m.t}</span></div>
+      <div class="txt">${m.b}</div>${extra}${blocked}
+      <div class="row-actions"><button>Reply</button><button>Report</button><button>Mute</button></div></div></div>`;
+}
+function renderContacts(){
+  $("#threadhead").innerHTML=`<div class="thread-head"><div class="th-icon" style="color:var(--cyan);border-color:rgba(56,217,255,.35)">❋</div><div class="th-t"><b>Contacts</b><span>5 friends · 3 online</span></div><div class="th-actions"><button class="icon-btn">＋</button></div></div>`;
+  $("#stream").innerHTML=CONTACTS.map(c=>`<div class="contact"><div class="av" style="color:${fcol(c.f)}">${c.a.slice(0,1)}</div>
+    <div class="cbd"><div class="meta"><span class="tick" style="color:${fcol(c.f)};background:${fcol(c.f)}1a">[${c.f}]</span><span class="nm">${c.a}</span>${c.v?'<span class="vbadge">✓</span>':''}</div>
+    <div class="cnote"><span class="dot ${c.on?'on':''}"></span>${c.note}</div></div>
+    <button class="cmsg">Message</button></div>`).join('');
+}
+function renderThread(){
+  if(active==="contacts"){ renderContacts(); return; }
+  const isAlliance=active==="alliance";
+  const key=isAlliance?allianceTab:active;
+  const c=CHANNELS.find(x=>x.id===active)||DMS.find(x=>x.id===active);
+  const isSys=active==="system", isDM=active.startsWith("dm");
+  const isWar=isAlliance&&allianceTab==="warroom";
+  const col=isDM?fcol(c.faction):(isWar?"var(--gold)":"var(--cyan)");
+  const title=isAlliance?"Alliance · Orbital":(isDM&&c.faction?`[${c.faction}] ${c.label}`:c.label);
+  $("#threadhead").innerHTML=`<div class="thread-head">
+      <div class="th-icon" style="color:${col};border-color:${col}55">${c.icon||c.label.slice(0,1)}</div>
+      <div class="th-t"><b>${title}</b><span>${c.detail}</span></div>
+      <div class="th-actions"><button class="icon-btn">☆</button><button class="icon-btn">⋯</button></div></div>
+    ${isAlliance?`<div class="subtabs">
+        <button class="${allianceTab==='general'?'on':''}" data-at="general">◇ General</button>
+        <button class="${allianceTab==='warroom'?'on':''} ${ALLIANCE_MANAGEMENT?'':'locked'}" ${ALLIANCE_MANAGEMENT?'data-at="warroom"':'title="Requires alliance management"'}>⚔ War Room ${ALLIANCE_MANAGEMENT?(WARROOM_ACTIVE?'<span class="live-dot"></span>':''):'🔒'}</button>
+      </div>`:''}
+    ${isWar?`<div class="warroom-strip">⚔ Wormhole Sentinel op<span class="who">6 fleets · Nyx, Whale +4</span></div>`:''}
+    ${isSys?`<div class="sysfilter">${["all","mil","eco","sec"].map(f=>`<button class="${f===sysFilter?'on':''}" data-sf="${f}">${({all:'All',mil:'Military',eco:'Economy',sec:'Security'})[f]}</button>`).join('')}</div>`:''}`;
+  let msgs=(THREADS[key]||[]).concat(sent[key]||[]);
+  if(isSys&&sysFilter!=="all") msgs=msgs.filter(m=>m.sys===sysFilter);
+  const lead=isWar?`<div class="spam">⚔ Fresh op session · clears when the op ends</div>`:"";
+  $("#stream").innerHTML=lead+(msgs.map(msgHTML).join('')||`<div class="spam">No active op — a War Room opens fresh when an officer starts one.</div>`);
+  document.querySelectorAll('[data-at]').forEach(b=>b.onclick=()=>{allianceTab=b.dataset.at;renderThread();renderCtx();});
+  document.querySelectorAll('[data-sf]').forEach(b=>b.onclick=()=>{sysFilter=b.dataset.sf;renderThread();});
+  $("#stream").scrollTop=$("#stream").scrollHeight;
+}
+function renderCtx(){
+  const c=$("#ctx");
+  if(active==="cosmos"){
+    c.innerHTML=`<div class="ct-title">Factions online</div>
+      <div class="factions">${["ORBT","PEPE","DOGE","MOG","WIF"].map(f=>`<span class="fchip" style="color:${fcol(f)}"><i style="background:${fcol(f)}"></i>${f}</span>`).join('')}</div>`;
+  } else if(active==="alliance"){
+    const roster=[["NyxValidator","ORBT","2 fleets"],["WhaleSignal","MOG","air ×2"],["VoidRunner","ORBT","idle"],["Ruglord","ORBT","you"]];
+    c.innerHTML=`<div class="ct-hero"><b>ORBITAL</b><span>[ORBT] · rank #12</span></div>
+      <div class="ct-title">The Wormhole</div>
+      <div class="obj"><div class="ob-l"><span>Sector control</span><b style="color:var(--ink)">66%</b></div><div class="ob-bar"><i style="width:66%"></i></div></div>
+      <div class="ct-title">${allianceTab==='warroom'?'In this op':'Online'}</div>
+      <div class="roster">${roster.map(r=>`<div class="rm"><span class="dot on"></span><span style="color:${fcol(r[1])}">●</span>${r[0]}<span class="rm-f">${r[2]}</span></div>`).join('')}</div>
+      <div class="ct-title">Quick links</div>
+      <div class="qlinks"><div class="ql">⚔ Rally board <span class="qbadge">2</span></div><div class="ql">◈ Shared coordinates</div><div class="ql">▤ Shared reports</div><div class="ql">⚙ Alliance page ▸</div></div>`;
+  } else if(active==="system"){
+    c.innerHTML=`<div class="ct-title">Notify me for</div>
+      <div class="roster"><div class="rm"><span class="dot on"></span>Under attack<span class="rm-f">on</span></div><div class="rm"><span class="dot on"></span>Rally opened<span class="rm-f">on</span></div><div class="rm"><span class="dot on"></span>Reinforcement<span class="rm-f">on</span></div><div class="rm"><span class="dot"></span>Harvest returned<span class="rm-f">off</span></div></div>`;
+  } else if(active==="contacts"){
+    c.innerHTML=`<div class="ct-title">Requests <span class="qbadge" style="display:inline-grid;vertical-align:middle">1</span></div>
+      <div class="roster"><div class="rm"><span style="color:${fcol('WIF')}">●</span>SolSniper<span class="rm-f" style="color:var(--cyan)">accept</span></div></div>
+      <div class="ct-title">Add friend</div>
+      <div class="search" style="margin:0">⌕ Player name</div>`;
+  } else {
+    const dm=DMS.find(x=>x.id===active);
+    c.innerHTML=`<div class="ct-hero"><b>${dm.label}</b><span style="color:${fcol(dm.faction)}">[${dm.faction}] · ${dm.detail}</span></div>
+      <div class="ct-title">Actions</div>
+      <div class="qlinks"><div class="ql">◈ Share a coordinate</div><div class="ql">▤ Share a report</div><div class="ql" style="color:var(--err)">⃠ Block / mute</div></div>`;
+  }
+}
+const sent={};
+function renderMini(){
+  const src=(window.__mini==="cosmos")?THREADS.cosmos:THREADS.general;
+  const lines=src.filter(m=>!m.pin&&!m.spam&&!m.sys).slice(-3);
+  $("#minibody").innerHTML=lines.map(m=>`<div class="mini-line"><b style="color:${fcol(m.f)}">[${m.f}] ${m.a}</b> <span style="color:var(--ink2)">${m.coord?('◈ '+m.coord.c):m.b.slice(0,50)}</span></div>`).join('');
+}
+window.__mini="alliance";
+// Clicking the mini toggle previews that channel AND jumps into the full Comms page on it.
+document.querySelectorAll('[data-mini]').forEach(b=>b.onclick=()=>{
+  window.__mini=b.dataset.mini;
+  document.querySelectorAll('[data-mini]').forEach(x=>x.classList.toggle('on',x===b));
+  renderMini();
+  active=b.dataset.mini==="cosmos"?"cosmos":"alliance"; if(active==="alliance") allianceTab="general";
+  renderAll(); window.scrollTo({top:0,behavior:"smooth"});
+});
+$("#minibody").onclick=()=>{active=window.__mini==="cosmos"?"cosmos":"alliance";if(active==="alliance")allianceTab="general";renderAll();window.scrollTo({top:0,behavior:"smooth"});};
+$("#send").onclick=()=>{const v=$("#draft").value.trim();if(!v)return;const key=active==="alliance"?allianceTab:active;(sent[key]=sent[key]||[]).push({a:"Ruglord",f:"ORBT",own:1,t:"now",b:v});$("#draft").value="";renderThread();};
+$("#draft").addEventListener("keydown",e=>{if(e.key==="Enter")$("#send").click();});
+$("#attach").onclick=()=>alert("Attach → Coordinate · Battle report · Start a rally (structured, never a raw link)");
+function renderAll(){renderChannels();renderThread();renderCtx();}
+
+// starfield — compact port of CosmicBackdrop.tsx
+(function(){
+  const cv=document.getElementById("stars"); if(!cv) return; const cx=cv.getContext("2d");
+  const rm=matchMedia("(prefers-reduced-motion:reduce)").matches; let W=1,H=1,stars=[];
+  const wrap=(v,l)=>((v%l)+l)%l;
+  function resize(){const r=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=W*r;cv.height=H*r;cv.style.width=W+"px";cv.style.height=H+"px";cx.setTransform(r,0,0,r,0,0);
+    const n=Math.max(120,Math.min(360,Math.round(W*H/4300)));
+    stars=Array.from({length:n},(_,i)=>{const d=i%3,ds=[.7,1.25,2][d];return{x:Math.random()*W,y:Math.random()*H,radius:(.35+Math.random()*.7)*[.72,1,1.28][d],alpha:.2+Math.random()*.5,phase:Math.random()*6.28,tw:.24+Math.random()*.5,vx:(.16+Math.random()*.2)*ds*(Math.random()>.2?1:-1),vy:(.05+Math.random()*.12)*ds,glow:d===2&&Math.random()>.86};});}
+  function draw(ts){const s=ts/1000;cx.clearRect(0,0,W,H);for(const st of stars){const x=wrap(st.x+s*st.vx,W),y=wrap(st.y+s*st.vy,H);const p=rm?0:Math.sin(s*st.tw+st.phase)*.13;const a=Math.max(.12,Math.min(.9,st.alpha+p));const tone=st.phase>3.14?"190,225,255":"213,203,255";if(st.glow){cx.beginPath();cx.fillStyle=`rgba(${tone},${a*.13})`;cx.arc(x,y,st.radius*4.2,0,6.28);cx.fill();}cx.beginPath();cx.fillStyle=`rgba(${tone},${a})`;cx.arc(x,y,st.radius,0,6.28);cx.fill();}if(!rm)requestAnimationFrame(draw);}
+  addEventListener("resize",resize);resize();requestAnimationFrame(draw);
+})();
+renderAll();renderMini();
+</script>
