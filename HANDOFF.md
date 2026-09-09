@@ -118,6 +118,7 @@ The Vite port may increment when another local server is already running. Use th
 
 - Current NPCs are browser-local test stand-ins, not synchronized players.
 - The Wormhole graduation/next-map system is designed but not implemented; Frontier I completion currently focuses the Wormhole and explains that the next sector is pending.
+- Frontier I currently hard-caps **World targets**, not City upgrades. Command Core L21+ remains available for local full-table testing until Map II, Wormhole graduation and any new post-L20 resource gate are designed together.
 - Alliance, rally, chat, resource-tile PvP, reinforcements, usable relocation items, heroes and world bosses are not implemented.
 - Wallet login is display-only `personal_sign`; production auth must support smart wallets/EIP-1271.
 - Blockscout proxy is development-only and needs a server/Worker proxy before deployment.

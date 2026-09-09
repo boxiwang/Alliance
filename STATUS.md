@@ -15,6 +15,7 @@ for the *why*; this file is the *where we are right now*.
 - Rogue recycling is randomly delayed 3–10 minutes; planet recycling 5–15 minutes. Level is conserved, coordinate changes, and population stays stable.
 - `NEXT ROGUE` searches the public ecology first. An explicit click can Deep Scan only L1–6 when no matching target exists within 55 tiles; discovered targets appear 28–50 tiles away and are limited per player/per level with a 10-minute cooldown.
 - `numbers.json` schema is **v0.10**. Admin World exposes the population, cap, level ceiling, sector, Deep Scan and lifecycle windows. Engine coverage is 116 tests; balance remains clean at L1–20.
+- Only World content is capped in this pass. City L21+ stays testable until the future Map II/Wormhole/new-resource gate is specified and implemented as one system.
 
 ### 🛠 World-experience fixes (Claude, 2026-09-08)
 Built on Codex's Star Map pass; `npm run check` = 110 tests + build green, `balance:world` = 0 issues at that commit. Highlights: fixed the old-save load white-screen; bounded winner casualties by enemy strength; established low-outer/high-inner geography and level-preserving respawn; added the NEXT ROGUE/lock guidance; made scout a fast unarmed rival-city recon; improved entity spacing and name-plate/march-line legibility. Its reconcile-time local-supply rule was superseded by the public-ecology pass above.

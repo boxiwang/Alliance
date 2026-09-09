@@ -108,6 +108,8 @@ Personal mode is **async single-player PvP** on a shared **concentric world**: f
 from the outer edge to the center. **Frontier I** supports Command Core/Rogue progression through
 L20 and resource planets through L8. Explicit higher rows remain reserved for later maps instead of
 appearing in the starting world. **No fog-of-war** — the map is visible; scouting = intel on a target.
+The current local build enforces the World-target ceilings but deliberately leaves City L21+ open
+for full-table testing. The real post-L20 City gate must arrive with Map II and Wormhole graduation.
 
 **The Wormhole (endgame progression loop):** the center is a contested transit zone. Hold position
 around the wormhole for cumulative time → **graduate/teleport to the next sector**; being beaten out bumps you
