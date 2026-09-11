@@ -77,15 +77,17 @@ diffuse corona → light GATHERS into a crown (~7s) → crown holds, sharp & bri
   after the burst. **No crisp rings** (the `orbit` slot owns rings).
 - **Gathered crown** (intensity `× g`): a **king's-crown silhouette** — a band + 5 sharp
   spikes, the **outer two splayed outward**, centre tallest, with a **violet diamond finial**
-  above the centre spike. A luminous gold fill (bright-top→deep-base gradient), kept as a
-  clean *shape*, not fussy line detail. It **brightens and sharpens as it forms** (body blur
-  `7px→2px` as `g:0→1`; diamond kept sharper). Shape referenced from a royal-crown set
-  (the splayed-spike one).
-- **Burst** (force, but *soft*): the whole blast is drawn under `ctx.filter='blur(6px)'` so
-  it reads as a **bloom of light, not hard lines/dots** — a front-loaded **core flash**
-  (`fa = 1−k·2.8`), **two fast thick shockwave rings** (fattened so blur keeps them glowing,
-  easeOut expansion to ~2R), and **22 diffuse radial smears** with soft heads flying
-  outward — then it settles back to the diffuse corona.
+  above the centre spike. A luminous gold fill, kept as a clean *shape*, not fussy line
+  detail. **The crown body stays soft/luminous at all times** (body blur `9px→~6px`, never
+  crisp — a crisp edge reads cheap); **only the diamond finial is kept crisp** (fixed
+  `blur(0.8px)`) so the star stays sharp. Shape referenced from a royal-crown set (the
+  splayed-spike one).
+- **Burst = the crown crumbling** (not an abrupt shockwave): as the burst starts, `g` fades
+  the crown out over the first third while **shards launch outward from the crown's own
+  feature points** (`frags` at the spike/band positions, flying radially, fading), under
+  `blur(7px)` so they read as soft light debris. Plus a **gentle release flash** (soft, no
+  hard ring). Then it settles back to the diffuse corona. The old expanding shockwave was
+  removed — it appeared out of nowhere and felt abrupt.
 - Front (always): crisp thin **white rim** + blurred **gold glow rim**; **cathedral light
   motes** that are pulled inward as the crown gathers and dim during the burst.
 - One slow master breath `0.85 + 0.15·sin(t·0.28)` modulates the aura throughout.
