@@ -72,6 +72,10 @@ holiness comes from layering and slowness, not speed or size.
   **layered soft radiance** via stacked blooms at `R*1.34 / 1.62 / 1.9` — *not* crisp
   concentric rings (the `orbit` slot owns rings; crisp rings here would clash and read
   as clutter).
+- **Breathing crown** (behind the planet): a heavily blurred golden crown silhouette
+  (3 peaks + jewel tips) that breathes **from nothing → full over ~5s, holds, fades, and
+  returns** on an ~11s cycle (`env = sin(min(1, (t%11/11)/0.82)·π)`). Its peaks rise from
+  behind the planet; blur keeps it a ghostly apparition, not a hard emblem.
 - Front: a crisp thin **white rim** (α .6 w1.6) + a **blurred gold glow rim**
   (`blur(3px)`, α .5 w4.2) — a glow, not a hard band; 8 slow-drifting **cathedral light
   motes** softly twinkling; a slow 4-point **star** that swells at the crown's top.

@@ -200,6 +200,18 @@
         if(half==='back'){
           // soft outer white-gold aura
           this.bloom(ctx,cx,cy,R,R*2.05,[255,240,206],.11*breathe);
+          // a blurred crown silhouette that breathes in from nothing (~5s), holds, fades
+          // and returns — its peaks rise from behind the planet.
+          { const P=11, ph=(T%P)/P; const env=Math.max(0, Math.sin(Math.min(1,ph/0.82)*Math.PI));
+            if(env>0.01){ ctx.save(); ctx.filter='blur(9px)'; const s=R, gx=cx, gy=cy-R*0.15;
+              ctx.fillStyle=rgba([255,226,150], env*0.5); ctx.beginPath();
+              ctx.moveTo(gx-1.5*s, gy+0.6*s); ctx.lineTo(gx-1.5*s, gy-0.1*s); ctx.lineTo(gx-0.95*s, gy-1.0*s);
+              ctx.lineTo(gx-0.5*s, gy-0.2*s); ctx.lineTo(gx, gy-1.35*s); ctx.lineTo(gx+0.5*s, gy-0.2*s);
+              ctx.lineTo(gx+0.95*s, gy-1.0*s); ctx.lineTo(gx+1.5*s, gy-0.1*s); ctx.lineTo(gx+1.5*s, gy+0.6*s);
+              ctx.closePath(); ctx.fill();
+              ctx.fillStyle=rgba([255,247,222], env*0.75);
+              for(const tx of [-0.95,0,0.95]){ ctx.beginPath(); ctx.arc(gx+tx*s, gy+(tx===0?-1.35:-1.0)*s, 3.2, 0, 7); ctx.fill(); }
+              ctx.filter='none'; ctx.restore(); } }
           // two counter-rotating volumetric ray layers — BLURRED so the shafts
           // diffuse into light with no hard edges (holy glow, not spotlights)
           const rays=(count,dir,speed,len,wIn,wOut,alpha)=>{
