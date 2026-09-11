@@ -62,27 +62,31 @@ Flowing aurora curtains wrapping the sphere, colour drifting teal→violet by an
   **top half drawn behind the planet, bottom half in front** (occlusion). Front rim teal α .4.
 
 ### `halo.radiant` — Radiant Crown (Legendary / earn-only)
-A layered, **slow, divine** corona of light. Everything moves at a calm, majestic pace —
-holiness comes from layering and slowness, not speed or size.
-- One long calm breath drives the whole crown: `breathe = 0.85 + 0.15·sin(t·0.28)`.
-- Behind: soft white-gold outer aura to `R*2.05`; **two counter-rotating volumetric ray
-  layers** — 12 broad shafts (`rotate +t·0.028`, widen outward) and 24 fine shafts
-  (`rotate −t·0.016`), each ray's length gently breathing, **all drawn under
-  `ctx.filter='blur(4px)'` so the shafts diffuse into light with no hard edges**; then
-  **layered soft radiance** via stacked blooms at `R*1.34 / 1.62 / 1.9` — *not* crisp
-  concentric rings (the `orbit` slot owns rings; crisp rings here would clash and read
-  as clutter).
-- **Breathing crown** (behind the planet): a heavily blurred golden crown silhouette
-  (3 peaks + jewel tips) that breathes **from nothing → full over ~5s, holds, fades, and
-  returns** on an ~11s cycle (`env = sin(min(1, (t%11/11)/0.82)·π)`). Its peaks rise from
-  behind the planet; blur keeps it a ghostly apparition, not a hard emblem.
-- Front: a crisp thin **white rim** (α .6 w1.6) + a **blurred gold glow rim**
-  (`blur(3px)`, α .5 w4.2) — a glow, not a hard band; 8 slow-drifting **cathedral light
-  motes** softly twinkling; a slow 4-point **star** that swells at the crown's top.
+The showpiece. A **~12s looping cycle** where the light gathers into a crown, the crown
+bursts, and the light falls back into a diffuse corona:
+```
+diffuse corona → light GATHERS into a crown (~7s) → crown holds, sharp & bright (~1s)
+→ crown BURSTS: shockwave ring + particles fly outward → light settles back to diffuse → repeat
+```
+- Driven by `cyc = (t % 12)/12` and a **gather amount** `g` (0 = diffuse, 1 = fully
+  collected into the crown): `g = smoothstep(cyc/0.60)` up to `cyc<0.60`, `=1` on `[0.60,0.66]`,
+  then `0`. `diffuse = 1 − g`. Burst progress `bt = (cyc−0.66)/0.24` on `[0.66,0.90]`.
+- **Diffuse corona** (intensity `× diffuse`): the two counter-rotating blurred ray layers
+  (12 broad + 24 fine, `blur(4px)`) whose shaft length also pulls inward as `g` rises, plus
+  stacked soft-radiance blooms at `R*1.34 / 1.62 / 1.9`. Fades out as light gathers, returns
+  after the burst. **No crisp rings** (the `orbit` slot owns rings).
+- **Gathered crown** (intensity `× g`): a blurred golden crown silhouette (3 peaks + jewel
+  tips) that **brightens and sharpens as it forms** — blur `9px → 3px` as `g: 0→1` — so it
+  reads as a defined crown at the peak, plus a concentrated gold bloom.
+- **Burst**: a blurred shockwave ring expanding to `~2R` (fading) + 16 particles flying
+  outward, releasing the crown back into light; a brief white apex flash.
+- Front (always): crisp thin **white rim** + blurred **gold glow rim**; **cathedral light
+  motes** that are pulled inward as the crown gathers and dim during the burst.
+- One slow master breath `0.85 + 0.15·sin(t·0.28)` modulates the aura throughout.
 
-> **Softness matters:** hard-edged shafts / crisp rings read as cheap and busy, and
-> collide with the `orbit` slot. Blur the light and use diffuse gradations — the halo is
-> atmosphere, not geometry.
+> **Softness + spectacle:** hard-edged shafts / crisp rings read as cheap and collide with
+> the `orbit` slot — blur the light and use diffuse gradations. The drama comes from the
+> gather→burst *cycle*, not from size (stays within ~2×R).
 
 ## Shared mechanics
 
