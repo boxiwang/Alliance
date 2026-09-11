@@ -67,10 +67,18 @@ holiness comes from layering and slowness, not speed or size.
 - One long calm breath drives the whole crown: `breathe = 0.85 + 0.15·sin(t·0.28)`.
 - Behind: soft white-gold outer aura to `R*2.05`; **two counter-rotating volumetric ray
   layers** — 12 broad shafts (`rotate +t·0.028`, widen outward) and 24 fine shafts
-  (`rotate −t·0.016`), each ray's length gently breathing; 3 concentric **holy rings**
-  with slow staggered breath; a gold bloom to `R*1.5`.
-- Front: double rim (white α .6 w1.7, gold α .42 w3.4); 8 slow-drifting **cathedral
-  light motes** softly twinkling; a slow 4-point **star** that swells at the crown's top.
+  (`rotate −t·0.016`), each ray's length gently breathing, **all drawn under
+  `ctx.filter='blur(4px)'` so the shafts diffuse into light with no hard edges**; then
+  **layered soft radiance** via stacked blooms at `R*1.34 / 1.62 / 1.9` — *not* crisp
+  concentric rings (the `orbit` slot owns rings; crisp rings here would clash and read
+  as clutter).
+- Front: a crisp thin **white rim** (α .6 w1.6) + a **blurred gold glow rim**
+  (`blur(3px)`, α .5 w4.2) — a glow, not a hard band; 8 slow-drifting **cathedral light
+  motes** softly twinkling; a slow 4-point **star** that swells at the crown's top.
+
+> **Softness matters:** hard-edged shafts / crisp rings read as cheap and busy, and
+> collide with the `orbit` slot. Blur the light and use diffuse gradations — the halo is
+> atmosphere, not geometry.
 
 ## Shared mechanics
 

@@ -199,25 +199,29 @@
         const breathe = 0.85 + 0.15*Math.sin(T*0.28); // one long, calm breath
         if(half==='back'){
           // soft outer white-gold aura
-          this.bloom(ctx,cx,cy,R,R*2.05,[255,240,206],.10*breathe);
-          // two counter-rotating volumetric ray layers; each ray length gently breathes
+          this.bloom(ctx,cx,cy,R,R*2.05,[255,240,206],.11*breathe);
+          // two counter-rotating volumetric ray layers — BLURRED so the shafts
+          // diffuse into light with no hard edges (holy glow, not spotlights)
           const rays=(count,dir,speed,len,wIn,wOut,alpha)=>{
             ctx.save(); ctx.translate(cx,cy); ctx.rotate(dir*T*speed);
             for(let k=0;k<count;k++){ ctx.rotate(Math.PI*2/count);
               const b=0.72+0.28*Math.sin(T*0.4 + k*1.3); const rEnd=R*len*b;
-              const g=ctx.createLinearGradient(R*0.98,0,rEnd,0); g.addColorStop(0,rgba(COL.gold,alpha)); g.addColorStop(1,rgba(COL.gold,0));
-              ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(R*0.98,-wIn); ctx.lineTo(rEnd,-wOut); ctx.lineTo(rEnd,wOut); ctx.lineTo(R*0.98,wIn); ctx.closePath(); ctx.fill(); }
+              const g=ctx.createLinearGradient(R*0.9,0,rEnd,0); g.addColorStop(0,rgba(COL.gold,alpha)); g.addColorStop(1,rgba(COL.gold,0));
+              ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(R*0.9,-wIn); ctx.lineTo(rEnd,-wOut); ctx.lineTo(rEnd,wOut); ctx.lineTo(R*0.9,wIn); ctx.closePath(); ctx.fill(); }
             ctx.restore();
           };
-          rays(12, 1, 0.028, 2.0, 1.6, 4.4, .22);   // broad slow shafts
-          rays(24, -1, 0.016, 1.66, 0.6, 1.7, .11);  // fine counter-shafts
-          // concentric holy rings, slow staggered breath
-          for(let r=0;r<3;r++){ const rr=R*(1.28+r*0.26); const ph=Math.sin(T*0.32 - r*0.9);
-            ctx.strokeStyle=rgba([255,239,203],(.20+.10*ph)*(1-r*0.22)); ctx.lineWidth=1.1; ctx.beginPath(); ctx.arc(cx,cy,rr,0,7); ctx.stroke(); }
-          this.bloom(ctx,cx,cy,R,R*1.5,COL.gold,.17*breathe);
+          ctx.save(); ctx.filter='blur(4px)';
+          rays(12, 1, 0.028, 2.0, 3.2, 8.0, .15);   // broad soft shafts
+          rays(24, -1, 0.016, 1.66, 1.5, 3.6, .08);  // fine counter-shafts
+          ctx.filter='none'; ctx.restore();
+          // layered soft radiance — diffuse gradations, NOT crisp rings (orbit owns rings)
+          this.bloom(ctx,cx,cy,R,R*1.34,COL.gold,.15*breathe);
+          this.bloom(ctx,cx,cy,R,R*1.62,[255,240,206],.10);
+          this.bloom(ctx,cx,cy,R,R*1.9,COL.gold,.07*breathe);
         } else {
-          // radiant double rim
-          this.rim(ctx,cx,cy,R,[255,249,228],.6,1.7); this.rim(ctx,cx,cy,R,COL.gold,.42,3.4);
+          // radiant rim: a crisp thin white edge + a blurred gold glow (no hard band)
+          this.rim(ctx,cx,cy,R,[255,249,228],.6,1.6);
+          ctx.save(); ctx.filter='blur(3px)'; this.rim(ctx,cx,cy,R,COL.gold,.5,4.2); ctx.filter='none'; ctx.restore();
           // slow-drifting cathedral light motes, softly twinkling
           for(let i=0;i<8;i++){ const ang=T*0.1 + i*(Math.PI*2/8); const rr=R*(1.34+0.24*Math.sin(T*0.26+i));
             const x=cx+Math.cos(ang)*rr, y=cy+Math.sin(ang)*rr; const tw=0.3+0.4*Math.sin(T*0.7+i*1.7);
