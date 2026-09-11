@@ -81,10 +81,11 @@ diffuse corona → light GATHERS into a crown (~7s) → crown holds, sharp & bri
   (radial-gradient) at the band centre (violet gem), band sides, and every spire tip. It
   **brightens and sharpens as it forms** (body blur `9px→3px`, gems kept sharper). Not a
   flat vector outline — layered for volume.
-- **Burst** (must read as *force*): a front-loaded **core flash** (white-gold radial punch,
-  `fa = 1−k·2.8`), **two fast thick shockwave rings** (easeOut expansion to ~2R), and **22
-  radial motion streaks** with bright heads flying outward — then it settles back to the
-  diffuse corona.
+- **Burst** (force, but *soft*): the whole blast is drawn under `ctx.filter='blur(6px)'` so
+  it reads as a **bloom of light, not hard lines/dots** — a front-loaded **core flash**
+  (`fa = 1−k·2.8`), **two fast thick shockwave rings** (fattened so blur keeps them glowing,
+  easeOut expansion to ~2R), and **22 diffuse radial smears** with soft heads flying
+  outward — then it settles back to the diffuse corona.
 - Front (always): crisp thin **white rim** + blurred **gold glow rim**; **cathedral light
   motes** that are pulled inward as the crown gathers and dim during the burst.
 - One slow master breath `0.85 + 0.15·sin(t·0.28)` modulates the aura throughout.
