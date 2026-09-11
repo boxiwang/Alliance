@@ -43,7 +43,7 @@ export default function CosmicBackdrop() {
     let animationFrame = 0;
 
     const resize = () => {
-      const ratio = Math.min(2, window.devicePixelRatio || 1);
+      const ratio = Math.min(1.5, window.devicePixelRatio || 1);
       width = Math.max(1, window.innerWidth);
       height = Math.max(1, window.innerHeight);
       canvas.width = Math.round(width * ratio);
@@ -53,7 +53,7 @@ export default function CosmicBackdrop() {
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
 
       const random = seededRandom(4663 + width * 7 + height * 13);
-      const count = Math.max(120, Math.min(360, Math.round((width * height) / 4300)));
+      const count = Math.max(90, Math.min(220, Math.round((width * height) / 7200)));
       stars = Array.from({ length: count }, (_, index) => {
         const depth = index % 3;
         const depthSpeed = [0.7, 1.25, 2][depth];
@@ -71,7 +71,12 @@ export default function CosmicBackdrop() {
       });
     };
 
+    let last = 0;
     const draw = (timestamp: number) => {
+      if (!reducedMotion) animationFrame = window.requestAnimationFrame(draw);
+      if (document.hidden) return;        // don't burn CPU/GPU when the tab/window is hidden
+      if (timestamp - last < 33) return;  // cap ~30fps — plenty for an ambient starfield
+      last = timestamp;
       const seconds = timestamp / 1000;
       context.clearRect(0, 0, width, height);
       for (const star of stars) {
@@ -92,7 +97,6 @@ export default function CosmicBackdrop() {
         context.arc(x, y, star.radius, 0, Math.PI * 2);
         context.fill();
       }
-      if (!reducedMotion) animationFrame = window.requestAnimationFrame(draw);
     };
 
     resize();

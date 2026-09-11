@@ -282,6 +282,11 @@ export default function World({ address, profile, onBack, onMessages = () => {} 
   const playerCity = session.world.entities[session.world.players[session.playerId].cityId] as CityEntity;
   const [camera, setCamera] = useState<Point>(() => ({ ...playerCity.position }));
   const drag = useRef<{ x: number; y: number; camera: Point; moved: boolean } | null>(null);
+  // Drag coalescing: a trackpad fires pointermove far faster than the screen
+  // refreshes. We stash the latest target camera and apply at most once per
+  // animation frame, so a drag re-renders ~60x/s instead of 120–200x/s.
+  const dragRaf = useRef<number | null>(null);
+  const pendingCamera = useRef<Point | null>(null);
   const dispatchSeq = useRef(0);
   const seenReportCount = useRef(initial.session.world.players[initial.session.playerId].reportIds.length);
   const gm = hasLocalGm(address) || localGmRequested();
@@ -318,6 +323,7 @@ export default function World({ address, profile, onBack, onMessages = () => {} 
   useEffect(() => {
     try { localStorage.setItem(`ruglands:world-bookmarks:${address.toLowerCase()}`, JSON.stringify(bookmarks)); } catch {}
   }, [address, bookmarks]);
+  useEffect(() => () => { if (dragRaf.current != null) cancelAnimationFrame(dragRaf.current); }, []);
 
   const world = session.world;
   const viewGame = useMemo(() => project(game, now), [game, now]);
@@ -403,6 +409,79 @@ export default function World({ address, profile, onBack, onMessages = () => {} 
     }, tuned, hospitalOpen);
   }, [N, player.accountModifiers, selected, selection, sentCount, viewGame.buildings.hospital.lvl, viewGame.wounded]);
 
+  // Viewport culling on a coarse grid. We only build markers near the visible
+  // region, and recompute on a grid step (~1/3 screen) with a full-screen margin
+  // on every side — so an ordinary drag stays inside an already-rendered band
+  // (nothing pops in) AND the memoized marker layer below is not rebuilt frame by
+  // frame. At higher populations / larger maps this is what keeps the cost flat.
+  const cullCell = Math.max(16, Math.round(Math.min(viewport.width, viewport.height) / 3));
+  const cullQX = Math.round(camera.x / cullCell);
+  const cullQY = Math.round(camera.y / cullCell);
+
+  // LAYER 1 — static scaffold (grid, rings, wormhole core). Never depends on the
+  // camera or the clock, so panning and the 1s tick reuse this element tree
+  // untouched: React skips reconciling it entirely.
+  const mapScaffold = useMemo(() => <>
+    <defs>
+      <pattern id="world-micro-grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" stroke="#17344a" strokeWidth={.25 / zoom} opacity=".34" /></pattern>
+      <pattern id="world-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#2e7892" strokeWidth={.48 / zoom} opacity=".52" /><circle cx="0" cy="0" r={.7 / zoom} fill="#41dffc" opacity=".5" /></pattern>
+      <pattern id="world-stars" width="64" height="64" patternUnits="userSpaceOnUse"><circle cx="7" cy="13" r={.42 / zoom} fill="#c9f4ff" opacity=".72"/><circle cx="43" cy="8" r={.25 / zoom} fill="#a8c8ff" opacity=".55"/><circle cx="27" cy="47" r={.35 / zoom} fill="#e2d4ff" opacity=".64"/><circle cx="58" cy="36" r={.18 / zoom} fill="#fff" opacity=".8"/><circle cx="12" cy="59" r={.2 / zoom} fill="#73dfff" opacity=".48"/></pattern>
+      <radialGradient id="world-ground" cx="58%" cy="42%"><stop offset="0" stopColor="#152044"/><stop offset=".34" stopColor="#0b1532"/><stop offset=".72" stopColor="#060c20"/><stop offset="1" stopColor="#02050e"/></radialGradient>
+      <radialGradient id="world-nebula" cx="50%" cy="50%"><stop offset="0" stopColor="#7a49d8" stopOpacity=".16"/><stop offset=".48" stopColor="#215e9b" stopOpacity=".07"/><stop offset="1" stopColor="#030711" stopOpacity="0"/></radialGradient>
+      <radialGradient id="circle-core"><stop offset="0" stopColor="#010208" stopOpacity="1"/><stop offset=".22" stopColor="#09051d" stopOpacity="1"/><stop offset=".48" stopColor="#a35cff" stopOpacity=".42"/><stop offset=".72" stopColor="#38d9ff" stopOpacity=".16"/><stop offset="1" stopColor="#1d123a" stopOpacity="0"/></radialGradient>
+      <radialGradient id="world-planet-cash" cx="32%" cy="27%"><stop offset="0" stopColor="#f3fff9"/><stop offset=".13" stopColor="#82ffc5"/><stop offset=".52" stopColor="#237756"/><stop offset="1" stopColor="#07140f"/></radialGradient>
+      <radialGradient id="world-planet-oil" cx="32%" cy="27%"><stop offset="0" stopColor="#fff8e9"/><stop offset=".13" stopColor="#ffd08a"/><stop offset=".52" stopColor="#815528"/><stop offset="1" stopColor="#160e07"/></radialGradient>
+      <radialGradient id="world-planet-power" cx="32%" cy="27%"><stop offset="0" stopColor="#f2fdff"/><stop offset=".13" stopColor="#89e7ff"/><stop offset=".52" stopColor="#226b91"/><stop offset="1" stopColor="#07131b"/></radialGradient>
+      <filter id="signal-glow" x="-200%" y="-200%" width="400%" height="400%"><feGaussianBlur stdDeviation="1.6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-ground)" />
+    <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-nebula)" />
+    <g className="world-starfield">
+      <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-stars)" />
+      <animateTransform attributeName="transform" type="rotate" from={`0 ${center.x} ${center.y}`} to={`360 ${center.x} ${center.y}`} dur="420s" repeatCount="indefinite" />
+    </g>
+    <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-micro-grid)" />
+    <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-grid)" />
+    {Array.from({ length: 5 }, (_, index) => index + 1).map((ring) => <circle key={ring} cx={center.x} cy={center.y} r={worldRadius * ring / 5} className="world-sector-ring" opacity={ring === 5 ? .9 : .34} />)}
+    <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius * 1.55} fill="url(#circle-core)" />
+    <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius} className="world-core-ring" />
+    <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius * .62} className="world-core-ring inner" />
+    <path d={`M ${center.x - world.config.circleReserveRadius - 8} ${center.y} H ${center.x + world.config.circleReserveRadius + 8} M ${center.x} ${center.y - world.config.circleReserveRadius - 8} V ${center.y + world.config.circleReserveRadius + 8}`} className="world-core-cross" />
+    <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`} className="world-core-marker" onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera(center)}><circle cx={center.x} cy={center.y} r="7.5" /><ellipse cx={center.x} cy={center.y} rx="5.2" ry="2.8" /><circle cx={center.x} cy={center.y} r="2.1" /><text x={center.x} y={center.y - 11} className="world-circle-label">WORMHOLE</text></g>
+  </>, [zoom, world.config, center.x, center.y, worldRadius, importantScale]);
+
+  // LAYER 2a — strategic clusters. Depends on the signal set + zoom, not the camera.
+  const mapClusters = useMemo(() => strategicZoom ? signalClusters.map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera(cluster.position); setZoom(1.8); }}>
+    <circle cx={cluster.position.x} cy={cluster.position.y} r="6.5" /><circle cx={cluster.position.x} cy={cluster.position.y} r="3.7" /><text x={cluster.position.x} y={cluster.position.y + 1.3}>{cluster.count}</text>
+  </g>) : null, [strategicZoom, signalClusters, markerScale]);
+
+  // LAYER 2b — planet / rogue / rival-city markers. Rebuilt only when the entities
+  // themselves change (spawn / deplete / occupation), when zoom changes the marker
+  // scale/detail, when the selection or bookmarks change, or when the coarse cull
+  // cell changes — NOT on every drag frame and NOT on the 1s clock tick.
+  const mapTargets = useMemo(() => {
+    if (strategicZoom) return null;
+    const cx = cullQX * cullCell, cy = cullQY * cullCell;
+    const minX = cx - viewport.width * 1.5, maxX = cx + viewport.width * 1.5;
+    const minY = cy - viewport.height * 1.5, maxY = cy + viewport.height * 1.5;
+    return filteredTargets.filter((entity) => (entity.kind !== "city" || playerSearchZoom)
+      && entity.position.x >= minX && entity.position.x <= maxX && entity.position.y >= minY && entity.position.y <= maxY)
+      .map((entity) => {
+        const color = entityColor(entity); const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id; const verified = entity.kind === "resource" || scoutedTargetIds.has(entity.id);
+        const occupation = entity.kind === "resource" ? resourceOccupationDisposition(entity, world.marches, world.players, session.playerId, profile.faction) : "neutral";
+        return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setSelection(emptySelection()); setMessage(""); setTileMark(null); }}>
+          {selectedTarget && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
+          <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />
+          <WorldEntityGlyph entity={entity} detailZoom={detailZoom} occupation={occupation} />
+          {entity.kind === "city" && detailZoom && (selectedId === entity.id
+            ? <CityIdentityTag x={entity.position.x} y={entity.position.y} level={entity.townhallLevel} name={localWorldTargetName(world, entity.id)} />
+            : <WorldLevelBadge x={entity.position.x} y={entity.position.y} level={entity.townhallLevel} />)}
+          {verified && entity.kind !== "resource" && <circle cx={entity.position.x + 4.5} cy={entity.position.y - 4.5} r="1.2" className="world-verified-dot" />}
+          {bookmarks.includes(entity.id) && <text x={entity.position.x + 7} y={entity.position.y - 6} className="world-bookmark-star">★</text>}
+        </g>;
+      });
+  }, [filteredTargets, strategicZoom, playerSearchZoom, detailZoom, markerScale, selectedId, bookmarks, scoutedTargetIds, world.marches, world.players, world.entities, session.playerId, profile.faction, viewport.width, viewport.height, cullQX, cullQY, cullCell]);
+
   function commit(result: ReturnType<typeof advanceLocalWorldSession>) {
     sessionRef.current = result.session; setSession(result.session); setGame(result.game); gameRef.current = result.game; saveLocalWorldSession(result.session); saveGame(result.game);
   }
@@ -486,18 +565,24 @@ export default function World({ address, profile, onBack, onMessages = () => {} 
     if (result.error) { setMessage("That fleet can no longer be recalled."); return; }
     commit(result); setMessage("Fleet recalled. It is returning along its traveled route.");
   }
+  function flushCamera() {
+    dragRaf.current = null;
+    if (pendingCamera.current) { setCamera(pendingCamera.current); pendingCamera.current = null; }
+  }
   function pointerDown(event: React.PointerEvent<SVGSVGElement>) { drag.current = { x: event.clientX, y: event.clientY, camera, moved: false }; event.currentTarget.setPointerCapture(event.pointerId); }
   function pointerMove(event: React.PointerEvent<SVGSVGElement>) {
     if (!drag.current) return;
     if (!drag.current.moved && Math.hypot(event.clientX - drag.current.x, event.clientY - drag.current.y) > 3) drag.current.moved = true;
     const scale = viewport.width / Math.max(1, event.currentTarget.clientWidth);
-    setCamera({
+    pendingCamera.current = {
       x: Math.max(0, Math.min(world.config.width, drag.current.camera.x - (event.clientX - drag.current.x) * scale)),
       y: Math.max(0, Math.min(world.config.height, drag.current.camera.y - (event.clientY - drag.current.y) * scale)),
-    });
+    };
+    if (dragRaf.current == null) dragRaf.current = requestAnimationFrame(flushCamera);
   }
   function pointerUp(event: React.PointerEvent<SVGSVGElement>) {
     const state = drag.current; drag.current = null;
+    if (dragRaf.current != null) { cancelAnimationFrame(dragRaf.current); flushCamera(); }
     // A press with no drag on empty space = inspect that tile's coordinate (Kingshot-style).
     if (!state || state.moved) return;
     const svg = event.currentTarget; const ctm = svg.getScreenCTM(); if (!ctm) return;
@@ -527,50 +612,10 @@ export default function World({ address, profile, onBack, onMessages = () => {} 
         <div className="world-coordinate world-coordinate-x">X {Math.round(viewX).toString().padStart(3, "0")} — {Math.round(viewX + viewport.width).toString().padStart(3, "0")}</div>
         <div className="world-coordinate world-coordinate-y">Y {Math.round(viewY).toString().padStart(3, "0")} — {Math.round(viewY + viewport.height).toString().padStart(3, "0")}</div>
         <svg className="world-map world-map-v2" viewBox={viewBox} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { drag.current = null; }} onWheel={(event) => { event.preventDefault(); setZoom((value) => steppedWorldZoom(value, event.deltaY < 0 ? "in" : "out", 1.14)); }}>
-          <defs>
-            <pattern id="world-micro-grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" stroke="#17344a" strokeWidth={.25 / zoom} opacity=".34" /></pattern>
-            <pattern id="world-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#2e7892" strokeWidth={.48 / zoom} opacity=".52" /><circle cx="0" cy="0" r={.7 / zoom} fill="#41dffc" opacity=".5" /></pattern>
-            <pattern id="world-stars" width="64" height="64" patternUnits="userSpaceOnUse"><circle cx="7" cy="13" r={.42 / zoom} fill="#c9f4ff" opacity=".72"/><circle cx="43" cy="8" r={.25 / zoom} fill="#a8c8ff" opacity=".55"/><circle cx="27" cy="47" r={.35 / zoom} fill="#e2d4ff" opacity=".64"/><circle cx="58" cy="36" r={.18 / zoom} fill="#fff" opacity=".8"/><circle cx="12" cy="59" r={.2 / zoom} fill="#73dfff" opacity=".48"/></pattern>
-            <radialGradient id="world-ground" cx="58%" cy="42%"><stop offset="0" stopColor="#152044"/><stop offset=".34" stopColor="#0b1532"/><stop offset=".72" stopColor="#060c20"/><stop offset="1" stopColor="#02050e"/></radialGradient>
-            <radialGradient id="world-nebula" cx="50%" cy="50%"><stop offset="0" stopColor="#7a49d8" stopOpacity=".16"/><stop offset=".48" stopColor="#215e9b" stopOpacity=".07"/><stop offset="1" stopColor="#030711" stopOpacity="0"/></radialGradient>
-            <radialGradient id="circle-core"><stop offset="0" stopColor="#010208" stopOpacity="1"/><stop offset=".22" stopColor="#09051d" stopOpacity="1"/><stop offset=".48" stopColor="#a35cff" stopOpacity=".42"/><stop offset=".72" stopColor="#38d9ff" stopOpacity=".16"/><stop offset="1" stopColor="#1d123a" stopOpacity="0"/></radialGradient>
-            <radialGradient id="world-planet-cash" cx="32%" cy="27%"><stop offset="0" stopColor="#f3fff9"/><stop offset=".13" stopColor="#82ffc5"/><stop offset=".52" stopColor="#237756"/><stop offset="1" stopColor="#07140f"/></radialGradient>
-            <radialGradient id="world-planet-oil" cx="32%" cy="27%"><stop offset="0" stopColor="#fff8e9"/><stop offset=".13" stopColor="#ffd08a"/><stop offset=".52" stopColor="#815528"/><stop offset="1" stopColor="#160e07"/></radialGradient>
-            <radialGradient id="world-planet-power" cx="32%" cy="27%"><stop offset="0" stopColor="#f2fdff"/><stop offset=".13" stopColor="#89e7ff"/><stop offset=".52" stopColor="#226b91"/><stop offset="1" stopColor="#07131b"/></radialGradient>
-            <filter id="signal-glow" x="-200%" y="-200%" width="400%" height="400%"><feGaussianBlur stdDeviation="1.6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-          </defs>
-          <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-ground)" />
-          <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-nebula)" />
-          <g className="world-starfield">
-            <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-stars)" />
-            <animateTransform attributeName="transform" type="rotate" from={`0 ${center.x} ${center.y}`} to={`360 ${center.x} ${center.y}`} dur="420s" repeatCount="indefinite" />
-          </g>
-          <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-micro-grid)" />
-          <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-grid)" />
-          {Array.from({ length: 5 }, (_, index) => index + 1).map((ring) => <circle key={ring} cx={center.x} cy={center.y} r={worldRadius * ring / 5} className="world-sector-ring" opacity={ring === 5 ? .9 : .34} />)}
-          <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius * 1.55} fill="url(#circle-core)" />
-          <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius} className="world-core-ring" />
-          <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius * .62} className="world-core-ring inner" />
-          <path d={`M ${center.x - world.config.circleReserveRadius - 8} ${center.y} H ${center.x + world.config.circleReserveRadius + 8} M ${center.x} ${center.y - world.config.circleReserveRadius - 8} V ${center.y + world.config.circleReserveRadius + 8}`} className="world-core-cross" />
-          <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`} className="world-core-marker" onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera(center)}><circle cx={center.x} cy={center.y} r="7.5" /><ellipse cx={center.x} cy={center.y} rx="5.2" ry="2.8" /><circle cx={center.x} cy={center.y} r="2.1" /><text x={center.x} y={center.y - 11} className="world-circle-label">WORMHOLE</text></g>
+          {mapScaffold}
           {activeMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} />)}
-          {strategicZoom && signalClusters.map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera(cluster.position); setZoom(1.8); }}>
-            <circle cx={cluster.position.x} cy={cluster.position.y} r="6.5" /><circle cx={cluster.position.x} cy={cluster.position.y} r="3.7" /><text x={cluster.position.x} y={cluster.position.y + 1.3}>{cluster.count}</text>
-          </g>)}
-          {filteredTargets.filter((entity) => !strategicZoom && (entity.kind !== "city" || playerSearchZoom)).map((entity) => {
-            const color = entityColor(entity); const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id; const verified = entity.kind === "resource" || scoutedTargetIds.has(entity.id);
-            const occupation = entity.kind === "resource" ? resourceOccupationDisposition(entity, world.marches, world.players, session.playerId, profile.faction) : "neutral";
-            return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setSelection(emptySelection()); setMessage(""); setTileMark(null); }}>
-              {selectedTarget && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
-              <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />
-              <WorldEntityGlyph entity={entity} detailZoom={detailZoom} occupation={occupation} />
-              {entity.kind === "city" && detailZoom && (selectedId === entity.id
-                ? <CityIdentityTag x={entity.position.x} y={entity.position.y} level={entity.townhallLevel} name={localWorldTargetName(world, entity.id)} />
-                : <WorldLevelBadge x={entity.position.x} y={entity.position.y} level={entity.townhallLevel} />)}
-              {verified && entity.kind !== "resource" && <circle cx={entity.position.x + 4.5} cy={entity.position.y - 4.5} r="1.2" className="world-verified-dot" />}
-              {bookmarks.includes(entity.id) && <text x={entity.position.x + 7} y={entity.position.y - 6} className="world-bookmark-star">★</text>}
-            </g>;
-          })}
+          {mapClusters}
+          {mapTargets}
           <g className="world-city" transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`} onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera({ ...playerCity.position })}>
             <circle cx={playerCity.position.x} cy={playerCity.position.y} r="7.5" className="world-home-ring" />
             <rect x={playerCity.position.x - 4} y={playerCity.position.y - 4} width="8" height="8" rx="1" transform={`rotate(45 ${playerCity.position.x} ${playerCity.position.y})`} />
