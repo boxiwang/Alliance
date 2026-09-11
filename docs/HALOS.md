@@ -41,9 +41,12 @@ Tier ladder mirrors the skin / orbit / march ladders (R → SR → SSR → UR). 
 (`halo.radiant`) is **earn-only**, per `docs/PRODUCT.md`'s "top tier is not for sale".
 
 ### `halo.corona` — Faint Corona (Common)
-A soft breathing glow hugging the rim + a thin bright outline. Minimal starter.
-- Behind: annular bloom to `R*1.7`, alpha ≈ `.16·(0.75+0.25·sin t)`.
+A soft, **slowly** breathing glow hugging the rim + a thin bright outline. Minimal starter.
+- Behind: annular bloom to `R*1.7`, alpha ≈ `.16·(0.78+0.22·sin(t·0.42))` — a slow breath.
 - Front: rim at `R+0.6`, alpha ≈ `.42·breath`, width 1.2.
+
+> **Pacing:** cheaper tiers emanate *slowly* on purpose — a gentle, unhurried effect reads
+> as more premium than a fast flicker. Keep breaths/drifts low-frequency.
 
 ### `halo.pulse` — Pulse Aura (Rare)
 A brighter aura with periodic expanding pulse rings (a slow sonar breath).
@@ -54,15 +57,20 @@ A brighter aura with periodic expanding pulse rings (a slow sonar breath).
 ### `halo.aurora` — Aurora Veil (SSR)
 Flowing aurora curtains wrapping the sphere, colour drifting teal→violet by angle+time.
 - Behind: soft teal bloom to `R*1.75` (α .12).
-- Curtain: ~42 additive blobs around the rim at `r = R·(1.14 + 0.07·sin(4a+t))`, colour
-  `mix(teal,violet,(cos a+1)/2)`, shimmer `0.5+0.5·sin(3a + 1.6t + …)`; **top half drawn
-  behind the planet, bottom half in front** (occlusion). Front rim teal α .4.
+- Curtain: ~42 additive blobs around the rim at `r = R·(1.14 + 0.07·sin(4a + 0.4t))`, colour
+  `mix(teal,violet,(cos a+1)/2)`, shimmer `0.5+0.5·sin(3a + 0.5t + …)` — a **slow** drift;
+  **top half drawn behind the planet, bottom half in front** (occlusion). Front rim teal α .4.
 
 ### `halo.radiant` — Radiant Crown (Legendary / earn-only)
-Concentric glow rings + slow-rotating volumetric god-rays pouring from behind the planet.
-- Behind: 18 rotating ray trapezoids (`rotate t·0.06`, gradient `R*1.0→R*1.95`, gold
-  `.22→0`) + concentric blooms at `R*1.45` (α .16·breath) and `R*1.95` (α .09).
-- Front: double rim (white α .55 w1.6, gold α .4 w3.2) + 3 orbiting shimmer sparks.
+A layered, **slow, divine** corona of light. Everything moves at a calm, majestic pace —
+holiness comes from layering and slowness, not speed or size.
+- One long calm breath drives the whole crown: `breathe = 0.85 + 0.15·sin(t·0.28)`.
+- Behind: soft white-gold outer aura to `R*2.05`; **two counter-rotating volumetric ray
+  layers** — 12 broad shafts (`rotate +t·0.028`, widen outward) and 24 fine shafts
+  (`rotate −t·0.016`), each ray's length gently breathing; 3 concentric **holy rings**
+  with slow staggered breath; a gold bloom to `R*1.5`.
+- Front: double rim (white α .6 w1.7, gold α .42 w3.4); 8 slow-drifting **cathedral
+  light motes** softly twinkling; a slow 4-point **star** that swells at the crown's top.
 
 ## Shared mechanics
 
