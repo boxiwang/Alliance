@@ -75,11 +75,16 @@ diffuse corona → light GATHERS into a crown (~7s) → crown holds, sharp & bri
   (12 broad + 24 fine, `blur(4px)`) whose shaft length also pulls inward as `g` rises, plus
   stacked soft-radiance blooms at `R*1.34 / 1.62 / 1.9`. Fades out as light gathers, returns
   after the burst. **No crisp rings** (the `orbit` slot owns rings).
-- **Gathered crown** (intensity `× g`): a blurred golden crown silhouette (3 peaks + jewel
-  tips) that **brightens and sharpens as it forms** — blur `9px → 3px` as `g: 0→1` — so it
-  reads as a defined crown at the peak, plus a concentrated gold bloom.
-- **Burst**: a blurred shockwave ring expanding to `~2R` (fading) + 16 particles flying
-  outward, releasing the crown back into light; a brief white apex flash.
+- **Gathered crown** (intensity `× g`): an **ornate luminous crown** — a metallic gold
+  **band** (bright-top→deep-base gradient for volume), 5 **curved tapered spires**
+  (concave sides via quadratic curves, gold→white-hot gradient), and **glowing jewel orbs**
+  (radial-gradient) at the band centre (violet gem), band sides, and every spire tip. It
+  **brightens and sharpens as it forms** (body blur `9px→3px`, gems kept sharper). Not a
+  flat vector outline — layered for volume.
+- **Burst** (must read as *force*): a front-loaded **core flash** (white-gold radial punch,
+  `fa = 1−k·2.8`), **two fast thick shockwave rings** (easeOut expansion to ~2R), and **22
+  radial motion streaks** with bright heads flying outward — then it settles back to the
+  diffuse corona.
 - Front (always): crisp thin **white rim** + blurred **gold glow rim**; **cathedral light
   motes** that are pulled inward as the crown gathers and dim during the burst.
 - One slow master breath `0.85 + 0.15·sin(t·0.28)` modulates the aura throughout.

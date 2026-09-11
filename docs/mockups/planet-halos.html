@@ -202,14 +202,30 @@
         let g; if(cyc<0.60) g=ease(cyc/0.60); else if(cyc<0.66) g=1; else g=0;
         const diffuse=1-g;
         const bt = (cyc>=0.66 && cyc<0.90) ? (cyc-0.66)/0.24 : -1; // burst progress 0..1
-        const drawCrown=(s,gx,gy,alpha,blurPx,ja)=>{
+        // An ornate LUMINOUS crown — gradient band + curved tapered spires + glowing
+        // gems, layered for volume (not a flat vector outline).
+        const drawCrown=(s,gx,gy,alpha,blurPx,gemA)=>{
+          const yTop=gy-0.12*s, yBot=gy+0.5*s;
+          const spires=[[-1.18,-0.9],[-0.62,-1.16],[0,-1.6],[0.62,-1.16],[1.18,-0.9]];
           ctx.save(); ctx.filter=`blur(${blurPx}px)`;
-          ctx.fillStyle=rgba([255,226,150],alpha); ctx.beginPath();
-          ctx.moveTo(gx-1.5*s, gy+0.6*s); ctx.lineTo(gx-1.5*s, gy-0.1*s); ctx.lineTo(gx-0.95*s, gy-1.0*s);
-          ctx.lineTo(gx-0.5*s, gy-0.2*s); ctx.lineTo(gx, gy-1.42*s); ctx.lineTo(gx+0.5*s, gy-0.2*s);
-          ctx.lineTo(gx+0.95*s, gy-1.0*s); ctx.lineTo(gx+1.5*s, gy-0.1*s); ctx.lineTo(gx+1.5*s, gy+0.6*s);
-          ctx.closePath(); ctx.fill();
-          ctx.fillStyle=rgba([255,247,222],ja); for(const tx of [-0.95,0,0.95]){ ctx.beginPath(); ctx.arc(gx+tx*s, gy+(tx===0?-1.42:-1.0)*s, 3.2, 0, 7); ctx.fill(); }
+          // spires: filled, concave-sided, base-gold → white-hot tip
+          for(const [sx,syTop] of spires){ const bx=gx+sx*s, tipY=gy+syTop*s, hw=0.26*s, midY=(yTop+tipY)/2;
+            const gr=ctx.createLinearGradient(0,yTop,0,tipY); gr.addColorStop(0,rgba([243,196,107],alpha)); gr.addColorStop(1,rgba([255,251,232],alpha));
+            ctx.fillStyle=gr; ctx.beginPath(); ctx.moveTo(bx-hw,yTop);
+            ctx.quadraticCurveTo(bx-hw*0.45, midY, bx, tipY); ctx.quadraticCurveTo(bx+hw*0.45, midY, bx+hw, yTop); ctx.closePath(); ctx.fill(); }
+          // band: metallic gold, bright top → deep base (volume)
+          const bg=ctx.createLinearGradient(0,yTop,0,yBot); bg.addColorStop(0,rgba([255,242,196],alpha)); bg.addColorStop(.5,rgba([243,196,107],alpha)); bg.addColorStop(1,rgba([168,120,42],alpha));
+          ctx.fillStyle=bg; ctx.beginPath(); ctx.moveTo(gx-1.4*s,yTop); ctx.lineTo(gx+1.4*s,yTop);
+          ctx.quadraticCurveTo(gx+1.52*s,(yTop+yBot)/2, gx+1.26*s,yBot); ctx.lineTo(gx-1.26*s,yBot);
+          ctx.quadraticCurveTo(gx-1.52*s,(yTop+yBot)/2, gx-1.4*s,yTop); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle=rgba([255,253,238],alpha*0.9); ctx.lineWidth=1.1; ctx.beginPath(); ctx.moveTo(gx-1.36*s,yTop+0.4); ctx.lineTo(gx+1.36*s,yTop+0.4); ctx.stroke();
+          ctx.filter='none'; ctx.restore();
+          // gems: glowing orbs (kept sharper than the body for sparkle)
+          ctx.save(); ctx.filter=`blur(${Math.max(0.5,blurPx*0.4)}px)`;
+          const gem=(x,y,r,col)=>{ const g=ctx.createRadialGradient(x,y,0,x,y,r); g.addColorStop(0,rgba([255,255,255],gemA)); g.addColorStop(.4,rgba(col,gemA)); g.addColorStop(1,rgba(col,0)); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); };
+          gem(gx, gy+0.2*s, 0.3*s, [196,128,255]);           // center jewel (violet)
+          gem(gx-0.72*s, gy+0.22*s, 0.15*s, [255,222,150]); gem(gx+0.72*s, gy+0.22*s, 0.15*s, [255,222,150]);
+          for(const [sx,syTop] of spires) gem(gx+sx*s, gy+syTop*s, 0.15*s, [255,242,205]); // tip jewels
           ctx.filter='none'; ctx.restore();
         };
         if(half==='back'){
@@ -238,13 +254,22 @@
           }
           // BURST — a shockwave ring + particles fly outward, releasing the crown back into light
           if(bt>=0){
-            const rr=R*(1.0+bt*1.05);
+            const k=bt, e=1-(1-k)*(1-k);           // easeOut expansion (fast, then settle)
+            // (1) hard core flash — the punch, front-loaded
+            const fa=Math.max(0,1-k*2.8);
+            if(fa>0){ const fg=ctx.createRadialGradient(cx,cy,0,cx,cy,R*1.8); fg.addColorStop(0,rgba([255,253,238],fa*0.95)); fg.addColorStop(.45,rgba([255,236,180],fa*0.5)); fg.addColorStop(1,rgba([255,236,180],0)); ctx.fillStyle=fg; ctx.beginPath(); ctx.arc(cx,cy,R*1.8,0,7); ctx.fill(); }
+            // (2) two fast, thick, bright shockwave rings
             ctx.save(); ctx.filter='blur(2px)';
-            ctx.strokeStyle=rgba([255,244,210],(1-bt)*0.75); ctx.lineWidth=2.6*(1-bt)+0.6; ctx.beginPath(); ctx.arc(cx,cy,rr,0,7); ctx.stroke();
+            ctx.strokeStyle=rgba([255,248,220],(1-k)*0.9); ctx.lineWidth=(1-k)*5.5+0.8; ctx.beginPath(); ctx.arc(cx,cy,R*(1.0+e*1.0),0,7); ctx.stroke();
+            ctx.strokeStyle=rgba([255,220,150],(1-k)*0.55); ctx.lineWidth=(1-k)*3+0.5; ctx.beginPath(); ctx.arc(cx,cy,R*(0.8+e*1.35),0,7); ctx.stroke();
             ctx.filter='none'; ctx.restore();
-            for(let i=0;i<16;i++){ const ang=i/16*Math.PI*2+0.3; const pr=R*(0.95+bt*1.1);
-              const x=cx+Math.cos(ang)*pr, y=cy+Math.sin(ang)*pr;
-              ctx.fillStyle=rgba([255,240,200],(1-bt)*0.8); ctx.beginPath(); ctx.arc(x,y,(1-bt)*2.4+0.5,0,7); ctx.fill(); }
+            // (3) radial motion streaks with bright heads — velocity / force
+            for(let i=0;i<22;i++){ const ang=i/22*Math.PI*2 + (i%2?0.14:0);
+              const r0=R*(1.0+e*0.85), r1=r0 + R*(0.55*(1-k)+0.15);
+              const x0=cx+Math.cos(ang)*r0, y0=cy+Math.sin(ang)*r0, x1=cx+Math.cos(ang)*r1, y1=cy+Math.sin(ang)*r1;
+              const gr=ctx.createLinearGradient(x0,y0,x1,y1); gr.addColorStop(0,rgba([255,240,200],(1-k)*0.9)); gr.addColorStop(1,rgba([255,240,200],0));
+              ctx.strokeStyle=gr; ctx.lineWidth=(1-k)*2.4+0.4; ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+              ctx.fillStyle=rgba([255,251,232],(1-k)*0.95); ctx.beginPath(); ctx.arc(x1,y1,(1-k)*1.9+0.4,0,7); ctx.fill(); }
           }
         } else {
           this.rim(ctx,cx,cy,R,[255,249,228],.6,1.6);
