@@ -75,12 +75,12 @@ diffuse corona → light GATHERS into a crown (~7s) → crown holds, sharp & bri
   (12 broad + 24 fine, `blur(4px)`) whose shaft length also pulls inward as `g` rises, plus
   stacked soft-radiance blooms at `R*1.34 / 1.62 / 1.9`. Fades out as light gathers, returns
   after the burst. **No crisp rings** (the `orbit` slot owns rings).
-- **Gathered crown** (intensity `× g`): an **ornate luminous crown** — a metallic gold
-  **band** (bright-top→deep-base gradient for volume), 5 **curved tapered spires**
-  (concave sides via quadratic curves, gold→white-hot gradient), and **glowing jewel orbs**
-  (radial-gradient) at the band centre (violet gem), band sides, and every spire tip. It
-  **brightens and sharpens as it forms** (body blur `9px→3px`, gems kept sharper). Not a
-  flat vector outline — layered for volume.
+- **Gathered crown** (intensity `× g`): a **king's-crown silhouette** — a band + 5 sharp
+  spikes, the **outer two splayed outward**, centre tallest, with a **violet diamond finial**
+  above the centre spike. A luminous gold fill (bright-top→deep-base gradient), kept as a
+  clean *shape*, not fussy line detail. It **brightens and sharpens as it forms** (body blur
+  `7px→2px` as `g:0→1`; diamond kept sharper). Shape referenced from a royal-crown set
+  (the splayed-spike one).
 - **Burst** (force, but *soft*): the whole blast is drawn under `ctx.filter='blur(6px)'` so
   it reads as a **bloom of light, not hard lines/dots** — a front-loaded **core flash**
   (`fa = 1−k·2.8`), **two fast thick shockwave rings** (fattened so blur keeps them glowing,
