@@ -958,6 +958,13 @@ export default function World({ address, profile, onBack, onMessages = () => {},
         <WorldMarchLayer world={world} viewport={{ x: viewX, y: viewY, width: viewport.width, height: viewport.height }} zoom={zoom} viewerId={session.playerId} quality={quality} />
         {gpuVisualsReady && <svg className="world-map world-map-overlay" viewBox={viewBox} aria-hidden="true">
           {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
+          {/* Selection reticle for cities lives up here: the GPU visual layer paints
+              planets over the base SVG, so a lock ring drawn down there is hidden on
+              cities. Resources/rogues aren't GPU-drawn, so they keep the base ring. */}
+          {selected?.kind === "city" && <g transform={`translate(${selected.position.x} ${selected.position.y}) scale(${markerScale}) translate(${-selected.position.x} ${-selected.position.y})`} pointerEvents="none">
+            <circle cx={selected.position.x} cy={selected.position.y} r="9" className="world-lock-ring" />
+            <path d={`M ${selected.position.x - 12} ${selected.position.y} h 6 M ${selected.position.x + 6} ${selected.position.y} h 6 M ${selected.position.x} ${selected.position.y - 12} v 6 M ${selected.position.x} ${selected.position.y + 6} v 6`} className="world-lock-cross" />
+          </g>}
           <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`}>
             <text x={center.x} y={center.y - 47} className="world-circle-label">WORMHOLE</text>
             <text x={center.x} y={center.y - 39} className="world-circle-sub">GRAVITY ANCHOR · FRONTIER I</text>
