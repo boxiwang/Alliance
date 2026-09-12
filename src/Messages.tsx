@@ -14,6 +14,7 @@ import { loadCosmeticVault, type ChatSignalId } from "./lib/player-account";
 import { loadPlayerAccount } from "./lib/player-account";
 import { refreshLocalCommsIntel, saveLocalComms, type LocalCommsMessage } from "./lib/comms-local";
 import { clearQueuedCommsShare, loadQueuedCommsShare, queueWorldFocus, sharedIntelIsActive, type SharedWorldIntel } from "./lib/shared-intel";
+import { playerSystemReports } from "./lib/world-reports";
 
 // Comms is Task-1 chat. This is the frontend + a LOCAL adapter: channels/threads are seeded and
 // your own sends echo locally. A server adapter (Cloudflare Durable Objects) replaces the data
@@ -146,11 +147,19 @@ export default function Messages({ address, profile, onCity, onWorld, onProfile 
   const key = isAlliance ? allianceTab : active;
   const dm = DMS.find((d) => d.id === active);
 
+  // Real world reports (attacks, harvests, recon) feed the System channel — the
+  // same reports the starmap shows — so a battle result appears in both places.
+  // Falls back to the seeded sample lines only when a fresh account has none.
+  const systemReports = useMemo(() => {
+    const lines = playerSystemReports(stored, stored?.playerId ?? "");
+    return lines.length ? lines.map(({ sys, tag, t, b }) => ({ sys, tag, t, b })) : THREADS.system;
+  }, [stored, clock]);
+
   const messages = useMemo(() => {
-    let list = [...(THREADS[key] ?? []), ...(sent[key] ?? [])];
+    let list = isSystem ? [...systemReports] : [...(THREADS[key] ?? []), ...(sent[key] ?? [])];
     if (isSystem && sysFilter !== "all") list = list.filter((m) => m.sys === sysFilter);
     return list;
-  }, [key, sent, isSystem, sysFilter]);
+  }, [key, sent, isSystem, sysFilter, systemReports]);
 
   function send() {
     const body = draft.trim();
