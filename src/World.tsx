@@ -670,12 +670,12 @@ export default function World({ address, profile, onBack, onMessages = () => {},
           halo: cosmetics.halo,
           orbit: cosmetics.orbit,
           own: city.ownerId === session.playerId,
-          selected: city.id === selectedId,
+          selected: city.id === selectedId || (city.ownerId === session.playerId && homeSelected),
           burning: city.state === "burning",
         };
       });
     return live.concat(detailZoom ? stressVisuals : []);
-  }, [cityEntities, detailZoom, layers.city, selectedId, session.playerId, stressVisuals, world.players]);
+  }, [cityEntities, detailZoom, layers.city, selectedId, homeSelected, session.playerId, stressVisuals, world.players]);
   const monsterPreview = useMemo(() => {
     if (!selected || selected.kind !== "monster" || sentCount <= 0) return null;
     const runtime = { ...(N.runtimeAccountModifiers ?? {}) };
@@ -947,10 +947,6 @@ export default function World({ address, profile, onBack, onMessages = () => {},
               <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
               <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
             </g>}
-            {homeSelected && !gpuVisualsReady && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`} pointerEvents="none">
-              <circle cx={playerCity.position.x} cy={playerCity.position.y} r="9" className="world-lock-ring" />
-              <path d={`M ${playerCity.position.x - 12} ${playerCity.position.y} h 6 M ${playerCity.position.x + 6} ${playerCity.position.y} h 6 M ${playerCity.position.x} ${playerCity.position.y - 12} v 6 M ${playerCity.position.x} ${playerCity.position.y + 6} v 6`} className="world-lock-cross" />
-            </g>}
           </g>
           {tileMark && <g className="world-tile-mark" pointerEvents="none">
             <rect x={tileMark.x} y={tileMark.y} width="1" height="1" className="world-tile-cell" />
@@ -965,13 +961,8 @@ export default function World({ address, profile, onBack, onMessages = () => {},
         <WorldMarchLayer world={world} viewport={{ x: viewX, y: viewY, width: viewport.width, height: viewport.height }} zoom={zoom} viewerId={session.playerId} quality={quality} />
         {gpuVisualsReady && <svg className="world-map world-map-overlay" viewBox={viewBox} aria-hidden="true">
           {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
-          {/* Selection reticle for cities lives up here: the GPU visual layer paints
-              planets over the base SVG, so a lock ring drawn down there is hidden on
-              cities. Resources/rogues aren't GPU-drawn, so they keep the base ring. */}
-          {selected?.kind === "city" && <g transform={`translate(${selected.position.x} ${selected.position.y}) scale(${markerScale}) translate(${-selected.position.x} ${-selected.position.y})`} pointerEvents="none">
-            <circle cx={selected.position.x} cy={selected.position.y} r="9" className="world-lock-ring" />
-            <path d={`M ${selected.position.x - 12} ${selected.position.y} h 6 M ${selected.position.x + 6} ${selected.position.y} h 6 M ${selected.position.x} ${selected.position.y - 12} v 6 M ${selected.position.x} ${selected.position.y + 6} v 6`} className="world-lock-cross" />
-          </g>}
+          {/* Cities show selection via the GPU layer's thin outer ring (it wraps
+              outside the cosmetics); resources/rogues keep the base SVG ring. */}
           <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`}>
             <text x={center.x} y={center.y - 47} className="world-circle-label">WORMHOLE</text>
             <text x={center.x} y={center.y - 39} className="world-circle-sub">GRAVITY ANCHOR · FRONTIER I</text>
@@ -988,10 +979,6 @@ export default function World({ address, profile, onBack, onMessages = () => {},
             <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
             <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
           </g>
-          {homeSelected && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`} pointerEvents="none">
-            <circle cx={playerCity.position.x} cy={playerCity.position.y} r="9" className="world-lock-ring" />
-            <path d={`M ${playerCity.position.x - 12} ${playerCity.position.y} h 6 M ${playerCity.position.x + 6} ${playerCity.position.y} h 6 M ${playerCity.position.x} ${playerCity.position.y - 12} v 6 M ${playerCity.position.x} ${playerCity.position.y + 6} v 6`} className="world-lock-cross" />
-          </g>}
         </svg>}
         {!gpuVisualsReady && voidSkinEquipped && <VoidPlanetOverlay svgRef={svgRef} home={playerCity.position} zoom={zoom} strategic={strategicZoom} onActiveChange={setVoidShaderActive} />}
         {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
