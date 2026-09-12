@@ -9,6 +9,7 @@ import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
 import CosmicBackdrop from "./CosmicBackdrop";
 import PlayerCard, { type PlayerSignal } from "./PlayerCard";
+import NameSignal from "./NameSignal";
 import { loadCosmeticVault, type ChatSignalId } from "./lib/player-account";
 import { loadPlayerAccount } from "./lib/player-account";
 import { refreshLocalCommsIntel, saveLocalComms, type LocalCommsMessage } from "./lib/comms-local";
@@ -39,9 +40,9 @@ const DMS: DirectThread[] = [
 ];
 const PLAYER_SIGNALS: Record<string, PlayerSignal> = {
   ...Object.fromEntries(DMS.map((thread) => [thread.label, thread.signal])),
-  GreenOrbit: { username: "GreenOrbit", allianceSymbol: "PEPE", title: "CASH BLOOMER", wallet: "0x2E05D571d9a4aB04b082F409870a6A11436E112c", skin: { id: "civic-core", name: "Civic Core", rarity: "ISSUED" }, coreLevel: 11, might: 164_200, achievements: [{ mark: "Ⅰ", name: "FIRST LIGHT" }], online: true },
-  VoidRunner: { username: "VoidRunner", allianceSymbol: "ORBT", title: "NAME ERASED", wallet: "0x4A801Bbe20f64391219F043df4374DA0A1b3B7f2", skin: { id: "void-touched", name: "Void-Touched", rarity: "MYTHIC" }, coreLevel: 16, might: 337_900, achievements: [{ mark: "◈", name: "ECHO HUNTER" }, { mark: "⌁", name: "VOID WALKER" }], online: true },
-  MuchCommand: { username: "MuchCommand", allianceSymbol: "DOGE", title: "MOON ENGINEER", wallet: "0xD06E51c33Ea18E73908dE0F6b0ACD6e79Fb09A12", skin: { id: "solar-imperator", name: "Solar Imperator", rarity: "RELIC" }, coreLevel: 13, might: 208_700, achievements: [{ mark: "Ⅰ", name: "FIRST LIGHT" }], online: false },
+  GreenOrbit: { username: "GreenOrbit", allianceSymbol: "PEPE", title: "CASH BLOOMER", wallet: "0x2E05D571d9a4aB04b082F409870a6A11436E112c", skin: { id: "dust-homestead", name: "Dust Homestead", rarity: "ISSUED" }, nameSignal: "verdant-hail", coreLevel: 11, might: 164_200, achievements: [{ mark: "Ⅰ", name: "FIRST LIGHT" }], online: true },
+  VoidRunner: { username: "VoidRunner", allianceSymbol: "ORBT", title: "NAME ERASED", wallet: "0x4A801Bbe20f64391219F043df4374DA0A1b3B7f2", skin: { id: "void-touched", name: "Void-Touched", rarity: "MYTHIC" }, nameSignal: "eclipse-herald", coreLevel: 16, might: 337_900, achievements: [{ mark: "◈", name: "ECHO HUNTER" }, { mark: "⌁", name: "VOID WALKER" }], online: true },
+  MuchCommand: { username: "MuchCommand", allianceSymbol: "DOGE", title: "MOON ENGINEER", wallet: "0xD06E51c33Ea18E73908dE0F6b0ACD6e79Fb09A12", skin: { id: "solar-imperator", name: "Solar Imperator", rarity: "RELIC" }, nameSignal: "ember-cipher", coreLevel: 13, might: 208_700, achievements: [{ mark: "Ⅰ", name: "FIRST LIGHT" }], online: false },
 };
 const CONTACTS = [
   { a: "NyxValidator", f: "ORBT", v: true, on: true, note: "2 fleets" },
@@ -116,6 +117,7 @@ export default function Messages({ address, profile, onCity, onWorld, onProfile 
   const [clock, setClock] = useState(Date.now());
   const [inspectedSignal, setInspectedSignal] = useState<PlayerSignal | null>(null);
   const equippedChatSignal = useMemo(() => loadCosmeticVault(address).equipped.chatSignal, [address]);
+  const account = useMemo(() => loadPlayerAccount(address), [address]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
@@ -160,7 +162,7 @@ export default function Messages({ address, profile, onCity, onWorld, onProfile 
       b: body || (pendingShare?.kind === "scout-intel" ? "Recon envelope relayed." : pendingShare?.targetKind === "monster" ? "Rogue vector relayed." : pendingShare?.targetKind === "resource" ? "Resource vector relayed." : "Civilization vector relayed."),
       intel: pendingShare || undefined,
       sourceLanguage: "auto",
-      authorLocale: loadPlayerAccount(address).language,
+      authorLocale: account.language,
       createdAt: Date.now(),
     };
     setSent((cur) => ({ ...cur, [key]: [...(cur[key] ?? []), message] }));
@@ -245,7 +247,7 @@ export default function Messages({ address, profile, onCity, onWorld, onProfile 
             </div>)}</div>
           : <div className="stream">
               {isWar && <div className="spam">⚔ Fresh op session · clears when the op ends</div>}
-              {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} />)}
+              {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} reducedMotion={account.reducedMotion} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} />)}
               {messages.length === 0 && <div className="spam">{isWar ? "No active op — a War Room opens fresh when an officer starts one." : "No messages yet."}</div>}
             </div>}
 
@@ -267,7 +269,7 @@ export default function Messages({ address, profile, onCity, onWorld, onProfile 
   </section>;
 }
 
-function MessageRow({ m, now, ownChatSignal, onInspect, onOpenWorld }: { m: ChatMessage; now: number; ownChatSignal: ChatSignalId; onInspect: (name: string) => void; onOpenWorld: (share: SharedWorldIntel) => void }) {
+function MessageRow({ m, now, ownChatSignal, reducedMotion, onInspect, onOpenWorld }: { m: ChatMessage; now: number; ownChatSignal: ChatSignalId | null; reducedMotion: boolean; onInspect: (name: string) => void; onOpenWorld: (share: SharedWorldIntel) => void }) {
   if (m.pin) return <div className="pinned"><b>PINNED</b><span>{m.pin}</span></div>;
   if (m.spam) return <div className="spam"><b>[{m.f}] {m.a}</b> sent the same message {m.spam}× · collapsed</div>;
   if (m.sys) return <div className={`logrow ${m.sys}`}><span className="lg-tag">{m.tag}</span><span className="lg-b">{m.b}</span><span className="lg-t">{m.t}</span></div>;
@@ -276,7 +278,7 @@ function MessageRow({ m, now, ownChatSignal, onInspect, onOpenWorld }: { m: Chat
     <div className="bd">
       <div className="meta">
         {m.f && <span className="tick" style={{ color: fcol(m.f), background: `${fcol(m.f)}1a` }}>[{m.f}]</span>}
-        <button className={`nm player-name-button chat-name-${m.own ? ownChatSignal : m.a ? PLAYER_SIGNALS[m.a]?.nameSignal || "clear-channel" : "clear-channel"}`} disabled={!m.a || !PLAYER_SIGNALS[m.a]} onClick={() => m.a && onInspect(m.a)}>{m.a}</button>
+        <button className="nm player-name-button" disabled={!m.a || !PLAYER_SIGNALS[m.a]} onClick={() => m.a && onInspect(m.a)}><NameSignal signal={m.own ? ownChatSignal : m.a ? PLAYER_SIGNALS[m.a]?.nameSignal : null} reducedMotion={reducedMotion}>{m.a || "UNKNOWN"}</NameSignal></button>
         {m.v && <span className="vbadge" title="on-chain pledge observed">✓</span>}
         {m.tag && <span className={`mtag ${m.tag}`}>{m.tag}</span>}
         <span className="mtime">{m.t}</span>

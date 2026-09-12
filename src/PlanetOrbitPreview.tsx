@@ -1,12 +1,15 @@
 import { useEffect, useRef } from "react";
 import { PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId } from "./lib/player-account";
+import { PLANET_CORE_GLSL } from "./planet-core-shared";
 import { RADIANT_CROWN_GLSL } from "./planet-halo-shared";
 
 const CORE_INDEX: Record<PlanetSkinId, number> = {
-  "civic-core": 0,
-  "void-touched": 1,
-  "event-horizon": 2,
-  "solar-imperator": 3,
+  "dust-homestead": 0,
+  "blue-marble": 1,
+  "void-touched": 2,
+  "sovereign-core": 3,
+  "event-horizon": 4,
+  "solar-imperator": 5,
 };
 
 const ORBIT_INDEX: Record<PlanetOrbitId, number> = {
@@ -43,6 +46,8 @@ uniform float uHalo;
 uniform float uShowHalo;
 uniform float uMotion;
 uniform float uIntensity;
+uniform float uAssemblyScale;
+uniform float uAssemblyOffsetY;
 
 #define PI 3.14159265359
 float hash21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
@@ -57,6 +62,7 @@ float lineSeg(vec2 p,vec2 a,vec2 b,float width){ vec2 pa=p-a,ba=b-a; float h=cla
 float boxMask(vec2 p,vec2 bounds,float feather){ vec2 d=abs(p)-bounds; float dist=length(max(d,0.))+min(max(d.x,d.y),0.); return 1.-smoothstep(0.,feather,dist); }
 void over(inout vec4 c,vec3 rgb,float alpha){ alpha=clamp(alpha,0.,1.); c.rgb=rgb*alpha+c.rgb*(1.-alpha); c.a=alpha+c.a*(1.-alpha); }
 void emit(inout vec4 c,vec3 rgb,float amount){ amount=max(0.,amount); c.rgb+=rgb*amount; c.a=max(c.a,clamp(amount*.8,0.,1.)); }
+${PLANET_CORE_GLSL}
 ${RADIANT_CROWN_GLSL}
 
 vec3 stars(vec2 p,float seed){
@@ -164,14 +170,6 @@ void drawHalo(inout vec4 col,vec2 p,float front){
   }
 }
 
-void civicCore(inout vec4 col,vec2 p){
-  float rr=.48,r=length(p),body=disc(p,rr,.004); float z=sqrt(max(0.,rr*rr-dot(p,p)))/rr; vec3 n=normalize(vec3(p/rr,z));
-  float terrain=fbm(vec2(atan(n.x,n.z),asin(n.y))*vec2(2.4,4.2)+3.); float lit=max(.08,dot(n,normalize(vec3(-.5,.5,.9))));
-  vec3 surf=mix(vec3(.012,.055,.10),vec3(.2,.72,.82),terrain)*(.42+lit*.75); surf+=pow(1.-z,3.)*vec3(.04,.68,1.)*.75; over(col,surf,body);
-  float grid=max(pow(abs(sin((p.x+p.y*.15)*27.)),42.),pow(abs(sin((p.y-p.x*.08)*23.)),44.)); emit(col,vec3(.58,.94,1.),grid*body*.17);
-  vec2 c=abs(rot(p,.7854)); over(col,vec3(.8,1.,1.),(1.-smoothstep(.06,.085,max(c.x,c.y)))*body*.86);
-}
-
 void riftCore(inout vec4 col,vec2 p){
   float rr=.48,r=length(p),body=disc(p,rr,.004); if(body<=0.)return;
   float z=sqrt(max(0.,rr*rr-dot(p,p)))/rr; vec3 n=normalize(vec3(p/rr,z)); vec2 surface=vec2(atan(n.x,n.z)/PI+n.y*.12,asin(n.y)/PI); surface.x+=uTime*.13*uMotion;
@@ -201,12 +199,24 @@ void solarCore(inout vec4 col,vec2 p){
   over(col,surf,body);
 }
 
-void drawCore(inout vec4 col,vec2 p){ if(uCore<.5)civicCore(col,p); else if(uCore<1.5)riftCore(col,p); else if(uCore<2.5)horizonCore(col,p); else solarCore(col,p); }
+void drawCore(inout vec4 col,vec2 p){
+  float time=uTime*uMotion;
+  vec2 q=p/.48;
+  if(uCore<.5)drawDustHomestead(col,q,time,1.13,.008,uIntensity,1.);
+  else if(uCore<1.5)drawBlueMarble(col,q,time,2.37,.008,uIntensity,1.);
+  else if(uCore<2.5)riftCore(col,p);
+  else if(uCore<3.5)drawSovereignCore(col,q,time,5.71,.008,uIntensity,1.);
+  else if(uCore<4.5)horizonCore(col,p);
+  else solarCore(col,p);
+}
 
 void main(){
   vec2 p=(gl_FragCoord.xy*2.-uResolution.xy)/min(uResolution.x,uResolution.y);
   vec3 base=stars(p,1.7+uCore*4.); float grid=(smoothstep(.497,.5,abs(fract((p.x+2.)*.5)-.5))+smoothstep(.497,.5,abs(fract((p.y+2.)*.5)-.5)))*.018; base+=grid*vec3(.16,.5,.75);
-  vec4 col=vec4(base,1.); drawHalo(col,p,0.); drawOrbit(col,p,0.); drawCore(col,p); drawOrbit(col,p,1.); drawHalo(col,p,1.);
+  // Fit mode scales only the cosmetic assembly. The star field remains full
+  // bleed while the widest Orbit and tallest Crown stay inside the viewport.
+  vec2 assemblyP=(p+vec2(0.,uAssemblyOffsetY))/max(.01,uAssemblyScale);
+  vec4 col=vec4(base,1.); drawHalo(col,assemblyP,0.); drawOrbit(col,assemblyP,0.); drawCore(col,assemblyP); drawOrbit(col,assemblyP,1.); drawHalo(col,assemblyP,1.);
   float vignette=1.-smoothstep(.55,1.38,length(p)); col.rgb*=.46+.54*vignette; col.rgb=1.-exp(-col.rgb*(1.08*uIntensity)); col.rgb=pow(col.rgb,vec3(.88)); gl_FragColor=vec4(col.rgb,1.);
 }
 `;
@@ -219,11 +229,13 @@ type Props = {
   halo?: PlanetHaloId | null;
   chrome?: boolean;
   staticPreview?: boolean;
+  /** Leave enough safe area for every equipped Halo and Orbit to be visible. */
+  fitAssembly?: boolean;
   className?: string;
 };
 
 /** High-fidelity Core + Halo + Orbit assembly used by Dossier and Relic Vault. */
-export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = true, staticPreview = false, className = "" }: Props) {
+export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = true, staticPreview = false, fitAssembly = false, className = "" }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const core = PLANET_SKINS.find((item) => item.id === skin) || PLANET_SKINS[0];
   const definition = orbit ? PLANET_ORBITS.find((item) => item.id === orbit) || PLANET_ORBITS[0] : null;
@@ -271,6 +283,8 @@ export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = 
     const showHalo = gl.getUniformLocation(program, "uShowHalo");
     const motion = gl.getUniformLocation(program, "uMotion");
     const intensity = gl.getUniformLocation(program, "uIntensity");
+    const assemblyScale = gl.getUniformLocation(program, "uAssemblyScale");
+    const assemblyOffsetY = gl.getUniformLocation(program, "uAssemblyOffsetY");
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const dpr = Math.min(staticPreview ? 1.25 : 2, window.devicePixelRatio || 1);
     const start = performance.now() - 2600;
@@ -291,6 +305,8 @@ export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = 
       gl.uniform1f(showHalo, halo ? 1 : 0);
       gl.uniform1f(motion, staticPreview || reduce ? 0 : 1);
       gl.uniform1f(intensity, 1.08);
+      gl.uniform1f(assemblyScale, fitAssembly ? .80 : 1);
+      gl.uniform1f(assemblyOffsetY, fitAssembly ? .04 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
     const loop = (now: number) => { draw(now); if (!staticPreview && !reduce && !document.hidden) raf = requestAnimationFrame(loop); };
@@ -307,7 +323,7 @@ export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = 
       gl.deleteBuffer(buffer);
       gl.deleteProgram(program);
     };
-  }, [halo, orbit, skin, staticPreview]);
+  }, [fitAssembly, halo, orbit, skin, staticPreview]);
 
   const label = [core.name, haloDefinition?.name, definition?.name].filter(Boolean).join(" with ");
   return <div className={`planet-orbit-preview ${orbit ? `planet-orbit-${orbit}` : "planet-core-only"} ${halo ? `planet-halo-${halo}` : "planet-halo-none"} ${className}`.trim()}>

@@ -912,6 +912,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .player-signal-card>header{display:grid;grid-template-columns:49px minmax(0,1fr) auto;align-items:center;gap:10px;padding:13px;border-bottom:1px solid rgba(92,129,171,.12);background:radial-gradient(circle at 15% 20%,rgba(104,74,180,.11),transparent 38%)}
 .player-signal-name{display:flex;min-width:0;flex-direction:column}.player-signal-name small{color:#8c77c7;font:700 6px var(--mono);letter-spacing:.11em}.player-signal-name b{overflow:hidden;margin-top:2px;color:#e6f1f7;font:650 13px var(--hud);text-overflow:ellipsis;white-space:nowrap}.player-signal-name span{overflow:hidden;margin-top:2px;color:#657f90;font:700 6px var(--mono);letter-spacing:.08em;text-overflow:ellipsis;white-space:nowrap}.player-signal-card>header>em{color:#516a7a;font:700 6px var(--mono);font-style:normal;letter-spacing:.1em}.player-signal-card>header>em.online{color:#43f2a1}
 .player-signal-orb{position:relative;width:44px;height:44px;display:grid;place-items:center;border:1px solid rgba(142,151,255,.24);border-radius:50%;background:radial-gradient(circle,rgba(83,63,145,.28),rgba(3,8,17,.96) 65%)}.player-signal-orb:after{content:"";position:absolute;width:42px;height:13px;border:1px solid rgba(56,217,255,.52);border-radius:50%;transform:rotate(-19deg);box-shadow:0 0 8px rgba(56,217,255,.16)}.player-signal-orb>i{position:relative;z-index:1;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 32% 27%,#9bedff,#24536f 35%,#07111f 75%);box-shadow:0 0 12px rgba(56,217,255,.25)}
+.player-signal-orb-dust-homestead>i{background:radial-gradient(circle at 31% 26%,#ddc18f,#8d6a42 34%,#3d2918 70%,#120c07);box-shadow:inset -5px -4px 8px rgba(8,5,2,.72),0 0 9px rgba(200,160,106,.24)}.player-signal-orb-dust-homestead:after{border-color:rgba(200,160,106,.55);box-shadow:0 0 7px rgba(200,160,106,.16)}.player-signal-orb-blue-marble>i{background:radial-gradient(circle at 31% 25%,#bdf5ff,#2695bf 25%,#176f62 36%,#075276 58%,#021225 78%);box-shadow:inset -5px -4px 8px rgba(1,8,18,.74),0 0 12px rgba(89,220,255,.38)}.player-signal-orb-blue-marble:after{border-color:rgba(89,220,255,.66)}.player-signal-orb-sovereign-core>i{background:radial-gradient(circle at 43% 40%,#fffef0,#ffe27c 22%,#f17f12 54%,#8d1c03 78%,#290400);box-shadow:inset -4px -4px 7px rgba(69,8,0,.7),0 0 14px rgba(243,196,107,.54)}.player-signal-orb-sovereign-core:after{border-color:rgba(243,196,107,.76);box-shadow:0 0 10px rgba(243,196,107,.34)}
 .player-signal-orb-void-touched>i{background:radial-gradient(circle at 35% 28%,#667094,#1d2240 38%,#03050d 78%);box-shadow:inset -5px -4px 9px #010207,0 0 12px rgba(145,77,255,.42)}.player-signal-orb-void-touched>i:after{content:"";position:absolute;left:11px;top:1px;width:1px;height:19px;transform:rotate(-27deg);background:#d6a6ff;box-shadow:0 0 5px #8d34ff}.player-signal-orb-event-horizon>i{width:17px;height:17px;background:#000;box-shadow:0 0 0 4px rgba(86,29,126,.65),0 0 0 6px rgba(255,132,55,.65),0 0 16px #ff7334}.player-signal-orb-event-horizon:after{height:10px;border-width:3px;border-color:rgba(255,149,61,.72);filter:blur(.6px)}.player-signal-orb-solar-imperator>i{background:radial-gradient(circle at 35% 30%,#fffbd0,#f0a53f 28%,#a72d2e 63%,#13040b);box-shadow:0 0 15px rgba(255,174,55,.52)}.player-signal-orb-solar-imperator:after{border-color:rgba(255,211,102,.72)}
 .player-signal-relic{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid rgba(92,129,171,.1);background:linear-gradient(90deg,rgba(170,130,255,.045),transparent)}.player-signal-relic>span{display:flex;min-width:0;flex-direction:column}.player-signal-relic small{color:#71609e;font:700 5px var(--mono);letter-spacing:.12em}.player-signal-relic b{overflow:hidden;margin-top:2px;color:#bfb1e4;font:650 9px var(--hud);text-overflow:ellipsis;white-space:nowrap}.player-signal-relic>i{width:20px;height:1px;background:linear-gradient(90deg,#aa82ff,transparent);box-shadow:0 0 7px #aa82ff}
 .player-signal-stats{display:grid;grid-template-columns:72px 1fr;border-bottom:1px solid rgba(92,129,171,.1)}.player-signal-stats>span{display:flex;min-width:0;flex-direction:column;padding:9px 13px;border-right:1px solid rgba(92,129,171,.1)}.player-signal-stats>span:last-child{border:0}.player-signal-stats small{color:#4e6879;font:700 5px var(--mono);letter-spacing:.1em}.player-signal-stats b{overflow:hidden;margin-top:2px;color:#c6d5dd;font:700 11px var(--hud);text-overflow:ellipsis}
@@ -959,12 +960,85 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .profile-motion-stilled .profile-planet-orbit,.profile-motion-stilled .profile-orbit-nodes>i{animation:none!important}
 
 /* Public World cosmetic identity — every city/fleet renders its owner's bound loadout. */
-.world-planet-skin{pointer-events:none}.world-planet-skin path,.world-planet-skin circle,.world-planet-skin ellipse,.world-planet-skin rect{vector-effect:non-scaling-stroke}.world-civic-atmosphere{fill:rgba(56,217,255,.06);stroke:#38d9ff;stroke-width:.55;stroke-dasharray:1.5 1.2}.world-civic-body{stroke:#bdefff;stroke-width:.55}.world-civic-grid{fill:none;stroke:rgba(209,249,255,.46);stroke-width:.38}.world-civic-core{fill:#eaffff;stroke:#38d9ff;stroke-width:.35;filter:drop-shadow(0 0 2px #38d9ff)}.world-civic-spec{fill:#fff;opacity:.72}
+.world-planet-skin{pointer-events:none}.world-planet-skin path,.world-planet-skin circle,.world-planet-skin ellipse,.world-planet-skin rect{vector-effect:non-scaling-stroke}.world-dust-body{stroke:#c8a06a;stroke-width:.48}.world-dust-band{fill:none;stroke:rgba(222,190,137,.13);stroke-width:1.4}.world-dust-crater{fill:rgba(36,23,12,.28);stroke:rgba(237,206,153,.24);stroke-width:.35}.world-dust-crater.small{opacity:.76}.world-dust-crater.faint{opacity:.46}.world-blue-body{stroke:#99edff;stroke-width:.5}.world-blue-land{fill:rgba(97,133,76,.9);stroke:rgba(213,226,170,.28);stroke-width:.28}.world-blue-cloud{fill:none;stroke:rgba(239,250,255,.67);stroke-width:1.05;stroke-linecap:round;filter:blur(.2px)}.world-blue-ice{fill:none;stroke:rgba(232,249,255,.76);stroke-width:.85;stroke-linecap:round}.world-blue-rim{fill:none;stroke:rgba(89,220,255,.72);stroke-width:.6;filter:drop-shadow(0 0 2px #59dcff)}.world-sovereign-body{stroke:#ffd873;stroke-width:.55}.world-sovereign-cell{fill:none;stroke:rgba(255,239,169,.48);stroke-width:.52}.world-sovereign-flare{fill:#fff6c7;opacity:.74;filter:drop-shadow(0 0 2px #ffb22e);animation:world-planet-breathe 1.8s ease-in-out infinite alternate}.world-sovereign-spot{fill:#6a1503;opacity:.58}.world-sovereign-rim{fill:none;stroke:#ffe299;stroke-width:.68;filter:drop-shadow(0 0 2px #f3c46b)}
 .world-event-lens{fill:none;stroke:#a96cff;stroke-width:.7;opacity:.42;filter:drop-shadow(0 0 2px #7b35e8);animation:world-planet-breathe 2.8s ease-in-out infinite alternate}.world-event-core{fill:#010207;stroke:#05010a;stroke-width:.8}.world-event-photon{fill:none;stroke:#f4eaff;stroke-width:.75;opacity:.92;filter:drop-shadow(0 0 2px #a96cff)}.world-event-accretion{fill:none;stroke:#a96cff;stroke-width:1.5}.world-event-accretion.back{opacity:.2}.world-event-accretion.front{stroke:#59dcff;stroke-dasharray:9 13;opacity:.8;animation:world-orbit-dash 2.4s linear infinite}
 .world-solar-corona{fill:rgba(255,180,84,.12);stroke:#ffb454;stroke-width:.65;stroke-dasharray:1.2 1.4;filter:drop-shadow(0 0 2px #ff9f43);animation:world-planet-breathe 2.2s ease-in-out infinite alternate}.world-solar-body{stroke:#fff1be;stroke-width:.65}.world-solar-contour{fill:none;stroke:rgba(255,243,204,.68);stroke-width:.42}.world-solar-crown{fill:none;stroke:#f3c46b;stroke-width:.8;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 2px #f3c46b)}.world-solar-spec{fill:#fff9dc;opacity:.86}.world-target.state-burning .world-planet-skin{filter:drop-shadow(0 0 4px #ff5f78)}
 .world-city-tag.signal-void-whisper rect{stroke:rgba(169,108,255,.72);fill:rgba(17,5,34,.94)}.world-city-tag.signal-void-whisper .world-city-player{fill:#d7b2ff;text-shadow:0 0 5px #8d34ff}.world-city-tag.signal-sovereign-flare rect{stroke:#f3c46b;fill:rgba(31,19,4,.95);filter:drop-shadow(0 0 3px rgba(243,196,107,.5))}.world-city-tag.signal-sovereign-flare circle{fill:#805c19;stroke:#fff1be}.world-city-tag.signal-sovereign-flare .world-city-player{fill:#ffe8a8;letter-spacing:.05em}
 @keyframes world-planet-breathe{to{opacity:.72;transform:scale(1.035)}}
 @media(prefers-reduced-motion:reduce){.world-planet-skin *{animation:none!important}}
+
+/* Commander identity cosmetics — Claude's Name Signals + in-game cursors. */
+.name-signal{position:relative;display:inline-flex;align-items:center;isolation:isolate;white-space:nowrap;color:inherit;line-height:1.15}
+.name-signal canvas{position:absolute;z-index:0;max-width:none;pointer-events:none}
+.name-signal-text{position:relative;z-index:1;display:inline-block;white-space:nowrap}
+.name-signal-clear-channel{color:inherit}
+.name-signal-signal-boost{color:#8fe6ff;animation:name-signal-ping 2.6s ease-in-out infinite}
+.name-signal-signal-boost:before{content:"▸";position:relative;z-index:2;margin-right:5px;color:#59dcff;font-size:.72em}
+.name-signal-verdant-hail{color:#5cf2b3;animation:name-signal-breath 3.6s ease-in-out infinite}
+.name-signal-verdant-hail:before,.name-signal-verdant-hail:after{content:"˖";position:absolute;z-index:2;bottom:1px;color:#9dffcf;font-size:.8em;opacity:0;animation:name-signal-spore 3.6s linear infinite}
+.name-signal-verdant-hail:before{left:0}.name-signal-verdant-hail:after{right:-2px;animation-delay:1.8s}
+.name-signal-void-whisper{color:#ca9bff;text-shadow:0 0 7px rgba(151,67,255,.4)}
+.name-signal-ember-cipher{color:#ffc978;text-shadow:0 0 7px rgba(255,116,35,.36)}
+.name-signal-eclipse-herald{color:#f6e6bf;text-shadow:0 0 8px rgba(255,225,165,.28)}
+.name-signal-sovereign-flare{color:#ffd577;text-shadow:0 0 9px rgba(255,171,48,.48);animation:name-signal-radiate 2.8s ease-in-out infinite}
+.name-signal-crown{position:relative;z-index:2;width:18px;height:18px;margin-right:6px;overflow:visible;flex:0 0 auto;filter:drop-shadow(0 0 4px rgba(255,190,80,.62));animation:name-crown-pulse 2.8s ease-in-out infinite}
+.name-signal-crown path:first-child{fill:#ffd36b;stroke:#fff3cf;stroke-width:1;stroke-linejoin:round}.name-signal-crown rect{fill:#f0b94a;stroke:#fff3cf;stroke-width:.8}.name-signal-crown circle{fill:#fff6df}.name-signal-crown .name-signal-keystone{fill:#c98bff}.name-signal-crown .name-signal-crown-star{fill:#fff6df;stroke:none;transform-box:fill-box;transform-origin:center;animation:name-signal-twinkle 1.9s ease-in-out infinite}
+@keyframes name-signal-ping{0%,58%,100%{text-shadow:0 0 5px rgba(89,220,255,.3);transform:scale(1)}70%{text-shadow:0 0 13px rgba(89,220,255,.95);transform:scale(1.05)}80%{text-shadow:0 0 6px rgba(89,220,255,.4);transform:scale(1)}}
+@keyframes name-signal-breath{0%,100%{text-shadow:0 0 5px currentColor;filter:brightness(.9)}50%{text-shadow:0 0 13px currentColor;filter:brightness(1.14)}}
+@keyframes name-signal-spore{0%{opacity:0;transform:translateY(3px) scale(.8)}18%{opacity:1}100%{opacity:0;transform:translateY(-17px) scale(1.1)}}
+@keyframes name-signal-radiate{0%,100%{text-shadow:0 0 5px rgba(255,171,48,.35)}50%{text-shadow:0 0 15px rgba(255,190,80,.9)}}
+@keyframes name-crown-pulse{0%,100%{filter:drop-shadow(0 0 3px rgba(255,190,80,.45))}50%{filter:drop-shadow(0 0 8px rgba(255,205,110,.9))}}
+@keyframes name-signal-twinkle{0%,100%{opacity:.35;transform:scale(.8) rotate(0)}50%{opacity:1;transform:scale(1.25) rotate(22deg)}}
+
+/* The rich component owns the name treatment; retire legacy pseudo-glyphs. */
+.relic-chat-message header>b:before,.relic-chat-message header>b:after{content:none!important}
+.player-signal-name b:after{content:none!important}
+.player-signal-name b{display:flex;min-width:0;align-items:center}
+.comms-page .player-name-button{overflow:visible}
+.comms-page .player-name-button .name-signal{font:inherit}
+.relic-social-title{display:block;width:max-content;margin:3px 0 -1px;padding:2px 5px;border:1px solid rgba(243,196,107,.21);border-radius:3px;background:rgba(243,196,107,.055);color:#d6b86f;font:700 5.5px var(--mono);font-style:normal;letter-spacing:.12em}
+
+/* Planet/March chamber and Social chamber are deliberately separate previews. */
+.profile-vault-preview-column{position:sticky;top:145px;display:grid;gap:12px;min-width:0}
+.profile-vault-preview{position:static}
+.profile-social-preview{overflow:visible;background:linear-gradient(180deg,rgba(8,16,33,.96),rgba(4,9,20,.98))}
+.profile-social-preview.focused{border-color:rgba(169,108,255,.35);box-shadow:0 0 28px rgba(108,58,194,.11)}
+.profile-social-preview>.relic-chat-preview{width:auto;margin:13px;overflow:visible}
+.profile-social-preview .relic-chat-message{overflow:visible}
+.profile-social-preview .relic-chat-message>div:last-child{min-width:0;overflow:visible}
+.profile-social-preview .name-signal{font-size:11px}
+.profile-name-vault .chat-effect-icon{overflow:visible;border-color:rgba(99,126,151,.4)}
+.profile-name-vault .chat-effect-icon>.name-signal{font-size:10px}
+.profile-name-vault .name-signal-crown{width:15px;height:15px;margin-right:1px}
+
+/* Cursor chamber + global follower. */
+.profile-vault-stage.preview-cursor{padding:24px;background:radial-gradient(circle at 50% 48%,rgba(89,220,255,.12),transparent 54%),#030814}
+.relic-cursor-preview{position:relative;width:100%;height:100%;overflow:hidden;border:1px solid rgba(92,150,196,.16);border-radius:11px;background:radial-gradient(circle at 50% 48%,rgba(21,79,105,.18),transparent 38%),#02040b;box-shadow:0 18px 42px rgba(0,0,0,.38);color:#59dcff}
+.relic-cursor-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(89,220,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(89,220,255,.045) 1px,transparent 1px);background-size:22px 22px;mask-image:radial-gradient(circle,#000,transparent 76%)}
+.relic-cursor-preview>svg{position:absolute;left:50%;top:50%;width:58px;height:58px;transform:translate(-50%,-50%);filter:drop-shadow(0 0 12px currentColor)}
+.relic-cursor-sigil{color:#f3c46b;background:radial-gradient(circle at 50% 48%,rgba(243,196,107,.13),transparent 40%),#02040b}
+.relic-cursor-lock{position:absolute;left:50%;top:50%;width:112px;height:112px;transform:translate(-50%,-50%);border:1px solid currentColor;border-radius:50%;opacity:.18;animation:cursor-preview-lock 8s linear infinite}
+.relic-cursor-lock:after{content:"";position:absolute;inset:13px;border:1px dashed currentColor;border-radius:50%}.relic-cursor-lock i{position:absolute;width:12px;height:1px;background:currentColor}.relic-cursor-lock i:nth-child(1){left:-7px;top:50%}.relic-cursor-lock i:nth-child(2){right:-7px;top:50%}.relic-cursor-lock i:nth-child(3){left:50%;top:-7px;transform:rotate(90deg)}.relic-cursor-lock i:nth-child(4){left:50%;bottom:-7px;transform:rotate(90deg)}
+.relic-cursor-preview>small{position:absolute;left:0;right:0;bottom:13px;color:#3f6475;font:700 6px var(--mono);letter-spacing:.15em;text-align:center}
+@keyframes cursor-preview-lock{to{transform:translate(-50%,-50%) rotate(360deg)}}
+.profile-cursor-vault .cursor-effect-icon{border:0;border-radius:0}.profile-cursor-vault .cursor-effect-icon svg{width:23px;height:23px;filter:drop-shadow(0 0 4px currentColor)}.profile-cursor-vault .cursor-effect-reticle,.profile-cursor-vault .cursor-effect-comet{color:#59dcff}.profile-cursor-vault .cursor-effect-sigil{color:#f3c46b}
+.game-cursor-active,.game-cursor-active *{cursor:none!important}
+.game-cursor{position:fixed;z-index:2147483000;left:0;top:0;opacity:0;pointer-events:none;will-change:transform;transition:opacity .08s linear;color:#59dcff;filter:drop-shadow(0 0 5px rgba(89,220,255,.72))}
+.game-cursor-sigil{color:#f3c46b;filter:drop-shadow(0 0 5px rgba(243,196,107,.78))}.game-cursor-comet{filter:drop-shadow(0 0 5px rgba(89,220,255,.8))}
+
+/* A released optional slot stays visibly bare everywhere. */
+.player-signal-orbit-none:after,.player-signal-halo-none:before{display:none}
+
+/* Static premium treatment for tiny Star Map nameplates. */
+.world-city-tag.signal-signal-boost rect{stroke:rgba(89,220,255,.72);fill:rgba(4,24,36,.94)}.world-city-tag.signal-signal-boost .world-city-player{fill:#9aeaff;filter:drop-shadow(0 0 1.5px #59dcff)}
+.world-city-tag.signal-verdant-hail rect{stroke:rgba(67,242,161,.68);fill:rgba(3,28,22,.94)}.world-city-tag.signal-verdant-hail .world-city-player{fill:#8affc8;filter:drop-shadow(0 0 1.4px #43f2a1)}
+.world-city-tag.signal-ember-cipher rect{stroke:rgba(255,163,73,.76);fill:rgba(34,13,3,.95)}.world-city-tag.signal-ember-cipher .world-city-player{fill:#ffd18b;filter:drop-shadow(0 0 1.7px #ff7a2b)}
+.world-city-tag.signal-eclipse-herald rect{stroke:rgba(246,230,191,.82);fill:rgba(28,23,13,.96);filter:drop-shadow(0 0 3px rgba(246,230,191,.35))}.world-city-tag.signal-eclipse-herald .world-city-player{fill:#fff2d2;letter-spacing:.04em}
+
+@media(max-width:1100px){.profile-vault-preview-column{position:static}.profile-social-preview>.relic-chat-preview{max-width:620px;margin-left:auto;margin-right:auto}}
+@media(max-width:540px){.profile-vault-stage{height:310px}.profile-social-preview>.relic-chat-preview{margin:8px}.profile-social-preview .relic-chat-message{grid-template-columns:26px minmax(0,1fr);gap:7px}.profile-social-preview .name-signal{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.name-signal,.name-signal:before,.name-signal:after,.name-signal-crown,.name-signal-crown-star,.relic-cursor-lock{animation:none!important}.name-signal-text{opacity:1!important;filter:none!important;transform:none!important;-webkit-mask-image:none!important;mask-image:none!important}}
+.profile-motion-stilled .name-signal,.profile-motion-stilled .name-signal:before,.profile-motion-stilled .name-signal:after,.profile-motion-stilled .name-signal-crown,.profile-motion-stilled .name-signal-crown-star,.profile-motion-stilled .relic-cursor-lock{animation:none!important}.profile-motion-stilled .name-signal-text{opacity:1!important;filter:none!important;transform:none!important;-webkit-mask-image:none!important;mask-image:none!important}
 
 /* Tactical cosmetic fidelity: brighter screen-space strokes and denser premium layers. */
 .world-target.city .world-orbit{filter:drop-shadow(0 0 3px currentColor)}

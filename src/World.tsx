@@ -111,7 +111,7 @@ function WorldLevelBadge({ x, y, level }: { x: number; y: number; level: number 
   return <g className="world-level-badge"><circle cx={x + 6.5} cy={y + 6.2} r="3.25" /><text x={x + 6.5} y={y + 7.25}>{level}</text></g>;
 }
 
-function CityIdentityTag({ x, y, level, name, signal = "clear-channel", own = false }: { x: number; y: number; level: number; name: string; signal?: ChatSignalId; own?: boolean }) {
+function CityIdentityTag({ x, y, level, name, signal = "clear-channel", own = false }: { x: number; y: number; level: number; name: string; signal?: ChatSignalId | null; own?: boolean }) {
   const label = name.slice(0, 18);
   // Width fits the actual rendered text (~1.82 units/char at this font) plus the level pill,
   // so the plate hugs the name instead of trailing empty space; the name is centred in the
@@ -121,7 +121,7 @@ function CityIdentityTag({ x, y, level, name, signal = "clear-channel", own = fa
   const width = Math.max(20, levelPad + textW + rightPad);
   const left = x - width / 2;
   const textCx = left + levelPad + textW / 2;
-  return <g className={`world-city-tag signal-${signal} ${own ? "own" : "rival"}`} pointerEvents="none">
+  return <g className={`world-city-tag signal-${signal || "clear-channel"} ${own ? "own" : "rival"}`} pointerEvents="none">
     <rect x={left} y={y + 6.1} width={width} height="7.1" rx="2.2" />
     <circle cx={left} cy={y + 9.65} r="4.15" />
     <text className="world-city-level" x={left} y={y + 10.9} textAnchor="middle">{level}</text>
@@ -278,7 +278,28 @@ function WorldHaloFx({ cx, cy, r, halo, half }: { cx: number; cy: number; r: num
 }
 
 function WorldPlanetFx({ cx, cy, r, skin }: { cx: number; cy: number; r: number; skin: PlanetSkinId }) {
+  if (skin === "dust-homestead") return <g className="world-planet-skin world-planet-dust-homestead">
+    <circle className="world-dust-body" cx={cx} cy={cy} r={r} fill="url(#world-planet-dust)" />
+    <ellipse className="world-dust-band" cx={cx} cy={cy - r * .14} rx={r * .9} ry={r * .18} />
+    <ellipse className="world-dust-crater" cx={cx - r * .36} cy={cy - r * .24} rx={r * .16} ry={r * .12} />
+    <ellipse className="world-dust-crater small" cx={cx + r * .34} cy={cy + r * .12} rx={r * .11} ry={r * .08} />
+    <ellipse className="world-dust-crater faint" cx={cx - r * .12} cy={cy + r * .43} rx={r * .13} ry={r * .09} />
+  </g>;
+  if (skin === "blue-marble") return <g className="world-planet-skin world-planet-blue-marble">
+    <circle className="world-blue-body" cx={cx} cy={cy} r={r} fill="url(#world-planet-blue)" />
+    <path className="world-blue-land" d={`M ${cx-r*.72} ${cy-r*.24} Q ${cx-r*.48} ${cy-r*.62} ${cx-r*.17} ${cy-r*.31} T ${cx+r*.08} ${cy-r*.08} Q ${cx-r*.16} ${cy+r*.08} ${cx-r*.39} ${cy+r*.17} T ${cx-r*.72} ${cy-r*.24} M ${cx+r*.18} ${cy-r*.52} Q ${cx+r*.52} ${cy-r*.47} ${cx+r*.67} ${cy-r*.12} L ${cx+r*.42} ${cy+r*.03} Q ${cx+r*.58} ${cy+r*.37} ${cx+r*.28} ${cy+r*.61} Q ${cx+r*.02} ${cy+r*.24} ${cx+r*.18} ${cy-r*.52}`} />
+    <path className="world-blue-cloud" d={`M ${cx-r*.72} ${cy-r*.02} Q ${cx-r*.28} ${cy-r*.29} ${cx+r*.17} ${cy-r*.08} T ${cx+r*.72} ${cy-r*.2} M ${cx-r*.53} ${cy+r*.35} Q ${cx-r*.02} ${cy+r*.12} ${cx+r*.55} ${cy+r*.32}`} />
+    <path className="world-blue-ice" d={`M ${cx-r*.51} ${cy-r*.82} Q ${cx} ${cy-r*1.02} ${cx+r*.51} ${cy-r*.82} M ${cx-r*.43} ${cy+r*.86} Q ${cx} ${cy+r*.99} ${cx+r*.43} ${cy+r*.86}`} />
+    <circle className="world-blue-rim" cx={cx} cy={cy} r={r} />
+  </g>;
   if (skin === "void-touched") return <VoidTouchedPlanet cx={cx} cy={cy} r={r} />;
+  if (skin === "sovereign-core") return <g className="world-planet-skin world-planet-sovereign-core">
+    <circle className="world-sovereign-body" cx={cx} cy={cy} r={r} fill="url(#world-planet-sovereign)" />
+    <path className="world-sovereign-cell" d={`M ${cx-r*.62} ${cy-r*.18} Q ${cx-r*.3} ${cy-r*.54} ${cx-r*.02} ${cy-r*.2} T ${cx+r*.58} ${cy-r*.3} M ${cx-r*.5} ${cy+r*.34} Q ${cx-r*.1} ${cy+r*.02} ${cx+r*.18} ${cy+r*.38} T ${cx+r*.65} ${cy+r*.18}`} />
+    <circle className="world-sovereign-flare" cx={cx-r*.23} cy={cy-r*.18} r={r*.18} />
+    <ellipse className="world-sovereign-spot" cx={cx+r*.35} cy={cy+r*.16} rx={r*.13} ry={r*.08} />
+    <circle className="world-sovereign-rim" cx={cx} cy={cy} r={r} />
+  </g>;
   if (skin === "event-horizon") return <g className="world-planet-skin world-planet-event-horizon">
     <circle className="world-event-lens outer" cx={cx} cy={cy} r={r * 1.42} />
     <ellipse className="world-event-accretion back" cx={cx} cy={cy} rx={r * 1.52} ry={r * .4} transform={`rotate(-16 ${cx} ${cy})`} />
@@ -293,13 +314,7 @@ function WorldPlanetFx({ cx, cy, r, skin }: { cx: number; cy: number; r: number;
     <path className="world-solar-crown" d={`M ${cx - r * .6} ${cy - r * .78} L ${cx - r * .32} ${cy - r * 1.18} L ${cx} ${cy - r * .82} L ${cx + r * .32} ${cy - r * 1.18} L ${cx + r * .6} ${cy - r * .78}`} />
     <circle className="world-solar-spec" cx={cx - r * .3} cy={cy - r * .3} r={r * .16} />
   </g>;
-  return <g className="world-planet-skin world-planet-civic-core">
-    <circle className="world-civic-atmosphere" cx={cx} cy={cy} r={r * 1.2} />
-    <circle className="world-civic-body" cx={cx} cy={cy} r={r} fill="url(#world-planet-civic)" />
-    <path className="world-civic-grid" d={`M ${cx - r * .72} ${cy - r * .05} Q ${cx} ${cy - r * .42} ${cx + r * .72} ${cy - r * .05} M ${cx - r * .7} ${cy + r * .28} Q ${cx} ${cy + r * .58} ${cx + r * .7} ${cy + r * .28} M ${cx} ${cy - r * .82} V ${cy + r * .82}`} />
-    <rect className="world-civic-core" x={cx - r * .2} y={cy - r * .2} width={r * .4} height={r * .4} transform={`rotate(45 ${cx} ${cy})`} />
-    <circle className="world-civic-spec" cx={cx - r * .3} cy={cy - r * .31} r={r * .15} />
-  </g>;
+  return null;
 }
 
 function entityState(entity: SelectableEntity): string {
@@ -517,9 +532,9 @@ export default function World({ address, profile, onBack, onMessages = () => {},
     setSelection(emptySelection());
   }, [detailZoom, selectedCandidate]);
   const selectedCityCosmetics = selected?.kind === "city" ? world.players[selected.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS : null;
-  const selectedCoreName = selectedCityCosmetics ? PLANET_SKINS.find((skin) => skin.id === selectedCityCosmetics.planetBody)?.name || "Civic Core" : "";
-  const selectedHaloName = selectedCityCosmetics ? PLANET_HALOS.find((halo) => halo.id === selectedCityCosmetics.halo)?.name || "Faint Corona" : "";
-  const selectedOrbitName = selectedCityCosmetics ? PLANET_ORBITS.find((orbit) => orbit.id === selectedCityCosmetics.orbit)?.name || "Survey Ring" : "";
+  const selectedCoreName = selectedCityCosmetics ? PLANET_SKINS.find((skin) => skin.id === selectedCityCosmetics.planetBody)?.name || "Dust Homestead" : "";
+  const selectedHaloName = selectedCityCosmetics ? PLANET_HALOS.find((halo) => halo.id === selectedCityCosmetics.halo)?.name || "Unbound" : "";
+  const selectedOrbitName = selectedCityCosmetics ? PLANET_ORBITS.find((orbit) => orbit.id === selectedCityCosmetics.orbit)?.name || "Unbound" : "";
   const allActiveMarches = Object.values(world.marches).filter((march) => !["completed", "failed"].includes(march.state));
   const activeMarches = allActiveMarches.filter((march) => march.playerId === session.playerId);
   const mapMarches = allActiveMarches.filter((march) => worldMarchObservable(march.playerId, session.playerId, zoom));
@@ -660,8 +675,10 @@ export default function World({ address, profile, onBack, onMessages = () => {},
       <radialGradient id="world-planet-cash" cx="32%" cy="27%"><stop offset="0" stopColor="#f3fff9"/><stop offset=".13" stopColor="#82ffc5"/><stop offset=".52" stopColor="#237756"/><stop offset="1" stopColor="#07140f"/></radialGradient>
       <radialGradient id="world-planet-oil" cx="32%" cy="27%"><stop offset="0" stopColor="#fff8e9"/><stop offset=".13" stopColor="#ffd08a"/><stop offset=".52" stopColor="#815528"/><stop offset="1" stopColor="#160e07"/></radialGradient>
       <radialGradient id="world-planet-power" cx="32%" cy="27%"><stop offset="0" stopColor="#f2fdff"/><stop offset=".13" stopColor="#89e7ff"/><stop offset=".52" stopColor="#226b91"/><stop offset="1" stopColor="#07131b"/></radialGradient>
-      <radialGradient id="world-planet-civic" cx="34%" cy="28%"><stop offset="0" stopColor="#e9fdff"/><stop offset=".16" stopColor="#6fe8ff"/><stop offset=".56" stopColor="#17627b"/><stop offset="1" stopColor="#03101c"/></radialGradient>
+      <radialGradient id="world-planet-dust" cx="31%" cy="25%"><stop offset="0" stopColor="#d7bb88"/><stop offset=".28" stopColor="#94724a"/><stop offset=".68" stopColor="#49331e"/><stop offset="1" stopColor="#171009"/></radialGradient>
+      <radialGradient id="world-planet-blue" cx="30%" cy="24%"><stop offset="0" stopColor="#8eeaff"/><stop offset=".2" stopColor="#2a90bd"/><stop offset=".63" stopColor="#075071"/><stop offset="1" stopColor="#031326"/></radialGradient>
       <radialGradient id="world-planet-void" cx="36%" cy="30%"><stop offset="0" stopColor="#3a3f63"/><stop offset=".32" stopColor="#1a2038"/><stop offset=".7" stopColor="#0a0e1e"/><stop offset="1" stopColor="#02040b"/></radialGradient>
+      <radialGradient id="world-planet-sovereign" cx="38%" cy="34%"><stop offset="0" stopColor="#fffdeb"/><stop offset=".18" stopColor="#ffe17a"/><stop offset=".52" stopColor="#f08a18"/><stop offset=".82" stopColor="#8b2605"/><stop offset="1" stopColor="#310700"/></radialGradient>
       <radialGradient id="world-planet-solar" cx="34%" cy="27%"><stop offset="0" stopColor="#fffbea"/><stop offset=".15" stopColor="#ffe09a"/><stop offset=".5" stopColor="#dc7b26"/><stop offset="1" stopColor="#291007"/></radialGradient>
       <linearGradient id="world-void-tail" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#8a3cff" stopOpacity=".55"/><stop offset=".55" stopColor="#7a2cff" stopOpacity=".18"/><stop offset="1" stopColor="#7a2cff" stopOpacity="0"/></linearGradient>
       <filter id="signal-glow" x="-200%" y="-200%" width="400%" height="400%"><feGaussianBlur stdDeviation="1.6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
@@ -706,11 +723,11 @@ export default function World({ address, profile, onBack, onMessages = () => {},
           {(!gpuVisualsReady || entity.kind !== "city") && <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />}
           {entity.kind === "city" && publicCosmetics ? <>
             {gpuVisualsReady ? <circle cx={entity.position.x} cy={entity.position.y} r="14" className="world-city-hit" /> : <>
-              <WorldHaloFx cx={entity.position.x} cy={entity.position.y} r={9} halo={publicCosmetics.halo} half="back" />
-              <WorldOrbitFx cx={entity.position.x} cy={entity.position.y} r={9} orbit={publicCosmetics.orbit} half="back" />
+              {publicCosmetics.halo && <WorldHaloFx cx={entity.position.x} cy={entity.position.y} r={9} halo={publicCosmetics.halo} half="back" />}
+              {publicCosmetics.orbit && <WorldOrbitFx cx={entity.position.x} cy={entity.position.y} r={9} orbit={publicCosmetics.orbit} half="back" />}
               <WorldPlanetFx cx={entity.position.x} cy={entity.position.y} r={9} skin={publicCosmetics.planetBody} />
-              <WorldOrbitFx cx={entity.position.x} cy={entity.position.y} r={9} orbit={publicCosmetics.orbit} half="front" />
-              <WorldHaloFx cx={entity.position.x} cy={entity.position.y} r={9} halo={publicCosmetics.halo} half="front" />
+              {publicCosmetics.orbit && <WorldOrbitFx cx={entity.position.x} cy={entity.position.y} r={9} orbit={publicCosmetics.orbit} half="front" />}
+              {publicCosmetics.halo && <WorldHaloFx cx={entity.position.x} cy={entity.position.y} r={9} halo={publicCosmetics.halo} half="front" />}
             </>}
           </> : <WorldEntityGlyph entity={entity} detailZoom={detailZoom} occupation={occupation} />}
           {!gpuVisualsReady && entity.kind === "city" && detailZoom && (selectedId === entity.id
@@ -869,7 +886,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
         <div className="world-coordinate world-coordinate-y">Y {Math.round(viewY).toString().padStart(3, "0")} — {Math.round(viewY + viewport.height).toString().padStart(3, "0")}</div>
         <svg ref={svgRef} className="world-map world-map-v2" viewBox={viewBox} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { drag.current = null; }} onWheel={(event) => { event.preventDefault(); setZoom((value) => steppedWorldZoom(value, event.deltaY < 0 ? "in" : "out", 1.14)); }}>
           {mapScaffold}
-          {!gpuVisualsReady && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} signature={world.players[march.playerId]?.cosmetics?.marchSignature || "ion-wake"} />)}
+          {!gpuVisualsReady && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {mapClusters}
           {mapTargets}
           <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera({ ...playerCity.position })}>
@@ -878,13 +895,13 @@ export default function World({ address, profile, onBack, onMessages = () => {},
               <rect x={playerCity.position.x - 4.5} y={playerCity.position.y - 4.5} width="9" height="9" rx="1" transform={`rotate(45 ${playerCity.position.x} ${playerCity.position.y})`} />
               <circle cx={playerCity.position.x} cy={playerCity.position.y} r="1.7" />
             </g> : !strategicZoom && !gpuVisualsReady ? <>
-              <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldHaloFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} halo={equippedPlanetHalo} half="back" /></g>
-              <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldOrbitFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} orbit={equippedPlanetOrbit} half="back" /></g>
+              {equippedPlanetHalo && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldHaloFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} halo={equippedPlanetHalo} half="back" /></g>}
+              {equippedPlanetOrbit && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldOrbitFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} orbit={equippedPlanetOrbit} half="back" /></g>}
               {(!voidSkinEquipped || !voidShaderActive) && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
                 <WorldPlanetFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} skin={equippedPlanetSkin} />
               </g>}
-              <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldOrbitFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} orbit={equippedPlanetOrbit} half="front" /></g>
-              <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldHaloFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} halo={equippedPlanetHalo} half="front" /></g>
+              {equippedPlanetOrbit && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldOrbitFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} orbit={equippedPlanetOrbit} half="front" /></g>}
+              {equippedPlanetHalo && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldHaloFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} halo={equippedPlanetHalo} half="front" /></g>}
             </> : <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><circle cx={playerCity.position.x} cy={playerCity.position.y} r="14" className="world-city-hit" /></g>}
             {!gpuVisualsReady && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
               <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
@@ -901,7 +918,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
         </svg>
         <WorldVisualLayer svgRef={svgRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} />
         {gpuVisualsReady && <svg className="world-map world-map-overlay" viewBox={viewBox} aria-hidden="true">
-          {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} signature={world.players[march.playerId]?.cosmetics?.marchSignature || "ion-wake"} />)}
+          {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`}>
             <text x={center.x} y={center.y - 47} className="world-circle-label">WORMHOLE</text>
             <text x={center.x} y={center.y - 39} className="world-circle-sub">GRAVITY ANCHOR · FRONTIER I</text>
@@ -1000,7 +1017,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
   </section>;
 }
 
-function MarchLine({ march, now, zoom, signature }: { march: HeadlessMarch; now: number; zoom: number; signature: MarchSignatureId }) {
+function MarchLine({ march, now, zoom, signature }: { march: HeadlessMarch; now: number; zoom: number; signature: MarchSignatureId | null }) {
   const progress = marchMapProgress(march, now); const x = march.origin.x + (march.destination.x - march.origin.x) * progress; const y = march.origin.y + (march.destination.y - march.origin.y) * progress;
   const heading = march.state === "returning"
     ? Math.atan2(march.origin.y - march.destination.y, march.origin.x - march.destination.x)
@@ -1012,12 +1029,12 @@ function MarchLine({ march, now, zoom, signature }: { march: HeadlessMarch; now:
   // for braids, sails and particle tails to read as distinct cosmetics.
   const cursorScale = zoom >= 3 ? 1.72 : detailed ? 1.45 : 1;
   const phase = progress < 0.045 ? "departing" : progress > 0.955 ? "arriving" : "cruising";
-  return <g className={`world-march-line ${march.action} state-${march.state} signature-${signature} signature-${detailed ? "field" : "strategic"} ${phase}`}>
+  return <g className={`world-march-line ${march.action} state-${march.state} signature-${signature || "none"} signature-${detailed ? "field" : "strategic"} ${phase}`}>
     <line x1={march.origin.x} y1={march.origin.y} x2={march.destination.x} y2={march.destination.y} />
     <g transform={`translate(${x} ${y}) scale(${cursorScale / zoom}) translate(${-x} ${-y})`}>
       <circle cx={x} cy={y} r="8.4" className="world-march-pulse" />
       <g className="world-march-cursor" transform={`rotate(${cursorDeg} ${x} ${y})`}>
-        {detailed ? <MarchSignatureFx x={x} y={y} signature={signature} /> : <FleetKite x={x} y={y} />}
+        {detailed && signature ? <MarchSignatureFx x={x} y={y} signature={signature} /> : <FleetKite x={x} y={y} />}
       </g>
       <text x={x} y={y - 11.5} className="world-march-eta">{eta}</text>
     </g>

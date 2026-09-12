@@ -1,4 +1,5 @@
 import type { ChatSignalId, PlanetHaloId, PlanetOrbitId, PlanetSkinId } from "./lib/player-account";
+import NameSignal from "./NameSignal";
 
 export interface PlayerSignal {
   username: string;
@@ -6,9 +7,9 @@ export interface PlayerSignal {
   title: string;
   wallet: string | null;
   skin: { id: PlanetSkinId; name: string; rarity: string };
-  halo?: PlanetHaloId;
-  orbit?: PlanetOrbitId;
-  nameSignal?: ChatSignalId;
+  halo?: PlanetHaloId | null;
+  orbit?: PlanetOrbitId | null;
+  nameSignal?: ChatSignalId | null;
   coreLevel: number;
   might: number;
   achievements: Array<{ mark: string; name: string }>;
@@ -26,8 +27,8 @@ export default function PlayerCard({ signal, onMessage, onOpen }: {
 }) {
   return <article className={`player-signal-card chat-signal-${signal.nameSignal || "clear-channel"}`}>
     <header>
-      <div className={`player-signal-orb player-signal-orb-${signal.skin.id} player-signal-halo-${signal.halo || "faint-corona"} player-signal-orbit-${signal.orbit || "survey-ring"}`}><i /></div>
-      <div className="player-signal-name"><small>{signal.allianceSymbol ? `[${signal.allianceSymbol}]` : "[UNCHARTED]"}</small><b>{signal.username}</b><span>{signal.title}</span></div>
+      <div className={`player-signal-orb player-signal-orb-${signal.skin.id} player-signal-halo-${signal.halo || "none"} player-signal-orbit-${signal.orbit || "none"}`}><i /></div>
+      <div className="player-signal-name"><small>{signal.allianceSymbol ? `[${signal.allianceSymbol}]` : "[UNCHARTED]"}</small><b><NameSignal signal={signal.nameSignal}>{signal.username}</NameSignal></b><span>{signal.title || "NO TITLE SEALED"}</span></div>
       <em className={signal.online ? "online" : ""}>{signal.online ? "LIVE" : "DARK"}</em>
     </header>
     <div className="player-signal-relic"><span><small>{signal.skin.rarity} CORE</small><b>{signal.skin.name}</b></span><i /></div>

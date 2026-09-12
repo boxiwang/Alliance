@@ -75,7 +75,7 @@ describe("local GameState ↔ headless World adapter", () => {
       .toBeGreaterThan(worldPlayableRadius(result.session.world.config) * .9);
     expect(Object.keys(result.session.world.players)).toHaveLength(3);
     expect(result.session.world.players[result.session.playerId].cosmetics).toEqual({
-      planetBody: "civic-core",
+      planetBody: "dust-homestead",
       halo: "faint-corona",
       orbit: "survey-ring",
       marchSignature: "ion-wake",

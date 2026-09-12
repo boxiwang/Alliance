@@ -1,14 +1,15 @@
 import { useEffect, useRef } from "react";
 import type { Point } from "./lib/world-engine";
 import type { PlanetHaloId, PlanetOrbitId, PlanetSkinId } from "./lib/player-account";
+import { PLANET_CORE_GLSL } from "./planet-core-shared";
 import { RADIANT_CROWN_GLSL } from "./planet-halo-shared";
 
 export interface WorldVisualCity {
   id: string;
   position: Point;
   skin: PlanetSkinId;
-  halo: PlanetHaloId;
-  orbit: PlanetOrbitId;
+  halo: PlanetHaloId | null;
+  orbit: PlanetOrbitId | null;
   own?: boolean;
   selected?: boolean;
   burning?: boolean;
@@ -44,7 +45,7 @@ export function worldVisualBodyRadius(zoom: number, own = false, selected = fals
 /** Deterministic render-only population used by GM stress runs; it never enters game authority. */
 export function createWorldVisualStress(count: number, width: number, height: number): WorldVisualCity[] {
   const total = Math.max(0, Math.min(50_000, Math.floor(count)));
-  const skins: PlanetSkinId[] = ["civic-core", "void-touched", "event-horizon", "solar-imperator"];
+  const skins: PlanetSkinId[] = ["dust-homestead", "blue-marble", "void-touched", "sovereign-core", "event-horizon", "solar-imperator"];
   const halos: PlanetHaloId[] = ["faint-corona", "pulse-aura", "aurora-veil", "radiant-crown"];
   const orbits: PlanetOrbitId[] = ["survey-ring", "orbital-belt", "accretion-halo", "sovereign-crown"];
   let seed = 0x51f15e;
@@ -118,10 +119,12 @@ export function planWorldVisuals(
 }
 
 const SKIN_INDEX: Record<PlanetSkinId, number> = {
-  "civic-core": 0,
-  "void-touched": 1,
-  "event-horizon": 2,
-  "solar-imperator": 3,
+  "dust-homestead": 0,
+  "blue-marble": 1,
+  "void-touched": 2,
+  "sovereign-core": 3,
+  "event-horizon": 4,
+  "solar-imperator": 5,
 };
 
 const ORBIT_INDEX: Record<PlanetOrbitId, number> = {
@@ -209,10 +212,12 @@ float softLine(vec2 p,vec2 a,vec2 b,float width){ float aa=1.2/max(vRadius,4.0);
 float softBox(vec2 p,vec2 bounds){ vec2 d=abs(p)-bounds; float dist=length(max(d,0.0))+min(max(d.x,d.y),0.0); return 1.0-smoothstep(0.0,1.4/max(vRadius,4.0),dist); }
 void over(inout vec4 c,vec3 rgb,float alpha){ alpha=clamp(alpha,0.0,1.0); c.rgb=rgb*alpha+c.rgb*(1.0-alpha); c.a=alpha+c.a*(1.0-alpha); }
 void emit(inout vec4 c,vec3 rgb,float amount){ amount=max(0.0,amount); c.rgb+=rgb*amount; c.a=max(c.a,clamp(amount*.8,0.0,1.0)); }
+${PLANET_CORE_GLSL}
 ${RADIANT_CROWN_GLSL}
 vec3 orbitColor(){ if(vOrbit<.5)return vec3(.35,.86,1.0); if(vOrbit<1.5)return vec3(.66,.42,1.0); if(vOrbit<2.5)return vec3(1.0,.7,.32); return vec3(.84,.91,1.0); }
 
 void drawOrbit(inout vec4 col,vec2 p,float front){
+  if(vOrbit<-.5)return;
   vec3 color=orbitColor();
   float halfMask=front>.5?smoothstep(-.07,.07,p.y):1.0-smoothstep(-.07,.07,p.y);
   float theta=atan(p.y/.66,p.x/2.18);
@@ -269,6 +274,7 @@ void drawOrbit(inout vec4 col,vec2 p,float front){
 }
 
 void drawHalo(inout vec4 col,vec2 p,float front){
+  if(vHalo<-.5)return;
   // Strategic markers remain equal and non-identifying; Halo resolves only at
   // Field/Tactical LOD, bounded inside twice the Core radius.
   if(vLod<.5)return;
@@ -339,26 +345,26 @@ void drawHalo(inout vec4 col,vec2 p,float front){
 void drawPlanet(inout vec4 col,vec2 p){
   float r=length(p);
   float body=disk(p,1.0);
-  float z=sqrt(max(0.0,1.0-r*r));
-  vec3 light=normalize(vec3(-.48,-.55,.85));
-  vec3 normal=normalize(vec3(p,z));
-  float lit=max(.08,dot(normal,light));
-
+  if(vLod<.5){
+    // Strategic view deliberately withholds cosmetic identity: every Core is
+    // the same restrained navigation marker until a closer observation tier.
+    over(col,vec3(.055,.11,.16),body);
+    emit(col,vec3(.32,.72,.86),ring(p,vec2(1.0),.026)*.44);
+    return;
+  }
+  float time=uTime*uMotion;
+  float aa=1.35/max(vRadius,4.0);
+  vec2 q=vec2(p.x,-p.y);
   if(vKind<.5){
-    emit(col,vec3(.12,.75,1.0),exp(-pow((r-1.08)*7.0,2.0))*.18);
-    vec3 base=mix(vec3(.015,.055,.1),vec3(.25,.82,.92),lit);
-    float terrain=noise(p*4.5+vSeed*11.0);
-    base*=.78+.28*terrain;
-    over(col,base,body);
-    if(vLod>.5){
-      float grid=max(pow(abs(sin((p.x+p.y*.15)*11.0)),35.0),pow(abs(sin((p.y-p.x*.08)*9.0)),38.0));
-      emit(col,vec3(.58,.94,1.0),grid*body*.16);
-      vec2 core=abs(rot(p,.7854));
-      over(col,vec3(.8,1.0,1.0),(1.0-smoothstep(.13,.18,max(core.x,core.y)))*body*.8);
-    }
+    drawDustHomestead(col,q,time,vSeed,aa,1.0,step(1.5,vLod));
   }else if(vKind<1.5){
+    drawBlueMarble(col,q,time,vSeed,aa,1.0,step(1.5,vLod));
+  }else if(vKind<2.5){
     // Restored Rift Sovereign surface: the first design used a living Voronoi
     // fracture field wrapped around a rotating sphere, not three fixed strokes.
+    float z=sqrt(max(0.0,1.0-r*r));
+    vec3 normal=normalize(vec3(p,z));
+    float lit=max(.08,dot(normal,normalize(vec3(-.48,-.55,.85))));
     emit(col,vec3(.18,.72,1.0),exp(-pow((r-1.025)*10.0,2.0))*.34);
     if(body>0.0){
       vec2 surface=vec2(atan(normal.x,normal.z)/PI+normal.y*.12,asin(normal.y)/PI);
@@ -373,7 +379,9 @@ void drawPlanet(inout vec4 col,vec2 p){
       base+=pow(max(0.0,dot(normal,normalize(vec3(.5,-.3,.7)))),16.0)*.3;
       over(col,base,body);
     }
-  }else if(vKind<2.5){
+  }else if(vKind<3.5){
+    drawSovereignCore(col,q,time,vSeed,aa,1.0,step(1.5,vLod));
+  }else if(vKind<4.5){
     vec2 q=rot(p,.28);
     float back=ring(q,vec2(1.6,.42),.07)*(1.0-smoothstep(-.05,.05,q.y));
     emit(col,mix(vec3(.55,.1,1.0),vec3(1.0,.42,.12),smoothstep(-1.6,1.6,q.x)),back*.78);
@@ -383,6 +391,9 @@ void drawPlanet(inout vec4 col,vec2 p){
     float front=ring(q,vec2(1.6,.42),.065)*smoothstep(-.05,.05,q.y);
     emit(col,mix(vec3(.55,.14,1.0),vec3(1.0,.5,.16),smoothstep(-1.6,1.6,q.x)),front*.92);
   }else{
+    float z=sqrt(max(0.0,1.0-r*r));
+    vec3 normal=normalize(vec3(p,z));
+    float lit=max(.08,dot(normal,normalize(vec3(-.48,-.55,.85))));
     float rays=.55+.45*sin(atan(p.y,p.x)*19.0+uTime*.7*uMotion+vSeed*8.0);
     float corona=exp(-pow((r-1.08)*5.0,2.0))*(.2+.35*rays);
     emit(col,vec3(1.0,.38,.08),corona);
@@ -402,7 +413,7 @@ void drawPlanet(inout vec4 col,vec2 p){
 }
 
 void drawBeacon(inout vec4 col,vec2 p){
-  vec3 skin=vKind<.5?vec3(.2,.85,1.0):vKind<1.5?vec3(.58,.2,1.0):vKind<2.5?vec3(.82,.38,1.0):vec3(1.0,.63,.16);
+  vec3 skin=vKind<.5?vec3(.68,.49,.29):vKind<1.5?vec3(.20,.68,1.0):vKind<2.5?vec3(.58,.2,1.0):vKind<3.5?vec3(1.0,.70,.24):vKind<4.5?vec3(.82,.38,1.0):vec3(1.0,.63,.16);
   float pulse=.82+.18*sin(uTime*uMotion*1.15+vSeed*9.0);
   emit(col,skin,exp(-dot(p,p)*1.8)*.18*pulse);
   over(col,mix(skin,vec3(1.0),.42),disk(p,.4));
@@ -433,7 +444,7 @@ void main(){
   vec4 col=vec4(0.0);
   if(vLod<-.5){
     drawBeacon(col,vP);
-  }else if(vKind>3.5){
+  }else if(vKind>5.5){
     drawWormhole(col,vP);
   }else{
     drawHalo(col,vP,0.0);
@@ -608,7 +619,7 @@ export default function WorldVisualLayer({
         const holeScreen = mapPoint(hole);
         const holeRadius = currentZoom < 1.45 ? 26 : currentZoom < 3 ? 30 : Math.min(44, 31 + Math.log2(currentZoom / 3) * 5);
         if (holeScreen.x + holeRadius * 3.6 > 0 && holeScreen.x - holeRadius * 3.6 < rect.width && holeScreen.y + holeRadius * 3.6 > 0 && holeScreen.y - holeRadius * 3.6 < rect.height) {
-          offset = writeQuad(offset, holeScreen.x, holeScreen.y, holeRadius, 4, 0, 0, .731, 0, lod);
+          offset = writeQuad(offset, holeScreen.x, holeScreen.y, holeRadius, 6, 0, 0, .731, 0, lod);
           landmarkDrawn = 1;
         }
         // Cheap overflow beacons render first; selecting one promotes it into
@@ -617,7 +628,7 @@ export default function WorldVisualLayer({
           const screen = mapPoint(city.position);
           const radius = city.selected ? 3.2 : 2.7;
           if (screen.x + radius * 3.6 < 0 || screen.x - radius * 3.6 > rect.width || screen.y + radius * 3.6 < 0 || screen.y - radius * 3.6 > rect.height) continue;
-          offset = writeQuad(offset, screen.x, screen.y, radius, SKIN_INDEX[city.skin], ORBIT_INDEX[city.orbit], HALO_INDEX[city.halo], stableSeed(city.id), 0, -1);
+          offset = writeQuad(offset, screen.x, screen.y, radius, SKIN_INDEX[city.skin] ?? 0, city.orbit ? ORBIT_INDEX[city.orbit] : -1, city.halo ? HALO_INDEX[city.halo] : -1, stableSeed(city.id), 0, -1);
           beaconDrawn += 1;
         }
         for (const city of planned.detailed) {
@@ -625,7 +636,7 @@ export default function WorldVisualLayer({
           const radius = worldVisualBodyRadius(currentZoom, city.own, city.selected);
           if (screen.x + radius * 3.6 < 0 || screen.x - radius * 3.6 > rect.width || screen.y + radius * 3.6 < 0 || screen.y - radius * 3.6 > rect.height) continue;
           const flags = (city.own ? 1 : 0) + (city.selected ? 2 : 0) + (city.burning ? 4 : 0);
-          offset = writeQuad(offset, screen.x, screen.y, radius, SKIN_INDEX[city.skin], ORBIT_INDEX[city.orbit], HALO_INDEX[city.halo], stableSeed(city.id), flags, lod);
+          offset = writeQuad(offset, screen.x, screen.y, radius, SKIN_INDEX[city.skin] ?? 0, city.orbit ? ORBIT_INDEX[city.orbit] : -1, city.halo ? HALO_INDEX[city.halo] : -1, stableSeed(city.id), flags, lod);
           detailedDrawn += 1;
         }
         cityDrawn = detailedDrawn + beaconDrawn;

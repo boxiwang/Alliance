@@ -425,6 +425,9 @@ export function openLocalWorldSession(address: string, sourceGame: GameState, no
       player.cosmetics = player.id === stored.playerId
         ? publicCosmetics(address)
         : player.id.startsWith("npc.") ? npcCosmetics(player.spawnIndex) : { ...ISSUED_WORLD_COSMETICS, ...player.cosmetics };
+      // Civic Core was retired in the Genesis body drop. Keep old shared-world
+      // snapshots renderable and move their owners to the issued Dust body.
+      if ((player.cosmetics.planetBody as string) === "civic-core") player.cosmetics.planetBody = "dust-homestead";
     });
     if ((stored as any).version < 5) {
       stored.world = redistributeWorldTargets(stored.world, now, numbers);

@@ -5,11 +5,13 @@ export type NumberFormat = "compact" | "full";
 export type ConsentKey = "terms" | "privacy" | "digitalAssets";
 export type LoginMethod = "wallet" | "google";
 
-export type PlanetSkinId = "civic-core" | "void-touched" | "event-horizon" | "solar-imperator";
+export type PlanetSkinId = "dust-homestead" | "blue-marble" | "void-touched" | "sovereign-core" | "event-horizon" | "solar-imperator";
 export type PlanetOrbitId = "survey-ring" | "orbital-belt" | "accretion-halo" | "sovereign-crown";
 export type PlanetHaloId = "faint-corona" | "pulse-aura" | "aurora-veil" | "radiant-crown";
 export type MarchSignatureId = "ion-wake" | "warp-thread" | "aurora-sail" | "comet-vanguard";
-export type ChatSignalId = "clear-channel" | "void-whisper" | "sovereign-flare";
+export type ChatSignalId = "clear-channel" | "signal-boost" | "verdant-hail" | "void-whisper" | "ember-cipher" | "sovereign-flare" | "eclipse-herald";
+export type GameCursorId = "reticle" | "comet" | "sigil";
+export type TitleId = "frontier-born" | "rift-cartographer" | "whale-fall";
 export type CosmeticRarity = "ISSUED" | "RELIC" | "MYTHIC" | "SOVEREIGN";
 
 export interface PlayerAccount {
@@ -42,15 +44,16 @@ export interface PlayerAccount {
 
 export interface CosmeticLoadout {
   planetBody: PlanetSkinId;
-  marchSignature: MarchSignatureId;
-  chatSignal: ChatSignalId;
-  halo: PlanetHaloId;
+  marchSignature: MarchSignatureId | null;
+  chatSignal: ChatSignalId | null;
+  halo: PlanetHaloId | null;
   /** Legacy slot retained only so older local saves remain readable. */
   surface: string;
-  orbit: PlanetOrbitId;
+  orbit: PlanetOrbitId | null;
   glyph: string;
   trail: string;
-  title: string;
+  title: TitleId | null;
+  cursor: GameCursorId | null;
 }
 
 export interface CosmeticVault {
@@ -61,7 +64,11 @@ export interface CosmeticVault {
 export interface PlanetSkinDefinition {
   id: PlanetSkinId;
   name: string;
+  translatedName?: string;
   rarity: CosmeticRarity;
+  tier?: "R" | "SR" | "SSR" | "UR";
+  accent?: string;
+  price?: number | null;
   transmission: string;
   source: string;
 }
@@ -81,23 +88,55 @@ export interface CosmeticEffectDefinition<Id extends string> {
 
 export const PLANET_SKINS: PlanetSkinDefinition[] = [
   {
-    id: "civic-core",
-    name: "Civic Core",
+    id: "dust-homestead",
+    name: "Dust Homestead",
+    translatedName: "荒土",
     rarity: "ISSUED",
-    transmission: "First light of a newly founded civilization.",
-    source: "Townhall founding rite",
+    tier: "R",
+    accent: "#c8a06a",
+    price: 0,
+    transmission: "A weathered first world. Quiet craters keep the record of every frontier dawn.",
+    source: "Command activation // default",
+  },
+  {
+    id: "blue-marble",
+    name: "Blue Marble",
+    translatedName: "蔚蓝",
+    rarity: "RELIC",
+    tier: "SR",
+    accent: "#59dcff",
+    price: 1400,
+    transmission: "Ocean, cloud and a living edge of day. Proof that the dark can shelter a world.",
+    source: "Credit exchange · Relic draw // ◈1,400",
   },
   {
     id: "void-touched",
     name: "Void-Touched",
+    translatedName: "触虚核",
     rarity: "MYTHIC",
+    tier: "SSR",
+    accent: "#a96cff",
+    price: 3200,
     transmission: "Obsidian crust. Living fractures. A scar that refuses to close.",
-    source: "Rift Sovereign cache",
+    source: "Limited relic draw // ◈3,200",
+  },
+  {
+    id: "sovereign-core",
+    name: "Sovereign Core",
+    translatedName: "君核",
+    rarity: "SOVEREIGN",
+    tier: "UR",
+    accent: "#f3c46b",
+    price: null,
+    transmission: "Contained stellar fury. Fourteen flare-signals rise and die beneath a sovereign rim.",
+    source: "Season ascent // earn-only",
   },
   {
     id: "event-horizon",
     name: "Event Horizon",
     rarity: "SOVEREIGN",
+    tier: "UR",
+    accent: "#a96cff",
     transmission: "The city is gone. Its gravity remains.",
     source: "Season prestige track",
   },
@@ -105,6 +144,8 @@ export const PLANET_SKINS: PlanetSkinDefinition[] = [
     id: "solar-imperator",
     name: "Solar Imperator",
     rarity: "RELIC",
+    tier: "SR",
+    accent: "#ffb454",
     transmission: "A forged sun crowned in orbital gold.",
     source: "Alliance world engineering",
   },
@@ -192,9 +233,25 @@ export const PLANET_HALOS: CosmeticEffectDefinition<PlanetHaloId>[] = [
 ];
 
 export const CHAT_SIGNALS: CosmeticEffectDefinition<ChatSignalId>[] = [
-  { id: "clear-channel", name: "Clear Channel", rarity: "ISSUED", transmission: "An unmodified commander signal.", source: "Command activation" },
-  { id: "void-whisper", name: "Void Whisper", rarity: "MYTHIC", transmission: "The name arrives a fraction before the message.", source: "Rift Sovereign cache" },
-  { id: "sovereign-flare", name: "Sovereign Flare", rarity: "SOVEREIGN", transmission: "A nameplate forged for sector-defining commanders.", source: "Season prestige track" },
+  { id: "clear-channel", name: "Clear Channel", translatedName: "明码", rarity: "ISSUED", tier: "R", accent: "#eaf4ff", transmission: "An unmodified commander signal.", source: "Command activation" },
+  { id: "signal-boost", name: "Signal Boost", translatedName: "增幅", rarity: "RELIC", tier: "SR", accent: "#59dcff", price: 900, transmission: "The name pings as it transmits.", source: "Relic draw // ◈900" },
+  { id: "verdant-hail", name: "Verdant Hail", translatedName: "青鸣", rarity: "RELIC", tier: "SR", accent: "#43f2a1", price: 900, transmission: "Spores drift up from a breathing name.", source: "Relic draw // ◈900" },
+  { id: "void-whisper", name: "Void Whisper", translatedName: "虚语", rarity: "MYTHIC", tier: "SSR", accent: "#a96cff", transmission: "A black hole spits the name out, then swallows it.", source: "Rift Sovereign cache" },
+  { id: "ember-cipher", name: "Ember Cipher", translatedName: "炽语", rarity: "MYTHIC", tier: "SSR", accent: "#ffbf63", transmission: "The name is burned in, then burned away.", source: "Rift Sovereign cache" },
+  { id: "sovereign-flare", name: "Sovereign Flare", translatedName: "君焰", rarity: "SOVEREIGN", tier: "UR", accent: "#f3c46b", price: null, transmission: "A crowned nameplate for sector-defining commanders.", source: "Season prestige track // earn-only" },
+  { id: "eclipse-herald", name: "Eclipse Herald", translatedName: "蚀谕", rarity: "SOVEREIGN", tier: "UR", accent: "#f6e6bf", price: null, transmission: "The name resolves out of gathered light.", source: "Season prestige track // earn-only" },
+];
+
+export const GAME_CURSORS: CosmeticEffectDefinition<GameCursorId>[] = [
+  { id: "reticle", name: "Reticle", translatedName: "星标准星", rarity: "ISSUED", tier: "R", accent: "#59dcff", transmission: "Four sensor ticks hold the command point in their center.", source: "Command activation" },
+  { id: "comet", name: "Comet", translatedName: "彗针", rarity: "RELIC", tier: "SR", accent: "#59dcff", price: 700, transmission: "A navigator's arrow carrying one last spark through the dark.", source: "Relic draw // ◈700" },
+  { id: "sigil", name: "Sovereign Sigil", translatedName: "君印", rarity: "SOVEREIGN", tier: "UR", accent: "#f3c46b", price: null, transmission: "A gold command seal follows the hand that rules the sector.", source: "Season ascent // earn-only" },
+];
+
+export const TITLE_SEALS: CosmeticEffectDefinition<TitleId>[] = [
+  { id: "frontier-born", name: "Frontier Born", translatedName: "边疆初生", rarity: "ISSUED", tier: "R", accent: "#8ca9ba", transmission: "The first seal carried beyond the safe orbit.", source: "Command activation" },
+  { id: "rift-cartographer", name: "Rift Cartographer", translatedName: "裂隙绘师", rarity: "MYTHIC", tier: "SSR", accent: "#a96cff", transmission: "A title written in routes no ordinary chart can hold.", source: "Rogue Codex ascent" },
+  { id: "whale-fall", name: "Whale Fall", translatedName: "鲸落", rarity: "SOVEREIGN", tier: "UR", accent: "#f3c46b", transmission: "The market remembers the gravity of your arrival.", source: "Season prestige track" },
 ];
 
 export const CONSENT_VERSIONS: Record<ConsentKey, string> = {
@@ -204,6 +261,7 @@ export const CONSENT_VERSIONS: Record<ConsentKey, string> = {
 };
 
 export const PLAYER_ACCOUNT_CHANGED_EVENT = "ruglands:player-account-changed";
+export const COSMETIC_VAULT_CHANGED_EVENT = "ruglands:cosmetic-vault-changed";
 
 const ACCOUNT_KEY = (playerId: string) => `ruglands:account:${playerId.toLowerCase()}`;
 const LEGACY_ACCOUNT_KEY = (address: string) => `ruglands:account:${address.toLowerCase()}`;
@@ -254,18 +312,19 @@ function gmCosmetics(address: string): string[] {
     ...PLANET_HALOS.map((halo) => `halo:${halo.id}`),
     ...MARCH_SIGNATURES.map((signature) => `march:${signature.id}`),
     ...CHAT_SIGNALS.map((signal) => `chat:${signal.id}`),
+    ...GAME_CURSORS.map((cursor) => `cursor:${cursor.id}`),
+    ...TITLE_SEALS.map((title) => `title:${title.id}`),
     "surface:founder-grid", "glyph:genesis", "trail:none",
-    "title:frontier-born", "title:rift-cartographer", "title:whale-fall",
   ];
 }
 
 function defaultVault(address: string): CosmeticVault {
   const gm = gmCosmetics(address);
-  const owned = Array.from(new Set(["planet:civic-core", "orbit:survey-ring", "halo:faint-corona", "march:ion-wake", "chat:clear-channel", "surface:founder-grid", "glyph:genesis", "trail:none", "title:frontier-born", ...gm]));
+  const owned = Array.from(new Set(["planet:dust-homestead", "orbit:survey-ring", "halo:faint-corona", "march:ion-wake", "chat:clear-channel", "cursor:reticle", "surface:founder-grid", "glyph:genesis", "trail:none", "title:frontier-born", ...gm]));
   return {
     owned,
     equipped: {
-      planetBody: gm.length ? "void-touched" : "civic-core",
+      planetBody: gm.length ? "void-touched" : "dust-homestead",
       marchSignature: gm.length ? "aurora-sail" : "ion-wake",
       chatSignal: gm.length ? "void-whisper" : "clear-channel",
       halo: gm.length ? "radiant-crown" : "faint-corona",
@@ -274,6 +333,7 @@ function defaultVault(address: string): CosmeticVault {
       glyph: "genesis",
       trail: "none",
       title: "frontier-born",
+      cursor: "reticle",
     },
   };
 }
@@ -333,21 +393,63 @@ export function loadCosmeticVault(address: string): CosmeticVault {
   const fallback = defaultVault(address);
   const saved = readJson<Partial<CosmeticVault>>(VAULT_KEY(address));
   if (!saved) return fallback;
-  const owned = Array.from(new Set([...fallback.owned, ...(Array.isArray(saved.owned) ? saved.owned : [])]));
-  const savedEquipped = (saved.equipped || {}) as Partial<Omit<CosmeticLoadout, "halo">> & { halo?: string };
+  const savedOwned = (Array.isArray(saved.owned) ? saved.owned : []).filter((relic) => relic !== "planet:civic-core");
+  const owned = Array.from(new Set([...fallback.owned, ...savedOwned]));
+  const savedEquipped = (saved.equipped || {}) as Partial<Omit<CosmeticLoadout, "halo" | "planetBody" | "orbit" | "marchSignature" | "chatSignal" | "title" | "cursor">> & {
+    halo?: string | null;
+    planetBody?: string;
+    orbit?: string | null;
+    marchSignature?: string | null;
+    chatSignal?: string | null;
+    title?: string | null;
+    cursor?: string | null;
+  };
   const legacyOrbit = savedEquipped.halo === "orbit-one" ? "survey-ring" : undefined;
-  const savedHalo = PLANET_HALOS.some((halo) => halo.id === savedEquipped.halo) ? savedEquipped.halo as PlanetHaloId : fallback.equipped.halo;
-  const equipped = { ...fallback.equipped, ...savedEquipped, halo: savedHalo, orbit: savedEquipped.orbit || legacyOrbit || fallback.equipped.orbit };
-  if (!PLANET_SKINS.some((skin) => skin.id === equipped.planetBody) || !owned.includes(`planet:${equipped.planetBody}`)) equipped.planetBody = "civic-core";
-  if (!PLANET_ORBITS.some((orbit) => orbit.id === equipped.orbit) || !owned.includes(`orbit:${equipped.orbit}`)) equipped.orbit = "survey-ring";
-  if (!PLANET_HALOS.some((halo) => halo.id === equipped.halo) || !owned.includes(`halo:${equipped.halo}`)) equipped.halo = "faint-corona";
-  if (!MARCH_SIGNATURES.some((signature) => signature.id === equipped.marchSignature) || !owned.includes(`march:${equipped.marchSignature}`)) equipped.marchSignature = "ion-wake";
-  if (!CHAT_SIGNALS.some((signal) => signal.id === equipped.chatSignal) || !owned.includes(`chat:${equipped.chatSignal}`)) equipped.chatSignal = "clear-channel";
+  const savedHalo = savedEquipped.halo === null
+    ? null
+    : PLANET_HALOS.some((halo) => halo.id === savedEquipped.halo) ? savedEquipped.halo as PlanetHaloId : fallback.equipped.halo;
+  const savedOrbit = savedEquipped.orbit === null
+    ? null
+    : PLANET_ORBITS.some((orbit) => orbit.id === savedEquipped.orbit) ? savedEquipped.orbit as PlanetOrbitId : legacyOrbit || fallback.equipped.orbit;
+  const savedMarch = savedEquipped.marchSignature === null
+    ? null
+    : MARCH_SIGNATURES.some((signature) => signature.id === savedEquipped.marchSignature) ? savedEquipped.marchSignature as MarchSignatureId : fallback.equipped.marchSignature;
+  const savedChat = savedEquipped.chatSignal === null
+    ? null
+    : CHAT_SIGNALS.some((signal) => signal.id === savedEquipped.chatSignal) ? savedEquipped.chatSignal as ChatSignalId : fallback.equipped.chatSignal;
+  const savedTitle = savedEquipped.title === null
+    ? null
+    : TITLE_SEALS.some((title) => title.id === savedEquipped.title) ? savedEquipped.title as TitleId : fallback.equipped.title;
+  const savedCursor = savedEquipped.cursor === null
+    ? null
+    : GAME_CURSORS.some((cursor) => cursor.id === savedEquipped.cursor) ? savedEquipped.cursor as GameCursorId : fallback.equipped.cursor;
+  const savedCore = savedEquipped.planetBody === "civic-core" ? "dust-homestead" : savedEquipped.planetBody;
+  const equipped: CosmeticLoadout = {
+    ...fallback.equipped,
+    ...savedEquipped,
+    planetBody: (savedCore || fallback.equipped.planetBody) as PlanetSkinId,
+    halo: savedHalo,
+    orbit: savedOrbit,
+    marchSignature: savedMarch,
+    chatSignal: savedChat,
+    title: savedTitle,
+    cursor: savedCursor,
+  };
+  if (!PLANET_SKINS.some((skin) => skin.id === equipped.planetBody) || !owned.includes(`planet:${equipped.planetBody}`)) equipped.planetBody = "dust-homestead";
+  if (equipped.orbit !== null && (!PLANET_ORBITS.some((orbit) => orbit.id === equipped.orbit) || !owned.includes(`orbit:${equipped.orbit}`))) equipped.orbit = fallback.equipped.orbit;
+  if (equipped.halo !== null && (!PLANET_HALOS.some((halo) => halo.id === equipped.halo) || !owned.includes(`halo:${equipped.halo}`))) equipped.halo = fallback.equipped.halo;
+  if (equipped.marchSignature !== null && (!MARCH_SIGNATURES.some((signature) => signature.id === equipped.marchSignature) || !owned.includes(`march:${equipped.marchSignature}`))) equipped.marchSignature = fallback.equipped.marchSignature;
+  if (equipped.chatSignal !== null && (!CHAT_SIGNALS.some((signal) => signal.id === equipped.chatSignal) || !owned.includes(`chat:${equipped.chatSignal}`))) equipped.chatSignal = fallback.equipped.chatSignal;
+  if (equipped.title !== null && (!TITLE_SEALS.some((title) => title.id === equipped.title) || !owned.includes(`title:${equipped.title}`))) equipped.title = fallback.equipped.title;
+  if (equipped.cursor !== null && (!GAME_CURSORS.some((cursor) => cursor.id === equipped.cursor) || !owned.includes(`cursor:${equipped.cursor}`))) equipped.cursor = fallback.equipped.cursor;
   return { owned, equipped };
 }
 
 export function saveCosmeticVault(address: string, vault: CosmeticVault): void {
   writeJson(VAULT_KEY(address), vault);
+  try {
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") window.dispatchEvent(new Event(COSMETIC_VAULT_CHANGED_EVENT));
+  } catch {}
 }
 
 export function ownsPlanetSkin(vault: CosmeticVault, skinId: PlanetSkinId): boolean {
@@ -368,4 +470,12 @@ export function ownsMarchSignature(vault: CosmeticVault, signatureId: MarchSigna
 
 export function ownsChatSignal(vault: CosmeticVault, signalId: ChatSignalId): boolean {
   return vault.owned.includes(`chat:${signalId}`);
+}
+
+export function ownsGameCursor(vault: CosmeticVault, cursorId: GameCursorId): boolean {
+  return vault.owned.includes(`cursor:${cursorId}`);
+}
+
+export function ownsTitleSeal(vault: CosmeticVault, titleId: TitleId): boolean {
+  return vault.owned.includes(`title:${titleId}`);
 }

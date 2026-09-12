@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CHAT_SIGNALS, MARCH_SIGNATURES, PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, loadCosmeticVault, loadPlayerAccount, ownsChatSignal, ownsMarchSignature, ownsPlanetHalo, ownsPlanetOrbit, ownsPlanetSkin, savePlayerAccount } from "./player-account";
+import { CHAT_SIGNALS, GAME_CURSORS, MARCH_SIGNATURES, PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, TITLE_SEALS, loadCosmeticVault, loadPlayerAccount, ownsChatSignal, ownsGameCursor, ownsMarchSignature, ownsPlanetHalo, ownsPlanetOrbit, ownsPlanetSkin, ownsTitleSeal, savePlayerAccount } from "./player-account";
 
 describe("player account persistence", () => {
   beforeEach(() => {
@@ -62,13 +62,18 @@ describe("player account persistence", () => {
     expect(restored.linkedWallets).toEqual([]);
   });
 
-  it("always grants the issued civilization shell", () => {
+  it("always grants the issued frontier Core", () => {
     const vault = loadCosmeticVault("0xabc123");
-    expect(ownsPlanetSkin(vault, "civic-core")).toBe(true);
+    expect(ownsPlanetSkin(vault, "dust-homestead")).toBe(true);
+    expect(PLANET_SKINS.map((skin) => skin.id)).toEqual([
+      "dust-homestead", "blue-marble", "void-touched", "sovereign-core", "event-horizon", "solar-imperator",
+    ]);
     expect(ownsPlanetHalo(vault, "faint-corona")).toBe(true);
     expect(ownsPlanetOrbit(vault, "survey-ring")).toBe(true);
     expect(ownsMarchSignature(vault, "ion-wake")).toBe(true);
     expect(ownsChatSignal(vault, "clear-channel")).toBe(true);
+    expect(ownsGameCursor(vault, "reticle")).toBe(true);
+    expect(ownsTitleSeal(vault, "frontier-born")).toBe(true);
   });
 
   it("unlocks every live cosmetic renderer when local GM mode is requested", () => {
@@ -82,6 +87,23 @@ describe("player account persistence", () => {
     expect(PLANET_ORBITS.every((orbit) => ownsPlanetOrbit(vault, orbit.id))).toBe(true);
     expect(MARCH_SIGNATURES.every((signature) => ownsMarchSignature(vault, signature.id))).toBe(true);
     expect(CHAT_SIGNALS.every((signal) => ownsChatSignal(vault, signal.id))).toBe(true);
+    expect(GAME_CURSORS.every((cursor) => ownsGameCursor(vault, cursor.id))).toBe(true);
+    expect(TITLE_SEALS.every((title) => ownsTitleSeal(vault, title.id))).toBe(true);
+  });
+
+  it("preserves deliberately released optional cosmetic slots", () => {
+    localStorage.setItem("ruglands:cosmetics:0xabc123", JSON.stringify({
+      owned: [],
+      equipped: { halo: null, orbit: null, marchSignature: null, chatSignal: null, title: null, cursor: null },
+    }));
+    const equipped = loadCosmeticVault("0xabc123").equipped;
+    expect(equipped.halo).toBeNull();
+    expect(equipped.orbit).toBeNull();
+    expect(equipped.marchSignature).toBeNull();
+    expect(equipped.chatSignal).toBeNull();
+    expect(equipped.title).toBeNull();
+    expect(equipped.cursor).toBeNull();
+    expect(equipped.planetBody).toBe("dust-homestead");
   });
 
   it("falls back safely when a pre-Genesis march signature is stored", () => {
@@ -90,6 +112,17 @@ describe("player account persistence", () => {
       equipped: { marchSignature: "void-scar" },
     }));
     expect(loadCosmeticVault("0xabc123").equipped.marchSignature).toBe("ion-wake");
+  });
+
+  it("migrates the retired Civic Core into Dust Homestead", () => {
+    localStorage.setItem("ruglands:cosmetics:0xabc123", JSON.stringify({
+      owned: ["planet:civic-core"],
+      equipped: { planetBody: "civic-core" },
+    }));
+    const vault = loadCosmeticVault("0xabc123");
+    expect(vault.equipped.planetBody).toBe("dust-homestead");
+    expect(ownsPlanetSkin(vault, "dust-homestead")).toBe(true);
+    expect(vault.owned).not.toContain("planet:civic-core");
   });
 
   it("migrates the prototype halo slot into the issued Survey Ring", () => {

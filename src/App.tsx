@@ -14,6 +14,7 @@ import World from "./World";
 import Messages from "./Messages";
 import ProfileScreen from "./ProfileScreen";
 import GameMusic, { requestGameMusicStart } from "./GameMusic";
+import GameCursor from "./GameCursor";
 import { grantLocalGm, localGmRequested } from "./lib/gm";
 import { loadGame } from "./lib/gamestore";
 
@@ -49,6 +50,7 @@ function DevGameShell({ initialView, slot, gm }: { initialView: MainStage; slot:
 
   return <div className="page">
     <GameMusic address={address} active />
+    <GameCursor address={address} active />
     {view === "town" && <Town address={address} profile={profile} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} onProfile={() => navigate("profile")} />}
     {view === "world" && <World address={address} profile={profile} onBack={() => navigate("town")} onMessages={() => navigate("messages")} onProfile={() => navigate("profile")} />}
     {view === "messages" && <Messages address={address} profile={profile} onCity={() => navigate("town")} onWorld={() => navigate("world")} onProfile={() => navigate("profile")} />}
@@ -194,6 +196,7 @@ export default function App() {
   return (
     <div className="page">
       <GameMusic address={address} active={stage === "town" || stage === "world" || stage === "messages" || stage === "profile"} />
+      <GameCursor address={address} active={!!address && (stage === "town" || stage === "world" || stage === "messages" || stage === "profile")} />
       <header className="topbar">
         <div className="brand">
           <span className="crest">⚔️</span>

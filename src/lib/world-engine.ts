@@ -204,14 +204,14 @@ export type WorldEntity = CityEntity | ResourceEntity | MonsterEntity | PoiEntit
 
 export interface PublicCosmeticLoadout {
   planetBody: PlanetSkinId;
-  halo: PlanetHaloId;
-  orbit: PlanetOrbitId;
-  marchSignature: MarchSignatureId;
-  chatSignal: ChatSignalId;
+  halo: PlanetHaloId | null;
+  orbit: PlanetOrbitId | null;
+  marchSignature: MarchSignatureId | null;
+  chatSignal: ChatSignalId | null;
 }
 
 export const ISSUED_WORLD_COSMETICS: PublicCosmeticLoadout = {
-  planetBody: "civic-core",
+  planetBody: "dust-homestead",
   halo: "faint-corona",
   orbit: "survey-ring",
   marchSignature: "ion-wake",
