@@ -149,6 +149,10 @@ export default function WorldMarchLayer({
     const observer = new ResizeObserver(resize); observer.observe(canvas); resize();
 
     const render = (now: number) => {
+      // `now` is the rAF timestamp (page-relative) — good for animation drift.
+      // Fleet PROGRESS must use epoch time, since march.dispatchedAt/arriveAt are
+      // Date.now() values; mixing the two pins every fleet to its origin.
+      const nowMs = Date.now();
       const { world: w, viewport: vp, zoom: z, viewerId: vid, quality: q } = latestRef.current;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
       if (q.marchFx === "kite") { rafRef.current = requestAnimationFrame(render); return; }
@@ -168,7 +172,7 @@ export default function WorldMarchLayer({
         if (march.playerId !== vid && z < TACTICAL_ZOOM) continue; // rivals only in Tactical
         const signature = w.players[march.playerId]?.cosmetics?.marchSignature as MarchSignatureId | undefined;
         if (!signature) continue;
-        const p = marchProgress(march, now);
+        const p = marchProgress(march, nowMs);
         const wx = march.origin.x + (march.destination.x - march.origin.x) * p;
         const wy = march.origin.y + (march.destination.y - march.origin.y) * p;
         const hx = toX(wx), hy = toY(wy);
