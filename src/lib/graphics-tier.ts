@@ -120,7 +120,7 @@ export function resolveGraphicsQuality(setting: GraphicsTier, opts: ResolveOptio
     quality.nameCanvas = false;
     quality.fallbackAnim = false;
     quality.bgAnimate = false;
-    quality.marchFx = quality.marchFx === "full" ? "lite" : quality.marchFx;
+    quality.marchFx = "kite"; // reduced motion → the static kite, no animated trail
     quality.nameFxBudget = 0;
   }
   return quality;

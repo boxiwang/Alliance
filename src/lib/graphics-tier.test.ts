@@ -34,6 +34,7 @@ describe("resolveGraphicsQuality", () => {
     expect(q.nameCanvas).toBe(false);
     expect(q.fallbackAnim).toBe(false);
     expect(q.nameFxBudget).toBe(0);
+    expect(q.marchFx).toBe("kite");
     expect(q.dprCap).toBe(TIER_PRESETS.ultra.dprCap);
   });
 });

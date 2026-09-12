@@ -24,6 +24,7 @@ import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
 import WorldVisualLayer, { createWorldVisualStress, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
+import WorldMarchLayer from "./WorldMarchLayer";
 import { useGraphicsQuality } from "./useGraphicsQuality";
 import type { GraphicsQuality } from "./lib/graphics-tier";
 import {
@@ -954,6 +955,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
         </svg>
         <WorldVisualLayer svgRef={svgRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} />
         <WorldStrikeLayer world={world} viewport={{ x: viewX, y: viewY, width: viewport.width, height: viewport.height }} zoom={zoom} gm={gm} stressCount={strikeStressCount} burstNonce={strikeBurstNonce} dprCap={quality.dprCap} />
+        <WorldMarchLayer world={world} viewport={{ x: viewX, y: viewY, width: viewport.width, height: viewport.height }} zoom={zoom} viewerId={session.playerId} quality={quality} />
         {gpuVisualsReady && <svg className="world-map world-map-overlay" viewBox={viewBox} aria-hidden="true">
           {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`}>
@@ -1067,20 +1069,22 @@ function MarchLine({ march, now, zoom, quality, signature }: { march: HeadlessMa
   // the strike layer plays, then the fleet returns along the line.
   const gatheringAtSite = march.state === "gathering";
   const showPath = !gatheringAtSite;
-  // The elaborate signature only reads (and only fits) in Tactical range; in
-  // Field/Strategic view it would dwarf the planets, so fly a compact kite.
   const detailed = zoom >= WORLD_TACTICAL_ZOOM;
   const cursorScale = worldMarchScreenScale(zoom);
   const fxTier = quality.marchFx; // "kite" | "lite" | "full"
-  const showSignatureFx = detailed && !gatheringAtSite && !!signature && fxTier !== "kite";
+  // Medium+ tiers render the rich fleet signature on WorldMarchLayer (a Canvas
+  // twin of the Vault preview). Here the SVG only draws the route line, ETA, and
+  // the settled harvest mark; the flying marker is SVG only in the kite tier.
+  const canvasFleet = !gatheringAtSite && !!signature && fxTier !== "kite";
   const phase = gatheringAtSite ? "harvesting" : progress < 0.045 ? "departing" : progress > 0.955 ? "arriving" : "cruising";
   return <g className={`world-march-line ${march.action} state-${march.state} signature-${signature || "none"} signature-${detailed ? "field" : "strategic"} fx-${fxTier} ${phase}`}>
     {showPath && <line x1={march.origin.x} y1={march.origin.y} x2={march.destination.x} y2={march.destination.y} />}
     <g transform={`translate(${x} ${y}) scale(${cursorScale / zoom}) translate(${-x} ${-y})`}>
-      <circle cx={x} cy={y} r="8.4" className="world-march-pulse" />
-      <g className="world-march-cursor" transform={`rotate(${gatheringAtSite ? 0 : cursorDeg} ${x} ${y})`}>
-        {gatheringAtSite ? <HarvestMark x={x} y={y} /> : showSignatureFx ? <MarchSignatureFx x={x} y={y} signature={signature!} /> : <FleetKite x={x} y={y} />}
-      </g>
+      {!canvasFleet && <circle cx={x} cy={y} r="8.4" className="world-march-pulse" />}
+      {gatheringAtSite
+        ? <g className="world-march-cursor"><HarvestMark x={x} y={y} /></g>
+        : canvasFleet ? null
+        : <g className="world-march-cursor" transform={`rotate(${cursorDeg} ${x} ${y})`}><FleetKite x={x} y={y} /></g>}
       <text x={x} y={y - 11.5} className="world-march-eta">{eta}</text>
     </g>
   </g>;
@@ -1103,55 +1107,5 @@ function FleetKite({ x, y }: { x: number; y: number }) {
     <path d={`M ${x} ${y - 6.1} L ${x + 2.35} ${y - .1} L ${x} ${y + 2.85} L ${x - 2.35} ${y - .1} Z`} className="world-march-cursor-core" />
     <path d={`M ${x - 2.25} ${y + 1.15} Q ${x} ${y + 3.45} ${x + 2.25} ${y + 1.15}`} className="world-march-engine" />
     <circle cx={x} cy={y - 2.05} r="1.12" className="world-march-hull-light" />
-  </g>;
-}
-
-function MarchSignatureFx({ x, y, signature }: { x: number; y: number; signature: MarchSignatureId }) {
-  if (signature === "ion-wake") return <g className="world-march-signature world-signature-ion">
-    <path className="ion-plume plume-wide" d={`M ${x - 2.3} ${y + 2} C ${x - 7} ${y + 11}, ${x - 4.5} ${y + 24}, ${x - 1.2} ${y + 31} C ${x + .5} ${y + 23}, ${x + 3} ${y + 11}, ${x + 2.3} ${y + 2} Z`} />
-    <path className="ion-plume plume-hot" d={`M ${x - 1.2} ${y + 2} C ${x - 2.7} ${y + 12}, ${x - 1.1} ${y + 23}, ${x + .2} ${y + 27} C ${x + 1.8} ${y + 18}, ${x + 2} ${y + 9}, ${x + 1.2} ${y + 2} Z`} />
-    <path className="ion-trail ion-trail-a" d={`M ${x - 1.2} ${y + 3} C ${x - 5.7} ${y + 11}, ${x - 3.4} ${y + 22}, ${x - 6.1} ${y + 30}`} />
-    <path className="ion-trail ion-trail-b" d={`M ${x + 1.2} ${y + 3} C ${x + 5.1} ${y + 10}, ${x + 1.4} ${y + 20}, ${x + 4.4} ${y + 26}`} />
-    <path className="ion-trail ion-trail-c" d={`M ${x} ${y + 4} Q ${x - 1.4} ${y + 17} ${x + .5} ${y + 32}`} />
-    <circle className="signature-mote mote-one" cx={x - 5.4} cy={y + 17} r="1.25" />
-    <circle className="signature-mote mote-two" cx={x + 4.1} cy={y + 24} r=".82" />
-    <circle className="signature-mote mote-three" cx={x - 1.2} cy={y + 29} r=".62" />
-    <FleetKite x={x} y={y} />
-  </g>;
-
-  if (signature === "warp-thread") return <g className="world-march-signature world-signature-warp">
-    <path className="warp-sheath" d={`M ${x} ${y + 1} C ${x - 11} ${y + 11}, ${x - 8} ${y + 26}, ${x} ${y + 34} C ${x + 8} ${y + 26}, ${x + 11} ${y + 11}, ${x} ${y + 1} Z`} />
-    <path className="warp-rail rail-left" d={`M ${x - 1.7} ${y + 2} Q ${x - 8} ${y + 16} ${x - 3.8} ${y + 33}`} />
-    <path className="warp-rail rail-right" d={`M ${x + 1.7} ${y + 2} Q ${x + 8} ${y + 16} ${x + 3.8} ${y + 33}`} />
-    <path className="warp-braid braid-violet" d={`M ${x} ${y + 2} C ${x - 7} ${y + 8}, ${x + 7} ${y + 13}, ${x} ${y + 18} S ${x - 6} ${y + 27}, ${x} ${y + 34}`} />
-    <path className="warp-braid braid-cyan" d={`M ${x} ${y + 2} C ${x + 7} ${y + 8}, ${x - 7} ${y + 13}, ${x} ${y + 18} S ${x + 6} ${y + 27}, ${x} ${y + 34}`} />
-    <path className="warp-fold fold-one" d={`M ${x - 5} ${y - 5} Q ${x} ${y - 11} ${x + 5} ${y - 5}`} />
-    <path className="warp-fold fold-two" d={`M ${x - 8} ${y - 8} Q ${x} ${y - 17} ${x + 8} ${y - 8}`} />
-    <path className="warp-fold fold-three" d={`M ${x - 11} ${y - 11} Q ${x} ${y - 23} ${x + 11} ${y - 11}`} />
-    <circle className="warp-ring ring-one" cx={x} cy={y} r="6.6" />
-    <circle className="warp-ring ring-two" cx={x} cy={y} r="10.5" />
-    <circle className="warp-lens warp-lens-cyan" cx={x - 1.25} cy={y + 2.1} r="2.6" />
-    <circle className="warp-lens warp-lens-violet" cx={x + 1.25} cy={y + 2.1} r="2.6" />
-    <FleetKite x={x} y={y} />
-  </g>;
-
-  if (signature === "aurora-sail") return <g className="world-march-signature world-signature-aurora">
-    <path className="aurora-glow" d={`M ${x} ${y + 2} C ${x - 14} ${y + 8}, ${x + 13} ${y + 14}, ${x - 6} ${y + 22} C ${x + 7} ${y + 25}, ${x - 11} ${y + 30}, ${x} ${y + 36} C ${x + 8} ${y + 29}, ${x + 16} ${y + 23}, ${x + 6} ${y + 17} C ${x + 14} ${y + 10}, ${x + 6} ${y + 5}, ${x} ${y + 2} Z`} />
-    <path className="aurora-ribbon" d={`M ${x} ${y + 2} C ${x - 9} ${y + 9}, ${x + 10} ${y + 14}, ${x - 4} ${y + 22} S ${x + 8} ${y + 30}, ${x} ${y + 36} C ${x + 4} ${y + 28}, ${x - 5} ${y + 24}, ${x + 4} ${y + 18} S ${x + 5} ${y + 8}, ${x} ${y + 2} Z`} />
-    <path className="aurora-shimmer" d={`M ${x} ${y + 2} C ${x - 7} ${y + 9}, ${x + 8} ${y + 16}, ${x - 3} ${y + 22} S ${x + 7} ${y + 30}, ${x} ${y + 36}`} />
-    <circle className="aurora-star star-one" cx={x - 7} cy={y + 20} r=".8" />
-    <circle className="aurora-star star-two" cx={x + 7.5} cy={y + 29} r=".55" />
-    <FleetKite x={x} y={y} />
-  </g>;
-
-  return <g className="world-march-signature world-signature-comet">
-    <path className="comet-tail tail-one" d={`M ${x - 3.5} ${y + 1} C ${x - 9} ${y + 12}, ${x - 5} ${y + 25}, ${x - 1.2} ${y + 37} C ${x + 1.5} ${y + 24}, ${x + 4} ${y + 11}, ${x + 3.5} ${y + 1} Z`} />
-    <path className="comet-tail tail-two" d={`M ${x - 1.8} ${y + 2} C ${x + 4} ${y + 13}, ${x + 2} ${y + 24}, ${x + 5} ${y + 31} C ${x + 8} ${y + 19}, ${x + 5} ${y + 8}, ${x + 1.8} ${y + 2} Z`} />
-    <path className="comet-spine" d={`M ${x} ${y + 3} C ${x - 3} ${y + 15}, ${x + 2} ${y + 26}, ${x - 1} ${y + 39}`} />
-    <circle className="comet-ember ember-one" cx={x - 6} cy={y + 15} r="1.05" />
-    <circle className="comet-ember ember-two" cx={x + 5.5} cy={y + 24} r=".78" />
-    <circle className="comet-ember ember-three" cx={x - 2.5} cy={y + 34} r=".62" />
-    <circle className="comet-head-glow" cx={x} cy={y} r="10" />
-    <FleetKite x={x} y={y} />
   </g>;
 }
