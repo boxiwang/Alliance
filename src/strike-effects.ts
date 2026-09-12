@@ -21,7 +21,7 @@ export const STRIKE_EFFECT_STAGES: Record<StrikeSignatureId, string> = {
   "rift-guillotine": "SEAM · CROSSCUT · AFTERSHOCK",
   "solar-bloom": "CORONA · REVERSAL · CINDER",
   "finality-engine": "QUORUM · FINALITY · SEAL",
-  "whalefall-protocol": "SHADOW · GRAVITY · LEVIATHAN ECHO",
+  "whalefall-protocol": "SHADOW · PRESSURE BREACH · LEVIATHAN ECHO",
 };
 
 export const STRIKE_EFFECT_FRAME_SIZE: Record<StrikeSignatureId, number> = {
@@ -235,11 +235,84 @@ class StrikePainter {
     this.glow(.78 * scale, -.08 * scale, 5.5, "#f3c46b", alpha * .86); this.diamond(.78 * scale, -.08 * scale, 2.2, "#fff1bd", alpha, true); c.restore();
   }
   whalefallProtocol(p: number): void {
-    const approach = easeInOut(clamp(p / .43)), capture = easeInOut(clamp((p - .2) / .43)), well = clamp((p - .47) / .25), after = clamp((p - .66) / .34), whaleScale = 165;
-    if (p < .54) { const x = lerp(-245, whaleScale * .95, approach), y = -35 + Math.sin(approach * Math.PI) * 16, visibility = Math.sin(clamp(p / .54) * Math.PI) * .92; this.glow(x, y, whaleScale * 1.2, "#173d67", .075 * visibility); this.drawWhaleShadow(x, y, whaleScale, .66 * visibility); for (let i = 0; i < 7; i += 1) this.ellipse(x - i * 14, y, whaleScale * (.54 + i * .055), whaleScale * (.12 + i * .018), -.1, "#4978a0", .045 * visibility * (1 - capture)); }
-    for (let i = 0; i < 148 * this.density; i += 1) { const angle = this.rnd(i, 4) * TAU, base = 30 + this.rnd(i, 7) * 190, elliptic = .54 + this.rnd(i, 9) * .24, spin = capture * (i % 2 ? 1 : -1) * 1.55; let radius = lerp(base, 8, capture); if (after > 0) radius = lerp(8, 30 + this.rnd(i, 5) * 175, easeOut(after)); const color = i % 9 === 0 ? "#f3c46b" : i % 3 === 0 ? "#72d8ff" : "#7086d8"; this.glow(Math.cos(angle + spin) * radius, Math.sin(angle + spin) * radius * elliptic + (after ? Math.sin(i * .9) * after * 18 : 0), 1 + this.rnd(i, 11) * 2.4, color, (after ? 1 - after * .62 : .18 + .5 * capture) * .52); }
-    if (capture > 0) { for (let i = 0; i < 9; i += 1) { const wobble = Math.sin(p * 13 + i) * 2; this.ellipse(0, 0, 32 + i * 9 + wobble, 8 + i * 2.5, p * 1.15 + i * .27, i % 3 === 0 ? "#f3c46b" : i % 2 ? "#72d8ff" : "#7b65d8", (.075 + i * .016) * (1 - after * .7), 1.1); } this.glow(0, 0, 125, "#315e9b", .24 * (1 - after * .5)); }
-    if (well > 0) { this.ctx.fillStyle = rgba("#010207", .98); this.ctx.beginPath(); this.ctx.arc(0, 0, 7 + well * 22, 0, TAU); this.ctx.fill(); this.withGlow("#72d8ff", 20, () => this.ellipse(0, 0, 31 + well * 10, 9 + well * 3, p * 1.2, "#72d8ff", .72 * (1 - after), 1.7)); this.withGlow("#f3c46b", 14, () => this.ellipse(0, 0, 34 + well * 12, 7 + well * 4, -p * .9, "#f3c46b", .6 * (1 - after), 1.35)); }
+    const approach = easeInOut(clamp(p / .43));
+    const pressure = easeInOut(clamp((p - .18) / .4));
+    const breach = easeInOut(clamp((p - .47) / .19));
+    const after = clamp((p - .66) / .34);
+    const whaleScale = 165;
+
+    // A massive, directional wake replaces the former stack of concentric
+    // ellipses. The silhouette now feels like an object displacing space on
+    // approach, rather than a second black-hole spell.
+    if (p < .54) {
+      const x = lerp(-245, whaleScale * .95, approach);
+      const y = -35 + Math.sin(approach * Math.PI) * 16;
+      const visibility = Math.sin(clamp(p / .54) * Math.PI) * .92;
+      const c = this.ctx;
+      c.save(); c.translate(x, y); c.rotate(-.1); c.globalCompositeOperation = "lighter";
+      for (let lane = 0; lane < 5; lane += 1) {
+        const offset = (lane - 2) * 10;
+        const reach = whaleScale * (.78 + lane * .095);
+        c.beginPath(); c.moveTo(-whaleScale * .56, offset * .24);
+        c.bezierCurveTo(-whaleScale * .84, offset * .46, -reach * .9, offset * 1.2, -reach, offset * 1.65);
+        c.strokeStyle = rgba(lane === 2 ? "#b9e8ff" : lane % 2 ? "#72d8ff" : "#7086d8", visibility * (.13 - Math.abs(lane - 2) * .018) * (1 - pressure * .72));
+        c.lineWidth = lane === 2 ? 2.1 : 1.15; c.stroke();
+      }
+      for (let rib = 0; rib < 4; rib += 1) {
+        const tailX = -whaleScale * (.7 + rib * .16);
+        const spread = 20 + rib * 8;
+        c.beginPath(); c.moveTo(tailX + 18, -spread); c.lineTo(tailX - 8, 0); c.lineTo(tailX + 18, spread);
+        c.strokeStyle = rgba("#4978a0", visibility * (.15 - rib * .024) * (1 - pressure)); c.lineWidth = 1.1; c.stroke();
+      }
+      c.restore();
+      this.glow(x, y, whaleScale * 1.2, "#173d67", .075 * visibility);
+      this.drawWhaleShadow(x, y, whaleScale, .66 * visibility);
+    }
+
+    // Nearby matter is dragged into thin undertow streaks. Rectilinear debris
+    // and converging seams give the hit a readable direction without orbiting
+    // rings competing with the final whale constellation.
+    if (pressure > 0 && after < 1) {
+      for (let i = 0; i < 112 * this.density; i += 1) {
+        const startX = lerp(-225, 225, this.rnd(i, 4));
+        const startY = lerp(-145, 145, this.rnd(i, 7));
+        const delay = this.rnd(i, 12) * .28;
+        const pull = easeInOut(clamp((pressure - delay) / Math.max(.01, 1 - delay)));
+        const x = lerp(startX, (this.rnd(i, 19) - .5) * 12, pull);
+        const y = lerp(startY, (this.rnd(i, 21) - .5) * 8, pull);
+        const length = 3 + pull * (8 + this.rnd(i, 15) * 9);
+        const magnitude = Math.max(1, Math.hypot(startX, startY));
+        const color = i % 11 === 0 ? "#f3c46b" : i % 3 === 0 ? "#b9e8ff" : "#7086d8";
+        this.line(x + startX / magnitude * length, y + startY / magnitude * length, x, y, color, (.12 + .52 * pull) * (1 - after), i % 13 === 0 ? 1.7 : .8);
+      }
+      const c = this.ctx;
+      for (let lane = 0; lane < 7; lane += 1) {
+        const laneY = (lane - 3) * 23;
+        const gap = lerp(172, 10 + Math.abs(laneY) * .08, pressure);
+        const bend = laneY * lerp(1, .16, pressure);
+        c.beginPath(); c.moveTo(-230, laneY * 1.32); c.bezierCurveTo(-145, laneY, -70, bend, -gap, bend * .2);
+        c.strokeStyle = rgba(lane % 3 === 0 ? "#f3c46b" : "#72d8ff", pressure * (.16 + (3 - Math.abs(lane - 3)) * .035) * (1 - after)); c.lineWidth = lane === 3 ? 1.8 : 1; c.stroke();
+        c.beginPath(); c.moveTo(230, laneY * 1.32); c.bezierCurveTo(145, laneY, 70, bend, gap, bend * .2); c.stroke();
+      }
+      this.glow(0, 0, 112, "#315e9b", .12 * pressure * (1 - after));
+    }
+
+    if (breach > 0 && after < 1) {
+      const c = this.ctx;
+      const crush = lerp(118, 14, breach);
+      const flash = Math.sin(clamp((p - .5) / .16) * Math.PI);
+      this.withGlow("#dff7ff", 22, () => {
+        this.line(-crush - 70, 0, -crush, 0, "#72d8ff", .84 * (1 - after), 2.5);
+        this.line(crush + 70, 0, crush, 0, "#f3c46b", .74 * (1 - after), 2.1);
+      });
+      for (let shard = 0; shard < 10; shard += 1) {
+        const angle = (shard - 4.5) * .19 + (shard % 2 ? Math.PI : 0);
+        const reach = (32 + shard % 3 * 13) * flash;
+        this.spark(Math.cos(angle) * 8, Math.sin(angle) * 8, reach, shard % 3 ? "#b9e8ff" : "#f3c46b", flash * .72, angle);
+      }
+      c.fillStyle = rgba("#010207", .98); c.beginPath(); c.arc(0, 0, 6 + breach * 19, 0, TAU); c.fill();
+      if (flash > 0) this.glow(0, 0, 105, "#e5f8ff", .42 * flash);
+    }
     if (after > 0) { this.ring(0, 0, 30 + after * 190, "#72d8ff", (1 - after) * .62, 1.8); this.ring(0, 0, 22 + after * 142, "#f3c46b", (1 - after) * .34, 1.1); const echo = easeOut(clamp((p - .7) / .1)) * (1 - clamp((p - .94) / .06)); if (echo > 0) this.drawWhaleConstellation(190, echo, after); for (let i = 0; i < 24; i += 1) { const angle = this.rnd(i, 14) * TAU, radius = 55 + this.rnd(i, 16) * 155; this.glow(Math.cos(angle) * radius * after, Math.sin(angle) * radius * .58 * after, 1.4 + (i % 5 === 0 ? 2 : 0), i % 4 === 0 ? "#f3c46b" : "#b9e8ff", (1 - after) * .42); } }
   }
 }

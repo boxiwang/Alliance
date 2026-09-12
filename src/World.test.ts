@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import defaults from "../docs/numbers.json";
-import { WORLD_MAX_ZOOM, WORLD_TACTICAL_ZOOM, clusterWorldSignals, gatherCarryWithAccount, marchMapProgress, recommendedGatherForce, resourceOccupationDisposition, worldMarchObservable, worldMarkerScale, worldTargetObservable } from "./World";
+import { WORLD_MAX_ZOOM, WORLD_TACTICAL_ZOOM, clusterWorldSignals, gatherCarryWithAccount, marchMapProgress, recommendedGatherForce, resourceOccupationDisposition, worldIdentityLocalOffset, worldMarchObservable, worldMarchScreenScale, worldMarkerScale, worldTargetObservable } from "./World";
 import type { MonsterEntity, ResourceEntity } from "./lib/world-engine";
 
 describe("World strategic signal clusters", () => {
@@ -101,5 +101,15 @@ describe("World march rendering", () => {
     expect(WORLD_MAX_ZOOM).toBe(16);
     expect(worldMarkerScale(3) * 3).toBeCloseTo(1);
     expect(worldMarkerScale(16) * 16).toBeCloseTo(2);
+  });
+
+  it("grows fleet cosmetics for inspection and keeps identity plates body-anchored", () => {
+    expect(worldMarchScreenScale(1)).toBeCloseTo(.92);
+    expect(worldMarchScreenScale(3)).toBeCloseTo(1.4);
+    expect(worldMarchScreenScale(16)).toBeCloseTo(2.65);
+    expect(worldIdentityLocalOffset(1, true)).toBe(0);
+    expect(worldIdentityLocalOffset(2, true)).toBe(7);
+    expect(worldIdentityLocalOffset(16, true)).toBe(30);
+    expect(worldIdentityLocalOffset(16, false)).toBe(17);
   });
 });

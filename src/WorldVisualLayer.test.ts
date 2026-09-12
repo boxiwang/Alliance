@@ -39,10 +39,11 @@ describe("Star Map high-value visual planner", () => {
     expect(plan.visibleCount).toBe(1_000);
   });
 
-  it("keeps rival cosmetics legible without letting the home body dominate", () => {
+  it("opens a high-resolution cosmetic inspection range at maximum Tactical zoom", () => {
     expect(worldVisualBodyRadius(1.8, false)).toBeGreaterThanOrEqual(11);
-    expect(worldVisualBodyRadius(16, false)).toBeGreaterThanOrEqual(18);
-    expect(worldVisualBodyRadius(16, true) / worldVisualBodyRadius(16, false)).toBeLessThan(1.3);
+    expect(worldVisualBodyRadius(16, false)).toBe(18);
+    expect(worldVisualBodyRadius(16, true)).toBe(44);
+    expect(worldVisualBodyRadius(16, false, true)).toBe(42);
   });
 
   it("keeps render probes outside game authority and clamps pathological requests", () => {

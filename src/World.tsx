@@ -70,6 +70,27 @@ export function worldMarkerScale(zoom: number): number {
   return tacticalBoost / safeZoom;
 }
 
+/** Screen-space fleet scale: restrained in Field, inspectable in deep Tactical. */
+export function worldMarchScreenScale(zoom: number): number {
+  const safeZoom = Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, zoom));
+  if (safeZoom < 1.45) return .92;
+  if (safeZoom < WORLD_TACTICAL_ZOOM) return 1.05 + ((safeZoom - 1.45) / (WORLD_TACTICAL_ZOOM - 1.45)) * .3;
+  const amount = Math.max(0, Math.min(1, Math.log2(safeZoom / WORLD_TACTICAL_ZOOM) / Math.log2(WORLD_MAX_ZOOM / WORLD_TACTICAL_ZOOM)));
+  return 1.4 + amount * 1.25;
+}
+
+/**
+ * Local SVG offset for a fixed-size identity plate. Own and selected bodies
+ * grow in screen space, while their label groups use different scale curves;
+ * matching those curves prevents the plate from drifting at 1600%.
+ */
+export function worldIdentityLocalOffset(zoom: number, own: boolean): number {
+  const safeZoom = Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, zoom));
+  if (safeZoom < WORLD_TACTICAL_ZOOM) return ((safeZoom - WORLD_MIN_ZOOM) / (WORLD_TACTICAL_ZOOM - WORLD_MIN_ZOOM)) * 14;
+  const amount = Math.max(0, Math.min(1, Math.log2(safeZoom / WORLD_TACTICAL_ZOOM) / Math.log2(WORLD_MAX_ZOOM / WORLD_TACTICAL_ZOOM)));
+  return own ? 14 + amount * 16 : 14 + amount * 3;
+}
+
 function steppedWorldZoom(value: number, direction: "in" | "out", factor: number): number {
   return Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, direction === "in" ? value * factor : value / factor));
 }
@@ -585,6 +606,8 @@ export default function World({ address, profile, onBack, onMessages = () => {},
   const strategicZoom = zoom < 1.45;
   const markerScale = worldMarkerScale(zoom);
   const importantScale = (strategicZoom ? 1.6 : 1.18) / zoom;
+  const homeIdentityOffset = worldIdentityLocalOffset(zoom, true);
+  const rivalIdentityOffset = worldIdentityLocalOffset(zoom, false);
   // The home planet must read as clearly the biggest body on the map at every
   // zoom. importantScale is a flat 1/zoom shrink, so in deep Tactical view it
   // fell BELOW a resource planet (whose worldMarkerScale grows via tacticalBoost).
@@ -909,8 +932,8 @@ export default function World({ address, profile, onBack, onMessages = () => {},
               {equippedPlanetHalo && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldHaloFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} halo={equippedPlanetHalo} half="front" /></g>}
             </> : <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><circle cx={playerCity.position.x} cy={playerCity.position.y} r="14" className="world-city-hit" /></g>}
             {!gpuVisualsReady && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
-              <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
-              <text x={playerCity.position.x} y={playerCity.position.y + 18} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
+              <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
+              <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
             </g>}
           </g>
           {tileMark && <g className="world-tile-mark" pointerEvents="none">
@@ -933,13 +956,13 @@ export default function World({ address, profile, onBack, onMessages = () => {},
             const cosmetics = world.players[city.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS;
             return <g key={`overlay-${city.id}`} transform={`translate(${city.position.x} ${city.position.y}) scale(${markerScale}) translate(${-city.position.x} ${-city.position.y})`}>
               {selectedId === city.id
-                ? <CityIdentityTag x={city.position.x} y={city.position.y + 32} level={city.townhallLevel} name={localWorldTargetName(world, city.id)} signal={cosmetics.chatSignal} />
+                ? <CityIdentityTag x={city.position.x} y={city.position.y + rivalIdentityOffset} level={city.townhallLevel} name={localWorldTargetName(world, city.id)} signal={cosmetics.chatSignal} />
                 : <WorldLevelBadge x={city.position.x} y={city.position.y} level={city.townhallLevel} />}
             </g>;
           })}
           <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
-            <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + 32} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
-            <text x={playerCity.position.x} y={playerCity.position.y + 51} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
+            <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
+            <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
           </g>
         </svg>}
         {!gpuVisualsReady && voidSkinEquipped && <VoidPlanetOverlay svgRef={svgRef} home={playerCity.position} zoom={zoom} strategic={strategicZoom} onActiveChange={setVoidShaderActive} />}
@@ -1033,7 +1056,7 @@ function MarchLine({ march, now, zoom, signature }: { march: HeadlessMarch; now:
   const detailed = zoom >= 1.45;
   // Fleet signatures stay screen-sized. Tactical inspection gets enough room
   // for braids, sails and particle tails to read as distinct cosmetics.
-  const cursorScale = zoom >= 3 ? 1.72 : detailed ? 1.45 : 1;
+  const cursorScale = worldMarchScreenScale(zoom);
   const phase = progress < 0.045 ? "departing" : progress > 0.955 ? "arriving" : "cruising";
   return <g className={`world-march-line ${march.action} state-${march.state} signature-${signature || "none"} signature-${detailed ? "field" : "strategic"} ${phase}`}>
     <line x1={march.origin.x} y1={march.origin.y} x2={march.destination.x} y2={march.destination.y} />
@@ -1049,52 +1072,60 @@ function MarchLine({ march, now, zoom, signature }: { march: HeadlessMarch; now:
 
 function FleetKite({ x, y }: { x: number; y: number }) {
   return <g className="world-march-hull">
-    <path d={`M ${x} ${y - 8.5} L ${x + 5.8} ${y + 1} L ${x} ${y + 5.7} L ${x - 5.8} ${y + 1} Z`} />
-    <path d={`M ${x} ${y - 4.9} L ${x + 2.2} ${y + 0.5} L ${x} ${y + 2.4} L ${x - 2.2} ${y + 0.5} Z`} className="world-march-cursor-core" />
-    <circle cx={x} cy={y - 1.2} r="1.05" className="world-march-hull-light" />
+    <path d={`M ${x} ${y - 9.4} L ${x + 6.4} ${y + 1.5} L ${x + 2.15} ${y + .45} L ${x} ${y + 6.25} L ${x - 2.15} ${y + .45} L ${x - 6.4} ${y + 1.5} Z`} />
+    <path d={`M ${x - 5.1} ${y + .9} L ${x - 1.8} ${y - 1.7} M ${x + 5.1} ${y + .9} L ${x + 1.8} ${y - 1.7}`} className="world-march-wing-etch" />
+    <path d={`M ${x} ${y - 6.1} L ${x + 2.35} ${y - .1} L ${x} ${y + 2.85} L ${x - 2.35} ${y - .1} Z`} className="world-march-cursor-core" />
+    <path d={`M ${x - 2.25} ${y + 1.15} Q ${x} ${y + 3.45} ${x + 2.25} ${y + 1.15}`} className="world-march-engine" />
+    <circle cx={x} cy={y - 2.05} r="1.12" className="world-march-hull-light" />
   </g>;
 }
 
 function MarchSignatureFx({ x, y, signature }: { x: number; y: number; signature: MarchSignatureId }) {
   if (signature === "ion-wake") return <g className="world-march-signature world-signature-ion">
-    <path className="ion-trail ion-trail-a" d={`M ${x} ${y + 3} Q ${x - 1.5} ${y + 10} ${x - 3.8} ${y + 20}`} />
-    <path className="ion-trail ion-trail-b" d={`M ${x + 1.2} ${y + 3} Q ${x + 3} ${y + 9} ${x + 2.4} ${y + 15}`} />
-    <circle className="signature-mote mote-one" cx={x - 3.5} cy={y + 12} r="1.2" />
-    <circle className="signature-mote mote-two" cx={x + 2.8} cy={y + 18} r="0.75" />
+    <path className="ion-plume plume-wide" d={`M ${x - 2.3} ${y + 2} C ${x - 7} ${y + 11}, ${x - 4.5} ${y + 24}, ${x - 1.2} ${y + 31} C ${x + .5} ${y + 23}, ${x + 3} ${y + 11}, ${x + 2.3} ${y + 2} Z`} />
+    <path className="ion-plume plume-hot" d={`M ${x - 1.2} ${y + 2} C ${x - 2.7} ${y + 12}, ${x - 1.1} ${y + 23}, ${x + .2} ${y + 27} C ${x + 1.8} ${y + 18}, ${x + 2} ${y + 9}, ${x + 1.2} ${y + 2} Z`} />
+    <path className="ion-trail ion-trail-a" d={`M ${x - 1.2} ${y + 3} C ${x - 5.7} ${y + 11}, ${x - 3.4} ${y + 22}, ${x - 6.1} ${y + 30}`} />
+    <path className="ion-trail ion-trail-b" d={`M ${x + 1.2} ${y + 3} C ${x + 5.1} ${y + 10}, ${x + 1.4} ${y + 20}, ${x + 4.4} ${y + 26}`} />
+    <path className="ion-trail ion-trail-c" d={`M ${x} ${y + 4} Q ${x - 1.4} ${y + 17} ${x + .5} ${y + 32}`} />
+    <circle className="signature-mote mote-one" cx={x - 5.4} cy={y + 17} r="1.25" />
+    <circle className="signature-mote mote-two" cx={x + 4.1} cy={y + 24} r=".82" />
+    <circle className="signature-mote mote-three" cx={x - 1.2} cy={y + 29} r=".62" />
     <FleetKite x={x} y={y} />
   </g>;
 
   if (signature === "warp-thread") return <g className="world-march-signature world-signature-warp">
-    <path className="warp-rail rail-left" d={`M ${x - 1.5} ${y + 2} Q ${x - 6.5} ${y + 12} ${x - 3.2} ${y + 22}`} />
-    <path className="warp-rail rail-right" d={`M ${x + 1.5} ${y + 2} Q ${x + 6.5} ${y + 12} ${x + 3.2} ${y + 22}`} />
-    <path className="warp-braid braid-violet" d={`M ${x} ${y + 2} C ${x - 6} ${y + 7}, ${x + 6} ${y + 11}, ${x} ${y + 15} S ${x - 4} ${y + 20}, ${x} ${y + 23}`} />
-    <path className="warp-braid braid-cyan" d={`M ${x} ${y + 2} C ${x + 6} ${y + 7}, ${x - 6} ${y + 11}, ${x} ${y + 15} S ${x + 4} ${y + 20}, ${x} ${y + 23}`} />
-    <path className="warp-fold fold-one" d={`M ${x - 4} ${y - 5} Q ${x} ${y - 10} ${x + 4} ${y - 5}`} />
-    <path className="warp-fold fold-two" d={`M ${x - 6} ${y - 7} Q ${x} ${y - 14} ${x + 6} ${y - 7}`} />
-    <path className="warp-fold fold-three" d={`M ${x - 8} ${y - 9} Q ${x} ${y - 18} ${x + 8} ${y - 9}`} />
-    <circle className="warp-ring ring-one" cx={x} cy={y} r="5" />
-    <circle className="warp-ring ring-two" cx={x} cy={y} r="8" />
-    <circle className="warp-lens warp-lens-cyan" cx={x - 1} cy={y} r="2.6" />
-    <circle className="warp-lens warp-lens-violet" cx={x + 1} cy={y} r="2.6" />
-    <circle className="warp-core" cx={x} cy={y} r="1.8" />
+    <path className="warp-sheath" d={`M ${x} ${y + 1} C ${x - 11} ${y + 11}, ${x - 8} ${y + 26}, ${x} ${y + 34} C ${x + 8} ${y + 26}, ${x + 11} ${y + 11}, ${x} ${y + 1} Z`} />
+    <path className="warp-rail rail-left" d={`M ${x - 1.7} ${y + 2} Q ${x - 8} ${y + 16} ${x - 3.8} ${y + 33}`} />
+    <path className="warp-rail rail-right" d={`M ${x + 1.7} ${y + 2} Q ${x + 8} ${y + 16} ${x + 3.8} ${y + 33}`} />
+    <path className="warp-braid braid-violet" d={`M ${x} ${y + 2} C ${x - 7} ${y + 8}, ${x + 7} ${y + 13}, ${x} ${y + 18} S ${x - 6} ${y + 27}, ${x} ${y + 34}`} />
+    <path className="warp-braid braid-cyan" d={`M ${x} ${y + 2} C ${x + 7} ${y + 8}, ${x - 7} ${y + 13}, ${x} ${y + 18} S ${x + 6} ${y + 27}, ${x} ${y + 34}`} />
+    <path className="warp-fold fold-one" d={`M ${x - 5} ${y - 5} Q ${x} ${y - 11} ${x + 5} ${y - 5}`} />
+    <path className="warp-fold fold-two" d={`M ${x - 8} ${y - 8} Q ${x} ${y - 17} ${x + 8} ${y - 8}`} />
+    <path className="warp-fold fold-three" d={`M ${x - 11} ${y - 11} Q ${x} ${y - 23} ${x + 11} ${y - 11}`} />
+    <circle className="warp-ring ring-one" cx={x} cy={y} r="6.6" />
+    <circle className="warp-ring ring-two" cx={x} cy={y} r="10.5" />
+    <circle className="warp-lens warp-lens-cyan" cx={x - 1.25} cy={y + 2.1} r="2.6" />
+    <circle className="warp-lens warp-lens-violet" cx={x + 1.25} cy={y + 2.1} r="2.6" />
+    <FleetKite x={x} y={y} />
   </g>;
 
   if (signature === "aurora-sail") return <g className="world-march-signature world-signature-aurora">
-    <path className="aurora-glow" d={`M ${x} ${y + 2} C ${x - 11} ${y + 7}, ${x + 10} ${y + 12}, ${x - 5} ${y + 18} C ${x + 5} ${y + 20}, ${x - 9} ${y + 24}, ${x} ${y + 27} C ${x + 6} ${y + 22}, ${x + 13} ${y + 18}, ${x + 5} ${y + 14} C ${x + 12} ${y + 9}, ${x + 5} ${y + 5}, ${x} ${y + 2} Z`} />
-    <path className="aurora-ribbon" d={`M ${x} ${y + 2} C ${x - 7} ${y + 8}, ${x + 8} ${y + 11}, ${x - 3} ${y + 17} S ${x + 7} ${y + 23}, ${x} ${y + 27} C ${x + 3} ${y + 21}, ${x - 4} ${y + 18}, ${x + 3} ${y + 14} S ${x + 4} ${y + 7}, ${x} ${y + 2} Z`} />
-    <path className="aurora-shimmer" d={`M ${x} ${y + 2} C ${x - 5} ${y + 7}, ${x + 6} ${y + 12}, ${x - 2} ${y + 17} S ${x + 5} ${y + 23}, ${x} ${y + 27}`} />
+    <path className="aurora-glow" d={`M ${x} ${y + 2} C ${x - 14} ${y + 8}, ${x + 13} ${y + 14}, ${x - 6} ${y + 22} C ${x + 7} ${y + 25}, ${x - 11} ${y + 30}, ${x} ${y + 36} C ${x + 8} ${y + 29}, ${x + 16} ${y + 23}, ${x + 6} ${y + 17} C ${x + 14} ${y + 10}, ${x + 6} ${y + 5}, ${x} ${y + 2} Z`} />
+    <path className="aurora-ribbon" d={`M ${x} ${y + 2} C ${x - 9} ${y + 9}, ${x + 10} ${y + 14}, ${x - 4} ${y + 22} S ${x + 8} ${y + 30}, ${x} ${y + 36} C ${x + 4} ${y + 28}, ${x - 5} ${y + 24}, ${x + 4} ${y + 18} S ${x + 5} ${y + 8}, ${x} ${y + 2} Z`} />
+    <path className="aurora-shimmer" d={`M ${x} ${y + 2} C ${x - 7} ${y + 9}, ${x + 8} ${y + 16}, ${x - 3} ${y + 22} S ${x + 7} ${y + 30}, ${x} ${y + 36}`} />
+    <circle className="aurora-star star-one" cx={x - 7} cy={y + 20} r=".8" />
+    <circle className="aurora-star star-two" cx={x + 7.5} cy={y + 29} r=".55" />
     <FleetKite x={x} y={y} />
   </g>;
 
   return <g className="world-march-signature world-signature-comet">
-    <circle className="comet-tail tail-four" cx={x} cy={y + 21} r="1.4" />
-    <circle className="comet-tail tail-three" cx={x - 1.2} cy={y + 16} r="2.1" />
-    <circle className="comet-tail tail-two" cx={x + 0.8} cy={y + 11} r="2.8" />
-    <circle className="comet-tail tail-one" cx={x} cy={y + 6} r="3.8" />
-    <circle className="comet-ember ember-one" cx={x - 4.5} cy={y + 11} r="0.9" />
-    <circle className="comet-ember ember-two" cx={x + 4} cy={y + 17} r="0.7" />
-    <circle className="comet-head-glow" cx={x} cy={y} r="8.5" />
-    <circle className="comet-head" cx={x} cy={y} r="3.2" />
-    <circle className="comet-core" cx={x} cy={y} r="1.45" />
+    <path className="comet-tail tail-one" d={`M ${x - 3.5} ${y + 1} C ${x - 9} ${y + 12}, ${x - 5} ${y + 25}, ${x - 1.2} ${y + 37} C ${x + 1.5} ${y + 24}, ${x + 4} ${y + 11}, ${x + 3.5} ${y + 1} Z`} />
+    <path className="comet-tail tail-two" d={`M ${x - 1.8} ${y + 2} C ${x + 4} ${y + 13}, ${x + 2} ${y + 24}, ${x + 5} ${y + 31} C ${x + 8} ${y + 19}, ${x + 5} ${y + 8}, ${x + 1.8} ${y + 2} Z`} />
+    <path className="comet-spine" d={`M ${x} ${y + 3} C ${x - 3} ${y + 15}, ${x + 2} ${y + 26}, ${x - 1} ${y + 39}`} />
+    <circle className="comet-ember ember-one" cx={x - 6} cy={y + 15} r="1.05" />
+    <circle className="comet-ember ember-two" cx={x + 5.5} cy={y + 24} r=".78" />
+    <circle className="comet-ember ember-three" cx={x - 2.5} cy={y + 34} r=".62" />
+    <circle className="comet-head-glow" cx={x} cy={y} r="10" />
+    <FleetKite x={x} y={y} />
   </g>;
 }

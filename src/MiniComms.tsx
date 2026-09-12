@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Profile } from "./lib/profile";
-import { loadPlayerAccount } from "./lib/player-account";
+import { loadCosmeticVault, loadPlayerAccount } from "./lib/player-account";
+import NameSignal from "./NameSignal";
 import {
   appendLocalCommsMessage, loadLocalComms, LOCAL_COMMS_CHANGED_EVENT,
   type LocalCommsMessage, type LocalCommsStore,
@@ -57,6 +58,8 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
   const channelSignal = active === "general" ? profile.factionSymbol || "UNBOUND" : channel.signal;
   const messages = useMemo(() => [...SEED[active], ...(sent[active] ?? [])].filter((message) => !!message.b).slice(-4), [active, sent]);
   const latest = messages[messages.length - 1];
+  const account = loadPlayerAccount(address);
+  const ownNameSignal = loadCosmeticVault(address).equipped.chatSignal;
 
   function transmit() {
     const body = draft.trim();
@@ -80,7 +83,7 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
   if (!expanded) return <aside className="mini-comms collapsed" aria-label="Quick communications">
     <button className="mini-comms-peek" onClick={() => setExpanded(true)}>
       <span className="mini-comms-mark">✦</span>
-      <span className="mini-comms-peek-copy"><small>{channel.icon} {channel.label} // LIVE</small><b><em>{latest?.a || "SIGNAL ARRAY"}</em>{latest?.b || "No nearby transmissions."}</b></span>
+      <span className="mini-comms-peek-copy"><small>{channel.icon} {channel.label} // LIVE</small><b><em>{latest?.own ? <NameSignal signal={ownNameSignal} mode="demo" reducedMotion={account.reducedMotion}>{latest.a}</NameSignal> : latest?.a || "SIGNAL ARRAY"}</em>{latest?.b || "No nearby transmissions."}</b></span>
       <span className="mini-comms-unread">12</span>
       <span className="mini-comms-chevron">⌃</span>
     </button>
@@ -99,7 +102,7 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
     <div className="mini-comms-stream">
       {messages.map((message, index) => <div className={`mini-comms-message${message.own ? " own" : ""}`} key={message.id || `${message.a}-${message.t}-${index}`}>
         <span className="mini-comms-avatar">{(message.a || "?").slice(0, 1)}</span>
-        <div><small>{message.f && `[${message.f}] `}<b>{message.a}</b><time>{message.t}</time></small><p>{message.b}</p></div>
+        <div><small>{message.f && `[${message.f}] `}<b>{message.own ? <NameSignal signal={ownNameSignal} mode="demo" reducedMotion={account.reducedMotion}>{message.a || "UNKNOWN"}</NameSignal> : message.a}</b><time>{message.t}</time></small><p>{message.b}</p></div>
       </div>)}
     </div>
     <div className="mini-comms-compose">

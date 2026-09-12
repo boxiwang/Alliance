@@ -278,7 +278,7 @@ function MessageRow({ m, now, ownChatSignal, reducedMotion, onInspect, onOpenWor
     <div className="bd">
       <div className="meta">
         {m.f && <span className="tick" style={{ color: fcol(m.f), background: `${fcol(m.f)}1a` }}>[{m.f}]</span>}
-        <button className="nm player-name-button" disabled={!m.a || !PLAYER_SIGNALS[m.a]} onClick={() => m.a && onInspect(m.a)}><NameSignal signal={m.own ? ownChatSignal : m.a ? PLAYER_SIGNALS[m.a]?.nameSignal : null} reducedMotion={reducedMotion}>{m.a || "UNKNOWN"}</NameSignal></button>
+        <button className="nm player-name-button" disabled={!m.a || !PLAYER_SIGNALS[m.a]} onClick={() => m.a && onInspect(m.a)}><NameSignal signal={m.own ? ownChatSignal : m.a ? PLAYER_SIGNALS[m.a]?.nameSignal : null} mode="demo" reducedMotion={reducedMotion}>{m.a || "UNKNOWN"}</NameSignal></button>
         {m.v && <span className="vbadge" title="on-chain pledge observed">✓</span>}
         {m.tag && <span className={`mtag ${m.tag}`}>{m.tag}</span>}
         <span className="mtime">{m.t}</span>

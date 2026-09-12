@@ -37,9 +37,15 @@ export function worldVisualBodyRadius(zoom: number, own = false, selected = fals
   else if (zoom < 3) radius = own ? 14 : 11;
   else {
     const amount = Math.max(0, Math.min(1, Math.log2(zoom / 3) / Math.log2(16 / 3)));
-    radius = (own ? 15.5 : 12.5) + amount * (own ? 6.5 : 5.5);
+    // Deep Tactical is the cosmetic inspection range. The local civilization
+    // reaches a true 44 px body radius at 1600% (2x the previous 22 px), and a
+    // selected rival receives nearly the same treatment. Unselected rivals
+    // stay compact so a dense neighborhood does not become a wall of bloom.
+    if (own) radius = 15.5 + amount * 28.5;
+    else if (selected) radius = 14.5 + amount * 27.5;
+    else radius = 12.5 + amount * 5.5;
   }
-  return radius + (selected ? (zoom < 1.45 ? 1.2 : 1.5) : 0);
+  return radius + (selected && zoom < 3 ? (zoom < 1.45 ? 1.2 : 1.5) : 0);
 }
 
 /** Deterministic render-only population used by GM stress runs; it never enters game authority. */
@@ -571,19 +577,27 @@ export default function WorldVisualLayer({
       const matrix = svg?.getScreenCTM();
       if (!svg || !matrix || rect.width < 2 || rect.height < 2) return;
 
+      const { cities: source, wormhole: hole, zoom: currentZoom } = latest.current;
       const frameGap = Math.min(100, time - lastFrame); lastFrame = time;
       statsFrames += 1;
       statsWorstGap = Math.max(statsWorstGap, frameGap);
       if (frameGap > 24) { slowFrames += 1; smoothFrames = 0; }
       else if (frameGap < 19) { smoothFrames += 1; slowFrames = Math.max(0, slowFrames - 1); }
-      if (slowFrames > 24 && dprCap > 1) { dprCap = Math.max(1, dprCap - .25); slowFrames = 0; }
-      if (smoothFrames > 420 && dprCap < 1.5) { dprCap = Math.min(1.5, dprCap + .25); smoothFrames = 0; }
+      // Deep inspection starts at a Retina-ready cap. It may step down under a
+      // sustained load, but never to the visibly soft 1x raster used by the
+      // mass-population overview. Planet shaders are re-evaluated at the new
+      // radius; no profile texture is being enlarged here.
+      const inspectionDprMin = currentZoom >= 8 ? 1.5 : 1;
+      const inspectionDprMax = currentZoom >= 8 ? 2 : 1.5;
+      dprCap = Math.max(inspectionDprMin, Math.min(inspectionDprMax, dprCap));
+      if (currentZoom >= 8 && cachedZoom < 8) dprCap = inspectionDprMax;
+      if (slowFrames > 24 && dprCap > inspectionDprMin) { dprCap = Math.max(inspectionDprMin, dprCap - .25); slowFrames = 0; }
+      if (smoothFrames > 420 && dprCap < inspectionDprMax) { dprCap = Math.min(inspectionDprMax, dprCap + .25); smoothFrames = 0; }
       const dpr = Math.min(dprCap, window.devicePixelRatio || 1);
       const deviceWidth = Math.max(2, Math.round(rect.width * dpr));
       const deviceHeight = Math.max(2, Math.round(rect.height * dpr));
       if (canvas.width !== deviceWidth || canvas.height !== deviceHeight) { canvas.width = deviceWidth; canvas.height = deviceHeight; }
 
-      const { cities: source, wormhole: hole, zoom: currentZoom } = latest.current;
       const transform = [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f];
       const geometryChanged = source !== cachedSource || currentZoom !== cachedZoom || rect.width !== cachedWidth || rect.height !== cachedHeight
         || transform.some((value, index) => Math.abs(value - cachedTransform[index]) > .01);
@@ -601,7 +615,11 @@ export default function WorldVisualLayer({
           const wy = inverse.b * x + inverse.d * y + inverse.f;
           minX = Math.min(minX, wx); maxX = Math.max(maxX, wx); minY = Math.min(minY, wy); maxY = Math.max(maxY, wy);
         });
-        const margin = 36 / Math.max(.001, Math.hypot(matrix.a, matrix.b));
+        // The 3.6x shader quad includes crowns, rings and orbital particles.
+        // Expand the planner band with the largest inspectable body so those
+        // effects do not pop or clip while a large planet enters the viewport.
+        const visualExtent = Math.max(36, worldVisualBodyRadius(currentZoom, true) * 3.6);
+        const margin = visualExtent / Math.max(.001, Math.hypot(matrix.a, matrix.b));
         const planned = planWorldVisualTiers(source, { minX: minX - margin, minY: minY - margin, maxX: maxX + margin, maxY: maxY + margin }, currentZoom);
         const required = (planned.detailed.length + planned.beacons.length + 1) * STRIDE * 6;
         if (data.length < required) data = new Float32Array(2 ** Math.ceil(Math.log2(required)));
