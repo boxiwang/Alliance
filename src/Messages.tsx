@@ -1,22 +1,25 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Profile } from "./lib/profile";
-import { mightBreakdown, project, totalTroops, worldMarchSlots } from "./lib/game";
-import { initGame, loadGame } from "./lib/gamestore";
-import { loadLocalWorldSession } from "./lib/world-adapter";
+import { displayResource, displayTroops, mightBreakdown, project, totalTroops, worldMarchSlots } from "./lib/game";
+import { compact } from "./lib/format";
+import { initGame, loadGame, saveGame } from "./lib/gamestore";
+import { loadLocalWorldSession, openLocalWorldSession, saveLocalWorldSession } from "./lib/world-adapter";
 import { energyAt } from "./lib/world-engine";
+import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
 import CosmicBackdrop from "./CosmicBackdrop";
+import PlayerCard, { type PlayerSignal } from "./PlayerCard";
+import { loadCosmeticVault, type ChatSignalId } from "./lib/player-account";
+import { loadPlayerAccount } from "./lib/player-account";
+import { refreshLocalCommsIntel, saveLocalComms, type LocalCommsMessage } from "./lib/comms-local";
+import { clearQueuedCommsShare, loadQueuedCommsShare, queueWorldFocus, sharedIntelIsActive, type SharedWorldIntel } from "./lib/shared-intel";
 
 // Comms is Task-1 chat. This is the frontend + a LOCAL adapter: channels/threads are seeded and
 // your own sends echo locally. A server adapter (Cloudflare Durable Objects) replaces the data
 // layer later without changing this page — same seam as World's world-adapter.
 type ChannelId = "cosmos" | "alliance" | "system" | "contacts" | "dm-nyx" | "dm-whale";
 type AllianceTab = "general" | "warroom";
-type ChatMessage = {
-  a?: string; f?: string; v?: boolean; t?: string; b?: string; tag?: string; own?: boolean;
-  pin?: string; spam?: number; blocked?: string; sys?: "mil" | "eco" | "sec";
-  coord?: { c: string; k: string }; rally?: boolean;
-};
+type ChatMessage = LocalCommsMessage;
 
 const FACTION: Record<string, string> = { ORBT: "#38d9ff", PEPE: "#43f2a1", DOGE: "#ffb454", MOG: "#aa82ff", WIF: "#7cc0ff" };
 const fcol = (t?: string) => (t && FACTION[t]) || "#8aa9b9";
@@ -29,10 +32,17 @@ const CHANNELS: Array<{ id: ChannelId; icon: string; label: string; detail: stri
   { id: "alliance", icon: "◇", label: "Alliance", detail: "[ORBT] Orbital", unread: 8, mention: true },
   { id: "system", icon: "⌁", label: "System", detail: "", unread: 1 },
 ];
-const DMS: Array<{ id: ChannelId; icon: string; label: string; detail: string; faction: string }> = [
-  { id: "dm-nyx", icon: "N", label: "NyxValidator", detail: "online", faction: "ORBT" },
-  { id: "dm-whale", icon: "W", label: "WhaleSignal", detail: "12m ago", faction: "MOG" },
+type DirectThread = { id: ChannelId; icon: string; label: string; detail: string; faction: string; signal: PlayerSignal };
+const DMS: DirectThread[] = [
+  { id: "dm-nyx", icon: "N", label: "NyxValidator", detail: "online", faction: "ORBT", signal: { username: "NyxValidator", allianceSymbol: "ORBT", title: "RIFT CARTOGRAPHER", wallet: "0x71bE5D5F2B6e17a4b4D0F29c9a807E71b6bAAa01", skin: { id: "solar-imperator", name: "Solar Imperator", rarity: "RELIC" }, nameSignal: "void-whisper", coreLevel: 18, might: 428_500, achievements: [{ mark: "Ⅰ", name: "FIRST LIGHT" }, { mark: "⌁", name: "RIFT WARDEN" }], online: true } },
+  { id: "dm-whale", icon: "W", label: "WhaleSignal", detail: "12m ago", faction: "MOG", signal: { username: "WhaleSignal", allianceSymbol: "MOG", title: "EVENT HORIZON", wallet: "0x9a72F0C890e8d413B250021b970Bbb12A998002a", skin: { id: "event-horizon", name: "Event Horizon", rarity: "SOVEREIGN" }, nameSignal: "sovereign-flare", coreLevel: 24, might: 1_820_400, achievements: [{ mark: "◈", name: "WHALE FALL" }, { mark: "◎", name: "MARKET MAKER" }], online: false } },
 ];
+const PLAYER_SIGNALS: Record<string, PlayerSignal> = {
+  ...Object.fromEntries(DMS.map((thread) => [thread.label, thread.signal])),
+  GreenOrbit: { username: "GreenOrbit", allianceSymbol: "PEPE", title: "CASH BLOOMER", wallet: "0x2E05D571d9a4aB04b082F409870a6A11436E112c", skin: { id: "civic-core", name: "Civic Core", rarity: "ISSUED" }, coreLevel: 11, might: 164_200, achievements: [{ mark: "Ⅰ", name: "FIRST LIGHT" }], online: true },
+  VoidRunner: { username: "VoidRunner", allianceSymbol: "ORBT", title: "NAME ERASED", wallet: "0x4A801Bbe20f64391219F043df4374DA0A1b3B7f2", skin: { id: "void-touched", name: "Void-Touched", rarity: "MYTHIC" }, coreLevel: 16, might: 337_900, achievements: [{ mark: "◈", name: "ECHO HUNTER" }, { mark: "⌁", name: "VOID WALKER" }], online: true },
+  MuchCommand: { username: "MuchCommand", allianceSymbol: "DOGE", title: "MOON ENGINEER", wallet: "0xD06E51c33Ea18E73908dE0F6b0ACD6e79Fb09A12", skin: { id: "solar-imperator", name: "Solar Imperator", rarity: "RELIC" }, coreLevel: 13, might: 208_700, achievements: [{ mark: "Ⅰ", name: "FIRST LIGHT" }], online: false },
+};
 const CONTACTS = [
   { a: "NyxValidator", f: "ORBT", v: true, on: true, note: "2 fleets" },
   { a: "WhaleSignal", f: "MOG", v: true, on: true, note: "air ×2" },
@@ -81,15 +91,40 @@ const THREADS: Record<string, ChatMessage[]> = {
   ],
 };
 
-export default function Messages({ address, profile, onCity, onWorld }: { address: string; profile: Profile; onCity: () => void; onWorld: () => void }) {
-  const [active, setActive] = useState<ChannelId>("alliance");
+function initialChannel(): ChannelId {
+  const requested = new URLSearchParams(window.location.search).get("channel") as ChannelId | null;
+  return requested && ["cosmos", "alliance", "system", "contacts", "dm-nyx", "dm-whale"].includes(requested) ? requested : "alliance";
+}
+
+export default function Messages({ address, profile, onCity, onWorld, onProfile = () => {} }: { address: string; profile: Profile; onCity: () => void; onWorld: () => void; onProfile?: () => void }) {
+  const [active, setActive] = useState<ChannelId>(initialChannel);
   const [allianceTab, setAllianceTab] = useState<AllianceTab>("general");
   const [sysFilter, setSysFilter] = useState<"all" | "mil" | "eco" | "sec">("all");
   const [draft, setDraft] = useState("");
-  const [sent, setSent] = useState<Record<string, ChatMessage[]>>({});
+  const [sent, setSent] = useState<Record<string, ChatMessage[]>>(() => {
+    // Comms is a full gameplay surface, so opening it also advances/migrates the
+    // local World authority. This keeps previously relayed recon consistent with
+    // a corrected source report instead of freezing a known-bad copied value.
+    const source = loadGame(address) || initGame(address);
+    const opened = openLocalWorldSession(address, source, Date.now(), getN());
+    saveLocalWorldSession(opened.session);
+    saveGame(opened.game);
+    return refreshLocalCommsIntel(address, opened.session.world);
+  });
+  const [pendingShare, setPendingShare] = useState<SharedWorldIntel | null>(() => loadQueuedCommsShare(address));
+  const [shareTrayOpen, setShareTrayOpen] = useState(false);
+  const [clock, setClock] = useState(Date.now());
+  const [inspectedSignal, setInspectedSignal] = useState<PlayerSignal | null>(null);
+  const equippedChatSignal = useMemo(() => loadCosmeticVault(address).equipped.chatSignal, [address]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => { saveLocalComms(address, sent); }, [address, sent]);
 
   // Live account status for the shared command nav (kept from the previous integration).
-  const now = Date.now();
+  const now = clock;
   const game = project(loadGame(address) || initGame(address), now);
   const stored = loadLocalWorldSession(address);
   const player = stored?.world.players[stored.playerId];
@@ -117,9 +152,37 @@ export default function Messages({ address, profile, onCity, onWorld }: { addres
 
   function send() {
     const body = draft.trim();
-    if (!body || isSystem || active === "contacts") return;
-    setSent((cur) => ({ ...cur, [key]: [...(cur[key] ?? []), { a: profile.name || "Ruglord", f: profile.factionSymbol || "ORBT", own: true, t: "now", b: body }] }));
+    if ((!body && !pendingShare) || isSystem || active === "contacts") return;
+    if (pendingShare && !sharedIntelIsActive(pendingShare, now)) return;
+    const message: ChatMessage = {
+      id: `comms:${Date.now()}`,
+      a: profile.name || "Ruglord", f: profile.factionSymbol || "ORBT", own: true, t: "now",
+      b: body || (pendingShare?.kind === "scout-intel" ? "Recon envelope relayed." : pendingShare?.targetKind === "monster" ? "Rogue vector relayed." : pendingShare?.targetKind === "resource" ? "Resource vector relayed." : "Civilization vector relayed."),
+      intel: pendingShare || undefined,
+      sourceLanguage: "auto",
+      authorLocale: loadPlayerAccount(address).language,
+      createdAt: Date.now(),
+    };
+    setSent((cur) => ({ ...cur, [key]: [...(cur[key] ?? []), message] }));
     setDraft("");
+    setPendingShare(null);
+    clearQueuedCommsShare(address);
+    setShareTrayOpen(false);
+  }
+
+  function removePendingShare() {
+    setPendingShare(null);
+    clearQueuedCommsShare(address);
+  }
+
+  function openSharedTarget(share: SharedWorldIntel) {
+    queueWorldFocus(address, share.targetId, share.position);
+    onWorld();
+  }
+
+  function openChannel(channel: ChannelId) {
+    setActive(channel);
+    setInspectedSignal(null);
   }
 
   const channelMeta = CHANNELS.find((c) => c.id === active);
@@ -134,23 +197,23 @@ export default function Messages({ address, profile, onCity, onWorld }: { addres
     <GameNav view="messages" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
       resources={game.res} energy={energy} energyCap={energyCap} activeFleets={activeFleets} fleetCap={fleetCap}
       standing={totalTroops(game)} wounded={game.wounded} might={mightBreakdown(game).total}
-      onCity={onCity} onWorld={onWorld} onMessages={() => {}} />
+      onCity={onCity} onWorld={onWorld} onMessages={() => {}} onProfile={onProfile} />
 
     <div className="comms">
       {/* LEFT — channels */}
       <aside className="col">
         <div className="cm-search">⌕ Search people &amp; channels</div>
         <div className="cm-grp">Channels</div>
-        {CHANNELS.map((c) => <button key={c.id} className={`chan ${active === c.id ? "on" : ""}`} onClick={() => setActive(c.id)}>
+        {CHANNELS.map((c) => <button key={c.id} className={`chan ${active === c.id ? "on" : ""}`} onClick={() => openChannel(c.id)}>
           <span className="ci" style={c.id === "alliance" ? { color: "var(--cyan)" } : undefined}>{c.icon}</span>
           <span className="cx"><b>{c.label}</b>{c.detail && <span>{c.detail}</span>}</span>
           {c.unread ? <span className={`badge ${c.mention ? "mention" : ""}`}>{c.mention ? `@${c.unread}` : c.unread}</span> : null}
         </button>)}
         <div className="cm-grp" style={{ marginTop: 12 }}>Direct</div>
-        <button className={`chan contacts-row ${active === "contacts" ? "on" : ""}`} onClick={() => setActive("contacts")}>
+        <button className={`chan contacts-row ${active === "contacts" ? "on" : ""}`} onClick={() => openChannel("contacts")}>
           <span className="ci contacts-ci">❋</span><span className="cx"><b>Contacts</b><span>3 online</span></span>
         </button>
-        {DMS.map((c) => <button key={c.id} className={`chan ${active === c.id ? "on" : ""}`} onClick={() => setActive(c.id)}>
+        {DMS.map((c) => <button key={c.id} className={`chan ${active === c.id ? "on" : ""}`} onClick={() => openChannel(c.id)}>
           <span className="ci" style={{ color: fcol(c.faction) }}>{c.icon}</span>
           <span className="cx"><b>[{c.faction}] {c.label}</b><span>{c.detail}</span></span>
         </button>)}
@@ -182,27 +245,29 @@ export default function Messages({ address, profile, onCity, onWorld }: { addres
             </div>)}</div>
           : <div className="stream">
               {isWar && <div className="spam">⚔ Fresh op session · clears when the op ends</div>}
-              {messages.map((m, i) => <MessageRow key={i} m={m} />)}
+              {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} />)}
               {messages.length === 0 && <div className="spam">{isWar ? "No active op — a War Room opens fresh when an officer starts one." : "No messages yet."}</div>}
             </div>}
 
         {!isSystem && active !== "contacts" && <div className="compose">
           <div className="safety"><span><i>🚫</i> Links off</span></div>
+          {shareTrayOpen && !pendingShare && <div className="comms-share-tray"><span><b>RELAY CHAMBER EMPTY</b><small>LOCK ANY SIGNAL IN THE STAR MAP TO RELAY ITS VECTOR OR LIVE RECON.</small></span><button onClick={onWorld}>OPEN STAR MAP ▸</button></div>}
+          {pendingShare && <div className="comms-pending-share"><SharedIntelCard share={pendingShare} now={now} onOpen={() => openSharedTarget(pendingShare)} compactView /><button className="comms-share-remove" aria-label="Remove intelligence attachment" onClick={removePendingShare}>×</button></div>}
           <div className="box">
-            <button className="attach" title="Share coordinate / report / start rally">+</button>
+            <button className={`attach ${pendingShare ? "loaded" : ""}`} title="Relay a coordinate or recon envelope" onClick={() => setShareTrayOpen((value) => !value)}>+</button>
             <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Message · @mention · attach a coordinate, report or rally with +" />
-            <button className="cm-send" onClick={send}>Send</button>
+            <button className="cm-send" disabled={!!pendingShare && !sharedIntelIsActive(pendingShare, now)} onClick={send}>Send</button>
           </div>
         </div>}
       </section>
 
       {/* RIGHT — context */}
-      <aside className="col"><div className="ctx">{renderContext(active, allianceTab, dm)}</div></aside>
+      <aside className="col"><div className="ctx">{renderContext(active, allianceTab, dm, inspectedSignal)}</div></aside>
     </div>
   </section>;
 }
 
-function MessageRow({ m }: { m: ChatMessage }) {
+function MessageRow({ m, now, ownChatSignal, onInspect, onOpenWorld }: { m: ChatMessage; now: number; ownChatSignal: ChatSignalId; onInspect: (name: string) => void; onOpenWorld: (share: SharedWorldIntel) => void }) {
   if (m.pin) return <div className="pinned"><b>PINNED</b><span>{m.pin}</span></div>;
   if (m.spam) return <div className="spam"><b>[{m.f}] {m.a}</b> sent the same message {m.spam}× · collapsed</div>;
   if (m.sys) return <div className={`logrow ${m.sys}`}><span className="lg-tag">{m.tag}</span><span className="lg-b">{m.b}</span><span className="lg-t">{m.t}</span></div>;
@@ -211,12 +276,13 @@ function MessageRow({ m }: { m: ChatMessage }) {
     <div className="bd">
       <div className="meta">
         {m.f && <span className="tick" style={{ color: fcol(m.f), background: `${fcol(m.f)}1a` }}>[{m.f}]</span>}
-        <span className="nm">{m.a}</span>
-        {m.v && <span className="vbadge" title="verified holder">✓</span>}
+        <button className={`nm player-name-button chat-name-${m.own ? ownChatSignal : m.a ? PLAYER_SIGNALS[m.a]?.nameSignal || "clear-channel" : "clear-channel"}`} disabled={!m.a || !PLAYER_SIGNALS[m.a]} onClick={() => m.a && onInspect(m.a)}>{m.a}</button>
+        {m.v && <span className="vbadge" title="on-chain pledge observed">✓</span>}
         {m.tag && <span className={`mtag ${m.tag}`}>{m.tag}</span>}
         <span className="mtime">{m.t}</span>
       </div>
       <div className="txt">{m.b}</div>
+      {m.intel && <SharedIntelCard share={m.intel} now={now} onOpen={() => onOpenWorld(m.intel!)} />}
       {m.coord && <div className="chip-coord"><div className="cc-i">◈</div><div className="cc-t"><b>{m.coord.c}</b><span>{m.coord.k}</span></div><div className="cc-act"><button>Scout</button><button>Gather</button><button className="go">Open ▸</button></div></div>}
       {m.rally && <div className="chip-rally"><div className="rr-top"><b>Wormhole Sentinel</b><span className="rr-lv">L18</span></div>
         <div className="rr-meta"><span>Fills in <b>4m 40s</b></span><span className="rr-counter">Counter: bring Army ▸ Air</span></div>
@@ -228,7 +294,43 @@ function MessageRow({ m }: { m: ChatMessage }) {
   </div>;
 }
 
-function renderContext(active: ChannelId, allianceTab: AllianceTab, dm?: { label: string; detail: string; faction: string }) {
+function intelRemaining(expiresAt: number, now: number): string {
+  const seconds = Math.max(0, Math.ceil((expiresAt - now) / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor(seconds % 3600 / 60);
+  const remainder = seconds % 60;
+  return hours ? `${hours}h ${minutes}m` : `${minutes}m ${remainder.toString().padStart(2, "0")}s`;
+}
+
+function SharedIntelCard({ share, now, onOpen, compactView = false }: { share: SharedWorldIntel; now: number; onOpen: () => void; compactView?: boolean }) {
+  const live = sharedIntelIsActive(share, now);
+  const coordinate = `${Math.round(share.position.x).toString().padStart(3, "0")}:${Math.round(share.position.y).toString().padStart(3, "0")}`;
+  const targetKind = share.targetKind || "city";
+  const vectorName = targetKind === "resource" ? "RESOURCE VECTOR" : targetKind === "monster" ? "ROGUE VECTOR" : "CIVILIZATION VECTOR";
+  if (share.kind === "coordinate") return <div className={`comms-intel-card coordinate target-${targetKind} ${compactView ? "compact" : ""}`}>
+    <header><span>◈ {vectorName}</span><em>UNCHAINED</em></header>
+    <div className="comms-intel-target"><b>{share.targetName}</b><small>L{share.targetLevel} · {coordinate}</small></div>
+    {!compactView && <button onClick={onOpen}>OPEN IN STAR MAP ▸</button>}
+  </div>;
+
+  const snapshot = share.snapshot as Record<string, any>;
+  const loot = (snapshot.loot ?? {}) as Record<string, number>;
+  const lootTotal = Object.values(loot).reduce((sum, amount) => sum + (Number(amount) || 0), 0);
+  return <div className={`comms-intel-card recon ${live ? "live" : "expired"} ${compactView ? "compact" : ""}`}>
+    <header><span>▤ RECON ENVELOPE</span><em>{live ? intelRemaining(share.expiresAt, now) : "DECAYED"}</em></header>
+    <div className="comms-intel-target"><b>{share.targetName}</b><small>L{share.targetLevel} · {coordinate}</small></div>
+    {!compactView && <div className="comms-intel-stats"><span><small>MIGHT</small><b>{live ? compact(Number(snapshot.might) || 0) : "•••"}</b></span><span><small>GARRISON</small><b>{live ? compact(displayTroops(Number(snapshot.garrison) || 0)) : "•••"}</b></span><span><small>LOOT</small><b>{live ? compact(displayResource(Number(snapshot.estimatedLoot) || lootTotal)) : "•••"}</b></span></div>}
+    {!compactView && <button className={live ? "" : "rescan"} onClick={onOpen}>{live ? "OPEN TARGET ▸" : "RE-SCAN REQUIRED ▸"}</button>}
+  </div>;
+}
+
+function renderContext(active: ChannelId, allianceTab: AllianceTab, dm?: DirectThread, inspectedSignal?: PlayerSignal | null) {
+  const playerSignal = inspectedSignal || dm?.signal;
+  if (playerSignal) return <>
+    <PlayerCard signal={playerSignal} />
+    <div className="ct-title">Open channel</div>
+    <div className="qlinks"><div className="ql">◇ Direct signal</div><div className="ql">◈ Share a coordinate</div><div className="ql">▤ Share a report</div><div className="ql" style={{ color: "var(--err)" }}>⃠ Block / mute</div></div>
+  </>;
   if (active === "cosmos") return <>
     <div className="ct-title">Factions online</div>
     <div className="factions">{["ORBT", "PEPE", "DOGE", "MOG", "WIF"].map((f) => <span key={f} className="fchip" style={{ color: fcol(f) }}><i style={{ background: fcol(f) }} />{f}</span>)}</div>
@@ -260,9 +362,5 @@ function renderContext(active: ChannelId, allianceTab: AllianceTab, dm?: { label
     <div className="ct-title">Add friend</div>
     <div className="cm-search" style={{ margin: 0 }}>⌕ Player name</div>
   </>;
-  return <>
-    <div className="ct-hero"><b>{dm?.label}</b><span style={{ color: fcol(dm?.faction) }}>[{dm?.faction}] · {dm?.detail}</span></div>
-    <div className="ct-title">Actions</div>
-    <div className="qlinks"><div className="ql">◈ Share a coordinate</div><div className="ql">▤ Share a report</div><div className="ql" style={{ color: "var(--err)" }}>⃠ Block / mute</div></div>
-  </>;
+  return null;
 }

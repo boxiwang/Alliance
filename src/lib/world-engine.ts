@@ -4,6 +4,7 @@ import type { ResKey, TroopKey } from "./game";
 import { TROOP_ORDER } from "./game";
 import { carryCapacity, resolveCombat, resolveGather, resolveScout } from "./expedition";
 import { getN } from "./numbers";
+import type { ChatSignalId, MarchSignatureId, PlanetHaloId, PlanetOrbitId, PlanetSkinId } from "./player-account";
 
 export interface Point { x: number; y: number }
 export type TroopManifest = Record<TroopKey, Record<string, number>>;
@@ -22,6 +23,7 @@ export interface WorldEngineConfig {
   marchSlots: number;
   marchCapacity: number;
   travelSecondsPerTile: number;
+  scoutIntelTtlSec: number;
   resourceRespawnSec: number;
   monsterRespawnSec: number;
   resourceRespawnMinSec: number;
@@ -51,6 +53,7 @@ export const DEFAULT_WORLD_ENGINE_CONFIG: WorldEngineConfig = {
   marchSlots: 2,
   marchCapacity: 1000,
   travelSecondsPerTile: 6,
+  scoutIntelTtlSec: 60 * 60,
   resourceRespawnSec: 10 * 60,
   monsterRespawnSec: 10 * 60,
   resourceRespawnMinSec: 5 * 60,
@@ -90,6 +93,7 @@ export function worldEngineConfig(numbers: any = getN()): WorldEngineConfig {
     marchSlots: value(march.marchQueueSlots, DEFAULT_WORLD_ENGINE_CONFIG.marchSlots),
     marchCapacity: value(march.baseMarchCapacity, DEFAULT_WORLD_ENGINE_CONFIG.marchCapacity),
     travelSecondsPerTile: value(march.baseTravelSecondsPerTile, DEFAULT_WORLD_ENGINE_CONFIG.travelSecondsPerTile),
+    scoutIntelTtlSec: value(march.scoutIntelTtlSeconds, DEFAULT_WORLD_ENGINE_CONFIG.scoutIntelTtlSec),
     resourceRespawnSec: value(lifecycle.resourceRespawnSec, DEFAULT_WORLD_ENGINE_CONFIG.resourceRespawnSec),
     monsterRespawnSec: value(lifecycle.monsterRespawnSec, DEFAULT_WORLD_ENGINE_CONFIG.monsterRespawnSec),
     resourceRespawnMinSec: value(lifecycle.resourceRespawnMinSec, DEFAULT_WORLD_ENGINE_CONFIG.resourceRespawnMinSec),
@@ -198,6 +202,22 @@ export interface PoiEntity extends EntityBase {
 
 export type WorldEntity = CityEntity | ResourceEntity | MonsterEntity | PoiEntity;
 
+export interface PublicCosmeticLoadout {
+  planetBody: PlanetSkinId;
+  halo: PlanetHaloId;
+  orbit: PlanetOrbitId;
+  marchSignature: MarchSignatureId;
+  chatSignal: ChatSignalId;
+}
+
+export const ISSUED_WORLD_COSMETICS: PublicCosmeticLoadout = {
+  planetBody: "civic-core",
+  halo: "faint-corona",
+  orbit: "survey-ring",
+  marchSignature: "ion-wake",
+  chatSignal: "clear-channel",
+};
+
 export interface HeadlessPlayer {
   id: string;
   /** Wallet-selected meme alliance CA. Optional while legacy local saves migrate. */
@@ -219,6 +239,8 @@ export interface HeadlessPlayer {
   marchSlots: number;
   marchCapacity: number;
   accountModifiers: MarchModifiers;
+  /** Public visual identity, replicated with World presence for other clients. */
+  cosmetics: PublicCosmeticLoadout;
   reportIds: string[];
 }
 
@@ -263,6 +285,22 @@ export interface WorldReport {
   payload: Record<string, unknown>;
 }
 
+export const DEFAULT_SCOUT_INTEL_TTL_MS = 60 * 60 * 1000;
+
+export function scoutReportExpiresAt(report: Pick<WorldReport, "createdAt" | "payload">, fallbackTtlMs = DEFAULT_SCOUT_INTEL_TTL_MS): number {
+  const embedded = Number(report.payload.intelExpiresAt);
+  return Number.isFinite(embedded) && embedded > report.createdAt
+    ? embedded
+    : report.createdAt + Math.max(0, fallbackTtlMs);
+}
+
+export function isScoutReportActive(report: WorldReport, now = Date.now(), fallbackTtlMs = DEFAULT_SCOUT_INTEL_TTL_MS): boolean {
+  return report.action === "scout"
+    && report.stage === "arrival"
+    && report.outcome === "scouted"
+    && now < scoutReportExpiresAt(report, fallbackTtlMs);
+}
+
 export interface ScheduledWorldEvent {
   id: string;
   type: "resource_respawn" | "monster_respawn" | "city_recover" | "march_arrival" | "gather_complete" | "march_return";
@@ -304,6 +342,7 @@ export interface HeadlessWorld {
 export interface SpawnPlayerInput {
   id: string;
   allianceId?: string | null;
+  cosmetics?: Partial<PublicCosmeticLoadout>;
   townhallLevel?: number;
   might?: number;
   troops?: Partial<TroopManifest>;
@@ -509,7 +548,8 @@ function spawnPlayerMutable(world: HeadlessWorld, input: SpawnPlayerInput, now: 
     resources, energyStored: world.config.energyCap, energyUpdatedAt: now,
     highestMonsterDefeated: 0, deepScanCooldowns: {}, deepScanTargetIds: {},
     marchSlots: world.config.marchSlots,
-    marchCapacity: world.config.marchCapacity, accountModifiers: modifiers(), reportIds: [],
+    marchCapacity: world.config.marchCapacity, accountModifiers: modifiers(),
+    cosmetics: { ...ISSUED_WORLD_COSMETICS, ...input.cosmetics }, reportIds: [],
   };
   addFeed(world, now, "player_spawned", cityId, input.id, { spawnIndex, position });
 }
@@ -1320,7 +1360,11 @@ function arriveScout(world: HeadlessWorld, march: HeadlessMarch, target: CityEnt
       },
     }
     : payload;
-  report(world, march, "arrival", "scouted", at, { snapshot, targetRevision: target.revision });
+  report(world, march, "arrival", "scouted", at, {
+    snapshot,
+    targetRevision: target.revision,
+    intelExpiresAt: at + world.config.scoutIntelTtlSec * 1000,
+  });
   scheduleReturn(world, march, at);
 }
 

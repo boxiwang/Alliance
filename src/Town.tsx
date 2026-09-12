@@ -33,6 +33,7 @@ import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
 import BuildingGlyph from "./BuildingGlyph";
 import CosmicBackdrop from "./CosmicBackdrop";
+import MiniComms from "./MiniComms";
 
 const ECONOMY_BUILDINGS: BKey[] = ["bank", "oilwell", "powerplant"];
 const COMMAND_BUILDINGS: BKey[] = ["storage", "wall"];
@@ -93,7 +94,7 @@ function queuePct(durationSec: number, finishAt: number, now: number): number {
   return Math.min(100, Math.max(0, ((total - (finishAt - now)) / total) * 100));
 }
 
-export default function Town({ address, profile, onWorld, onMessages = () => {} }: { address: string; profile: Profile; onWorld: () => void; onMessages?: () => void }) {
+export default function Town({ address, profile, onWorld, onMessages = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onWorld: () => void; onMessages?: () => void; onProfile?: () => void }) {
   const [game, setGame] = useState<GameState>(() => loadGame(address) || initGame(address));
   const [now, setNow] = useState(Date.now());
   const [msg, setMsg] = useState<string>("");
@@ -205,7 +206,7 @@ export default function Town({ address, profile, onWorld, onMessages = () => {} 
       <GameNav view="city" profile={profile} townhallLevel={view.buildings.keep.lvl} location={worldStatus.location}
         resources={view.res} energy={worldStatus.energy} energyCap={worldStatus.energyCap}
         activeFleets={worldStatus.activeFleets} fleetCap={worldStatus.fleetCap} standing={troopsTotal} wounded={view.wounded}
-        might={mightScore.total} onCity={() => {}} onWorld={onWorld} onMessages={onMessages} />
+        might={mightScore.total} onCity={() => {}} onWorld={onWorld} onMessages={onMessages} onProfile={onProfile} />
 
 
       {gm && (
@@ -339,6 +340,7 @@ export default function Town({ address, profile, onWorld, onMessages = () => {} 
           <aside className="facility-inspector command-feed" aria-label="Command feed">{renderCommandFeed()}</aside>
         )}
       </div>
+      <MiniComms address={address} profile={profile} onOpenMessages={onMessages} />
     </section>
   );
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import defaults from "../docs/numbers.json";
-import { WORLD_MAX_ZOOM, clusterWorldSignals, gatherCarryWithAccount, marchMapProgress, recommendedGatherForce, resourceOccupationDisposition, worldMarkerScale } from "./World";
+import { WORLD_MAX_ZOOM, WORLD_TACTICAL_ZOOM, clusterWorldSignals, gatherCarryWithAccount, marchMapProgress, recommendedGatherForce, resourceOccupationDisposition, worldMarchObservable, worldMarkerScale, worldTargetObservable } from "./World";
 import type { MonsterEntity, ResourceEntity } from "./lib/world-engine";
 
 describe("World strategic signal clusters", () => {
@@ -21,6 +21,24 @@ describe("World strategic signal clusters", () => {
     expect(clusters).toHaveLength(2);
     expect(clusters.find((cluster) => cluster.kind === "resource")?.count).toBe(2);
     expect(clusters.find((cluster) => cluster.kind === "monster")?.count).toBe(1);
+  });
+});
+
+describe("World civilization sensor envelope", () => {
+  it("keeps rival civilizations encrypted until Tactical zoom", () => {
+    expect(worldTargetObservable("city", WORLD_TACTICAL_ZOOM - .01)).toBe(false);
+    expect(worldTargetObservable("city", WORLD_TACTICAL_ZOOM)).toBe(true);
+  });
+
+  it("keeps public planets and Rogues observable outside Tactical zoom", () => {
+    expect(worldTargetObservable("resource", 1)).toBe(true);
+    expect(worldTargetObservable("monster", 1.8)).toBe(true);
+  });
+
+  it("keeps own fleets visible but encrypts rival fleet trails outside Tactical zoom", () => {
+    expect(worldMarchObservable("me", "me", 1)).toBe(true);
+    expect(worldMarchObservable("rival", "me", WORLD_TACTICAL_ZOOM - .01)).toBe(false);
+    expect(worldMarchObservable("rival", "me", WORLD_TACTICAL_ZOOM)).toBe(true);
   });
 });
 

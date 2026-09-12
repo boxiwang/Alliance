@@ -70,7 +70,8 @@
       "note": "sys.march_capacity — world-map phase",
       "marchQueueSlots": 2,
       "scoutSpeedMultiplier": 3,
-      "singleMarchCapacityNote": "capacityFractionOfMaxTroops = fraction of standing army one march may take; marchQueueSlots = simultaneous marches (scout march also consumes a slot); scoutSpeedMultiplier = scout recon fleet travels this many times faster than a combat march."
+      "scoutIntelTtlSeconds": 3600,
+      "singleMarchCapacityNote": "capacityFractionOfMaxTroops = fraction of standing army one march may take; marchQueueSlots = simultaneous marches (scout march also consumes a slot); scoutSpeedMultiplier = scout recon fleet travels this many times faster than a combat march; scoutIntelTtlSeconds = how long a successful recon snapshot remains readable."
     },
     "display": {
       "resourceMultiplier": 1000,

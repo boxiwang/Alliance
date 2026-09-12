@@ -5,7 +5,7 @@ import {
   advanceHeadlessWorld, advanceTargetLifecycle, breachCity, buildSpatialIndex, defeatMonster, depleteResource,
   dispatchMarch, distance, emptyCommanderSnapshot, energyAt, initHeadlessWorld, migrateWorldToCircularBoundary, occupyResource,
   populateWorld, queryNearby, recallMarch, redistributeWorldTargets, scanForRogue, spawnPlayer, spawnPlayers, worldCenter,
-  isInsidePlayableWorld, worldDepth, worldPlayableRadius, worldResourceMaxLevel, worldRogueMaxLevel,
+  isInsidePlayableWorld, isScoutReportActive, scoutReportExpiresAt, worldDepth, worldPlayableRadius, worldResourceMaxLevel, worldRogueMaxLevel,
 } from "./world-engine";
 
 function minPairDistance(points: Point[]): number {
@@ -21,6 +21,26 @@ function firstEntity<T extends "resource" | "monster">(world: HeadlessWorld, kin
 }
 
 describe("headless world — scale and sparse spawning", () => {
+  it("replicates each commander's public cosmetic loadout with World presence", () => {
+    const world = spawnPlayer(initHeadlessWorld("state-cosmetics", 1000), {
+      id: "whale",
+      cosmetics: {
+        planetBody: "event-horizon",
+        halo: "radiant-crown",
+        orbit: "sovereign-crown",
+        marchSignature: "comet-vanguard",
+        chatSignal: "sovereign-flare",
+      },
+    }, 1000);
+    expect(world.players.whale.cosmetics).toEqual({
+      planetBody: "event-horizon",
+      halo: "radiant-crown",
+      orbit: "sovereign-crown",
+      marchSignature: "comet-vanguard",
+      chatSignal: "sovereign-flare",
+    });
+  });
+
   it("spawns 1,000 unique cities outside the Circle reserve", () => {
     const base = initHeadlessWorld("state-4663", 1000);
     const inputs = Array.from({ length: 1000 }, (_, index) => ({ id: `player-${index}` }));
@@ -189,6 +209,30 @@ describe("headless world — scale and sparse spawning", () => {
     expect(first.spawnCursor).toBe(second.spawnCursor);
     expect(Object.values(first.players).map((player) => player.spawnIndex))
       .toEqual(Object.values(second.players).map((player) => player.spawnIndex));
+  });
+});
+
+describe("headless world — reconnaissance decay", () => {
+  it("seals successful scout intelligence for exactly one hour", () => {
+    let world = spawnPlayers(initHeadlessWorld("state-recon-ttl", 1000), [
+      { id: "observer" }, { id: "target", shieldDurationSec: 0 },
+    ], 1000);
+    const targetId = world.players.target.cityId;
+    const sent = dispatchMarch(world, {
+      playerId: "observer", targetId, action: "scout", force: { army: {}, navy: {}, air: {} },
+      idempotencyKey: "recon-ttl",
+    }, 2000, defaults);
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+    world = advanceHeadlessWorld(sent.world, sent.march.arriveAt, defaults);
+    const report = world.players.observer.reportIds
+      .map((id) => world.reports[id])
+      .find((candidate) => candidate.outcome === "scouted")!;
+    const expiresAt = scoutReportExpiresAt(report);
+    expect(expiresAt).toBe(report.createdAt + 60 * 60 * 1000);
+    expect(report.payload.intelExpiresAt).toBe(expiresAt);
+    expect(isScoutReportActive(report, expiresAt - 1)).toBe(true);
+    expect(isScoutReportActive(report, expiresAt)).toBe(false);
   });
 });
 

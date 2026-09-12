@@ -3,6 +3,7 @@ import type { Profile } from "./lib/profile";
 import { RES, RES_ORDER, ResKey, BKey, displayResource, displayTroops } from "./lib/game";
 import { compact } from "./lib/format";
 import BuildingGlyph from "./BuildingGlyph";
+import { loadPlayerAccount } from "./lib/player-account";
 
 const RESOURCE_COLOR: Record<ResKey, string> = {
   cash: "#43f2a1",
@@ -13,9 +14,9 @@ const RESOURCE_BUILDING: Record<ResKey, BKey> = { cash: "bank", oil: "oilwell", 
 
 export default function GameNav({
   view, profile, townhallLevel, location, resources,
-  energy, energyCap, activeFleets, fleetCap, standing, wounded, might, onCity, onWorld, onMessages,
+  energy, energyCap, activeFleets, fleetCap, standing, wounded, might, credits, onCity, onWorld, onMessages, onProfile,
 }: {
-  view: "city" | "world" | "messages";
+  view: "city" | "world" | "messages" | "profile";
   profile: Profile;
   townhallLevel: number;
   location: string;
@@ -27,15 +28,18 @@ export default function GameNav({
   standing: number;
   wounded: number;
   might: number;
+  credits?: number;
   onCity: () => void;
   onWorld: () => void;
   onMessages: () => void;
+  onProfile: () => void;
 }) {
+  const visibleCredits = credits ?? loadPlayerAccount(profile.address).credits;
   return (
     <nav className="command-nav" aria-label="Game view and account status">
       <div className="command-nav-head">
         <div className="command-identity-wrap">
-          <span className="command-sigil" aria-label="Wallet civilization sigil"><i /></span>
+          <button type="button" className={`command-sigil command-sigil-${profile.avatarId || "genesis"} ${view === "profile" ? "active" : ""}`} aria-label="Open commander archive" aria-current={view === "profile" ? "page" : undefined} onClick={onProfile}><i /></button>
           <div className="command-identity">
             <span>ALLIANCE // CIV-{profile.address.slice(-3).toUpperCase()}</span>
             <div><b>{profile.name}</b><em>CORE {townhallLevel}</em></div>
@@ -70,7 +74,7 @@ export default function GameNav({
         <CommandMetric label="Fleets" value={`${activeFleets}/${fleetCap}`} tone="#38d9ff" />
         <CommandMetric label="Standing" value={compact(displayTroops(standing))} tone="#43f2a1" />
         <CommandMetric label="Wounded" value={compact(displayTroops(wounded))} tone="#ff7188" />
-        <button type="button" className="command-credits" aria-label="Buy game credits"><span>◇</span><div><small>CREDITS</small><b>0</b></div><strong>＋</strong></button>
+        <button type="button" className="command-credits" aria-label="Open Credits exchange"><span>◇</span><div><small>CREDITS</small><b>{compact(visibleCredits)}</b></div><strong>＋</strong></button>
       </div>
     </nav>
   );

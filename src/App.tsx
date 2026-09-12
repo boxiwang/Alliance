@@ -12,10 +12,49 @@ import AlliancePicker from "./AlliancePicker";
 import ExpeditionLab from "./ExpeditionLab";
 import World from "./World";
 import Messages from "./Messages";
+import ProfileScreen from "./ProfileScreen";
+import GameMusic, { requestGameMusicStart } from "./GameMusic";
 import { grantLocalGm, localGmRequested } from "./lib/gm";
 import { loadGame } from "./lib/gamestore";
 
-type Stage = "connect" | "start" | "resume" | "founded" | "town" | "world" | "messages";
+type Stage = "connect" | "start" | "resume" | "founded" | "town" | "world" | "messages" | "profile";
+type MainStage = Extract<Stage, "town" | "world" | "messages" | "profile">;
+
+function DevGameShell({ initialView, slot, gm }: { initialView: MainStage; slot: string; gm: boolean }) {
+  const address = slot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${slot}`;
+  const fallback: Profile = {
+    address, name: "Ruglord1070273", motto: "THE FRONTIER REMEMBERS.",
+    faction: "0x0000000000000000000000000000000000orbit", factionSymbol: "ORBT",
+    keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
+    title: "FRONTIER BORN", avatarId: "genesis",
+  };
+  const [view, setView] = useState<MainStage>(initialView);
+  const [profile, setProfile] = useState<Profile>(() => loadProfile(address) || fallback);
+
+  const navigate = (next: MainStage, replace = false) => {
+    const url = `/?${next}${gm ? "&gm" : ""}&slot=${slot}`;
+    window.history[replace ? "replaceState" : "pushState"]({}, "", url);
+    setView(next);
+  };
+
+  useEffect(() => {
+    const syncFromHistory = () => {
+      const search = new URLSearchParams(window.location.search);
+      const next = (["town", "world", "messages", "profile"] as MainStage[]).find((candidate) => search.has(candidate));
+      if (next) setView(next);
+    };
+    window.addEventListener("popstate", syncFromHistory);
+    return () => window.removeEventListener("popstate", syncFromHistory);
+  }, []);
+
+  return <div className="page">
+    <GameMusic address={address} active />
+    {view === "town" && <Town address={address} profile={profile} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} onProfile={() => navigate("profile")} />}
+    {view === "world" && <World address={address} profile={profile} onBack={() => navigate("town")} onMessages={() => navigate("messages")} onProfile={() => navigate("profile")} />}
+    {view === "messages" && <Messages address={address} profile={profile} onCity={() => navigate("town")} onWorld={() => navigate("world")} onProfile={() => navigate("profile")} />}
+    {view === "profile" && <ProfileScreen address={address} profile={profile} onProfileChange={(next) => { saveProfile(next); setProfile(next); }} onCity={() => navigate("town")} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} />}
+  </div>;
+}
 
 export default function App() {
   const params = new URLSearchParams(window.location.search);
@@ -25,37 +64,12 @@ export default function App() {
   if (params.has("expedition")) {
     return <ExpeditionLab />;
   }
-  if (import.meta.env.DEV && params.has("town")) {
-    const devSlot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
-    const gmQuery = params.has("gm") ? "&gm" : "";
-    const devAddress = devSlot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${devSlot}`;
-    const devProfile: Profile = {
-      address: devAddress, name: "Ruglord1070273", faction: "0x0000000000000000000000000000000000orbit", factionSymbol: "ORBT",
-      keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
-    };
-    return <div className="page"><Town address={devAddress} profile={devProfile} onWorld={() => window.location.assign(`/?world${gmQuery}&slot=${devSlot}`)} onMessages={() => window.location.assign(`/?messages${gmQuery}&slot=${devSlot}`)} /></div>;
-  }
-  if (import.meta.env.DEV && params.has("world")) {
-    const devSlot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
-    const gmQuery = params.has("gm") ? "&gm" : "";
-    const devAddress = devSlot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${devSlot}`;
-    const devProfile: Profile = {
-      address: devAddress, name: "Ruglord1070273", faction: "0x0000000000000000000000000000000000orbit", factionSymbol: "ORBT",
-      keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
-    };
-    return <div className="page"><World address={devAddress} profile={devProfile} onBack={() => window.location.assign(`/?town${gmQuery}&slot=${devSlot}`)} onMessages={() => window.location.assign(`/?messages${gmQuery}&slot=${devSlot}`)} /></div>;
-  }
-  if (import.meta.env.DEV && params.has("messages")) {
-    const devSlot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
-    const gmQuery = params.has("gm") ? "&gm" : "";
-    const devAddress = devSlot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${devSlot}`;
-    const devProfile: Profile = {
-      address: devAddress, name: "Ruglord1070273", faction: "0x0000000000000000000000000000000000orbit", factionSymbol: "ORBT",
-      keepLevel: 1, createdAt: new Date(0).toISOString(), renamedOnce: false,
-    };
-    return <div className="page"><Messages address={devAddress} profile={devProfile}
-      onCity={() => window.location.assign(`/?town${gmQuery}&slot=${devSlot}`)}
-      onWorld={() => window.location.assign(`/?world${gmQuery}&slot=${devSlot}`)} /></div>;
+  if (import.meta.env.DEV) {
+    const devView = (["town", "world", "messages", "profile"] as MainStage[]).find((candidate) => params.has(candidate));
+    if (devView) {
+      const slot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
+      return <DevGameShell initialView={devView} slot={slot} gm={params.has("gm")} />;
+    }
   }
 
   const [detected, setDetected] = useState<Eip6963ProviderDetail[]>([]);
@@ -136,6 +150,11 @@ export default function App() {
     setProfile(p);
   }
 
+  function updateProfile(next: Profile) {
+    saveProfile(next);
+    setProfile(next);
+  }
+
   function resetDev() {
     if (address) clearProfile(address);
     setProfile(null);
@@ -174,6 +193,7 @@ export default function App() {
 
   return (
     <div className="page">
+      <GameMusic address={address} active={stage === "town" || stage === "world" || stage === "messages" || stage === "profile"} />
       <header className="topbar">
         <div className="brand">
           <span className="crest">⚔️</span>
@@ -236,7 +256,7 @@ export default function App() {
               <div className="pname">{profile.name}</div>
               <div className="psub">Townhall Lv.{currentKeepLevel}</div>
             </div>
-            <button className="cta" onClick={() => setStage("town")}>Open Command Center →</button>
+            <button className="cta" onClick={() => { requestGameMusicStart(); setStage("town"); }}>Open Command Center →</button>
           </div>
           {memes.length > 0 && (
             <div className="card">
@@ -329,9 +349,10 @@ export default function App() {
         </section>
       )}
 
-      {stage === "town" && profile && <Town address={address} profile={profile} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} />}
-      {stage === "world" && profile && <World address={address} profile={profile} onBack={() => setStage("town")} onMessages={() => setStage("messages")} />}
-      {stage === "messages" && profile && <Messages address={address} profile={profile} onCity={() => setStage("town")} onWorld={() => setStage("world")} />}
+      {stage === "town" && profile && <Town address={address} profile={profile} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} onProfile={() => setStage("profile")} />}
+      {stage === "world" && profile && <World address={address} profile={profile} onBack={() => setStage("town")} onMessages={() => setStage("messages")} onProfile={() => setStage("profile")} />}
+      {stage === "messages" && profile && <Messages address={address} profile={profile} onCity={() => setStage("town")} onWorld={() => setStage("world")} onProfile={() => setStage("profile")} />}
+      {stage === "profile" && profile && <ProfileScreen address={address} profile={profile} onProfileChange={updateProfile} onCity={() => setStage("town")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} />}
 
       {stage === "founded" && profile && (
         <section className="mid">
@@ -345,7 +366,7 @@ export default function App() {
               <div><span>Townhall</span><b>Lv.{profile.keepLevel}</b></div>
               <div><span>Protection</span><b>until Lv.10</b></div>
             </div>
-            <button className="cta big" onClick={() => setStage("town")}>Enter your Townhall →</button>
+            <button className="cta big" onClick={() => { requestGameMusicStart(); setStage("town"); }}>Enter your Townhall →</button>
             <p className="soon">The world map — explore, gather, raid — is the next build.</p>
             <button className="mini out" onClick={resetDev}>(dev) start over</button>
           </div>

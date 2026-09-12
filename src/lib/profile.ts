@@ -2,6 +2,10 @@
 export interface Profile {
   address: string;
   name: string;
+  motto?: string;
+  avatarId?: string;
+  title?: string;
+  lastRenamedAt?: string;
   faction: string | null; // alliance token contract address (CA), or null = no alliance
   factionSymbol: string | null;
   keepLevel: number;
@@ -9,12 +13,34 @@ export interface Profile {
   renamedOnce: boolean;
 }
 
+export const FREE_RENAME_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function normalizeUsername(value: string): string {
+  return value.trim().normalize("NFKC");
+}
+
+export function usernameLength(value: string): number {
+  return Array.from(normalizeUsername(value)).length;
+}
+
+export function nextFreeRenameAt(profile: Pick<Profile, "lastRenamedAt">): number {
+  if (!profile.lastRenamedAt) return 0;
+  const lastRename = Date.parse(profile.lastRenamedAt);
+  return Number.isFinite(lastRename) ? lastRename + FREE_RENAME_COOLDOWN_MS : 0;
+}
+
+export function canRenameForFree(profile: Pick<Profile, "lastRenamedAt">, now = Date.now()): boolean {
+  return now >= nextFreeRenameAt(profile);
+}
+
 const KEY = (a: string) => `ruglands:profile:${a.toLowerCase()}`;
 
 export function loadProfile(a: string): Profile | null {
   try {
     const s = localStorage.getItem(KEY(a));
-    return s ? (JSON.parse(s) as Profile) : null;
+    if (!s) return null;
+    const { civilizationName: _legacyCivilizationName, ...profile } = JSON.parse(s) as Profile & { civilizationName?: string };
+    return profile;
   } catch {
     return null;
   }

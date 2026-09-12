@@ -5,12 +5,13 @@ import {
   RES_ORDER, TROOP_ORDER, accountResearchModifiers, capacity, maxTroops, might, project, worldMarchSlots,
   emptyTroopRoster, troopRosterCount,
 } from "./game";
-import type { DispatchMarchInput, HeadlessWorld, ResourceWallet, SpawnPlayerInput, TroopManifest } from "./world-engine";
+import type { DispatchMarchInput, HeadlessWorld, PublicCosmeticLoadout, ResourceWallet, SpawnPlayerInput, TroopManifest } from "./world-engine";
 import {
-  advanceHeadlessWorld, dispatchMarch, initHeadlessWorld, migrateWorldToCircularBoundary, populateWorld, recallMarch, redistributeWorldTargets, scanForRogue, spawnPlayers,
+  ISSUED_WORLD_COSMETICS, advanceHeadlessWorld, dispatchMarch, initHeadlessWorld, migrateWorldToCircularBoundary, populateWorld, recallMarch, redistributeWorldTargets, scanForRogue, spawnPlayers,
   worldEngineConfig, zoneForPoint,
 } from "./world-engine";
 import { clearWorld as clearLegacyWorld, loadWorld as loadLegacyWorld, projectWorld as projectLegacyWorld } from "./world";
+import { CHAT_SIGNALS, MARCH_SIGNATURES, PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, loadCosmeticVault } from "./player-account";
 
 export interface WorldGameSnapshot {
   troops: TroopManifest;
@@ -20,7 +21,7 @@ export interface WorldGameSnapshot {
 }
 
 export interface LocalWorldSession {
-  version: 6;
+  version: 7;
   address: string;
   playerId: string;
   world: HeadlessWorld;
@@ -78,6 +79,35 @@ function troopTierAt(numbers: any, townhall: number): number {
   return tier;
 }
 
+function publicCosmetics(address: string): PublicCosmeticLoadout {
+  const equipped = loadCosmeticVault(address).equipped;
+  return {
+    planetBody: equipped.planetBody,
+    halo: equipped.halo,
+    orbit: equipped.orbit,
+    marchSignature: equipped.marchSignature,
+    chatSignal: equipped.chatSignal,
+  };
+}
+
+function npcCosmetics(index: number): PublicCosmeticLoadout {
+  return {
+    planetBody: PLANET_SKINS[index % PLANET_SKINS.length].id,
+    halo: PLANET_HALOS[(index * 11) % PLANET_HALOS.length].id,
+    orbit: PLANET_ORBITS[(index * 3) % PLANET_ORBITS.length].id,
+    marchSignature: MARCH_SIGNATURES[(index * 5) % MARCH_SIGNATURES.length].id,
+    chatSignal: CHAT_SIGNALS[(index * 7) % CHAT_SIGNALS.length].id,
+  };
+}
+
+function npcTroopMight(troops: TroopManifest, numbers: any): number {
+  const displayMultiplier = Number(numbers.global?.display?.troopMultiplier) || 1;
+  return Math.round(TROOP_ORDER.reduce((total, arm) => total + Object.entries(troops[arm] ?? {})
+    .reduce((armTotal, [tier, quantity]) => armTotal + Math.max(0, Number(quantity) || 0)
+      * displayMultiplier
+      * (Number(numbers.troops?.[`troop.${arm}`]?.tiers?.[tier]?.power) || 0), 0), 0));
+}
+
 function npcInput(index: number, world: HeadlessWorld, numbers: any): SpawnPlayerInput {
   const position = world.spawnAnchors[index];
   const zone = zoneForPoint(position, world.config);
@@ -97,12 +127,12 @@ function npcInput(index: number, world: HeadlessWorld, numbers: any): SpawnPlaye
   const storage = Number(numbers.buildings?.["building.storage"]?.levels?.[String(townhall)]?.capacityPerResource) || 5000;
   return {
     id: `npc.${String(index).padStart(4, "0")}`,
+    cosmetics: npcCosmetics(index),
     townhallLevel: townhall,
     wallLevel: townhall,
     hospitalLevel: townhall,
     storageLevel: townhall,
-    might: Math.round(TROOP_ORDER.reduce((sum, arm) => sum + (troops[arm][String(tier)] || 0), 0)
-      * (Number(numbers.troops?.["troop.army"]?.tiers?.[String(tier)]?.power) || 1)),
+    might: npcTroopMight(troops, numbers),
     troops,
     resources: { cash: storage * .6, oil: storage * .45, power: storage * .45 },
     protectedFraction: Number(numbers.buildings?.["building.storage"]?.protectedFraction) || .25,
@@ -111,11 +141,30 @@ function npcInput(index: number, world: HeadlessWorld, numbers: any): SpawnPlaye
   };
 }
 
+function refreshLocalNpcMight(world: HeadlessWorld, numbers: any): void {
+  Object.values(world.players).filter((player) => player.id.startsWith("npc.")).forEach((player) => {
+    const city = world.entities[player.cityId];
+    if (!city || city.kind !== "city") return;
+    city.might = npcTroopMight(player.troops, numbers);
+    city.revision += 1;
+  });
+
+  // Recon snapshots are time-limited, but an active pre-v7 report must not keep
+  // publishing the old 1/1000 Might value after the owning city is migrated.
+  Object.values(world.reports).forEach((report) => {
+    if (report.action !== "scout" || !report.payload.snapshot || typeof report.payload.snapshot !== "object") return;
+    const target = world.entities[report.targetId];
+    if (!target || target.kind !== "city" || !target.ownerId.startsWith("npc.")) return;
+    (report.payload.snapshot as Record<string, unknown>).might = target.might;
+  });
+}
+
 function retuneLocalNpcs(world: HeadlessWorld, numbers: any): void {
   const activeTargets = new Set(Object.values(world.marches)
     .filter((march) => !["completed", "failed"].includes(march.state))
     .map((march) => march.targetId));
   Object.values(world.players).filter((player) => player.id.startsWith("npc.")).forEach((player) => {
+    player.cosmetics = npcCosmetics(player.spawnIndex);
     if (activeTargets.has(player.cityId)) return;
     const input = npcInput(player.spawnIndex, world, numbers);
     const city = world.entities[player.cityId];
@@ -140,6 +189,7 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
   let world = initHeadlessWorld(`local:${playerId}`, now, worldEngineConfig(numbers));
   world = spawnPlayers(world, [{
     id: playerId,
+    cosmetics: publicCosmetics(address),
     townhallLevel: game.buildings.keep.lvl,
     wallLevel: Math.max(1, game.buildings.wall.lvl),
     hospitalLevel: Math.max(1, game.buildings.hospital.lvl),
@@ -168,7 +218,7 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
   player.marchCapacity = Math.max(0, Math.floor(maxTroops(game)
     * (Number(numbers.global?.march?.capacityFractionOfMaxTroops) || 1)));
   const session: LocalWorldSession = {
-    version: 6, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
+    version: 7, address, playerId, world, syncedGame: snapshotWorldGame(game), createdAt: now, migratedLegacyAt: 0,
   };
   return { session, game, changed: true };
 }
@@ -219,6 +269,7 @@ function updatePlayerMetadata(session: LocalWorldSession, game: GameState, numbe
   city.garrison = clone(player.troops);
   city.resources = clone(player.resources);
   player.accountModifiers = playerResearchModifiers(game);
+  player.cosmetics = publicCosmetics(session.address);
   player.marchSlots = worldMarchSlots(game, numbers);
   player.marchCapacity = Math.max(0, Math.floor(maxTroops(game)
     * (Number(numbers.global?.march?.capacityFractionOfMaxTroops) || 1)));
@@ -341,7 +392,7 @@ export function loadLocalWorldSession(address: string): LocalWorldSession | null
   try {
     const raw = localStorage.getItem(KEY(address));
     const parsed = raw ? JSON.parse(raw) : null;
-    return [1, 2, 3, 4, 5, 6].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
+    return [1, 2, 3, 4, 5, 6, 7].includes(parsed?.version) && parsed?.world?.version === 2 ? parsed as LocalWorldSession : null;
   } catch { return null; }
 }
 
@@ -371,6 +422,9 @@ export function openLocalWorldSession(address: string, sourceGame: GameState, no
         ? player.deepScanCooldowns : {};
       player.deepScanTargetIds = player.deepScanTargetIds && typeof player.deepScanTargetIds === "object"
         ? player.deepScanTargetIds : {};
+      player.cosmetics = player.id === stored.playerId
+        ? publicCosmetics(address)
+        : player.id.startsWith("npc.") ? npcCosmetics(player.spawnIndex) : { ...ISSUED_WORLD_COSMETICS, ...player.cosmetics };
     });
     if ((stored as any).version < 5) {
       stored.world = redistributeWorldTargets(stored.world, now, numbers);
@@ -379,7 +433,11 @@ export function openLocalWorldSession(address: string, sourceGame: GameState, no
     }
     if ((stored as any).version < 6) {
       stored.world = migrateWorldToCircularBoundary(stored.world, now, numbers);
-      stored.version = 6;
+      (stored as any).version = 6;
+    }
+    if ((stored as any).version < 7) {
+      refreshLocalNpcMight(stored.world, numbers);
+      stored.version = 7;
     }
     return reconcile(stored, sourceGame, now, numbers);
   }
