@@ -24,6 +24,8 @@ import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
 import WorldVisualLayer, { createWorldVisualStress, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
+import { useGraphicsQuality } from "./useGraphicsQuality";
+import type { GraphicsQuality } from "./lib/graphics-tier";
 import {
   PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, loadCosmeticVault,
   type ChatSignalId, type MarchSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
@@ -70,13 +72,18 @@ export function worldMarkerScale(zoom: number): number {
   return tacticalBoost / safeZoom;
 }
 
-/** Screen-space fleet scale: restrained in Field, inspectable in deep Tactical. */
+/**
+ * Screen-space fleet scale. Because the marker is drawn with scale(value/zoom),
+ * this value IS its on-screen size independent of zoom — so it must stay small
+ * in Field view (where planets shrink to dots and an oversized fleet dwarfs
+ * them) and only grow once you are in Tactical range inspecting a single fleet.
+ */
 export function worldMarchScreenScale(zoom: number): number {
   const safeZoom = Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, zoom));
-  if (safeZoom < 1.45) return .92;
-  if (safeZoom < WORLD_TACTICAL_ZOOM) return 1.05 + ((safeZoom - 1.45) / (WORLD_TACTICAL_ZOOM - 1.45)) * .3;
+  if (safeZoom < 1.45) return .5;
+  if (safeZoom < WORLD_TACTICAL_ZOOM) return .5 + ((safeZoom - 1.45) / (WORLD_TACTICAL_ZOOM - 1.45)) * .22;
   const amount = Math.max(0, Math.min(1, Math.log2(safeZoom / WORLD_TACTICAL_ZOOM) / Math.log2(WORLD_MAX_ZOOM / WORLD_TACTICAL_ZOOM)));
-  return 1.4 + amount * 1.25;
+  return .72 + amount * .63;
 }
 
 /**
@@ -460,6 +467,7 @@ function reportCopy(report: WorldReport, world: LocalWorldSession["world"], now:
 
 export default function World({ address, profile, onBack, onMessages = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onBack: () => void; onMessages?: () => void; onProfile?: () => void }) {
   const N = useMemo(() => getN(), []);
+  const quality = useGraphicsQuality(address);
   const equippedCosmetics = useMemo(() => loadCosmeticVault(address).equipped, [address]);
   const equippedPlanetSkin = equippedCosmetics.planetBody;
   const equippedPlanetHalo = equippedCosmetics.halo;
@@ -715,7 +723,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
     <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-nebula)" />
     <g className="world-starfield">
       <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-stars)" />
-      <animateTransform attributeName="transform" type="rotate" from={`0 ${center.x} ${center.y}`} to={`360 ${center.x} ${center.y}`} dur="420s" repeatCount="indefinite" />
+      {quality.bgAnimate && <animateTransform attributeName="transform" type="rotate" from={`0 ${center.x} ${center.y}`} to={`360 ${center.x} ${center.y}`} dur="420s" repeatCount="indefinite" />}
     </g>
     <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-micro-grid)" />
     <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-grid)" />
@@ -725,7 +733,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
     <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius * .62} className="world-core-ring inner" />
     <path d={`M ${center.x - world.config.circleReserveRadius - 8} ${center.y} H ${center.x + world.config.circleReserveRadius + 8} M ${center.x} ${center.y - world.config.circleReserveRadius - 8} V ${center.y + world.config.circleReserveRadius + 8}`} className="world-core-cross" />
     <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`} className="world-core-marker" onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera(center)}><circle cx={center.x} cy={center.y} r="32" className="world-core-hit" /></g>
-  </>, [zoom, world.config, center.x, center.y, worldRadius, importantScale]);
+  </>, [zoom, world.config, center.x, center.y, worldRadius, importantScale, quality.bgAnimate]);
 
   // LAYER 2a — strategic clusters. Depends on the signal set + zoom, not the camera.
   const mapClusters = useMemo(() => strategicZoom ? signalClusters.map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera(cluster.position); setZoom(1.8); }}>
@@ -914,7 +922,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
         <div className="world-coordinate world-coordinate-y">Y {Math.round(viewY).toString().padStart(3, "0")} — {Math.round(viewY + viewport.height).toString().padStart(3, "0")}</div>
         <svg ref={svgRef} className="world-map world-map-v2" viewBox={viewBox} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { drag.current = null; }} onWheel={(event) => { event.preventDefault(); setZoom((value) => steppedWorldZoom(value, event.deltaY < 0 ? "in" : "out", 1.14)); }}>
           {mapScaffold}
-          {!gpuVisualsReady && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
+          {!gpuVisualsReady && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {mapClusters}
           {mapTargets}
           <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera({ ...playerCity.position })}>
@@ -945,9 +953,9 @@ export default function World({ address, profile, onBack, onMessages = () => {},
           </g>}
         </svg>
         <WorldVisualLayer svgRef={svgRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} />
-        <WorldStrikeLayer world={world} viewport={{ x: viewX, y: viewY, width: viewport.width, height: viewport.height }} zoom={zoom} gm={gm} stressCount={strikeStressCount} burstNonce={strikeBurstNonce} />
+        <WorldStrikeLayer world={world} viewport={{ x: viewX, y: viewY, width: viewport.width, height: viewport.height }} zoom={zoom} gm={gm} stressCount={strikeStressCount} burstNonce={strikeBurstNonce} dprCap={quality.dprCap} />
         {gpuVisualsReady && <svg className="world-map world-map-overlay" viewBox={viewBox} aria-hidden="true">
-          {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
+          {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`}>
             <text x={center.x} y={center.y - 47} className="world-circle-label">WORMHOLE</text>
             <text x={center.x} y={center.y - 39} className="world-circle-sub">GRAVITY ANCHOR · FRONTIER I</text>
@@ -1046,27 +1054,45 @@ export default function World({ address, profile, onBack, onMessages = () => {},
   </section>;
 }
 
-function MarchLine({ march, now, zoom, signature }: { march: HeadlessMarch; now: number; zoom: number; signature: MarchSignatureId | null }) {
+function MarchLine({ march, now, zoom, quality, signature }: { march: HeadlessMarch; now: number; zoom: number; quality: GraphicsQuality; signature: MarchSignatureId | null }) {
   const progress = marchMapProgress(march, now); const x = march.origin.x + (march.destination.x - march.origin.x) * progress; const y = march.origin.y + (march.destination.y - march.origin.y) * progress;
   const heading = march.state === "returning"
     ? Math.atan2(march.origin.y - march.destination.y, march.origin.x - march.destination.x)
     : Math.atan2(march.destination.y - march.origin.y, march.destination.x - march.origin.x);
   const cursorDeg = heading * 180 / Math.PI + 90; // Cursor geometry points north before rotation.
   const eta = fmtDuration(marchRemainingSec(march, now));
-  const detailed = zoom >= 1.45;
-  // Fleet signatures stay screen-sized. Tactical inspection gets enough room
-  // for braids, sails and particle tails to read as distinct cosmetics.
+  // Once the fleet has arrived to harvest it stops moving — and the connecting
+  // line must vanish so a parked gather does not draw a permanent arrow back to
+  // the commander's home coordinates. Strikes have no gather state: they arrive,
+  // the strike layer plays, then the fleet returns along the line.
+  const gatheringAtSite = march.state === "gathering";
+  const showPath = !gatheringAtSite;
+  // The elaborate signature only reads (and only fits) in Tactical range; in
+  // Field/Strategic view it would dwarf the planets, so fly a compact kite.
+  const detailed = zoom >= WORLD_TACTICAL_ZOOM;
   const cursorScale = worldMarchScreenScale(zoom);
-  const phase = progress < 0.045 ? "departing" : progress > 0.955 ? "arriving" : "cruising";
-  return <g className={`world-march-line ${march.action} state-${march.state} signature-${signature || "none"} signature-${detailed ? "field" : "strategic"} ${phase}`}>
-    <line x1={march.origin.x} y1={march.origin.y} x2={march.destination.x} y2={march.destination.y} />
+  const fxTier = quality.marchFx; // "kite" | "lite" | "full"
+  const showSignatureFx = detailed && !gatheringAtSite && !!signature && fxTier !== "kite";
+  const phase = gatheringAtSite ? "harvesting" : progress < 0.045 ? "departing" : progress > 0.955 ? "arriving" : "cruising";
+  return <g className={`world-march-line ${march.action} state-${march.state} signature-${signature || "none"} signature-${detailed ? "field" : "strategic"} fx-${fxTier} ${phase}`}>
+    {showPath && <line x1={march.origin.x} y1={march.origin.y} x2={march.destination.x} y2={march.destination.y} />}
     <g transform={`translate(${x} ${y}) scale(${cursorScale / zoom}) translate(${-x} ${-y})`}>
       <circle cx={x} cy={y} r="8.4" className="world-march-pulse" />
-      <g className="world-march-cursor" transform={`rotate(${cursorDeg} ${x} ${y})`}>
-        {detailed && signature ? <MarchSignatureFx x={x} y={y} signature={signature} /> : <FleetKite x={x} y={y} />}
+      <g className="world-march-cursor" transform={`rotate(${gatheringAtSite ? 0 : cursorDeg} ${x} ${y})`}>
+        {gatheringAtSite ? <HarvestMark x={x} y={y} /> : showSignatureFx ? <MarchSignatureFx x={x} y={y} signature={signature!} /> : <FleetKite x={x} y={y} />}
       </g>
       <text x={x} y={y - 11.5} className="world-march-eta">{eta}</text>
     </g>
+  </g>;
+}
+
+// Settled "harvesting" glyph shown at a resource once the fleet has arrived —
+// a parked collector ring, not a flying hull, and with no route line home.
+function HarvestMark({ x, y }: { x: number; y: number }) {
+  return <g className="world-march-harvest">
+    <circle cx={x} cy={y} r="6.6" className="harvest-ring" />
+    <circle cx={x} cy={y} r="3.4" className="harvest-core" />
+    <path d={`M ${x} ${y - 6.6} v -2.4 M ${x} ${y + 6.6} v 2.4 M ${x - 6.6} ${y} h -2.4 M ${x + 6.6} ${y} h 2.4`} className="harvest-tick" />
   </g>;
 }
 

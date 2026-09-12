@@ -1165,3 +1165,25 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world-strike-metrics b{color:#75efd8}.world-strike-metrics span:nth-of-type(2){color:#b7eef7}
 @media(max-width:760px){.profile-strike-vault>div{grid-template-columns:1fr}.world-strike-metrics{right:9px;left:auto;max-width:72%;flex-wrap:wrap}.strike-preview-sequence{display:none}}
 @media(max-width:470px){.profile-loadout{grid-template-columns:repeat(3,1fr)}.profile-loadout button:nth-child(-n+6){border-bottom:1px solid rgba(92,129,171,.13)}}
+
+/* ── Render tiers + fleet lifecycle (graphics-tier.ts) ───────────────────── */
+/* Settings hint under the RENDER PROTOCOL select. */
+.profile-field-hint{margin:8px 2px 0;font:9px var(--mono);line-height:1.5;color:var(--ink3);letter-spacing:.02em}
+/* Settled "harvesting" glyph — a parked collector, no route line home. */
+.world-march-harvest .harvest-ring{fill:none;stroke:#7fd7aa;stroke-width:.8;opacity:.85;transform-box:fill-box;transform-origin:center;animation:world-harvest-spin 7s linear infinite}
+.world-march-harvest .harvest-core{fill:rgba(70,192,129,.32);stroke:#8be3b3;stroke-width:.5;transform-box:fill-box;transform-origin:center;animation:world-harvest-breathe 2.2s ease-in-out infinite alternate}
+.world-march-harvest .harvest-tick{fill:none;stroke:#9ff0c4;stroke-width:.75;opacity:.7}
+.world-march-line.harvesting .world-march-pulse{fill:none;stroke:#7fd7aa;opacity:.4;animation:world-pulse 2.8s ease-out infinite}
+@keyframes world-harvest-spin{to{transform:rotate(360deg)}}
+@keyframes world-harvest-breathe{to{opacity:.7;transform:scale(1.12)}}
+/* Lite fidelity (Medium tier): keep each signature's identity, drop the costly
+   extra particle/glow sublayers so it still animates cheaply on modest GPUs. */
+.world-march-line.fx-lite .world-march-signature{filter:none}
+.world-march-line.fx-lite .signature-mote,
+.world-march-line.fx-lite .ion-trail-b,.world-march-line.fx-lite .ion-trail-c,.world-march-line.fx-lite .plume-wide,
+.world-march-line.fx-lite .warp-fold,.world-march-line.fx-lite .warp-ring,.world-march-line.fx-lite .warp-rail,
+.world-march-line.fx-lite .aurora-star,.world-march-line.fx-lite .aurora-shimmer,
+.world-march-line.fx-lite .comet-ember,.world-march-line.fx-lite .tail-two,.world-march-line.fx-lite .comet-spine{display:none}
+@media(prefers-reduced-motion:reduce){
+  .world-march-harvest .harvest-ring,.world-march-harvest .harvest-core,.world-march-line.harvesting .world-march-pulse{animation:none}
+}

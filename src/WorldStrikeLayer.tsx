@@ -56,7 +56,7 @@ export function strikeVisibleAtZoom(targetKind: ActiveStrike["targetKind"], zoom
 }
 
 export default function WorldStrikeLayer({
-  world, viewport, zoom, gm, stressCount, burstNonce,
+  world, viewport, zoom, gm, stressCount, burstNonce, dprCap = 2,
 }: {
   world: HeadlessWorld;
   viewport: Viewport;
@@ -64,6 +64,8 @@ export default function WorldStrikeLayer({
   gm: boolean;
   stressCount: number;
   burstNonce: number;
+  /** Upper bound on canvas backing-store DPR — lower tiers cap this to save fill. */
+  dprCap?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const activeRef = useRef<ActiveStrike[]>([]);
@@ -121,7 +123,7 @@ export default function WorldStrikeLayer({
     const frameSamples: number[] = [], drawSamples: number[] = [];
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
-      width = Math.max(1, rect.width); height = Math.max(1, rect.height); dpr = Math.min(2, window.devicePixelRatio || 1);
+      width = Math.max(1, rect.width); height = Math.max(1, rect.height); dpr = Math.min(dprCap, window.devicePixelRatio || 1);
       const nextWidth = Math.round(width * dpr), nextHeight = Math.round(height * dpr);
       if (canvas.width !== nextWidth || canvas.height !== nextHeight) { canvas.width = nextWidth; canvas.height = nextHeight; }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -186,7 +188,7 @@ export default function WorldStrikeLayer({
     const onVisibility = () => { if (!document.hidden && (latestRef.current.stressCount > 0 || activeRef.current.length)) ensureLoopRef.current(); };
     document.addEventListener("visibilitychange", onVisibility);
     return () => { if (rafRef.current != null) cancelAnimationFrame(rafRef.current); rafRef.current = null; observer.disconnect(); document.removeEventListener("visibilitychange", onVisibility); delete window.__ALLIANCE_STRIKE_DIAGNOSTICS__; };
-  }, [gm]);
+  }, [gm, dprCap]);
 
   useEffect(() => { if (stressCount > 0) ensureLoopRef.current(); }, [stressCount]);
 

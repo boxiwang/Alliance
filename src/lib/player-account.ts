@@ -1,4 +1,5 @@
 import { hasLocalGm, localGmRequested } from "./gm";
+import { isGraphicsTier, type GraphicsTier } from "./graphics-tier";
 
 export type LanguageCode = "en" | "zh-CN" | "zh-TW" | "ja" | "ko" | "es";
 export type NumberFormat = "compact" | "full";
@@ -36,6 +37,8 @@ export interface PlayerAccount {
   /** Player-selected mix inside the game's deliberately quiet music ceiling. */
   musicVolume: number;
   reducedMotion: boolean;
+  /** Rendering quality: "auto" adapts to the device, or a pinned tier. */
+  graphicsTier: GraphicsTier;
   autoTranslateComms: boolean;
   criticalNotifications: boolean;
   showAchievements: boolean;
@@ -345,6 +348,7 @@ function defaultAccount(address: string): PlayerAccount {
     musicEnabled: true,
     musicVolume: 1,
     reducedMotion: false,
+    graphicsTier: "auto",
     autoTranslateComms: false,
     criticalNotifications: true,
     showAchievements: true,
@@ -426,6 +430,7 @@ export function loadPlayerAccount(address: string): PlayerAccount {
     linkedWallets,
     credits: Math.max(0, Number(saved.credits) || 0),
     musicVolume: saved.musicVolume == null ? fallback.musicVolume : Math.max(0, Math.min(1, Number(saved.musicVolume) || 0)),
+    graphicsTier: isGraphicsTier(saved.graphicsTier) ? saved.graphicsTier : fallback.graphicsTier,
     consents: {
       terms: { ...fallback.consents.terms, ...saved.consents?.terms },
       privacy: { ...fallback.consents.privacy, ...saved.consents?.privacy },

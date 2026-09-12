@@ -103,10 +103,12 @@ describe("World march rendering", () => {
     expect(worldMarkerScale(16) * 16).toBeCloseTo(2);
   });
 
-  it("grows fleet cosmetics for inspection and keeps identity plates body-anchored", () => {
-    expect(worldMarchScreenScale(1)).toBeCloseTo(.92);
-    expect(worldMarchScreenScale(3)).toBeCloseTo(1.4);
-    expect(worldMarchScreenScale(16)).toBeCloseTo(2.65);
+  it("keeps field fleets compact and only grows them for tactical inspection", () => {
+    // Screen-space size is zoom-independent, so Field must stay small (planets
+    // shrink to dots there) and only Tactical inspection earns a larger marker.
+    expect(worldMarchScreenScale(1)).toBeCloseTo(.5);
+    expect(worldMarchScreenScale(3)).toBeCloseTo(.72);
+    expect(worldMarchScreenScale(16)).toBeCloseTo(1.35);
     expect(worldIdentityLocalOffset(1, true)).toBe(0);
     expect(worldIdentityLocalOffset(2, true)).toBe(7);
     expect(worldIdentityLocalOffset(16, true)).toBe(30);
