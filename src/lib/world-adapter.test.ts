@@ -46,13 +46,14 @@ describe("local GameState ↔ headless World adapter", () => {
     const now = 1_800_000_000_000;
     const address = "0xcosmetic";
     const vault = loadCosmeticVault(address);
-    vault.owned.push("planet:event-horizon", "halo:radiant-crown", "orbit:sovereign-crown", "march:comet-vanguard", "chat:sovereign-flare");
+    vault.owned.push("planet:event-horizon", "halo:radiant-crown", "orbit:sovereign-crown", "march:comet-vanguard", "strike:whalefall-protocol", "chat:sovereign-flare");
     vault.equipped = {
       ...vault.equipped,
       planetBody: "event-horizon",
       halo: "radiant-crown",
       orbit: "sovereign-crown",
       marchSignature: "comet-vanguard",
+      strikeSignature: "whalefall-protocol",
       chatSignal: "sovereign-flare",
     };
     saveCosmeticVault(address, vault);
@@ -62,6 +63,7 @@ describe("local GameState ↔ headless World adapter", () => {
       halo: "radiant-crown",
       orbit: "sovereign-crown",
       marchSignature: "comet-vanguard",
+      strikeSignature: "whalefall-protocol",
       chatSignal: "sovereign-flare",
     });
   });
@@ -79,6 +81,7 @@ describe("local GameState ↔ headless World adapter", () => {
       halo: "faint-corona",
       orbit: "survey-ring",
       marchSignature: "ion-wake",
+      strikeSignature: "vector-snap",
       chatSignal: "clear-channel",
     });
     expect(result.session.world.players["npc.0001"].cosmetics).not.toEqual(result.session.world.players[result.session.playerId].cosmetics);

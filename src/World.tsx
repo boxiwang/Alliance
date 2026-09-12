@@ -23,6 +23,7 @@ import MiniComms from "./MiniComms";
 import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
 import WorldVisualLayer, { createWorldVisualStress, type WorldVisualCity } from "./WorldVisualLayer";
+import WorldStrikeLayer from "./WorldStrikeLayer";
 import {
   PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, loadCosmeticVault,
   type ChatSignalId, type MarchSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
@@ -458,6 +459,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
   const [bookmarks, setBookmarks] = useState<string[]>(() => loadBookmarks(address));
   const [resultNotice, setResultNotice] = useState<ResultNotice | null>(null);
   const [tileMark, setTileMark] = useState<Point | null>(null);
+  const [strikeBurstNonce, setStrikeBurstNonce] = useState(0);
   const playerCity = session.world.entities[session.world.players[session.playerId].cityId] as CityEntity;
   const [camera, setCamera] = useState<Point>(() => ({ ...playerCity.position }));
   const svgRef = useRef<SVGSVGElement>(null);
@@ -609,6 +611,9 @@ export default function World({ address, profile, onBack, onMessages = () => {},
   const zoomLabel = strategicZoom ? "STRATEGIC" : detailZoom ? "TACTICAL" : "FIELD";
   const renderStressCount = gm
     ? Math.max(0, Math.min(50_000, Math.floor(Number(new URLSearchParams(window.location.search).get("stress")) || 0)))
+    : 0;
+  const strikeStressCount = gm
+    ? Math.max(0, Math.min(512, Math.floor(Number(new URLSearchParams(window.location.search).get("strikeStress")) || 0)))
     : 0;
   const stressVisuals = useMemo(
     () => createWorldVisualStress(renderStressCount, world.config.width, world.config.height),
@@ -875,7 +880,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
       energy={energy} energyCap={world.config.energyCap} activeFleets={activeMarches.length} fleetCap={player.marchSlots}
       standing={totalTroops(viewGame)} wounded={viewGame.wounded} might={mightBreakdown(viewGame).total}
       onCity={onBack} onWorld={() => {}} onMessages={onMessages} onProfile={onProfile} />
-    {gm && <div className="world-gm-strip"><span>LOCAL GM</span><button onClick={fillTroops}>FILL TROOPS</button><button onClick={finishMarches} disabled={!activeMarches.length}>RESOLVE FLEETS</button></div>}
+    {gm && <div className="world-gm-strip"><span>LOCAL GM</span><button onClick={fillTroops}>FILL TROOPS</button><button onClick={finishMarches} disabled={!activeMarches.length}>RESOLVE FLEETS</button><button onClick={() => setStrikeBurstNonce((value) => value + 1)}>CAST STRIKE SUITE</button></div>}
     {message && <div className="world-message">{message}</div>}
     <div className="world-layout">
       <div className="world-map-shell">
@@ -917,6 +922,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
           </g>}
         </svg>
         <WorldVisualLayer svgRef={svgRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} />
+        <WorldStrikeLayer world={world} viewport={{ x: viewX, y: viewY, width: viewport.width, height: viewport.height }} zoom={zoom} gm={gm} stressCount={strikeStressCount} burstNonce={strikeBurstNonce} />
         {gpuVisualsReady && <svg className="world-map world-map-overlay" viewBox={viewBox} aria-hidden="true">
           {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`}>
@@ -939,7 +945,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
         {!gpuVisualsReady && voidSkinEquipped && <VoidPlanetOverlay svgRef={svgRef} home={playerCity.position} zoom={zoom} strategic={strategicZoom} onActiveChange={setVoidShaderActive} />}
         {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
         <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")} title={detailZoom ? "Civilization signatures resolved" : "Civilization signatures resolve inside Tactical range"}><i className="city" />{detailZoom ? "CIVILIZATIONS" : "CIV SIGNALS · TAC LOCK"}</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>
-        <div className="world-map-hint">FRONTIER I · ROGUE L1–{rogueMaxLevel} · {world.config.width}×{world.config.height} · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS{renderStressCount ? ` · ${renderStressCount.toLocaleString()} FX PROBES` : ""}</div>
+        <div className="world-map-hint">FRONTIER I · ROGUE L1–{rogueMaxLevel} · {world.config.width}×{world.config.height} · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS{renderStressCount ? ` · ${renderStressCount.toLocaleString()} FX PROBES` : ""}{strikeStressCount ? ` · ${strikeStressCount} STRIKES` : ""}</div>
       </div>
       <aside className={`world-side ${selected ? "target-open" : "signals-open"}`}>
         <div className="world-intel-header"><b>{selected ? "TARGET INTEL" : "NEARBY SIGNALS"}</b><span><i />LIVE</span>{selected && <button aria-label="Close target intel" onClick={() => { setSelectedId(null); setSelection(emptySelection()); }}>×</button>}</div>

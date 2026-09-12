@@ -9,6 +9,7 @@ export type PlanetSkinId = "dust-homestead" | "blue-marble" | "void-touched" | "
 export type PlanetOrbitId = "survey-ring" | "orbital-belt" | "accretion-halo" | "sovereign-crown";
 export type PlanetHaloId = "faint-corona" | "pulse-aura" | "aurora-veil" | "radiant-crown";
 export type MarchSignatureId = "ion-wake" | "warp-thread" | "aurora-sail" | "comet-vanguard";
+export type StrikeSignatureId = "vector-snap" | "dust-fracture" | "blockfall" | "comet-break" | "rift-guillotine" | "solar-bloom" | "finality-engine" | "whalefall-protocol";
 export type ChatSignalId = "clear-channel" | "signal-boost" | "verdant-hail" | "void-whisper" | "ember-cipher" | "sovereign-flare" | "eclipse-herald";
 export type GameCursorId = "reticle" | "comet" | "sigil";
 export type TitleId = "frontier-born" | "rift-cartographer" | "whale-fall";
@@ -45,6 +46,7 @@ export interface PlayerAccount {
 export interface CosmeticLoadout {
   planetBody: PlanetSkinId;
   marchSignature: MarchSignatureId | null;
+  strikeSignature: StrikeSignatureId | null;
   chatSignal: ChatSignalId | null;
   halo: PlanetHaloId | null;
   /** Legacy slot retained only so older local saves remain readable. */
@@ -175,6 +177,57 @@ export const MARCH_SIGNATURES: CosmeticEffectDefinition<MarchSignatureId>[] = [
     rarity: "SOVEREIGN", tier: "UR", accent: "#f3c46b", price: null,
     transmission: "The comet declares its intent: cyan to scout, gold to harvest, red to strike.",
     source: "Season ascent // earn-only",
+  },
+];
+
+export const STRIKE_SIGNATURES: CosmeticEffectDefinition<StrikeSignatureId>[] = [
+  {
+    id: "vector-snap", skinId: "strike.vector", name: "Vector Snap", translatedName: "向量闭合",
+    rarity: "ISSUED", tier: "R", accent: "#58dfff", price: 520,
+    transmission: "The sky discards every point but one.",
+    source: "Credit exchange // ◈520",
+  },
+  {
+    id: "dust-fracture", skinId: "strike.dust", name: "Dust Fracture", translatedName: "星尘裂痕",
+    rarity: "RELIC", tier: "R", accent: "#c8a06a", price: 620,
+    transmission: "The wound is brief. The dust remembers.",
+    source: "Frontier rupture cache // ◈620",
+  },
+  {
+    id: "blockfall", skinId: "strike.blockfall", name: "Blockfall", translatedName: "区块坠击",
+    rarity: "RELIC", tier: "SR", accent: "#4ff0d0", price: 1350,
+    transmission: "Every block agrees on where the fall ends.",
+    source: "Relic draw // ◈1,350",
+  },
+  {
+    id: "comet-break", skinId: "strike.comet", name: "Comet Break", translatedName: "彗核破",
+    rarity: "RELIC", tier: "SR", accent: "#58dfff", price: 1500,
+    transmission: "The voyage ends. Its fragments keep moving.",
+    source: "Relic draw // ◈1,500",
+  },
+  {
+    id: "rift-guillotine", skinId: "strike.rift", name: "Rift Guillotine", translatedName: "裂隙裁决",
+    rarity: "MYTHIC", tier: "SSR", accent: "#ad70ff", price: 3100,
+    transmission: "Space waits for the second cut before it screams.",
+    source: "Rift Sovereign cache // ◈3,100",
+  },
+  {
+    id: "solar-bloom", skinId: "strike.solar", name: "Solar Bloom", translatedName: "日冕盛放",
+    rarity: "MYTHIC", tier: "SSR", accent: "#f3c46b", price: 3400,
+    transmission: "A small sun flowers only to turn its petals inward.",
+    source: "Helios breach cache // ◈3,400",
+  },
+  {
+    id: "finality-engine", skinId: "strike.finality", name: "Finality Engine", translatedName: "终局确认",
+    rarity: "SOVEREIGN", tier: "UR", accent: "#f3c46b", price: null,
+    transmission: "Three confirmations. One history. No return.",
+    source: "Season ascent // earn-only",
+  },
+  {
+    id: "whalefall-protocol", skinId: "strike.whalefall", name: "Whalefall Protocol", translatedName: "鲸落协议",
+    rarity: "SOVEREIGN", tier: "UR", accent: "#72d8ff", price: null,
+    transmission: "The largest signals do not explode. They change gravity.",
+    source: "Whale covenant // earn-only",
   },
 ];
 
@@ -311,6 +364,7 @@ function gmCosmetics(address: string): string[] {
     ...PLANET_ORBITS.map((orbit) => `orbit:${orbit.id}`),
     ...PLANET_HALOS.map((halo) => `halo:${halo.id}`),
     ...MARCH_SIGNATURES.map((signature) => `march:${signature.id}`),
+    ...STRIKE_SIGNATURES.map((signature) => `strike:${signature.id}`),
     ...CHAT_SIGNALS.map((signal) => `chat:${signal.id}`),
     ...GAME_CURSORS.map((cursor) => `cursor:${cursor.id}`),
     ...TITLE_SEALS.map((title) => `title:${title.id}`),
@@ -320,12 +374,13 @@ function gmCosmetics(address: string): string[] {
 
 function defaultVault(address: string): CosmeticVault {
   const gm = gmCosmetics(address);
-  const owned = Array.from(new Set(["planet:dust-homestead", "orbit:survey-ring", "halo:faint-corona", "march:ion-wake", "chat:clear-channel", "cursor:reticle", "surface:founder-grid", "glyph:genesis", "trail:none", "title:frontier-born", ...gm]));
+  const owned = Array.from(new Set(["planet:dust-homestead", "orbit:survey-ring", "halo:faint-corona", "march:ion-wake", "strike:vector-snap", "chat:clear-channel", "cursor:reticle", "surface:founder-grid", "glyph:genesis", "trail:none", "title:frontier-born", ...gm]));
   return {
     owned,
     equipped: {
       planetBody: gm.length ? "void-touched" : "dust-homestead",
       marchSignature: gm.length ? "aurora-sail" : "ion-wake",
+      strikeSignature: gm.length ? "whalefall-protocol" : "vector-snap",
       chatSignal: gm.length ? "void-whisper" : "clear-channel",
       halo: gm.length ? "radiant-crown" : "faint-corona",
       surface: "founder-grid",
@@ -395,11 +450,12 @@ export function loadCosmeticVault(address: string): CosmeticVault {
   if (!saved) return fallback;
   const savedOwned = (Array.isArray(saved.owned) ? saved.owned : []).filter((relic) => relic !== "planet:civic-core");
   const owned = Array.from(new Set([...fallback.owned, ...savedOwned]));
-  const savedEquipped = (saved.equipped || {}) as Partial<Omit<CosmeticLoadout, "halo" | "planetBody" | "orbit" | "marchSignature" | "chatSignal" | "title" | "cursor">> & {
+  const savedEquipped = (saved.equipped || {}) as Partial<Omit<CosmeticLoadout, "halo" | "planetBody" | "orbit" | "marchSignature" | "strikeSignature" | "chatSignal" | "title" | "cursor">> & {
     halo?: string | null;
     planetBody?: string;
     orbit?: string | null;
     marchSignature?: string | null;
+    strikeSignature?: string | null;
     chatSignal?: string | null;
     title?: string | null;
     cursor?: string | null;
@@ -414,6 +470,9 @@ export function loadCosmeticVault(address: string): CosmeticVault {
   const savedMarch = savedEquipped.marchSignature === null
     ? null
     : MARCH_SIGNATURES.some((signature) => signature.id === savedEquipped.marchSignature) ? savedEquipped.marchSignature as MarchSignatureId : fallback.equipped.marchSignature;
+  const savedStrike = savedEquipped.strikeSignature === null
+    ? null
+    : STRIKE_SIGNATURES.some((signature) => signature.id === savedEquipped.strikeSignature) ? savedEquipped.strikeSignature as StrikeSignatureId : fallback.equipped.strikeSignature;
   const savedChat = savedEquipped.chatSignal === null
     ? null
     : CHAT_SIGNALS.some((signal) => signal.id === savedEquipped.chatSignal) ? savedEquipped.chatSignal as ChatSignalId : fallback.equipped.chatSignal;
@@ -431,6 +490,7 @@ export function loadCosmeticVault(address: string): CosmeticVault {
     halo: savedHalo,
     orbit: savedOrbit,
     marchSignature: savedMarch,
+    strikeSignature: savedStrike,
     chatSignal: savedChat,
     title: savedTitle,
     cursor: savedCursor,
@@ -439,6 +499,7 @@ export function loadCosmeticVault(address: string): CosmeticVault {
   if (equipped.orbit !== null && (!PLANET_ORBITS.some((orbit) => orbit.id === equipped.orbit) || !owned.includes(`orbit:${equipped.orbit}`))) equipped.orbit = fallback.equipped.orbit;
   if (equipped.halo !== null && (!PLANET_HALOS.some((halo) => halo.id === equipped.halo) || !owned.includes(`halo:${equipped.halo}`))) equipped.halo = fallback.equipped.halo;
   if (equipped.marchSignature !== null && (!MARCH_SIGNATURES.some((signature) => signature.id === equipped.marchSignature) || !owned.includes(`march:${equipped.marchSignature}`))) equipped.marchSignature = fallback.equipped.marchSignature;
+  if (equipped.strikeSignature !== null && (!STRIKE_SIGNATURES.some((signature) => signature.id === equipped.strikeSignature) || !owned.includes(`strike:${equipped.strikeSignature}`))) equipped.strikeSignature = fallback.equipped.strikeSignature;
   if (equipped.chatSignal !== null && (!CHAT_SIGNALS.some((signal) => signal.id === equipped.chatSignal) || !owned.includes(`chat:${equipped.chatSignal}`))) equipped.chatSignal = fallback.equipped.chatSignal;
   if (equipped.title !== null && (!TITLE_SEALS.some((title) => title.id === equipped.title) || !owned.includes(`title:${equipped.title}`))) equipped.title = fallback.equipped.title;
   if (equipped.cursor !== null && (!GAME_CURSORS.some((cursor) => cursor.id === equipped.cursor) || !owned.includes(`cursor:${equipped.cursor}`))) equipped.cursor = fallback.equipped.cursor;
@@ -466,6 +527,10 @@ export function ownsPlanetHalo(vault: CosmeticVault, haloId: PlanetHaloId): bool
 
 export function ownsMarchSignature(vault: CosmeticVault, signatureId: MarchSignatureId): boolean {
   return vault.owned.includes(`march:${signatureId}`);
+}
+
+export function ownsStrikeSignature(vault: CosmeticVault, signatureId: StrikeSignatureId): boolean {
+  return vault.owned.includes(`strike:${signatureId}`);
 }
 
 export function ownsChatSignal(vault: CosmeticVault, signalId: ChatSignalId): boolean {

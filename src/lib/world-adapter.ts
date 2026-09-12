@@ -11,7 +11,7 @@ import {
   worldEngineConfig, zoneForPoint,
 } from "./world-engine";
 import { clearWorld as clearLegacyWorld, loadWorld as loadLegacyWorld, projectWorld as projectLegacyWorld } from "./world";
-import { CHAT_SIGNALS, MARCH_SIGNATURES, PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, loadCosmeticVault } from "./player-account";
+import { CHAT_SIGNALS, MARCH_SIGNATURES, PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, STRIKE_SIGNATURES, loadCosmeticVault } from "./player-account";
 
 export interface WorldGameSnapshot {
   troops: TroopManifest;
@@ -86,6 +86,7 @@ function publicCosmetics(address: string): PublicCosmeticLoadout {
     halo: equipped.halo,
     orbit: equipped.orbit,
     marchSignature: equipped.marchSignature,
+    strikeSignature: equipped.strikeSignature,
     chatSignal: equipped.chatSignal,
   };
 }
@@ -96,6 +97,7 @@ function npcCosmetics(index: number): PublicCosmeticLoadout {
     halo: PLANET_HALOS[(index * 11) % PLANET_HALOS.length].id,
     orbit: PLANET_ORBITS[(index * 3) % PLANET_ORBITS.length].id,
     marchSignature: MARCH_SIGNATURES[(index * 5) % MARCH_SIGNATURES.length].id,
+    strikeSignature: STRIKE_SIGNATURES[(index * 13) % STRIKE_SIGNATURES.length].id,
     chatSignal: CHAT_SIGNALS[(index * 7) % CHAT_SIGNALS.length].id,
   };
 }

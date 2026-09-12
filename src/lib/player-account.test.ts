@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CHAT_SIGNALS, GAME_CURSORS, MARCH_SIGNATURES, PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, TITLE_SEALS, loadCosmeticVault, loadPlayerAccount, ownsChatSignal, ownsGameCursor, ownsMarchSignature, ownsPlanetHalo, ownsPlanetOrbit, ownsPlanetSkin, ownsTitleSeal, savePlayerAccount } from "./player-account";
+import { CHAT_SIGNALS, GAME_CURSORS, MARCH_SIGNATURES, PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, STRIKE_SIGNATURES, TITLE_SEALS, loadCosmeticVault, loadPlayerAccount, ownsChatSignal, ownsGameCursor, ownsMarchSignature, ownsPlanetHalo, ownsPlanetOrbit, ownsPlanetSkin, ownsStrikeSignature, ownsTitleSeal, savePlayerAccount } from "./player-account";
 
 describe("player account persistence", () => {
   beforeEach(() => {
@@ -71,6 +71,7 @@ describe("player account persistence", () => {
     expect(ownsPlanetHalo(vault, "faint-corona")).toBe(true);
     expect(ownsPlanetOrbit(vault, "survey-ring")).toBe(true);
     expect(ownsMarchSignature(vault, "ion-wake")).toBe(true);
+    expect(ownsStrikeSignature(vault, "vector-snap")).toBe(true);
     expect(ownsChatSignal(vault, "clear-channel")).toBe(true);
     expect(ownsGameCursor(vault, "reticle")).toBe(true);
     expect(ownsTitleSeal(vault, "frontier-born")).toBe(true);
@@ -86,6 +87,7 @@ describe("player account persistence", () => {
     expect(PLANET_HALOS.every((halo) => ownsPlanetHalo(vault, halo.id))).toBe(true);
     expect(PLANET_ORBITS.every((orbit) => ownsPlanetOrbit(vault, orbit.id))).toBe(true);
     expect(MARCH_SIGNATURES.every((signature) => ownsMarchSignature(vault, signature.id))).toBe(true);
+    expect(STRIKE_SIGNATURES.every((signature) => ownsStrikeSignature(vault, signature.id))).toBe(true);
     expect(CHAT_SIGNALS.every((signal) => ownsChatSignal(vault, signal.id))).toBe(true);
     expect(GAME_CURSORS.every((cursor) => ownsGameCursor(vault, cursor.id))).toBe(true);
     expect(TITLE_SEALS.every((title) => ownsTitleSeal(vault, title.id))).toBe(true);
@@ -94,12 +96,13 @@ describe("player account persistence", () => {
   it("preserves deliberately released optional cosmetic slots", () => {
     localStorage.setItem("ruglands:cosmetics:0xabc123", JSON.stringify({
       owned: [],
-      equipped: { halo: null, orbit: null, marchSignature: null, chatSignal: null, title: null, cursor: null },
+      equipped: { halo: null, orbit: null, marchSignature: null, strikeSignature: null, chatSignal: null, title: null, cursor: null },
     }));
     const equipped = loadCosmeticVault("0xabc123").equipped;
     expect(equipped.halo).toBeNull();
     expect(equipped.orbit).toBeNull();
     expect(equipped.marchSignature).toBeNull();
+    expect(equipped.strikeSignature).toBeNull();
     expect(equipped.chatSignal).toBeNull();
     expect(equipped.title).toBeNull();
     expect(equipped.cursor).toBeNull();
@@ -112,6 +115,14 @@ describe("player account persistence", () => {
       equipped: { marchSignature: "void-scar" },
     }));
     expect(loadCosmeticVault("0xabc123").equipped.marchSignature).toBe("ion-wake");
+  });
+
+  it("falls back safely when an unknown strike imprint is stored", () => {
+    localStorage.setItem("ruglands:cosmetics:0xabc123", JSON.stringify({
+      owned: ["strike:prototype-nova"],
+      equipped: { strikeSignature: "prototype-nova" },
+    }));
+    expect(loadCosmeticVault("0xabc123").equipped.strikeSignature).toBe("vector-snap");
   });
 
   it("migrates the retired Civic Core into Dust Homestead", () => {

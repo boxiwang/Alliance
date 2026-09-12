@@ -4,7 +4,7 @@ import type { ResKey, TroopKey } from "./game";
 import { TROOP_ORDER } from "./game";
 import { carryCapacity, resolveCombat, resolveGather, resolveScout } from "./expedition";
 import { getN } from "./numbers";
-import type { ChatSignalId, MarchSignatureId, PlanetHaloId, PlanetOrbitId, PlanetSkinId } from "./player-account";
+import type { ChatSignalId, MarchSignatureId, PlanetHaloId, PlanetOrbitId, PlanetSkinId, StrikeSignatureId } from "./player-account";
 
 export interface Point { x: number; y: number }
 export type TroopManifest = Record<TroopKey, Record<string, number>>;
@@ -207,6 +207,7 @@ export interface PublicCosmeticLoadout {
   halo: PlanetHaloId | null;
   orbit: PlanetOrbitId | null;
   marchSignature: MarchSignatureId | null;
+  strikeSignature: StrikeSignatureId | null;
   chatSignal: ChatSignalId | null;
 }
 
@@ -215,6 +216,7 @@ export const ISSUED_WORLD_COSMETICS: PublicCosmeticLoadout = {
   halo: "faint-corona",
   orbit: "survey-ring",
   marchSignature: "ion-wake",
+  strikeSignature: "vector-snap",
   chatSignal: "clear-channel",
 };
 

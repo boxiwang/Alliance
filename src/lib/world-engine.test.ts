@@ -29,6 +29,7 @@ describe("headless world — scale and sparse spawning", () => {
         halo: "radiant-crown",
         orbit: "sovereign-crown",
         marchSignature: "comet-vanguard",
+        strikeSignature: "whalefall-protocol",
         chatSignal: "sovereign-flare",
       },
     }, 1000);
@@ -37,6 +38,7 @@ describe("headless world — scale and sparse spawning", () => {
       halo: "radiant-crown",
       orbit: "sovereign-crown",
       marchSignature: "comet-vanguard",
+      strikeSignature: "whalefall-protocol",
       chatSignal: "sovereign-flare",
     });
   });

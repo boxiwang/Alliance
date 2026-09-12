@@ -3,6 +3,7 @@ import CosmicBackdrop from "./CosmicBackdrop";
 import GameNav from "./GameNav";
 import MarchSignaturePreview from "./MarchSignaturePreview";
 import PlanetOrbitPreview from "./PlanetOrbitPreview";
+import StrikeSignaturePreview from "./StrikeSignaturePreview";
 import PlayerCard from "./PlayerCard";
 import NameSignal from "./NameSignal";
 import { CursorGlyph } from "./GameCursor";
@@ -16,6 +17,7 @@ import {
   CHAT_SIGNALS,
   GAME_CURSORS,
   MARCH_SIGNATURES,
+  STRIKE_SIGNATURES,
   PLANET_HALOS,
   PLANET_ORBITS,
   PLANET_SKINS,
@@ -25,6 +27,7 @@ import {
   type GameCursorId,
   type LanguageCode,
   type MarchSignatureId,
+  type StrikeSignatureId,
   type PlanetHaloId,
   type PlanetOrbitId,
   type PlanetSkinId,
@@ -34,6 +37,7 @@ import {
   ownsChatSignal,
   ownsGameCursor,
   ownsMarchSignature,
+  ownsStrikeSignature,
   ownsPlanetHalo,
   ownsPlanetOrbit,
   ownsPlanetSkin,
@@ -43,7 +47,14 @@ import {
 } from "./lib/player-account";
 
 type ArchiveSection = "dossier" | "vault" | "wallet" | "protocols";
-type RelicPreviewKind = "planet" | "halo" | "orbit" | "march" | "chat" | "title" | "cursor";
+type RelicPreviewKind = "planet" | "halo" | "orbit" | "march" | "strike" | "chat" | "title" | "cursor";
+type RelicVaultSection = "celestial" | "field" | "social";
+
+function vaultSectionForPreview(kind: RelicPreviewKind): RelicVaultSection {
+  if (kind === "planet" || kind === "halo" || kind === "orbit") return "celestial";
+  if (kind === "march" || kind === "strike" || kind === "cursor") return "field";
+  return "social";
+}
 
 function initialArchiveSection(): ArchiveSection {
   const requested = new URLSearchParams(window.location.search).get("section") as ArchiveSection | null;
@@ -52,7 +63,7 @@ function initialArchiveSection(): ArchiveSection {
 
 function initialRelicPreviewKind(): RelicPreviewKind {
   const requested = new URLSearchParams(window.location.search).get("preview") as RelicPreviewKind | null;
-  return requested && ["planet", "halo", "orbit", "march", "chat", "title", "cursor"].includes(requested) ? requested : "planet";
+  return requested && ["planet", "halo", "orbit", "march", "strike", "chat", "title", "cursor"].includes(requested) ? requested : "planet";
 }
 
 const LANGUAGE_NAMES: Record<LanguageCode, string> = {
@@ -111,14 +122,17 @@ export default function ProfileScreen({
   const requestedHalo = previewParams.get("halo") as PlanetHaloId | null;
   const requestedOrbit = previewParams.get("orbit") as PlanetOrbitId | null;
   const requestedMarch = previewParams.get("signature") as MarchSignatureId | null;
+  const requestedStrike = previewParams.get("strike") as StrikeSignatureId | null;
   const requestedChat = previewParams.get("signal") as ChatSignalId | null;
   const requestedTitle = previewParams.get("title") as TitleId | null;
   const requestedCursor = previewParams.get("cursor") as GameCursorId | null;
   const [previewKind, setPreviewKind] = useState<RelicPreviewKind>(initialRelicPreviewKind);
+  const [vaultSection, setVaultSection] = useState<RelicVaultSection>(() => vaultSectionForPreview(initialRelicPreviewKind()));
   const [previewSkin, setPreviewSkin] = useState<PlanetSkinId>(() => PLANET_SKINS.some((skin) => skin.id === requestedSkin) ? requestedSkin! : vault.equipped.planetBody);
   const [previewHalo, setPreviewHalo] = useState<PlanetHaloId>(() => PLANET_HALOS.some((halo) => halo.id === requestedHalo) ? requestedHalo! : vault.equipped.halo || PLANET_HALOS[0].id);
   const [previewOrbit, setPreviewOrbit] = useState<PlanetOrbitId>(() => PLANET_ORBITS.some((orbit) => orbit.id === requestedOrbit) ? requestedOrbit! : vault.equipped.orbit || PLANET_ORBITS[0].id);
   const [previewMarch, setPreviewMarch] = useState<MarchSignatureId>(() => MARCH_SIGNATURES.some((signature) => signature.id === requestedMarch) ? requestedMarch! : vault.equipped.marchSignature || MARCH_SIGNATURES[0].id);
+  const [previewStrike, setPreviewStrike] = useState<StrikeSignatureId>(() => STRIKE_SIGNATURES.some((signature) => signature.id === requestedStrike) ? requestedStrike! : vault.equipped.strikeSignature || STRIKE_SIGNATURES[0].id);
   const [previewChat, setPreviewChat] = useState<ChatSignalId>(() => CHAT_SIGNALS.some((signal) => signal.id === requestedChat) ? requestedChat! : vault.equipped.chatSignal || CHAT_SIGNALS[0].id);
   const [previewTitle, setPreviewTitle] = useState<TitleId>(() => TITLE_SEALS.some((title) => title.id === requestedTitle) ? requestedTitle! : vault.equipped.title || TITLE_SEALS[0].id);
   const [previewCursor, setPreviewCursor] = useState<GameCursorId>(() => GAME_CURSORS.some((cursor) => cursor.id === requestedCursor) ? requestedCursor! : vault.equipped.cursor || GAME_CURSORS[0].id);
@@ -141,19 +155,21 @@ export default function ProfileScreen({
   const selectedHalo = PLANET_HALOS.find((halo) => halo.id === previewHalo) || PLANET_HALOS[0];
   const selectedOrbit = PLANET_ORBITS.find((orbit) => orbit.id === previewOrbit) || PLANET_ORBITS[0];
   const selectedMarch = MARCH_SIGNATURES.find((effect) => effect.id === previewMarch) || MARCH_SIGNATURES[0];
+  const selectedStrike = STRIKE_SIGNATURES.find((effect) => effect.id === previewStrike) || STRIKE_SIGNATURES[0];
   const selectedChat = CHAT_SIGNALS.find((effect) => effect.id === previewChat) || CHAT_SIGNALS[0];
   const selectedTitle = TITLE_SEALS.find((effect) => effect.id === previewTitle) || TITLE_SEALS[0];
   const selectedCursor = GAME_CURSORS.find((effect) => effect.id === previewCursor) || GAME_CURSORS[0];
-  const selectedRelic = previewKind === "planet" ? selectedSkin : previewKind === "halo" ? selectedHalo : previewKind === "orbit" ? selectedOrbit : previewKind === "march" ? selectedMarch : previewKind === "chat" ? selectedChat : previewKind === "title" ? selectedTitle : selectedCursor;
+  const selectedRelic = previewKind === "planet" ? selectedSkin : previewKind === "halo" ? selectedHalo : previewKind === "orbit" ? selectedOrbit : previewKind === "march" ? selectedMarch : previewKind === "strike" ? selectedStrike : previewKind === "chat" ? selectedChat : previewKind === "title" ? selectedTitle : selectedCursor;
   const selectedRelicTier = "tier" in selectedRelic ? selectedRelic.tier || selectedRelic.rarity : selectedRelic.rarity;
-  const selectedRelicType = previewKind === "planet" ? "CORE" : previewKind === "halo" ? "PLANET HALO" : previewKind === "orbit" ? "ORBITAL ARRAY" : previewKind === "march" ? "MARCH SIGNATURE" : previewKind === "chat" ? "NAME SIGNAL" : previewKind === "title" ? "TITLE SEAL" : "COMMAND CURSOR";
-  const selectedRelicTarget = previewKind === "planet" ? "CORE" : previewKind === "halo" ? "HALO" : previewKind === "orbit" ? "ORBIT" : previewKind === "march" ? "FLEETS" : previewKind === "chat" ? "COMMS" : previewKind === "title" ? "DOSSIER" : "COMMAND HAND";
-  const selectedRelicOwned = previewKind === "planet" ? ownsPlanetSkin(vault, previewSkin) : previewKind === "halo" ? ownsPlanetHalo(vault, previewHalo) : previewKind === "orbit" ? ownsPlanetOrbit(vault, previewOrbit) : previewKind === "march" ? ownsMarchSignature(vault, previewMarch) : previewKind === "chat" ? ownsChatSignal(vault, previewChat) : previewKind === "title" ? ownsTitleSeal(vault, previewTitle) : ownsGameCursor(vault, previewCursor);
-  const selectedRelicEquipped = previewKind === "planet" ? vault.equipped.planetBody === previewSkin : previewKind === "halo" ? vault.equipped.halo === previewHalo : previewKind === "orbit" ? vault.equipped.orbit === previewOrbit : previewKind === "march" ? vault.equipped.marchSignature === previewMarch : previewKind === "chat" ? vault.equipped.chatSignal === previewChat : previewKind === "title" ? vault.equipped.title === previewTitle : vault.equipped.cursor === previewCursor;
+  const selectedRelicType = previewKind === "planet" ? "CORE" : previewKind === "halo" ? "PLANET HALO" : previewKind === "orbit" ? "ORBITAL ARRAY" : previewKind === "march" ? "MARCH SIGNATURE" : previewKind === "strike" ? "STRIKE IMPRINT" : previewKind === "chat" ? "NAME SIGNAL" : previewKind === "title" ? "TITLE SEAL" : "COMMAND CURSOR";
+  const selectedRelicTarget = previewKind === "planet" ? "CORE" : previewKind === "halo" ? "HALO" : previewKind === "orbit" ? "ORBIT" : previewKind === "march" ? "FLEETS" : previewKind === "strike" ? "STRIKES" : previewKind === "chat" ? "COMMS" : previewKind === "title" ? "DOSSIER" : "COMMAND HAND";
+  const selectedRelicOwned = previewKind === "planet" ? ownsPlanetSkin(vault, previewSkin) : previewKind === "halo" ? ownsPlanetHalo(vault, previewHalo) : previewKind === "orbit" ? ownsPlanetOrbit(vault, previewOrbit) : previewKind === "march" ? ownsMarchSignature(vault, previewMarch) : previewKind === "strike" ? ownsStrikeSignature(vault, previewStrike) : previewKind === "chat" ? ownsChatSignal(vault, previewChat) : previewKind === "title" ? ownsTitleSeal(vault, previewTitle) : ownsGameCursor(vault, previewCursor);
+  const selectedRelicEquipped = previewKind === "planet" ? vault.equipped.planetBody === previewSkin : previewKind === "halo" ? vault.equipped.halo === previewHalo : previewKind === "orbit" ? vault.equipped.orbit === previewOrbit : previewKind === "march" ? vault.equipped.marchSignature === previewMarch : previewKind === "strike" ? vault.equipped.strikeSignature === previewStrike : previewKind === "chat" ? vault.equipped.chatSignal === previewChat : previewKind === "title" ? vault.equipped.title === previewTitle : vault.equipped.cursor === previewCursor;
   const equippedSkin = PLANET_SKINS.find((skin) => skin.id === vault.equipped.planetBody) || PLANET_SKINS[0];
   const equippedHalo = PLANET_HALOS.find((halo) => halo.id === vault.equipped.halo);
   const equippedOrbit = PLANET_ORBITS.find((orbit) => orbit.id === vault.equipped.orbit);
   const equippedMarch = MARCH_SIGNATURES.find((effect) => effect.id === vault.equipped.marchSignature);
+  const equippedStrike = STRIKE_SIGNATURES.find((effect) => effect.id === vault.equipped.strikeSignature);
   const equippedChat = CHAT_SIGNALS.find((effect) => effect.id === vault.equipped.chatSignal);
   const equippedTitle = TITLE_SEALS.find((effect) => effect.id === vault.equipped.title);
   const equippedCursor = GAME_CURSORS.find((effect) => effect.id === vault.equipped.cursor);
@@ -215,6 +231,13 @@ export default function ProfileScreen({
     commitVault(next, `${effect.name.toUpperCase()} BOUND TO FLEETS`);
   }
 
+  function equipStrikeSignature(signatureId: StrikeSignatureId) {
+    const effect = STRIKE_SIGNATURES.find((item) => item.id === signatureId);
+    if (!effect || !ownsStrikeSignature(vault, signatureId)) { flash("STRIKE IMPRINT NOT RECOVERED"); return; }
+    const next = { ...vault, equipped: { ...vault.equipped, strikeSignature: signatureId } };
+    commitVault(next, effect.name.toUpperCase() + " BOUND TO IMPACT");
+  }
+
   function equipPlanetOrbit(orbitId: PlanetOrbitId) {
     const orbit = PLANET_ORBITS.find((item) => item.id === orbitId);
     if (!orbit || !ownsPlanetOrbit(vault, orbitId)) { flash("ORBITAL ARRAY NOT RECOVERED"); return; }
@@ -256,6 +279,7 @@ export default function ProfileScreen({
     if (kind === "halo") next.equipped.halo = null;
     else if (kind === "orbit") next.equipped.orbit = null;
     else if (kind === "march") next.equipped.marchSignature = null;
+    else if (kind === "strike") next.equipped.strikeSignature = null;
     else if (kind === "chat") next.equipped.chatSignal = null;
     else if (kind === "title") next.equipped.title = null;
     else next.equipped.cursor = null;
@@ -263,19 +287,52 @@ export default function ProfileScreen({
     if (kind === "title") onProfileChange({ ...profile, title: "" });
   }
 
-  function chooseOptional(kind: Exclude<RelicPreviewKind, "planet">, id: PlanetHaloId | PlanetOrbitId | MarchSignatureId | ChatSignalId | TitleId | GameCursorId) {
-    const current = kind === "halo" ? previewHalo : kind === "orbit" ? previewOrbit : kind === "march" ? previewMarch : kind === "chat" ? previewChat : kind === "title" ? previewTitle : previewCursor;
-    const equipped = kind === "halo" ? vault.equipped.halo : kind === "orbit" ? vault.equipped.orbit : kind === "march" ? vault.equipped.marchSignature : kind === "chat" ? vault.equipped.chatSignal : kind === "title" ? vault.equipped.title : vault.equipped.cursor;
-    if (previewKind === kind && current === id) {
-      if (equipped === id) unbind(kind);
+  function openVaultSection(nextSection: RelicVaultSection) {
+    setVaultSection(nextSection);
+    if (nextSection === "celestial") {
       setPreviewKind("planet");
       setPreviewSkin(vault.equipped.planetBody);
+      return;
+    }
+    if (nextSection === "field") {
+      if (vault.equipped.strikeSignature) {
+        setPreviewStrike(vault.equipped.strikeSignature);
+        setPreviewKind("strike");
+      } else if (vault.equipped.marchSignature) {
+        setPreviewMarch(vault.equipped.marchSignature);
+        setPreviewKind("march");
+      } else {
+        if (vault.equipped.cursor) setPreviewCursor(vault.equipped.cursor);
+        setPreviewKind(vault.equipped.cursor ? "cursor" : "march");
+      }
+      return;
+    }
+    if (vault.equipped.chatSignal) {
+      setPreviewChat(vault.equipped.chatSignal);
+      setPreviewKind("chat");
+    } else {
+      if (vault.equipped.title) setPreviewTitle(vault.equipped.title);
+      setPreviewKind(vault.equipped.title ? "title" : "chat");
+    }
+  }
+
+  function chooseOptional(kind: Exclude<RelicPreviewKind, "planet">, id: PlanetHaloId | PlanetOrbitId | MarchSignatureId | StrikeSignatureId | ChatSignalId | TitleId | GameCursorId) {
+    setVaultSection(vaultSectionForPreview(kind));
+    const current = kind === "halo" ? previewHalo : kind === "orbit" ? previewOrbit : kind === "march" ? previewMarch : kind === "strike" ? previewStrike : kind === "chat" ? previewChat : kind === "title" ? previewTitle : previewCursor;
+    const equipped = kind === "halo" ? vault.equipped.halo : kind === "orbit" ? vault.equipped.orbit : kind === "march" ? vault.equipped.marchSignature : kind === "strike" ? vault.equipped.strikeSignature : kind === "chat" ? vault.equipped.chatSignal : kind === "title" ? vault.equipped.title : vault.equipped.cursor;
+    if (previewKind === kind && current === id) {
+      if (equipped === id) unbind(kind);
+      if (kind === "halo" || kind === "orbit") {
+        setPreviewKind("planet");
+        setPreviewSkin(vault.equipped.planetBody);
+      }
       return;
     }
     setPreviewKind(kind);
     if (kind === "halo") setPreviewHalo(id as PlanetHaloId);
     else if (kind === "orbit") setPreviewOrbit(id as PlanetOrbitId);
     else if (kind === "march") setPreviewMarch(id as MarchSignatureId);
+    else if (kind === "strike") setPreviewStrike(id as StrikeSignatureId);
     else if (kind === "chat") setPreviewChat(id as ChatSignalId);
     else if (kind === "title") setPreviewTitle(id as TitleId);
     else setPreviewCursor(id as GameCursorId);
@@ -286,6 +343,7 @@ export default function ProfileScreen({
     else if (previewKind === "halo") equipPlanetHalo(previewHalo);
     else if (previewKind === "orbit") equipPlanetOrbit(previewOrbit);
     else if (previewKind === "march") equipMarchSignature(previewMarch);
+    else if (previewKind === "strike") equipStrikeSignature(previewStrike);
     else if (previewKind === "chat") equipChatSignal(previewChat);
     else if (previewKind === "title") equipTitleSeal(previewTitle);
     else equipGameCursor(previewCursor);
@@ -298,6 +356,17 @@ export default function ProfileScreen({
 
   const publicWallet = account.alliancePledge?.wallet || account.primaryWallet;
   const ownedSkinCount = PLANET_SKINS.filter((skin) => ownsPlanetSkin(vault, skin.id)).length;
+  const celestialRecovered = ownedSkinCount
+    + PLANET_HALOS.filter((halo) => ownsPlanetHalo(vault, halo.id)).length
+    + PLANET_ORBITS.filter((orbit) => ownsPlanetOrbit(vault, orbit.id)).length;
+  const celestialTotal = PLANET_SKINS.length + PLANET_HALOS.length + PLANET_ORBITS.length;
+  const fieldRecovered = MARCH_SIGNATURES.filter((effect) => ownsMarchSignature(vault, effect.id)).length
+    + STRIKE_SIGNATURES.filter((effect) => ownsStrikeSignature(vault, effect.id)).length
+    + GAME_CURSORS.filter((cursor) => ownsGameCursor(vault, cursor.id)).length;
+  const fieldTotal = MARCH_SIGNATURES.length + STRIKE_SIGNATURES.length + GAME_CURSORS.length;
+  const socialRecovered = CHAT_SIGNALS.filter((effect) => ownsChatSignal(vault, effect.id)).length
+    + TITLE_SEALS.filter((title) => ownsTitleSeal(vault, title.id)).length;
+  const socialTotal = CHAT_SIGNALS.length + TITLE_SEALS.length;
   const freeRenameReady = canRenameForFree(profile, now);
   const renameReadyAt = nextFreeRenameAt(profile);
   const renameWindow = freeRenameReady ? "FREE RENAME // READY" : `FREE RENAME // ${new Intl.DateTimeFormat(account.language, { month: "short", day: "numeric", year: "numeric" }).format(renameReadyAt)}`;
@@ -354,7 +423,16 @@ export default function ProfileScreen({
       <article className="profile-card profile-home-card">
         <header><small>HOME SIGNAL</small><span>{equippedSkin.rarity}</span></header>
         <div className="profile-home-stage"><PlanetOrbitPreview skin={vault.equipped.planetBody} halo={vault.equipped.halo} orbit={vault.equipped.orbit} chrome={false} fitAssembly className="profile-bound-assembly" /><div className="profile-home-caption"><small>BOUND ASSEMBLY</small><b>{equippedSkin.name} · {equippedHalo?.name || "Bare Halo"} · {equippedOrbit?.name || "Bare Orbit"}</b></div><span className="profile-home-lod">STAR MAP // ACTIVE</span></div>
-        <div className="profile-loadout"><button onClick={() => setSection("vault")}><small>CORE</small><b>{equippedSkin.name}</b></button><button onClick={() => setSection("vault")}><small>HALO</small><b>{equippedHalo?.name || "Unbound"}</b></button><button onClick={() => setSection("vault")}><small>ORBIT</small><b>{equippedOrbit?.name || "Unbound"}</b></button><button onClick={() => setSection("vault")}><small>MARCH</small><b>{equippedMarch?.name || "Unbound"}</b></button><button onClick={() => setSection("vault")}><small>COMMS</small><b>{equippedChat?.name || "Unbound"}</b></button><button onClick={() => setSection("vault")}><small>TITLE</small><b>{equippedTitle?.name || "Unbound"}</b></button><button onClick={() => setSection("vault")}><small>CURSOR</small><b>{equippedCursor?.name || "Unbound"}</b></button></div>
+        <div className="profile-loadout">
+          <button onClick={() => { setSection("vault"); openVaultSection("celestial"); }}><small>CORE</small><b>{equippedSkin.name}</b></button>
+          <button onClick={() => { setSection("vault"); openVaultSection("celestial"); }}><small>HALO</small><b>{equippedHalo?.name || "Unbound"}</b></button>
+          <button onClick={() => { setSection("vault"); openVaultSection("celestial"); }}><small>ORBIT</small><b>{equippedOrbit?.name || "Unbound"}</b></button>
+          <button onClick={() => { setSection("vault"); openVaultSection("field"); }}><small>MARCH</small><b>{equippedMarch?.name || "Unbound"}</b></button>
+          <button onClick={() => { setSection("vault"); openVaultSection("field"); }}><small>STRIKE</small><b>{equippedStrike?.name || "Unbound"}</b></button>
+          <button onClick={() => { setSection("vault"); openVaultSection("social"); }}><small>COMMS</small><b>{equippedChat?.name || "Unbound"}</b></button>
+          <button onClick={() => { setSection("vault"); openVaultSection("social"); }}><small>TITLE</small><b>{equippedTitle?.name || "Unbound"}</b></button>
+          <button onClick={() => { setSection("vault"); openVaultSection("field"); }}><small>CURSOR</small><b>{equippedCursor?.name || "Unbound"}</b></button>
+        </div>
       </article>
 
       <aside className="profile-dossier-side">
@@ -370,33 +448,56 @@ export default function ProfileScreen({
       </article>}
     </div>}
 
-    {section === "vault" && <div className="profile-vault-grid">
-      <div className="profile-vault-preview-column">
-        <article className="profile-card profile-vault-preview">
-          <header><small>{previewKind === "march" ? "MARCH PREVIEW // LIVE ROUTE" : previewKind === "cursor" ? "CURSOR PREVIEW // COMMAND HAND" : "PLANET PREVIEW // BOUND ASSEMBLY"}</small><span>{selectedRelicTier}</span></header>
-          <div className={`profile-vault-stage preview-${previewKind}`}>
-            {previewKind === "march" ? <MarchSignaturePreview signature={previewMarch} /> : previewKind === "cursor" ? <CursorPreview cursor={previewCursor} /> : <PlanetOrbitPreview skin={previewKind === "planet" ? previewSkin : vault.equipped.planetBody} halo={previewKind === "halo" ? previewHalo : vault.equipped.halo} orbit={previewKind === "orbit" ? previewOrbit : vault.equipped.orbit} chrome={false} fitAssembly className="profile-bound-assembly" />}
-          </div>
-          <div className="profile-relic-copy"><small>{selectedRelicTier} // {selectedRelicType}</small><h2>{selectedRelic.name}{selectedRelic.translatedName ? <span className="profile-relic-translation">{selectedRelic.translatedName}</span> : null}</h2><p>{selectedRelic.transmission}</p><em>RECOVERED FROM // {selectedRelic.source}</em><button className="profile-action primary full" disabled={!selectedRelicOwned || (previewKind === "planet" && selectedRelicEquipped)} onClick={triggerSelectedRelic}>{!selectedRelicOwned ? "RELIC NOT RECOVERED" : selectedRelicEquipped ? previewKind === "planet" ? "CORE CANNOT BE UNBOUND" : `RELEASE FROM ${selectedRelicTarget}` : `BIND TO ${selectedRelicTarget}`}</button></div>
-        </article>
-        <article className={`profile-card profile-social-preview ${previewKind === "chat" || previewKind === "title" ? "focused" : ""}`}>
-          <header><small>SOCIAL PREVIEW // COMMS IDENTITY</small><span>{socialTitle ? "SEALED" : "OPEN"}</span></header>
-          <ChatSignalPreview signal={socialSignal} title={socialTitle} username={profile.name} faction={profile.factionSymbol} reducedMotion={account.reducedMotion} />
-        </article>
-      </div>
-      <div className="profile-vault-list">
-        <div className="profile-section-title"><div><small>CORES</small><b>{ownedSkinCount} / {PLANET_SKINS.length} RECOVERED</b></div><span>MIGHT SIGNATURE // 0</span></div>
-        <div className="profile-relic-grid">{PLANET_SKINS.map((skin) => {
-          const owned = ownsPlanetSkin(vault, skin.id); const equipped = vault.equipped.planetBody === skin.id;
-          return <button key={skin.id} className={`${previewKind === "planet" && previewSkin === skin.id ? "selected" : ""} ${owned ? "owned" : "locked"}`} onClick={() => { setPreviewKind("planet"); setPreviewSkin(skin.id); }}><div><PlanetOrbitPreview skin={skin.id} orbit={null} chrome={false} staticPreview className="profile-core-isolation" /></div><span>{equipped ? "BOUND" : owned ? "RECOVERED" : "UNKNOWN"}</span><b>{skin.name}</b><small>{skin.tier || skin.rarity} · CORE</small></button>;
-        })}</div>
-        <div className="profile-vault-slots">
-          <article className="profile-card"><header><small>PLANET HALOS</small><span>{PLANET_HALOS.filter((halo) => ownsPlanetHalo(vault, halo.id)).length} / {PLANET_HALOS.length}</span></header><div>{PLANET_HALOS.map((halo) => { const owned = ownsPlanetHalo(vault, halo.id); return <button key={halo.id} className={`${vault.equipped.halo === halo.id ? "active" : ""} ${previewKind === "halo" && previewHalo === halo.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("halo", halo.id)}><i className={`halo-effect-icon halo-effect-${halo.id}`} /><span><b>{halo.name} <em>{halo.translatedName}</em></b><small>{vault.equipped.halo === halo.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? `${halo.tier} · RECOVERED` : `${halo.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
-          <article className="profile-card"><header><small>ORBITAL ARRAYS</small><span>{PLANET_ORBITS.filter((orbit) => ownsPlanetOrbit(vault, orbit.id)).length} / {PLANET_ORBITS.length}</span></header><div>{PLANET_ORBITS.map((orbit) => { const owned = ownsPlanetOrbit(vault, orbit.id); return <button key={orbit.id} className={`${vault.equipped.orbit === orbit.id ? "active" : ""} ${previewKind === "orbit" && previewOrbit === orbit.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("orbit", orbit.id)}><i className={`orbit-effect-icon orbit-effect-${orbit.id}`} /><span><b>{orbit.name} <em>{orbit.translatedName}</em></b><small>{vault.equipped.orbit === orbit.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? `${orbit.tier} · RECOVERED` : `${orbit.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
-          <article className="profile-card"><header><small>MARCH SIGNATURES</small><span>{MARCH_SIGNATURES.filter((effect) => ownsMarchSignature(vault, effect.id)).length} / {MARCH_SIGNATURES.length}</span></header><div>{MARCH_SIGNATURES.map((effect) => { const owned = ownsMarchSignature(vault, effect.id); return <button key={effect.id} className={`${vault.equipped.marchSignature === effect.id ? "active" : ""} ${previewKind === "march" && previewMarch === effect.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("march", effect.id)}><i className={`march-effect-icon march-effect-${effect.id}`} /><span><b>{effect.name} <em>{effect.translatedName}</em></b><small>{vault.equipped.marchSignature === effect.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? `${effect.tier} · RECOVERED` : `${effect.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
-          <article className="profile-card profile-name-vault"><header><small>NAME SIGNALS</small><span>{CHAT_SIGNALS.filter((effect) => ownsChatSignal(vault, effect.id)).length} / {CHAT_SIGNALS.length}</span></header><div>{CHAT_SIGNALS.map((effect) => { const owned = ownsChatSignal(vault, effect.id); return <button key={effect.id} className={`${vault.equipped.chatSignal === effect.id ? "active" : ""} ${previewKind === "chat" && previewChat === effect.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("chat", effect.id)}><i className="chat-effect-icon"><NameSignal signal={effect.id} mode="static">A</NameSignal></i><span><b>{effect.name} <em>{effect.translatedName}</em></b><small>{vault.equipped.chatSignal === effect.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? `${effect.tier} · RECOVERED` : `${effect.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
-          <article className="profile-card"><header><small>TITLE SEALS</small><span>{TITLE_SEALS.filter((title) => ownsTitleSeal(vault, title.id)).length} / {TITLE_SEALS.length}</span></header><div>{TITLE_SEALS.map((title, index) => { const owned = ownsTitleSeal(vault, title.id); return <button key={title.id} className={`${vault.equipped.title === title.id ? "active" : ""} ${previewKind === "title" && previewTitle === title.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("title", title.id)}><i>{["Ⅰ", "⌁", "◎"][index]}</i><span><b>{title.name.toUpperCase()}</b><small>{vault.equipped.title === title.id ? "SEALED · TAP AGAIN TO RELEASE" : owned ? `${title.tier} · RECOVERED` : `${title.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
-          <article className="profile-card profile-cursor-vault"><header><small>COMMAND CURSORS</small><span>{GAME_CURSORS.filter((cursor) => ownsGameCursor(vault, cursor.id)).length} / {GAME_CURSORS.length}</span></header><div>{GAME_CURSORS.map((cursor) => { const owned = ownsGameCursor(vault, cursor.id); return <button key={cursor.id} className={`${vault.equipped.cursor === cursor.id ? "active" : ""} ${previewKind === "cursor" && previewCursor === cursor.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("cursor", cursor.id)}><i className={`cursor-effect-icon cursor-effect-${cursor.id}`}><CursorGlyph cursor={cursor.id} /></i><span><b>{cursor.name} <em>{cursor.translatedName}</em></b><small>{vault.equipped.cursor === cursor.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? `${cursor.tier} · RECOVERED` : `${cursor.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
+    {section === "vault" && <div className="profile-vault-shell">
+      <nav className="profile-vault-sectors" aria-label="Relic vault sectors">
+        <button className={vaultSection === "celestial" ? "active" : ""} aria-pressed={vaultSection === "celestial"} onClick={() => openVaultSection("celestial")}><i>01</i><span><b>PLANET REGALIA</b><small>CORE · HALO · ORBIT</small></span><em>{celestialRecovered}/{celestialTotal}</em></button>
+        <button className={vaultSection === "field" ? "active" : ""} aria-pressed={vaultSection === "field"} onClick={() => openVaultSection("field")}><i>02</i><span><b>FIELD SIGNATURES</b><small>MARCH · STRIKE · TRANSIT</small></span><em>{fieldRecovered}/{fieldTotal}</em></button>
+        <button className={vaultSection === "social" ? "active" : ""} aria-pressed={vaultSection === "social"} onClick={() => openVaultSection("social")}><i>03</i><span><b>SOCIAL SIGNALS</b><small>NAME · TITLE</small></span><em>{socialRecovered}/{socialTotal}</em></button>
+      </nav>
+
+      <div className={`profile-vault-grid vault-sector-${vaultSection}`}>
+        <div className="profile-vault-preview-column">
+          <article className={`profile-card profile-vault-preview ${vaultSection === "social" ? "profile-social-preview focused" : ""}`}>
+            <header><small>{vaultSection === "social" ? "SOCIAL PREVIEW // COMMS IDENTITY" : previewKind === "march" ? "MARCH PREVIEW // LIVE ROUTE" : previewKind === "strike" ? "STRIKE PREVIEW // IMPACT SIMULATION" : previewKind === "cursor" ? "CURSOR PREVIEW // COMMAND HAND" : "PLANET PREVIEW // BOUND ASSEMBLY"}</small><span>{vaultSection === "social" && socialTitle ? "SEALED" : selectedRelicTier}</span></header>
+            {vaultSection === "social"
+              ? <ChatSignalPreview signal={socialSignal} title={socialTitle} username={profile.name} faction={profile.factionSymbol} reducedMotion={account.reducedMotion} />
+              : <div className={`profile-vault-stage preview-${previewKind}`}>
+                {previewKind === "march" ? <MarchSignaturePreview signature={previewMarch} /> : previewKind === "strike" ? <StrikeSignaturePreview signature={previewStrike} reducedMotion={account.reducedMotion} /> : previewKind === "cursor" ? <CursorPreview cursor={previewCursor} /> : <PlanetOrbitPreview skin={previewKind === "planet" ? previewSkin : vault.equipped.planetBody} halo={previewKind === "halo" ? previewHalo : vault.equipped.halo} orbit={previewKind === "orbit" ? previewOrbit : vault.equipped.orbit} chrome={false} fitAssembly className="profile-bound-assembly" />}
+              </div>}
+            <div className="profile-relic-copy"><small>{selectedRelicTier} // {selectedRelicType}</small><h2>{selectedRelic.name}{selectedRelic.translatedName ? <span className="profile-relic-translation">{selectedRelic.translatedName}</span> : null}</h2><p>{selectedRelic.transmission}</p><em>RECOVERED FROM // {selectedRelic.source}</em><button className="profile-action primary full" disabled={!selectedRelicOwned || (previewKind === "planet" && selectedRelicEquipped)} onClick={triggerSelectedRelic}>{!selectedRelicOwned ? "RELIC NOT RECOVERED" : selectedRelicEquipped ? previewKind === "planet" ? "CORE CANNOT BE UNBOUND" : `RELEASE FROM ${selectedRelicTarget}` : `BIND TO ${selectedRelicTarget}`}</button></div>
+          </article>
+        </div>
+
+        <div className="profile-vault-list">
+          {vaultSection === "celestial" && <>
+            <div className="profile-section-title"><div><small>PLANET REGALIA // CORES</small><b>{ownedSkinCount} / {PLANET_SKINS.length} RECOVERED</b></div><span>VISIBLE ACROSS THE STAR MAP</span></div>
+            <div className="profile-relic-grid">{PLANET_SKINS.map((skin) => {
+              const owned = ownsPlanetSkin(vault, skin.id); const equipped = vault.equipped.planetBody === skin.id;
+              return <button key={skin.id} className={`${previewKind === "planet" && previewSkin === skin.id ? "selected" : ""} ${owned ? "owned" : "locked"}`} onClick={() => { setPreviewKind("planet"); setPreviewSkin(skin.id); }}><div><PlanetOrbitPreview skin={skin.id} orbit={null} chrome={false} staticPreview className="profile-core-isolation" /></div><span>{equipped ? "BOUND" : owned ? "RECOVERED" : "UNKNOWN"}</span><b>{skin.name}</b><small>{skin.tier || skin.rarity} · CORE</small></button>;
+            })}</div>
+            <div className="profile-vault-slots">
+              <article className="profile-card"><header><small>PLANET HALOS</small><span>{PLANET_HALOS.filter((halo) => ownsPlanetHalo(vault, halo.id)).length} / {PLANET_HALOS.length}</span></header><div>{PLANET_HALOS.map((halo) => { const owned = ownsPlanetHalo(vault, halo.id); return <button key={halo.id} className={`${vault.equipped.halo === halo.id ? "active" : ""} ${previewKind === "halo" && previewHalo === halo.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("halo", halo.id)}><i className={`halo-effect-icon halo-effect-${halo.id}`} /><span><b>{halo.name} <em>{halo.translatedName}</em></b><small>{vault.equipped.halo === halo.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? `${halo.tier} · RECOVERED` : `${halo.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
+              <article className="profile-card"><header><small>ORBITAL ARRAYS</small><span>{PLANET_ORBITS.filter((orbit) => ownsPlanetOrbit(vault, orbit.id)).length} / {PLANET_ORBITS.length}</span></header><div>{PLANET_ORBITS.map((orbit) => { const owned = ownsPlanetOrbit(vault, orbit.id); return <button key={orbit.id} className={`${vault.equipped.orbit === orbit.id ? "active" : ""} ${previewKind === "orbit" && previewOrbit === orbit.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("orbit", orbit.id)}><i className={`orbit-effect-icon orbit-effect-${orbit.id}`} /><span><b>{orbit.name} <em>{orbit.translatedName}</em></b><small>{vault.equipped.orbit === orbit.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? `${orbit.tier} · RECOVERED` : `${orbit.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
+            </div>
+          </>}
+
+          {vaultSection === "field" && <>
+            <div className="profile-section-title"><div><small>FIELD SIGNATURES // DEPLOYMENT</small><b>{fieldRecovered} / {fieldTotal} RECOVERED</b></div><span>TRACES LEFT BEYOND THE CITY</span></div>
+            <div className="profile-vault-slots">
+              <article className="profile-card"><header><small>MARCH SIGNATURES</small><span>{MARCH_SIGNATURES.filter((effect) => ownsMarchSignature(vault, effect.id)).length} / {MARCH_SIGNATURES.length}</span></header><div>{MARCH_SIGNATURES.map((effect) => { const owned = ownsMarchSignature(vault, effect.id); return <button key={effect.id} className={`${vault.equipped.marchSignature === effect.id ? "active" : ""} ${previewKind === "march" && previewMarch === effect.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("march", effect.id)}><i className={`march-effect-icon march-effect-${effect.id}`} /><span><b>{effect.name} <em>{effect.translatedName}</em></b><small>{vault.equipped.marchSignature === effect.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? `${effect.tier} · RECOVERED` : `${effect.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
+              <article className="profile-card profile-cursor-vault"><header><small>COMMAND HAND // PRIVATE LAYER</small><span>{GAME_CURSORS.filter((cursor) => ownsGameCursor(vault, cursor.id)).length} / {GAME_CURSORS.length}</span></header><div>{GAME_CURSORS.map((cursor) => { const owned = ownsGameCursor(vault, cursor.id); return <button key={cursor.id} className={`${vault.equipped.cursor === cursor.id ? "active" : ""} ${previewKind === "cursor" && previewCursor === cursor.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("cursor", cursor.id)}><i className={`cursor-effect-icon cursor-effect-${cursor.id}`}><CursorGlyph cursor={cursor.id} /></i><span><b>{cursor.name} <em>{cursor.translatedName}</em></b><small>{vault.equipped.cursor === cursor.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? `${cursor.tier} · RECOVERED` : `${cursor.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
+              <article className="profile-card profile-strike-vault"><header><small>STRIKE IMPRINTS</small><span>{STRIKE_SIGNATURES.filter((effect) => ownsStrikeSignature(vault, effect.id)).length} / {STRIKE_SIGNATURES.length}</span></header><div>{STRIKE_SIGNATURES.map((effect) => { const owned = ownsStrikeSignature(vault, effect.id); return <button key={effect.id} className={(vault.equipped.strikeSignature === effect.id ? "active " : "") + (previewKind === "strike" && previewStrike === effect.id ? "previewed " : "") + (owned ? "" : "locked")} onClick={() => chooseOptional("strike", effect.id)}><i className={"strike-effect-icon strike-effect-" + effect.id}><span /></i><span><b>{effect.name} <em>{effect.translatedName}</em></b><small>{vault.equipped.strikeSignature === effect.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? effect.tier + " · RECOVERED" : effect.tier + " · UNKNOWN"}</small></span></button>; })}</div></article>
+            </div>
+            <article className="profile-card profile-field-horizon"><header><small>UNCHARTED FIELD CHANNELS</small><span>VAULT EXPANSION</span></header><div><span><i>⌁</i><b>FOLD ARRIVAL</b><small>NO RELIC HAS ANSWERED YET</small></span><span><i>◇</i><b>WILDLANDS TRACE</b><small>NO RELIC HAS ANSWERED YET</small></span></div></article>
+          </>}
+
+          {vaultSection === "social" && <>
+            <div className="profile-section-title"><div><small>SOCIAL SIGNALS // COMMANDER IDENTITY</small><b>{socialRecovered} / {socialTotal} RECOVERED</b></div><span>SEEN IN COMMS AND DOSSIERS</span></div>
+            <div className="profile-vault-slots">
+              <article className="profile-card profile-name-vault"><header><small>NAME SIGNALS</small><span>{CHAT_SIGNALS.filter((effect) => ownsChatSignal(vault, effect.id)).length} / {CHAT_SIGNALS.length}</span></header><div>{CHAT_SIGNALS.map((effect) => { const owned = ownsChatSignal(vault, effect.id); return <button key={effect.id} className={`${vault.equipped.chatSignal === effect.id ? "active" : ""} ${previewKind === "chat" && previewChat === effect.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("chat", effect.id)}><i className="chat-effect-icon"><NameSignal signal={effect.id} mode="static">A</NameSignal></i><span><b>{effect.name} <em>{effect.translatedName}</em></b><small>{vault.equipped.chatSignal === effect.id ? "BOUND · TAP AGAIN TO RELEASE" : owned ? `${effect.tier} · RECOVERED` : `${effect.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
+              <article className="profile-card"><header><small>TITLE SEALS</small><span>{TITLE_SEALS.filter((title) => ownsTitleSeal(vault, title.id)).length} / {TITLE_SEALS.length}</span></header><div>{TITLE_SEALS.map((title, index) => { const owned = ownsTitleSeal(vault, title.id); return <button key={title.id} className={`${vault.equipped.title === title.id ? "active" : ""} ${previewKind === "title" && previewTitle === title.id ? "previewed" : ""} ${owned ? "" : "locked"}`} onClick={() => chooseOptional("title", title.id)}><i>{["Ⅰ", "⌁", "◎"][index]}</i><span><b>{title.name.toUpperCase()}</b><small>{vault.equipped.title === title.id ? "SEALED · TAP AGAIN TO RELEASE" : owned ? `${title.tier} · RECOVERED` : `${title.tier} · UNKNOWN`}</small></span></button>; })}</div></article>
+            </div>
+          </>}
         </div>
       </div>
     </div>}
