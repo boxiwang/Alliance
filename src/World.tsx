@@ -474,6 +474,9 @@ export default function World({ address, profile, onBack, onMessages = () => {},
   const equippedPlanetHalo = equippedCosmetics.halo;
   const equippedPlanetOrbit = equippedCosmetics.orbit;
   const voidSkinEquipped = equippedPlanetSkin === "void-touched";
+  // The home planet isn't an attackable target, so it can't enter selectedId;
+  // this gives it the same selection reticle when you tap it.
+  const [homeSelected, setHomeSelected] = useState(false);
   const initial = useMemo(() => openLocalWorldSession(address, loadGame(address) || initGame(address), Date.now(), N), [address, N]);
   const [game, setGame] = useState<GameState>(() => initial.game);
   const [session, setSession] = useState<LocalWorldSession>(() => initial.session);
@@ -755,7 +758,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
         const color = entityColor(entity); const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id; const verified = entity.kind === "resource" || scoutedTargetIds.has(entity.id);
         const occupation = entity.kind === "resource" ? resourceOccupationDisposition(entity, world.marches, world.players, session.playerId, profile.faction) : "neutral";
         const publicCosmetics = entity.kind === "city" ? world.players[entity.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS : null;
-        return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setSelection(emptySelection()); setMessage(""); setTileMark(null); }}>
+        return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setHomeSelected(false); setSelection(emptySelection()); setMessage(""); setTileMark(null); }}>
           {selectedTarget && (entity.kind !== "city" || !gpuVisualsReady) && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
           {(!gpuVisualsReady || entity.kind !== "city") && <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />}
           {entity.kind === "city" && publicCosmetics ? <>
@@ -926,7 +929,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
           {!gpuVisualsReady && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {mapClusters}
           {mapTargets}
-          <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera({ ...playerCity.position })}>
+          <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera({ ...playerCity.position }); setSelectedId(null); setHomeSelected(true); }}>
             {strategicZoom && !gpuVisualsReady ? <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
               <circle cx={playerCity.position.x} cy={playerCity.position.y} r="9" className="world-home-ring" />
               <rect x={playerCity.position.x - 4.5} y={playerCity.position.y - 4.5} width="9" height="9" rx="1" transform={`rotate(45 ${playerCity.position.x} ${playerCity.position.y})`} />
@@ -943,6 +946,10 @@ export default function World({ address, profile, onBack, onMessages = () => {},
             {!gpuVisualsReady && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
               <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
               <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
+            </g>}
+            {homeSelected && !gpuVisualsReady && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`} pointerEvents="none">
+              <circle cx={playerCity.position.x} cy={playerCity.position.y} r="9" className="world-lock-ring" />
+              <path d={`M ${playerCity.position.x - 12} ${playerCity.position.y} h 6 M ${playerCity.position.x + 6} ${playerCity.position.y} h 6 M ${playerCity.position.x} ${playerCity.position.y - 12} v 6 M ${playerCity.position.x} ${playerCity.position.y + 6} v 6`} className="world-lock-cross" />
             </g>}
           </g>
           {tileMark && <g className="world-tile-mark" pointerEvents="none">
@@ -981,6 +988,10 @@ export default function World({ address, profile, onBack, onMessages = () => {},
             <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
             <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
           </g>
+          {homeSelected && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`} pointerEvents="none">
+            <circle cx={playerCity.position.x} cy={playerCity.position.y} r="9" className="world-lock-ring" />
+            <path d={`M ${playerCity.position.x - 12} ${playerCity.position.y} h 6 M ${playerCity.position.x + 6} ${playerCity.position.y} h 6 M ${playerCity.position.x} ${playerCity.position.y - 12} v 6 M ${playerCity.position.x} ${playerCity.position.y + 6} v 6`} className="world-lock-cross" />
+          </g>}
         </svg>}
         {!gpuVisualsReady && voidSkinEquipped && <VoidPlanetOverlay svgRef={svgRef} home={playerCity.position} zoom={zoom} strategic={strategicZoom} onActiveChange={setVoidShaderActive} />}
         {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
