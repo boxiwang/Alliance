@@ -121,25 +121,45 @@ export function resolveWallets(detected: Eip6963ProviderDetail[]): WalletButton[
 }
 
 // ---- connect / chain / sign, all on a chosen provider ----
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`__timeout__:${label}`)), ms);
+    p.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+  });
+}
+
 export async function connect(
-  provider: Eip1193Provider
+  provider: Eip1193Provider,
+  opts: { timeoutMs?: number } = {}
 ): Promise<{ address: string; chainOk: boolean }> {
   if (!provider) throw new Error("Wallet not installed.");
-  const accounts: string[] = await provider.request({ method: "eth_requestAccounts" });
+  // Reuse an already-authorized account without prompting again — avoids the
+  // "-32002 request already pending" state when a prior prompt is still open.
+  let accounts: string[] = [];
+  try { accounts = (await provider.request({ method: "eth_accounts" })) as string[]; } catch {}
+  if (!accounts?.length) {
+    accounts = (await withTimeout(
+      provider.request({ method: "eth_requestAccounts" }),
+      opts.timeoutMs ?? 45000,
+      "requestAccounts",
+    )) as string[];
+  }
   const address = accounts?.[0];
   if (!address) throw new Error("No account returned.");
 
+  // Chain switch is best-effort and must never hang the connect flow — the game
+  // is playable solo regardless of chainOk, so time it out and move on.
   let chainOk = false;
   try {
-    await provider.request({
+    await withTimeout(provider.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: RH_MAINNET.chainIdHex }],
-    });
+    }), opts.timeoutMs ?? 45000, "switchChain");
     chainOk = true;
   } catch (e: any) {
     if (e?.code === 4902 || String(e?.message || "").toLowerCase().includes("unrecognized")) {
       try {
-        await provider.request({ method: "wallet_addEthereumChain", params: [RH_MAINNET.params] });
+        await withTimeout(provider.request({ method: "wallet_addEthereumChain", params: [RH_MAINNET.params] }), opts.timeoutMs ?? 45000, "addChain");
         chainOk = true;
       } catch {
         chainOk = false;

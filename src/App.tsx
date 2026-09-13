@@ -134,6 +134,7 @@ export default function App() {
   const currentKeepLevel = profile ? (loadGame(profile.address)?.buildings.keep.lvl ?? profile.keepLevel) : 1;
 
   async function pick(w: WalletButton) {
+    if (busy) return; // one wallet request at a time — avoids "-32002 already pending"
     setError("");
     if (!w.provider) {
       if (w.install) window.open(w.install, "_blank", "noopener");
@@ -180,7 +181,17 @@ export default function App() {
         report(recs, { wallet: w.name, chainOk: res.chainOk, stage: "founded", profile: p });
       }
     } catch (e: any) {
-      setError(e?.message || "Couldn't connect. Try again?");
+      const code = e?.code;
+      const msg = String(e?.message || "");
+      if (msg.startsWith("__timeout__")) {
+        setError("Wallet didn't respond — open your wallet to approve, then try again. Or use Quick Play.");
+      } else if (code === -32002 || msg.toLowerCase().includes("already pending")) {
+        setError("A connection request is already open in your wallet — approve it there (or reopen the wallet), then retry.");
+      } else if (code === 4001 || msg.toLowerCase().includes("reject") || msg.toLowerCase().includes("denied")) {
+        setError("Connection cancelled. Tap the wallet again to retry.");
+      } else {
+        setError(e?.message || "Couldn't connect. Try again — or use Quick Play.");
+      }
     } finally {
       setBusy("");
     }
@@ -340,7 +351,7 @@ export default function App() {
                 className={"wbtn" + (w.detected ? "" : " off")}
                 style={{ ["--wc" as any]: w.color }}
                 onClick={() => pick(w)}
-                disabled={busy === w.key}
+                disabled={!!busy}
               >
                 <span className="wicon">
                   {w.icon ? <img src={w.icon} alt="" /> : <span className="emoji">{w.emoji}</span>}
