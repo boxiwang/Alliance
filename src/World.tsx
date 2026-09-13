@@ -22,7 +22,7 @@ import GameNav from "./GameNav";
 import MiniComms from "./MiniComms";
 import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
-import WorldVisualLayer, { createWorldVisualStress, type WorldVisualCity } from "./WorldVisualLayer";
+import WorldVisualLayer, { createWorldVisualStress, worldVisualBodyRadius, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
 import WorldMarchLayer from "./WorldMarchLayer";
 import { useGraphicsQuality } from "./useGraphicsQuality";
@@ -496,6 +496,16 @@ export default function World({ address, profile, onBack, onMessages = () => {},
   const playerCity = session.world.entities[session.world.players[session.playerId].cityId] as CityEntity;
   const [camera, setCamera] = useState<Point>(() => ({ ...playerCity.position }));
   const svgRef = useRef<SVGSVGElement>(null);
+  const [mapPx, setMapPx] = useState({ w: 1, h: 1 });
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const measure = () => { const r = el.getBoundingClientRect(); if (r.width && r.height) setMapPx({ w: r.width, h: r.height }); };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [gpuVisualsReady, setGpuVisualsReady] = useState(false);
   // True while the WebGL Void-Touched shader is actively covering the home planet;
   // when so, we hide the SVG skin underneath to avoid a doubled halo.
@@ -625,6 +635,11 @@ export default function World({ address, profile, onBack, onMessages = () => {},
   // fell BELOW a resource planet (whose worldMarkerScale grows via tacticalBoost).
   // Track that same growth curve and stay ~1.35x above it.
   const homeScale = strategicZoom ? 2 / zoom : worldMarkerScale(zoom) * 1.35;
+  // Selection ring radius in WORLD units: the planet's on-screen body radius is
+  // in px (grows with zoom via LOD), so convert px→world and wrap at 3.35× the
+  // body — just outside the halo/orbit — with a non-scaling (constant-thin) stroke.
+  const worldPerPx = Math.max(viewport.width / mapPx.w, viewport.height / mapPx.h);
+  const selectionRingWorldR = (own: boolean, sel: boolean) => worldVisualBodyRadius(zoom, own, sel) * 3.35 * worldPerPx;
   const filteredTargets = useMemo(() => targets.filter((entity) => layers[entity.kind]
     && worldTargetObservable(entity.kind, zoom)
     && !(entity.kind === "resource" && entity.state === "depleted")
@@ -670,12 +685,12 @@ export default function World({ address, profile, onBack, onMessages = () => {},
           halo: cosmetics.halo,
           orbit: cosmetics.orbit,
           own: city.ownerId === session.playerId,
-          selected: city.id === selectedId || (city.ownerId === session.playerId && homeSelected),
+          selected: city.id === selectedId,
           burning: city.state === "burning",
         };
       });
     return live.concat(detailZoom ? stressVisuals : []);
-  }, [cityEntities, detailZoom, layers.city, selectedId, homeSelected, session.playerId, stressVisuals, world.players]);
+  }, [cityEntities, detailZoom, layers.city, selectedId, session.playerId, stressVisuals, world.players]);
   const monsterPreview = useMemo(() => {
     if (!selected || selected.kind !== "monster" || sentCount <= 0) return null;
     const runtime = { ...(N.runtimeAccountModifiers ?? {}) };
@@ -961,8 +976,11 @@ export default function World({ address, profile, onBack, onMessages = () => {},
         <WorldMarchLayer world={world} viewport={{ x: viewX, y: viewY, width: viewport.width, height: viewport.height }} zoom={zoom} viewerId={session.playerId} quality={quality} />
         {gpuVisualsReady && <svg className="world-map world-map-overlay" viewBox={viewBox} aria-hidden="true">
           {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
-          {/* Cities show selection via the GPU layer's thin outer ring (it wraps
-              outside the cosmetics); resources/rogues keep the base SVG ring. */}
+          {/* Selection ring for cities: a full circle in screen-space with a
+              constant thin stroke, wrapping outside the planet's cosmetics at
+              every zoom. Resources/rogues keep the base SVG lock-ring. */}
+          {selected?.kind === "city" && <circle cx={selected.position.x} cy={selected.position.y} r={selectionRingWorldR(false, true)} className="world-sel-ring" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
+          {homeSelected && <circle cx={playerCity.position.x} cy={playerCity.position.y} r={selectionRingWorldR(true, false)} className="world-sel-ring" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
           <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`}>
             <text x={center.x} y={center.y - 47} className="world-circle-label">WORMHOLE</text>
             <text x={center.x} y={center.y - 39} className="world-circle-sub">GRAVITY ANCHOR · FRONTIER I</text>

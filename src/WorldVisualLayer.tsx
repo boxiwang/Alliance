@@ -458,12 +458,10 @@ void main(){
     drawPlanet(col,vP);
     drawOrbit(col,vP,1.0);
     drawHalo(col,vP,1.0);
-    float selected=mod(floor(vFlags/2.0),2.0);
     float burning=mod(floor(vFlags/4.0),2.0);
-    // Selection: a single thin, static ring at the OUTERMOST edge of the quad so
-    // it wraps cleanly outside the body/orbit/halo instead of cutting through
-    // them. No breathing pulse.
-    emit(col,vec3(.62,.82,1.0),ring(vP,vec2(3.45,3.45),.011)*selected*.6);
+    // Selection is drawn as a screen-space SVG ring in World.tsx (constant thin
+    // stroke, wraps outside the cosmetics at every zoom) — not in this quad,
+    // whose radius-relative AA made the ring fat and clipped when zoomed out.
     emit(col,vec3(1.0,.18,.28),exp(-pow((length(vP)-1.32)*5.5,2.0))*burning*(.25+.2*sin(uTime*3.0*uMotion)));
   }
   gl_FragColor=col;
