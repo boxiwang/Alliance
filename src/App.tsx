@@ -19,13 +19,11 @@ import GameCursor from "./GameCursor";
 import { hasLocalGm, localGmRequested } from "./lib/gm";
 import { loadGame } from "./lib/gamestore";
 import { verifyAllianceHolding } from "./lib/alliance";
+import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
-
-// Google OAuth client id (set VITE_GOOGLE_CLIENT_ID at build/deploy). When unset,
-// the Google button is hidden and Quick Play still works.
-const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || "";
 
 // Guest / Google players have no wallet, but the whole app is keyed on a 0x
 // address, so derive a stable synthetic one from their id. FNV-1a expanded to 40 hex.
@@ -108,31 +106,23 @@ export default function App() {
   useEffect(() => subscribeProviders(setDetected), []);
   const wallets = useMemo(() => resolveWallets(detected), [detected]);
 
-  // Load Google Identity Services on the connect screen when a client id is set.
-  useEffect(() => {
-    if (stage !== "connect" || !GOOGLE_CLIENT_ID) return;
-    const init = () => {
-      const g = (window as any).google;
-      if (!g?.accounts?.id) return;
-      g.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: (resp: any) => {
-          try {
-            const payload = JSON.parse(atob(String(resp.credential).split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-            beginLocalSession(synthAddress("google:" + payload.sub), payload.name || payload.email || "", "Google");
-          } catch { setError("Google sign-in failed. Try again or use Quick Play."); }
-        },
-      });
-      const el = document.getElementById("gbtn");
-      if (el) { el.innerHTML = ""; g.accounts.id.renderButton(el, { theme: "filled_black", size: "large", text: "continue_with", shape: "pill", width: 280 }); }
-    };
-    if ((window as any).google?.accounts?.id) { init(); return; }
-    const existing = document.getElementById("gis-script") as HTMLScriptElement | null;
-    if (existing) { existing.addEventListener("load", init); return () => existing.removeEventListener("load", init); }
-    const s = document.createElement("script");
-    s.id = "gis-script"; s.src = "https://accounts.google.com/gsi/client"; s.async = true; s.defer = true; s.onload = init;
-    document.head.appendChild(s);
-  }, [stage]);
+  // Google sign-in via Firebase Auth (reuses the Blockwick Firebase project).
+  async function signInGoogle() {
+    setError("");
+    const auth = firebaseAuth();
+    if (!auth) { setError("Google sign-in is not configured."); return; }
+    setBusy("google");
+    try {
+      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+      const u = cred.user;
+      beginLocalSession(synthAddress("google:" + u.uid), u.displayName || u.email || "", "Google");
+    } catch (e: any) {
+      const msg = String(e?.code || e?.message || "");
+      if (!msg.includes("popup-closed") && !msg.includes("cancelled")) setError("Google sign-in failed. Try again or use Quick Play.");
+    } finally {
+      setBusy("");
+    }
+  }
 
   const memes = records ? memeHoldings(records) : [];
   const pledgeable = pledgeableFrom(memes);
@@ -321,7 +311,7 @@ export default function App() {
           </p>
           <div className="quickstart">
             <button className="cta big" onClick={startGuest}>▶ Quick Play — no wallet</button>
-            {GOOGLE_CLIENT_ID && <div id="gbtn" className="gbtn" />}
+            {firebaseConfigured && <button className="gbtn" onClick={signInGoogle} disabled={busy === "google"}>{busy === "google" ? "Opening Google…" : "Continue with Google"}</button>}
             <div className="or"><span>or connect a wallet</span></div>
           </div>
           <div className="wgrid">
