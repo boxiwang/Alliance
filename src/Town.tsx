@@ -34,7 +34,7 @@ import GameNav from "./GameNav";
 import BuildingGlyph from "./BuildingGlyph";
 import CosmicBackdrop from "./CosmicBackdrop";
 import MiniComms from "./MiniComms";
-import { ALLIANCE_CHANGED_EVENT, openHelpFor, requestAllianceHelp } from "./lib/alliance";
+import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAllianceHelp } from "./lib/alliance";
 
 const ECONOMY_BUILDINGS: BKey[] = ["bank", "oilwell", "powerplant"];
 const COMMAND_BUILDINGS: BKey[] = ["storage", "wall"];
@@ -169,6 +169,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   }, [facilityOpen]);
 
   const view = useMemo(() => project(game, now), [game, now]);
+  const allianceBonuses = useMemo(() => allianceGameplayBonuses(address), [address, allianceRevision]);
   const rate = prodPerHour(view);
   const troopsTotal = totalTroops(view);
   const mightScore = mightBreakdown(view);
@@ -200,6 +201,23 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const r = fn();
     if (r.ok) { setGame(r.state); saveGame(r.state); setMsg(""); }
     else setMsg(r.reason || "Can't do that");
+  }
+
+  function startAllianceUpgrade(k: BKey) {
+    const result = startUpgrade(game, k);
+    if (!result.ok || allianceBonuses.constructionSpeedBonus <= 0) return result;
+    const queue = result.state.buildings[k];
+    queue.durationSec = Math.max(1, Math.ceil((queue.durationSec || 1) / (1 + allianceBonuses.constructionSpeedBonus)));
+    queue.finishAt = Date.now() + queue.durationSec * 1000;
+    return result;
+  }
+
+  function startAllianceHealing(quantity: number) {
+    const result = startHealing(game, quantity);
+    if (!result.ok || allianceBonuses.healingSpeedBonus <= 0) return result;
+    result.state.healing.durationSec = Math.max(1, Math.ceil(result.state.healing.durationSec / (1 + allianceBonuses.healingSpeedBonus)));
+    result.state.healing.finishAt = Date.now() + result.state.healing.durationSec * 1000;
+    return result;
   }
 
   function gmAct(fn: (state: GameState) => GameState, message: string) {
@@ -764,7 +782,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       <div className="upgrade-inspector-level">
         <span>NEXT</span>
         <b>{building.lvl === 0 ? "BUILD" : `LV.${building.lvl} → LV.${target}`}</b>
-        {upgradable && !atCap && <time className="mono">◷ {fmtSec(upgradeTimeSec(k, target))}</time>}
+        {upgradable && !atCap && <time className="mono">◷ {fmtSec(Math.ceil(upgradeTimeSec(k, target) / (1 + allianceBonuses.constructionSpeedBonus)))}</time>}
       </div>
       {upgradable && !atCap && <div className="upgrade-resource-grid">
         {RES_ORDER.filter((resource) => (cost[resource] ?? 0) > 0).map((resource) => {
@@ -781,7 +799,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         {missingRequirements.map((requirement) => <span key={requirement.key}>🔒 {BUILDINGS[requirement.key].label} LV.{requirement.requiredLevel}</span>)}
       </div>}
       {upgrading ? <><div className="upgrade-inspector-progress"><div className="rmeter"><i style={{ width: upPct(k, building, now) + "%" }} /></div><b className="mono">{fmtMs(building.finishAt - now)}</b></div><button className="alliance-help-request" disabled={!!helpRequest} onClick={() => { const result = requestAllianceHelp(profile, "building", k, `${BUILDINGS[k].label} LV.${target}`); setMsg(result.reason || "Alliance assistance signal transmitted."); setAllianceRevision((value) => value + 1); }}>{helpRequest ? `ALLIANCE AID · ${helpRequest.helpers.length}/25` : "REQUEST ALLIANCE AID"}</button></>
-        : <button className={ready ? "ready" : "blocked"} disabled={!ready} onClick={() => act(() => startUpgrade(game, k))}><span>{blockLabel}</span>{ready && <b>{building.lvl === 0 ? "BUILD" : "UPGRADE"} →</b>}</button>}
+        : <button className={ready ? "ready" : "blocked"} disabled={!ready} onClick={() => act(() => startAllianceUpgrade(k))}><span>{blockLabel}</span>{ready && <b>{building.lvl === 0 ? "BUILD" : "UPGRADE"} →</b>}</button>}
     </section>;
   }
 
@@ -809,11 +827,11 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       return <div className="hospital-queue"><div className="tr-row"><span>Healing {compact(displayTroops(view.healing.qty))}</span><span className="mono">{fmtMs(view.healing.finishAt - now)}</span></div><div className="rmeter"><i style={{ width: progress + "%" }} /></div><button className="alliance-help-request" disabled={!!helpRequest} onClick={() => { const result = requestAllianceHelp(profile, "healing", "hospital", `Heal ${compact(displayTroops(view.healing.qty))} wounded`); setMsg(result.reason || "Alliance medical signal transmitted."); setAllianceRevision((value) => value + 1); }}>{helpRequest ? `ALLIANCE AID · ${helpRequest.helpers.length}/25` : "REQUEST ALLIANCE AID"}</button></div>;
     }
     return <div className="hospital-controls">
-      <div className="hospital-stats mono"><span>Wounded {compact(displayTroops(view.wounded))}/{compact(displayTroops(hospitalCap))}</span><span>Healing speed ×{healingSpeedMult(view).toFixed(2)}</span></div>
+      <div className="hospital-stats mono"><span>Wounded {compact(displayTroops(view.wounded))}/{compact(displayTroops(hospitalCap))}</span><span>Healing speed ×{(healingSpeedMult(view) * (1 + allianceBonuses.healingSpeedBonus)).toFixed(2)}</span></div>
       {view.wounded > 0 && !upgrading && <>
         <div className="train-slider-row"><span className="mono">{compact(displayTroops(1))}</span><input aria-label="Healing quantity" type="range" min={1} max={view.wounded} step={1} value={quantity} onChange={(event) => setHealQty(Number(event.target.value))} /><span className="mono">{compact(displayTroops(view.wounded))}</span></div>
-        <div className="bcost mono">Heal {compact(displayTroops(quantity))}: {RES_ORDER.map((resource) => cost[resource] ? `${compact(displayResource(cost[resource]!))}${RES[resource].emoji} ` : "").join("")}· ◷ {fmtSec(healingDurationSec(view, quantity))}</div>
-        <button className="academy-open" onClick={() => act(() => startHealing(game, quantity))}>Heal wounded</button>
+        <div className="bcost mono">Heal {compact(displayTroops(quantity))}: {RES_ORDER.map((resource) => cost[resource] ? `${compact(displayResource(cost[resource]!))}${RES[resource].emoji} ` : "").join("")}· ◷ {fmtSec(Math.ceil(healingDurationSec(view, quantity) / (1 + allianceBonuses.healingSpeedBonus)))}</div>
+        <button className="academy-open" onClick={() => act(() => startAllianceHealing(quantity))}>Heal wounded</button>
       </>}
     </div>;
   }

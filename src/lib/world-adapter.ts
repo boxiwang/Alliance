@@ -12,7 +12,7 @@ import {
 } from "./world-engine";
 import { clearWorld as clearLegacyWorld, loadWorld as loadLegacyWorld, projectWorld as projectLegacyWorld } from "./world";
 import { CHAT_SIGNALS, MARCH_SIGNATURES, PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, STRIKE_SIGNATURES, loadCosmeticVault } from "./player-account";
-import { allianceForAddress } from "./alliance";
+import { allianceForAddress, allianceGameplayBonuses } from "./alliance";
 
 export interface WorldGameSnapshot {
   troops: TroopManifest;
@@ -51,14 +51,16 @@ function manifest(source: GameState["troops"]): TroopManifest {
 }
 
 function playerResearchModifiers(game: GameState): any {
+  const research = accountResearchModifiers(game);
+  const alliance = allianceGameplayBonuses(game.address);
   return {
-    marchSpeedBonus: 0,
-    gatherSpeedBonus: 0,
     troopAttackBonus: 0,
     troopDefenseBonus: 0,
     loadBonus: 0,
-    marchCapacityBonus: 0,
-    ...accountResearchModifiers(game),
+    ...research,
+    marchSpeedBonus: (research.marchSpeedBonus ?? 0) + alliance.marchSpeedBonus,
+    gatherSpeedBonus: (research.gatherSpeedBonus ?? 0) + alliance.gatherSpeedBonus,
+    marchCapacityBonus: (research.marchCapacityBonus ?? 0) + alliance.marchCapacityBonus,
   };
 }
 

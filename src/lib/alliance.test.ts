@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { TokenHolding } from "./blockscout";
 import type { Profile } from "./profile";
 import {
-  DEFAULT_ALLIANCE_ID, HELP_LIMIT, allianceForAddress, endorseCandidate, gmPrepareAlliance, helpAll,
-  foundAllianceFromToken, gmSeedAlliance, joinAlliance, leaveAlliance,
+  DEFAULT_ALLIANCE_ID, HELP_LIMIT, allianceForAddress, allianceGameplayBonuses, availableAlliances, endorseCandidate, gmPrepareAlliance, helpAll,
+  castLeadershipVote, foundAllianceFromToken, gmSeedAlliance, initiateLeadershipChallenge, joinAlliance, leaveAlliance,
   loadAllianceDirectory, relationshipBetween, requestAllianceEntry, requestAllianceHelp,
-  reviewAllianceApplication, setAllianceDiplomacy, setAllianceMemberRank, updateAllianceStandards,
+  resolveLeadershipChallenges, reviewAllianceApplication, reviewAllianceNap, setAllianceDiplomacy, setAllianceMemberRank, updateAllianceStandards,
+  upgradeAllianceSkill, verifyAllianceHolding,
 } from "./alliance";
 import { initGame, loadGame, saveGame } from "./gamestore";
 
@@ -33,6 +34,17 @@ describe("alliance core rules", () => {
     expect(result.ok).toBe(true);
     expect(allianceForAddress(profile(1).address)?.symbol).toBe("GACO");
     expect(result.alliance?.members.some((member) => member.rank === "R5")).toBe(true);
+  });
+
+  it("does not let command token-gate the default chapter", () => {
+    const member = profile(1);
+    joinAlliance(DEFAULT_ALLIANCE_ID, member, 1000);
+    gmPrepareAlliance(DEFAULT_ALLIANCE_ID, member.address);
+    expect(updateAllianceStandards(DEFAULT_ALLIANCE_ID, member.address, { minHoldingAmount: "999", joinPolicy: "application" }).ok).toBe(false);
+    const accord = allianceForAddress(member.address)!;
+    expect(accord.minHoldingAmount).toBe("0");
+    expect(accord.joinPolicy).toBe("open");
+    expect(requestAllianceEntry(DEFAULT_ALLIANCE_ID, profile(2), [], 2000).ok).toBe(true);
   });
 
   it("registers each token contract only once", () => {
@@ -93,16 +105,57 @@ describe("alliance core rules", () => {
     const founder = profile(1); const recruit = profile(2);
     const founded = foundAllianceFromToken(token, founder, 1000).alliance!;
     gmPrepareAlliance(founded.id, founder.address);
-    const petition = requestAllianceEntry(founded.id, recruit, "1 ORBT verified", 2000);
+    const petition = requestAllianceEntry(founded.id, recruit, [token], 2000);
     expect(petition).toMatchObject({ ok: true, applied: true });
     expect(reviewAllianceApplication(founded.id, founder.address, recruit.address, true, 3000).ok).toBe(true);
     expect(allianceForAddress(recruit.address)?.id).toBe(founded.id);
     expect(setAllianceMemberRank(founded.id, founder.address, recruit.address, "R4").ok).toBe(true);
-    expect(updateAllianceStandards(founded.id, founder.address, { minHoldingDisplay: "Hold 100 ORBT", joinPolicy: "application" }).ok).toBe(true);
+    expect(updateAllianceStandards(founded.id, founder.address, { minHoldingAmount: "100", joinPolicy: "application" }).ok).toBe(true);
     expect(setAllianceDiplomacy(founded.id, founder.address, "sim-orbt", "nap").ok).toBe(true);
+    const directory = loadAllianceDirectory();
+    const rival = directory.alliances.find((alliance) => alliance.id === "sim-orbt")!;
+    const request = directory.alliances.find((alliance) => alliance.id === founded.id)!.diplomacyRequests[0];
+    expect(reviewAllianceNap(rival.id, rival.members[0].address, request.id, true).ok).toBe(true);
     const updated = allianceForAddress(founder.address)!;
     expect(updated.members.find((member) => member.address === recruit.address)?.rank).toBe("R4");
     expect(updated.minHoldingDisplay).toBe("Hold 100 ORBT");
     expect(updated.napAllianceIds).toContain("sim-orbt");
+  });
+
+  it("enforces the R5 token threshold on discovery and login", () => {
+    const founder = profile(1);
+    const founded = foundAllianceFromToken(token, founder, 1000).alliance!;
+    gmPrepareAlliance(founded.id, founder.address);
+    expect(updateAllianceStandards(founded.id, founder.address, { minHoldingAmount: "2" }).ok).toBe(true);
+    expect(availableAlliances([token]).some((alliance) => alliance.id === founded.id)).toBe(false);
+    expect(verifyAllianceHolding(founder, [token], 2000).status).toBe("suspended");
+  });
+
+  it("turns doctrine levels into active gameplay modifiers", () => {
+    const member = profile(1);
+    joinAlliance(DEFAULT_ALLIANCE_ID, member, 1000);
+    gmPrepareAlliance(DEFAULT_ALLIANCE_ID, member.address);
+    expect(upgradeAllianceSkill(DEFAULT_ALLIANCE_ID, member.address, "warfare").ok).toBe(true);
+    const bonuses = allianceGameplayBonuses(member.address);
+    expect(bonuses.constructionSpeedBonus).toBe(.01);
+    expect(bonuses.healingSpeedBonus).toBe(.01);
+    expect(bonuses.marchSpeedBonus).toBe(.01);
+    expect(bonuses.marchCapacityBonus).toBe(.01);
+  });
+
+  it("runs a 48-hour leadership ballot with a seven-day challenge lock", () => {
+    const initiator = profile(1);
+    joinAlliance(DEFAULT_ALLIANCE_ID, initiator, 1000);
+    const alliance = gmPrepareAlliance(DEFAULT_ALLIANCE_ID, initiator.address)!;
+    const now = Date.now();
+    const candidate = alliance.members.find((member) => member.address !== initiator.address)!;
+    const opened = initiateLeadershipChallenge(initiator, candidate.address, now);
+    expect(opened.ok).toBe(true);
+    expect(opened.challenge?.closesAt).toBe(now + 48 * 60 * 60 * 1000);
+    expect(initiateLeadershipChallenge(initiator, candidate.address, now + 1).ok).toBe(false);
+    const voters = opened.challenge!.eligibleAddresses.slice(0, Math.ceil(opened.challenge!.eligibleAddresses.length * .4));
+    voters.forEach((address) => expect(castLeadershipVote(DEFAULT_ALLIANCE_ID, address, candidate.address, now + 1000).ok).toBe(true));
+    resolveLeadershipChallenges(opened.challenge!.closesAt + 1);
+    expect(allianceForAddress(initiator.address)!.members.find((member) => member.address === candidate.address)?.rank).toBe("R5");
   });
 });
