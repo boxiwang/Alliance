@@ -1191,4 +1191,31 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world-march-layer{position:absolute;z-index:3;inset:0;width:100%;height:100%;pointer-events:none;contain:strict}
 /* Screen-space selection ring for cities/home: constant thin stroke (via
    vector-effect on the element), wraps outside the planet cosmetics, soft glow. */
-.world-sel-ring{fill:none;stroke:rgba(156,214,245,.72);stroke-width:1.4;filter:drop-shadow(0 0 3px rgba(120,200,255,.45))}
+.world-celestial-lock{color:#66c9d9;fill:none;stroke-linecap:round}
+.world-celestial-lock.rival{color:#b299df}
+.world-celestial-lock .lock-underlay{stroke:#020911;stroke-width:4;opacity:.85}
+.world-celestial-lock .lock-arc{stroke:currentColor;stroke-width:1.1;opacity:.78;filter:drop-shadow(0 0 2px currentColor)}
+.world-celestial-lock .lock-tick{stroke:currentColor;stroke-width:.8;opacity:.45}
+.world-celestial-lock .lock-diamond{fill:currentColor;stroke:none;opacity:.7}
+.world-map-overlay .world-wormhole-caption .world-circle-label{font-size:11px;letter-spacing:.22em;stroke-width:3px}
+.world-wormhole-caption .world-circle-sub{font-size:7px;letter-spacing:.12em;paint-order:stroke;stroke:#030611;stroke-width:2px}
+
+/* Quiet starmap: ambient targets keep their material identity without
+   competing with player cosmetics. Saturated color is concentrated in the
+   close-range surface mark and thin orbital readout. */
+.world-target.resource .world-signal-halo,.world-target.monster .world-signal-halo{opacity:.12}
+.world-target.resource:hover .world-signal-halo,.world-target.monster:hover .world-signal-halo,
+.world-target.resource.selected .world-signal-halo,.world-target.monster.selected .world-signal-halo{opacity:.23}
+.world-planet-glyph,.world-planet-glyph.tactical{filter:drop-shadow(0 0 2px rgba(114,167,178,.24))}
+.world-target:hover .world-planet-glyph{filter:drop-shadow(0 0 4px rgba(142,205,215,.42)) brightness(1.08)}
+.world-planet-glyph>ellipse{opacity:.48!important}
+.world-planet-specular{fill:#d8e3e1;opacity:.38}
+.world-rogue-glyph{filter:drop-shadow(0 0 2px rgba(182,91,114,.25))}
+.world-rogue-glyph>circle{stroke:#9f5366;stroke-width:.55}
+.world-rogue-glyph>ellipse{stroke:#bb5b72;opacity:.45}
+.world-surface-mark{filter:drop-shadow(0 0 2px currentColor) drop-shadow(0 1px 1px rgba(0,0,0,.92))}
+.world-surface-mark.cash{color:#55e7a0;fill:rgba(20,104,70,.55);stroke:#83f5ba;stroke-width:.7}
+.world-surface-mark.oil{color:#ffc064;fill:rgba(172,91,25,.48);stroke:#ffd083;stroke-width:.7}
+.world-surface-mark.power{color:#45ddff;fill:#8eeaff;stroke:#11789b;stroke-width:.42}
+.world-surface-mark.rogue{color:#ff647f;fill:rgba(175,38,66,.5);stroke:#ff91a3;stroke-width:.7}
+.world-surface-mark.rogue circle{fill:#ff5f78}

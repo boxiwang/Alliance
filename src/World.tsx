@@ -22,7 +22,7 @@ import GameNav from "./GameNav";
 import MiniComms from "./MiniComms";
 import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
-import WorldVisualLayer, { createWorldVisualStress, worldVisualBodyRadius, type WorldVisualCity } from "./WorldVisualLayer";
+import WorldVisualLayer, { createWorldVisualStress, worldVisualBodyRadius, worldWormholeRadius, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
 import WorldMarchLayer from "./WorldMarchLayer";
 import { useGraphicsQuality } from "./useGraphicsQuality";
@@ -183,7 +183,7 @@ function WorldEntityGlyph({ entity, detailZoom, occupation }: { entity: Selectab
       {occupation !== "neutral" && <><circle cx={x} cy={y} r={radius + 2.15} className="world-occupation-ring" /><circle cx={x + radius * .82} cy={y - radius * .72} r="1.45" className="world-occupation-pip" /></>}
       <circle cx={x} cy={y} r={radius} fill={RESOURCE_GRADIENT[entity.resource]} />
       <ellipse cx={x} cy={y} rx={radius * 1.22} ry={radius * .35} transform={`rotate(-18 ${x} ${y})`} fill="none" stroke={color} strokeWidth=".55" opacity=".68" />
-      <circle cx={x - radius * .3} cy={y - radius * .32} r={radius * .18} fill="#f3fdff" opacity=".68" />
+      <circle cx={x - radius * .3} cy={y - radius * .32} r={radius * .18} className="world-planet-specular" />
       {detailZoom && <><path d={`M ${x - 5.5} ${y + 1.8}Q ${x} ${y + 4.7} ${x + 5.5} ${y + 1.1}`} className="world-planet-contour" /><WorldSurfaceMark x={x} y={y} kind={entity.resource} /></>}
       {detailZoom && <WorldLevelBadge x={x} y={y} level={entity.level} />}
     </g>;
@@ -191,7 +191,7 @@ function WorldEntityGlyph({ entity, detailZoom, occupation }: { entity: Selectab
   if (entity.kind === "city") {
     return <polygon points={`${x},${y - 4.1} ${x + 3.6},${y - 2} ${x + 3.6},${y + 2} ${x},${y + 4.1} ${x - 3.6},${y + 2} ${x - 3.6},${y - 2}`} fill={color} />;
   }
-  if (detailZoom) return <g className="world-rogue-glyph"><circle cx={x} cy={y} r="7.2" /><ellipse cx={x} cy={y} rx="8.5" ry="2.4" transform={`rotate(16 ${x} ${y})`} /><path d={`M ${x - 5.4} ${y + 1.7}Q ${x} ${y + 4.5} ${x + 5.4} ${y + 1}`} className="world-planet-contour" /><WorldSurfaceMark x={x} y={y} kind="rogue" /><WorldLevelBadge x={x} y={y} level={entity.level} /></g>;
+  if (detailZoom) return <g className="world-rogue-glyph"><circle cx={x} cy={y} r="7.2" fill="url(#world-planet-rogue)" /><ellipse cx={x} cy={y} rx="8.5" ry="2.4" transform={`rotate(16 ${x} ${y})`} /><path d={`M ${x - 5.4} ${y + 1.7}Q ${x} ${y + 4.5} ${x + 5.4} ${y + 1}`} className="world-planet-contour" /><WorldSurfaceMark x={x} y={y} kind="rogue" /><WorldLevelBadge x={x} y={y} level={entity.level} /></g>;
   return <path d={`M ${x} ${y - 4.2} L ${x + 4} ${y + 3.4} H ${x - 4} Z`} fill={color} />;
 }
 
@@ -639,7 +639,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
   // in px (grows with zoom via LOD), so convert px→world and wrap at 3.35× the
   // body — just outside the halo/orbit — with a non-scaling (constant-thin) stroke.
   const worldPerPx = Math.max(viewport.width / mapPx.w, viewport.height / mapPx.h);
-  const selectionRingWorldR = (own: boolean, sel: boolean) => worldVisualBodyRadius(zoom, own, sel) * 3.35 * worldPerPx;
+  const selectionRadius = (own: boolean, sel: boolean) => worldVisualBodyRadius(zoom, own, sel) * 2.85 + 8;
   const filteredTargets = useMemo(() => targets.filter((entity) => layers[entity.kind]
     && worldTargetObservable(entity.kind, zoom)
     && !(entity.kind === "resource" && entity.state === "depleted")
@@ -727,9 +727,10 @@ export default function World({ address, profile, onBack, onMessages = () => {},
       <radialGradient id="world-ground" cx="58%" cy="42%"><stop offset="0" stopColor="#152044"/><stop offset=".34" stopColor="#0b1532"/><stop offset=".72" stopColor="#060c20"/><stop offset="1" stopColor="#02050e"/></radialGradient>
       <radialGradient id="world-nebula" cx="50%" cy="50%"><stop offset="0" stopColor="#7a49d8" stopOpacity=".16"/><stop offset=".48" stopColor="#215e9b" stopOpacity=".07"/><stop offset="1" stopColor="#030711" stopOpacity="0"/></radialGradient>
       <radialGradient id="circle-core"><stop offset="0" stopColor="#010208" stopOpacity="1"/><stop offset=".22" stopColor="#09051d" stopOpacity="1"/><stop offset=".48" stopColor="#a35cff" stopOpacity=".42"/><stop offset=".72" stopColor="#38d9ff" stopOpacity=".16"/><stop offset="1" stopColor="#1d123a" stopOpacity="0"/></radialGradient>
-      <radialGradient id="world-planet-cash" cx="32%" cy="27%"><stop offset="0" stopColor="#f3fff9"/><stop offset=".13" stopColor="#82ffc5"/><stop offset=".52" stopColor="#237756"/><stop offset="1" stopColor="#07140f"/></radialGradient>
-      <radialGradient id="world-planet-oil" cx="32%" cy="27%"><stop offset="0" stopColor="#fff8e9"/><stop offset=".13" stopColor="#ffd08a"/><stop offset=".52" stopColor="#815528"/><stop offset="1" stopColor="#160e07"/></radialGradient>
-      <radialGradient id="world-planet-power" cx="32%" cy="27%"><stop offset="0" stopColor="#f2fdff"/><stop offset=".13" stopColor="#89e7ff"/><stop offset=".52" stopColor="#226b91"/><stop offset="1" stopColor="#07131b"/></radialGradient>
+      <radialGradient id="world-planet-cash" cx="32%" cy="27%"><stop offset="0" stopColor="#a9c9b8"/><stop offset=".16" stopColor="#659d83"/><stop offset=".56" stopColor="#294d3e"/><stop offset="1" stopColor="#08120f"/></radialGradient>
+      <radialGradient id="world-planet-oil" cx="32%" cy="27%"><stop offset="0" stopColor="#d1b58a"/><stop offset=".16" stopColor="#9a754b"/><stop offset=".56" stopColor="#513a25"/><stop offset="1" stopColor="#140e09"/></radialGradient>
+      <radialGradient id="world-planet-power" cx="32%" cy="27%"><stop offset="0" stopColor="#b5ccd1"/><stop offset=".16" stopColor="#6895a1"/><stop offset=".56" stopColor="#2b5262"/><stop offset="1" stopColor="#08131a"/></radialGradient>
+      <radialGradient id="world-planet-rogue" cx="32%" cy="27%"><stop offset="0" stopColor="#b9a3ac"/><stop offset=".16" stopColor="#805967"/><stop offset=".56" stopColor="#452632"/><stop offset="1" stopColor="#12080d"/></radialGradient>
       <radialGradient id="world-planet-dust" cx="31%" cy="25%"><stop offset="0" stopColor="#d7bb88"/><stop offset=".28" stopColor="#94724a"/><stop offset=".68" stopColor="#49331e"/><stop offset="1" stopColor="#171009"/></radialGradient>
       <radialGradient id="world-planet-blue" cx="30%" cy="24%"><stop offset="0" stopColor="#8eeaff"/><stop offset=".2" stopColor="#2a90bd"/><stop offset=".63" stopColor="#075071"/><stop offset="1" stopColor="#031326"/></radialGradient>
       <radialGradient id="world-planet-void" cx="36%" cy="30%"><stop offset="0" stopColor="#3a3f63"/><stop offset=".32" stopColor="#1a2038"/><stop offset=".7" stopColor="#0a0e1e"/><stop offset="1" stopColor="#02040b"/></radialGradient>
@@ -979,11 +980,11 @@ export default function World({ address, profile, onBack, onMessages = () => {},
           {/* Selection ring for cities: a full circle in screen-space with a
               constant thin stroke, wrapping outside the planet's cosmetics at
               every zoom. Resources/rogues keep the base SVG lock-ring. */}
-          {selected?.kind === "city" && <circle cx={selected.position.x} cy={selected.position.y} r={selectionRingWorldR(false, true)} className="world-sel-ring" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
-          {homeSelected && <circle cx={playerCity.position.x} cy={playerCity.position.y} r={selectionRingWorldR(true, false)} className="world-sel-ring" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
-          <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`}>
-            <text x={center.x} y={center.y - 47} className="world-circle-label">WORMHOLE</text>
-            <text x={center.x} y={center.y - 39} className="world-circle-sub">GRAVITY ANCHOR · FRONTIER I</text>
+          {selected?.kind === "city" && <CelestialLock position={selected.position} radius={selectionRadius(false, true)} worldPerPx={worldPerPx} />}
+          {homeSelected && <CelestialLock position={playerCity.position} radius={selectionRadius(true, false)} worldPerPx={worldPerPx} own />}
+          <g className="world-wormhole-caption" transform={`translate(${center.x} ${center.y}) scale(${worldPerPx})`}>
+            <text y={-worldWormholeRadius(zoom) * 1.7 - 22} className="world-circle-label">WORMHOLE</text>
+            <text y={-worldWormholeRadius(zoom) * 1.7 - 8} className="world-circle-sub">GRAVITY ANCHOR · FRONTIER I</text>
           </g>
           {layers.city && detailZoom && cityEntities.filter((city) => city.ownerId !== session.playerId).map((city) => {
             const cosmetics = world.players[city.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS;
@@ -1077,6 +1078,21 @@ export default function World({ address, profile, onBack, onMessages = () => {},
     </div>
     <MiniComms address={address} profile={profile} onOpenMessages={onMessages} />
   </section>;
+}
+
+function CelestialLock({ position, radius, worldPerPx, own = false }: { position: Point; radius: number; worldPerPx: number; own?: boolean }) {
+  const arc = (angle: number) => {
+    const a = (angle - 13) * Math.PI / 180, b = (angle + 13) * Math.PI / 180;
+    return `M ${Math.cos(a) * radius} ${Math.sin(a) * radius} A ${radius} ${radius} 0 0 1 ${Math.cos(b) * radius} ${Math.sin(b) * radius}`;
+  };
+  return <g className={`world-celestial-lock ${own ? "own" : "rival"}`} transform={`translate(${position.x} ${position.y}) scale(${worldPerPx})`} pointerEvents="none">
+    {[35, 145, 215, 325].map((angle) => <g key={angle}>
+      <path className="lock-underlay" d={arc(angle)} />
+      <path className="lock-arc" d={arc(angle)} />
+      <path className="lock-tick" transform={`rotate(${angle})`} d={`M ${radius + 4} 0 h 5 M ${radius - 4} -2 v 4`} />
+    </g>)}
+    <path className="lock-diamond" d={`M 0 ${-radius - 5} l 3 -4 l -3 -4 l -3 4 Z`} />
+  </g>;
 }
 
 function MarchLine({ march, now, zoom, quality, signature }: { march: HeadlessMarch; now: number; zoom: number; quality: GraphicsQuality; signature: MarchSignatureId | null }) {

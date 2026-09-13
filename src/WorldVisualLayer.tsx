@@ -25,6 +25,10 @@ export const WORLD_VISUAL_BUDGET = {
 
 export const WORLD_VISUAL_BEACON_BUDGET = 400;
 
+export function worldWormholeRadius(zoom: number): number {
+  return zoom < 1.45 ? 26 : zoom < 3 ? 30 : Math.min(44, 31 + Math.log2(zoom / 3) * 5);
+}
+
 export function worldVisualBudget(zoom: number): number {
   return zoom < 1.45 ? WORLD_VISUAL_BUDGET.strategic : zoom < 3 ? WORLD_VISUAL_BUDGET.field : WORLD_VISUAL_BUDGET.tactical;
 }
@@ -634,7 +638,7 @@ export default function WorldVisualLayer({
           y: matrix.b * point.x + matrix.d * point.y + matrix.f - rect.top,
         });
         const holeScreen = mapPoint(hole);
-        const holeRadius = currentZoom < 1.45 ? 26 : currentZoom < 3 ? 30 : Math.min(44, 31 + Math.log2(currentZoom / 3) * 5);
+        const holeRadius = worldWormholeRadius(currentZoom);
         if (holeScreen.x + holeRadius * 3.6 > 0 && holeScreen.x - holeRadius * 3.6 < rect.width && holeScreen.y + holeRadius * 3.6 > 0 && holeScreen.y - holeRadius * 3.6 < rect.height) {
           offset = writeQuad(offset, holeScreen.x, holeScreen.y, holeRadius, 6, 0, 0, .731, 0, lod);
           landmarkDrawn = 1;
