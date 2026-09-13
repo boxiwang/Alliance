@@ -146,7 +146,15 @@ export default function App() {
       setAddress(res.address);
       setChainOk(res.chainOk);
       setWalletName(w.name);
-      const recs = await readWallet(res.address);
+      // Blockscout sits behind a Cloudflare challenge that our server-side proxy
+      // can't always clear; don't let a failed read block a wallet player from
+      // entering — fall through with empty records (solo, no token/faction data).
+      let recs: WalletRecords;
+      try {
+        recs = await readWallet(res.address);
+      } catch {
+        recs = { address: res.address, coinBalanceRaw: "0", ethPrice: null, isContract: false, txCount: 0, tokenTransferCount: 0, tokens: [], recentTxs: [], oldestSeen: null };
+      }
       setRecords(recs);
       let existing = loadProfile(res.address);
       if (existing) {
