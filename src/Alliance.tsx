@@ -14,11 +14,12 @@ import { hasLocalGm } from "./lib/gm";
 import {
   ALLIANCE_CHANGED_EVENT, allianceForAddress, availableAlliances, castLeadershipVote,
   endorseCandidate, foundAllianceFromToken, gmPrepareAlliance, gmSeedAlliance, helpAll, initiateLeadershipChallenge,
-  joinAlliance, leaveAlliance, loadAllianceDirectory, resolveLeadershipChallenges,
-  tokenAllianceForHolding, upgradeAllianceSkill, type AllianceRecord,
+  leaveAlliance, loadAllianceDirectory, removeAllianceMember, requestAllianceEntry, resolveLeadershipChallenges,
+  reviewAllianceApplication, setAllianceDiplomacy, setAllianceMemberRank, tokenAllianceForHolding,
+  updateAllianceStandards, upgradeAllianceSkill, type AllianceRecord,
 } from "./lib/alliance";
 
-type AllianceView = "home" | "decree" | "rallies" | "skills" | "governance" | "exchange" | "roster";
+type AllianceView = "home" | "decree" | "rallies" | "skills" | "governance" | "exchange" | "roster" | "operations";
 
 function countdown(ms: number): string {
   const minutes = Math.max(0, Math.ceil(ms / 60000));
@@ -41,6 +42,8 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
   const [view, setView] = useState<AllianceView>("home");
   const [notice, setNotice] = useState("");
   const [candidateAddress, setCandidateAddress] = useState("");
+  const [holdingStandard, setHoldingStandard] = useState("");
+  const [activeStandard, setActiveStandard] = useState("");
   const [now, setNow] = useState(Date.now());
   const gm = hasLocalGm(address);
 
@@ -55,6 +58,11 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
   const directory = useMemo(() => loadAllianceDirectory(), [revision]);
   const alliance = useMemo(() => allianceForAddress(address, directory), [address, directory]);
   const membership = alliance?.members.find((member) => member.address.toLowerCase() === address.toLowerCase()) ?? null;
+  useEffect(() => {
+    if (!alliance || (profile.factionSymbol === alliance.symbol && profile.faction === (alliance.contractAddress || alliance.id))) return;
+    const updated = { ...profile, faction: alliance.contractAddress || alliance.id, factionSymbol: alliance.symbol };
+    saveProfile(updated); onProfileChange(updated);
+  }, [alliance?.id]);
   const game = project(loadGame(address) || initGame(address), now);
   const worldSession = loadLocalWorldSession(address);
   const worldPlayer = worldSession?.world.players[worldSession.playerId];
@@ -70,7 +78,14 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
     const updated = { ...profile, faction: next?.contractAddress || (next ? next.id : null), factionSymbol: next?.symbol || null };
     saveProfile(updated); onProfileChange(updated);
   }
-  function join(id: string) { const result = joinAlliance(id, profile); if (!result.ok) return refresh(result.reason); bindProfile(result.alliance!); refresh("Chapter signal accepted."); }
+  function join(id: string) {
+    const target = directory.alliances.find((entry) => entry.id === id);
+    const holding = holdings.find((token) => target?.contractAddress?.toLowerCase() === token.address.toLowerCase());
+    const result = requestAllianceEntry(id, profile, holding ? `${holding.raw} raw ${holding.symbol} verified` : "Open passage");
+    if (!result.ok) return refresh(result.reason);
+    if (result.applied) return refresh("Entry petition transmitted to R4/R5 command.");
+    bindProfile(result.alliance!); refresh("Chapter signal accepted.");
+  }
   function leave() { const result = leaveAlliance(profile); if (!result.ok) return refresh(result.reason); bindProfile(null); setView("home"); refresh("Signal withdrawn. Jump cooldown: 24 hours."); }
   function found(token: TokenHolding) { const result = foundAllianceFromToken(token, profile); if (!result.ok) return refresh(result.reason); bindProfile(result.alliance!); refresh("Founding beacon is live. Recruit five more civilizations."); }
   function assist() { const result = helpAll(profile); refresh(result.helped ? `${result.helped} timers shortened · ${result.rewarded} contribution signals credited.` : result.reason || "No unanswered calls remain."); }
@@ -129,7 +144,7 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
         <button onClick={() => setView("governance")}><span>◈</span><small>COMMAND CONSENSUS</small><b>GOVERNANCE</b><p>Founding authority, R4 command and anonymous succession.</p><em>{activeChallenge ? "BALLOT LIVE" : "STABLE"}</em></button>
         <button onClick={() => setView("exchange")}><span>◇</span><small>CHAPTER STORES</small><b>ALLIANCE EXCHANGE</b><p>Convert service credits into frontier instruments.</p><em>{membership?.credits ?? 0} CREDITS</em></button>
       </div>
-      <section className="alliance-lower"><button onClick={() => setView("roster")}><small>COMMAND COUNCIL</small><b>{alliance.members.filter((member) => member.rank === "R5" || member.rank === "R4").map((member) => `${member.rank} ${member.name}`).join(" · ") || "R5 SIGNAL PENDING"}</b><span>OPEN ROSTER →</span></button><div><small>RELATION ARRAY</small><b>{alliance.napAllianceIds.length} NAP · {alliance.warAllianceIds.length} WAR</b><span>Visible in Tactical range</span></div></section>
+      <section className="alliance-lower"><button onClick={() => setView("roster")}><small>COMMAND COUNCIL</small><b>{alliance.members.filter((member) => member.rank === "R5" || member.rank === "R4").map((member) => `${member.rank} ${member.name}`).join(" · ") || "R5 SIGNAL PENDING"}</b><span>OPEN ROSTER →</span></button><button onClick={() => setView("operations")}><small>OPERATIONS ARRAY</small><b>{alliance.applications.filter((application) => application.status === "pending").length} PETITIONS · {alliance.napAllianceIds.length} NAP · {alliance.warAllianceIds.length} WAR</b><span>OPEN CONTROL →</span></button></section>
     </>}
 
     {view === "decree" && <AlliancePanel title="CHAPTER DECREE" kicker="LAW, TREATY & SIGNAL HISTORY" onBack={() => setView("home")}>
@@ -149,7 +164,15 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
 
     {view === "exchange" && <AlliancePanel title="ALLIANCE EXCHANGE" kicker={`${membership?.credits ?? 0} SERVICE CREDITS`} onBack={() => setView("home")}><div className="alliance-exchange-grid">{[["5M CHRONO SHARD", 25], ["SCAN CHARGE", 60], ["PEACE VEIL · 8H", 240], ["TACTICAL WARP", 420]].map(([name, price]) => <article key={String(name)}><span>◇</span><b>{name}</b><small>CHAPTER ISSUE</small><button disabled={(membership?.credits ?? 0) < Number(price)}>{price} CREDITS</button></article>)}</div><p className="alliance-exchange-note">Service Credits never enter the player market. Tradeable goods remain in the public exchange.</p></AlliancePanel>}
 
-    {view === "roster" && <AlliancePanel title="SIGNAL ROSTER" kicker={`${alliance.members.length} CIVILIZATIONS SYNCHRONIZED`} onBack={() => setView("home")}><div className="alliance-roster">{[...alliance.members].sort((a, b) => Number(b.rank.slice(1)) - Number(a.rank.slice(1))).map((member) => <article key={member.address}><span>{member.name.slice(0, 1)}</span><div><b>{member.name}</b><small>{member.address.slice(0, 7)}…{member.address.slice(-5)}</small></div><em className={member.holdingStatus}>{member.holdingStatus === "verified" ? "VERIFIED" : "SUSPENDED"}</em><strong>{member.rank}</strong><small>{member.contribution} CONTRIBUTION</small></article>)}</div><button className="alliance-withdraw" onClick={leave}>WITHDRAW FROM CHAPTER</button></AlliancePanel>}
+    {view === "roster" && <AlliancePanel title="SIGNAL ROSTER" kicker={`${alliance.members.length} CIVILIZATIONS SYNCHRONIZED`} onBack={() => setView("home")}><div className="alliance-roster">{[...alliance.members].sort((a, b) => Number(b.rank.slice(1)) - Number(a.rank.slice(1))).map((member) => <article key={member.address}><span>{member.name.slice(0, 1)}</span><div><b>{member.name}</b><small>{member.address.slice(0, 7)}…{member.address.slice(-5)}</small></div><em className={member.holdingStatus}>{member.holdingStatus === "verified" ? "VERIFIED" : "SUSPENDED"}</em><strong>{member.rank}</strong><small>{member.contribution} CONTRIBUTION</small>{membership?.rank === "R5" && member.rank !== "R5" && <div className="alliance-member-command"><select value={member.rank} onChange={(event) => { const result = setAllianceMemberRank(alliance.id, address, member.address, event.target.value as "R1" | "R2" | "R3" | "R4"); refresh(result.reason || `${member.name} command rank updated.`); }}><option>R1</option><option>R2</option><option>R3</option><option>R4</option></select><button onClick={() => { const result = removeAllianceMember(alliance.id, address, member.address); refresh(result.reason || `${member.name} was severed from the chapter.`); }}>EXPEL</button></div>}</article>)}</div><button className="alliance-withdraw" onClick={leave}>WITHDRAW FROM CHAPTER</button></AlliancePanel>}
+
+    {view === "operations" && <AlliancePanel title="OPERATIONS CONTROL" kicker="RECRUITMENT, STANDARDS & DIPLOMACY" onBack={() => setView("home")}>
+      <div className="alliance-ops-grid">
+        <section><header><small>ENTRY PETITIONS</small><b>{alliance.applications.filter((application) => application.status === "pending").length} WAITING</b></header><div className="alliance-applications">{alliance.applications.filter((application) => application.status === "pending").length ? alliance.applications.filter((application) => application.status === "pending").map((application) => <article key={application.address}><div><b>{application.name}</b><small>{application.address.slice(0, 8)}…{application.address.slice(-5)} · {application.holdingDisplay}</small></div><button disabled={!(["R4", "R5"].includes(membership?.rank || ""))} onClick={() => { const result = reviewAllianceApplication(alliance.id, address, application.address, true); refresh(result.reason || `${application.name} synchronized.`); }}>ACCEPT</button><button disabled={!(["R4", "R5"].includes(membership?.rank || ""))} className="reject" onClick={() => { const result = reviewAllianceApplication(alliance.id, address, application.address, false); refresh(result.reason || `${application.name} declined.`); }}>DECLINE</button></article>) : <p>No unreviewed signals.</p>}</div></section>
+        <section><header><small>CHAPTER STANDARD</small><b>R5 CONTROL</b></header><label>ENTRY SIGNAL<input value={holdingStandard} onChange={(event) => setHoldingStandard(event.target.value)} placeholder={alliance.minHoldingDisplay} /></label><label>ACTIVE SIGNAL<input value={activeStandard} onChange={(event) => setActiveStandard(event.target.value)} placeholder={alliance.activeStandard} /></label><label>GATE<select defaultValue={alliance.joinPolicy} id="alliance-join-policy"><option value="open">OPEN</option><option value="application">APPLICATION</option></select></label><button disabled={membership?.rank !== "R5"} onClick={() => { const policy = (document.getElementById("alliance-join-policy") as HTMLSelectElement)?.value as "open" | "application"; const result = updateAllianceStandards(alliance.id, address, { minHoldingDisplay: holdingStandard || undefined, activeStandard: activeStandard || undefined, joinPolicy: policy }); refresh(result.reason || "Chapter standards transmitted."); }}>TRANSMIT STANDARD</button></section>
+      </div>
+      <section className="alliance-diplomacy"><header><small>DIPLOMATIC ARRAY</small><b>R5 CONTROL · TACTICAL NAMEPLATES UPDATE LIVE</b></header>{directory.alliances.filter((entry) => entry.id !== alliance.id && entry.status === "active").map((entry) => { const stance = alliance.warAllianceIds.includes(entry.id) ? "war" : alliance.napAllianceIds.includes(entry.id) ? "nap" : "neutral"; return <article key={entry.id} style={{ "--alliance": entry.color } as React.CSSProperties}><span>{entry.symbol.slice(0, 2)}</span><div><b>[{entry.symbol}] {entry.name}</b><small>CHAPTER {String(entry.chapter).padStart(3, "0")}</small></div><select value={stance} disabled={membership?.rank !== "R5"} onChange={(event) => { const result = setAllianceDiplomacy(alliance.id, address, entry.id, event.target.value as "neutral" | "nap" | "war"); refresh(result.reason || `${entry.symbol} stance updated.`); }}><option value="neutral">NEUTRAL · WHITE</option><option value="nap">NAP · GREEN</option><option value="war">WAR · RED</option></select></article>; })}</section>
+    </AlliancePanel>}
   </main><MiniComms address={address} profile={profile} onOpenMessages={onMessages} /></section>;
 }
 

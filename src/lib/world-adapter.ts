@@ -130,6 +130,7 @@ function npcInput(index: number, world: HeadlessWorld, numbers: any): SpawnPlaye
   const storage = Number(numbers.buildings?.["building.storage"]?.levels?.[String(townhall)]?.capacityPerResource) || 5000;
   return {
     id: `npc.${String(index).padStart(4, "0")}`,
+    allianceId: index % 7 === 0 ? "gaco-001" : index % 7 === 1 ? "sim-orbt" : index % 11 === 0 ? "sim-mog" : null,
     cosmetics: npcCosmetics(index),
     townhallLevel: townhall,
     wallLevel: townhall,
@@ -429,6 +430,7 @@ export function openLocalWorldSession(address: string, sourceGame: GameState, no
       player.cosmetics = player.id === stored.playerId
         ? publicCosmetics(address)
         : player.id.startsWith("npc.") ? npcCosmetics(player.spawnIndex) : { ...ISSUED_WORLD_COSMETICS, ...player.cosmetics };
+      if (player.id.startsWith("npc.")) player.allianceId = player.spawnIndex % 7 === 0 ? "gaco-001" : player.spawnIndex % 7 === 1 ? "sim-orbt" : player.spawnIndex % 11 === 0 ? "sim-mog" : null;
       // Civic Core was retired in the Genesis body drop. Keep old shared-world
       // snapshots renderable and move their owners to the issued Dust body.
       if ((player.cosmetics.planetBody as string) === "civic-core") player.cosmetics.planetBody = "dust-homestead";

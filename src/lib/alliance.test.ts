@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { TokenHolding } from "./blockscout";
 import type { Profile } from "./profile";
 import {
-  DEFAULT_ALLIANCE_ID, HELP_LIMIT, allianceForAddress, endorseCandidate, helpAll,
+  DEFAULT_ALLIANCE_ID, HELP_LIMIT, allianceForAddress, endorseCandidate, gmPrepareAlliance, helpAll,
   foundAllianceFromToken, gmSeedAlliance, joinAlliance, leaveAlliance,
-  loadAllianceDirectory, relationshipBetween, requestAllianceHelp,
+  loadAllianceDirectory, relationshipBetween, requestAllianceEntry, requestAllianceHelp,
+  reviewAllianceApplication, setAllianceDiplomacy, setAllianceMemberRank, updateAllianceStandards,
 } from "./alliance";
 import { initGame, loadGame, saveGame } from "./gamestore";
 
@@ -86,5 +87,22 @@ describe("alliance core rules", () => {
     const member = allianceForAddress(helper.address)!.members.find((candidate) => candidate.address === helper.address)!;
     expect(member.contribution).toBe(1);
     expect(member.credits).toBe(2);
+  });
+
+  it("lets command review recruits, set R4 and publish diplomacy", () => {
+    const founder = profile(1); const recruit = profile(2);
+    const founded = foundAllianceFromToken(token, founder, 1000).alliance!;
+    gmPrepareAlliance(founded.id, founder.address);
+    const petition = requestAllianceEntry(founded.id, recruit, "1 ORBT verified", 2000);
+    expect(petition).toMatchObject({ ok: true, applied: true });
+    expect(reviewAllianceApplication(founded.id, founder.address, recruit.address, true, 3000).ok).toBe(true);
+    expect(allianceForAddress(recruit.address)?.id).toBe(founded.id);
+    expect(setAllianceMemberRank(founded.id, founder.address, recruit.address, "R4").ok).toBe(true);
+    expect(updateAllianceStandards(founded.id, founder.address, { minHoldingDisplay: "Hold 100 ORBT", joinPolicy: "application" }).ok).toBe(true);
+    expect(setAllianceDiplomacy(founded.id, founder.address, "sim-orbt", "nap").ok).toBe(true);
+    const updated = allianceForAddress(founder.address)!;
+    expect(updated.members.find((member) => member.address === recruit.address)?.rank).toBe("R4");
+    expect(updated.minHoldingDisplay).toBe("Hold 100 ORBT");
+    expect(updated.napAllianceIds).toContain("sim-orbt");
   });
 });

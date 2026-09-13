@@ -489,7 +489,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     if (ownerId === session.playerId) return "self";
     const targetAllianceId = session.world.players[ownerId]?.allianceId ?? null;
     const actual = relationshipBetween(viewerAlliance?.id ?? null, targetAllianceId);
-    if (actual !== "neutral" || !ownerId.startsWith("npc.")) return actual;
+    if (actual !== "neutral" || targetAllianceId || !ownerId.startsWith("npc.")) return actual;
     // Local population carries deterministic diplomacy samples until a server
     // directory supplies real alliance ids. This exercises every tactical tone.
     const index = Number(ownerId.slice(-4)) || 0;

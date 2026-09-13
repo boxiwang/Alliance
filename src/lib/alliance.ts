@@ -36,6 +36,16 @@ export interface AllianceDecree {
   author: string;
 }
 
+export interface AllianceApplication {
+  address: string;
+  name: string;
+  appliedAt: number;
+  holdingDisplay: string;
+  status: "pending" | "approved" | "rejected";
+  reviewedBy?: string;
+  reviewedAt?: number;
+}
+
 export interface AllianceHelpRequest {
   id: string;
   allianceId: string;
@@ -75,6 +85,9 @@ export interface AllianceRecord {
   contractAddress?: string | null;
   minHoldingDisplay: string;
   activeStandard: string;
+  joinPolicy: "open" | "application";
+  applications: AllianceApplication[];
+  maxMembers: number;
   rules: string[];
   napAllianceIds: string[];
   warAllianceIds: string[];
@@ -110,6 +123,9 @@ function seedDirectory(now = Date.now()): AllianceDirectory {
       contractAddress: null,
       minHoldingDisplay: "Open passage · no token required",
       activeStandard: "Signal once every 72 hours",
+      joinPolicy: "open",
+      applications: [],
+      maxMembers: 100,
       rules: ["Protect Accord gatherers.", "Honor declared NAP corridors.", "Answer frontier rallies when able."],
       napAllianceIds: [],
       warAllianceIds: [],
@@ -147,6 +163,13 @@ export function loadAllianceDirectory(): AllianceDirectory {
     if (!raw) { const seeded = seedDirectory(); storage.setItem(DIRECTORY_KEY, JSON.stringify(seeded)); return seeded; }
     const parsed = JSON.parse(raw) as AllianceDirectory;
     if (!(parsed?.version === 1 && Array.isArray(parsed.alliances))) return seedDirectory();
+    parsed.alliances.forEach((alliance) => {
+      alliance.joinPolicy ??= alliance.kind === "default" ? "open" : "application";
+      alliance.applications ??= [];
+      alliance.maxMembers ??= 100;
+      alliance.warAllianceIds ??= [];
+      alliance.napAllianceIds ??= [];
+    });
     const accord = parsed.alliances.find((alliance) => alliance.id === DEFAULT_ALLIANCE_ID);
     if (accord && !accord.members.some((member) => member.rank === "R5")) {
       const existing = new Set(accord.members.map((member) => normalizeAddress(member.address)));
@@ -192,9 +215,83 @@ export function joinAlliance(allianceId: string, profile: Profile, now = Date.no
   if ((directory.switchLocks[address] ?? 0) > now) return { ok: false, reason: "Your jump signature is still cooling down." };
   const alliance = directory.alliances.find((candidate) => candidate.id === allianceId);
   if (!alliance) return { ok: false, reason: "That chapter no longer answers the relay." };
+  if (alliance.members.length >= alliance.maxMembers) return { ok: false, reason: "That chapter has reached its signal capacity." };
   alliance.members.push(memberFrom(profile, now));
   saveAllianceDirectory(directory);
   return { ok: true, alliance };
+}
+
+export function requestAllianceEntry(allianceId: string, profile: Profile, holdingDisplay = "Wallet holding verified", now = Date.now()): { ok: boolean; applied?: boolean; reason?: string; alliance?: AllianceRecord } {
+  const directory = loadAllianceDirectory(); const alliance = allianceById(allianceId, directory);
+  if (!alliance) return { ok: false, reason: "That chapter no longer answers the relay." };
+  if (alliance.kind === "default" || alliance.status === "forming" || alliance.joinPolicy === "open") return joinAlliance(allianceId, profile, now);
+  if (allianceForAddress(profile.address, directory)) return { ok: false, reason: "Withdraw from your current chapter first." };
+  const address = normalizeAddress(profile.address);
+  if ((directory.switchLocks[address] ?? 0) > now) return { ok: false, reason: "Your jump signature is still cooling down." };
+  const prior = alliance.applications.find((application) => normalizeAddress(application.address) === address && application.status === "pending");
+  if (prior) return { ok: true, applied: true, alliance };
+  alliance.applications.unshift({ address: profile.address, name: profile.name, appliedAt: now, holdingDisplay, status: "pending" });
+  saveAllianceDirectory(directory); return { ok: true, applied: true, alliance };
+}
+
+function commandMember(alliance: AllianceRecord, address: string): AllianceMember | null {
+  const member = alliance.members.find((candidate) => normalizeAddress(candidate.address) === normalizeAddress(address));
+  return member && (member.rank === "R4" || member.rank === "R5") ? member : null;
+}
+
+export function reviewAllianceApplication(allianceId: string, actorAddress: string, applicantAddress: string, approve: boolean, now = Date.now()): { ok: boolean; reason?: string } {
+  const directory = loadAllianceDirectory(); const alliance = allianceById(allianceId, directory);
+  if (!alliance || !commandMember(alliance, actorAddress)) return { ok: false, reason: "R4 command clearance required." };
+  const application = alliance.applications.find((candidate) => normalizeAddress(candidate.address) === normalizeAddress(applicantAddress) && candidate.status === "pending");
+  if (!application) return { ok: false, reason: "That entry signal is no longer pending." };
+  if (approve && alliance.members.length >= alliance.maxMembers) return { ok: false, reason: "Chapter signal capacity reached." };
+  application.status = approve ? "approved" : "rejected"; application.reviewedBy = actorAddress; application.reviewedAt = now;
+  if (approve && !allianceForAddress(application.address, directory)) alliance.members.push({ address: application.address, name: application.name, rank: "R1", joinedAt: now, holdingStatus: "verified", contribution: 0, credits: 0, lastActiveAt: now });
+  saveAllianceDirectory(directory); return { ok: true };
+}
+
+export function setAllianceMemberRank(allianceId: string, actorAddress: string, targetAddress: string, rank: Exclude<AllianceRank, "R5">): { ok: boolean; reason?: string } {
+  const directory = loadAllianceDirectory(); const alliance = allianceById(allianceId, directory);
+  const actor = alliance?.members.find((member) => normalizeAddress(member.address) === normalizeAddress(actorAddress));
+  const target = alliance?.members.find((member) => normalizeAddress(member.address) === normalizeAddress(targetAddress));
+  if (!alliance || actor?.rank !== "R5") return { ok: false, reason: "Only the R5 signal may shape command ranks." };
+  if (!target || target.rank === "R5") return { ok: false, reason: "That command signal cannot be changed here." };
+  target.rank = rank; saveAllianceDirectory(directory); return { ok: true };
+}
+
+export function removeAllianceMember(allianceId: string, actorAddress: string, targetAddress: string, now = Date.now()): { ok: boolean; reason?: string } {
+  const directory = loadAllianceDirectory(); const alliance = allianceById(allianceId, directory);
+  const actor = alliance?.members.find((member) => normalizeAddress(member.address) === normalizeAddress(actorAddress));
+  const target = alliance?.members.find((member) => normalizeAddress(member.address) === normalizeAddress(targetAddress));
+  if (!alliance || !actor || !target) return { ok: false, reason: "Signal not found." };
+  if (target.rank === "R5" || normalizeAddress(target.address) === normalizeAddress(actor.address)) return { ok: false, reason: "That signal cannot be expelled here." };
+  if (actor.rank !== "R5" && !(actor.rank === "R4" && Number(target.rank.slice(1)) < 4)) return { ok: false, reason: "Insufficient command clearance." };
+  alliance.members = alliance.members.filter((member) => normalizeAddress(member.address) !== normalizeAddress(targetAddress));
+  directory.switchLocks[normalizeAddress(targetAddress)] = now + ALLIANCE_SWITCH_COOLDOWN_MS;
+  saveAllianceDirectory(directory); return { ok: true };
+}
+
+export function updateAllianceStandards(allianceId: string, actorAddress: string, input: { minHoldingDisplay?: string; activeStandard?: string; joinPolicy?: AllianceRecord["joinPolicy"] }): { ok: boolean; reason?: string } {
+  const directory = loadAllianceDirectory(); const alliance = allianceById(allianceId, directory);
+  const actor = alliance?.members.find((member) => normalizeAddress(member.address) === normalizeAddress(actorAddress));
+  if (!alliance || actor?.rank !== "R5") return { ok: false, reason: "R5 command clearance required." };
+  if (input.minHoldingDisplay) alliance.minHoldingDisplay = input.minHoldingDisplay.slice(0, 80);
+  if (input.activeStandard) alliance.activeStandard = input.activeStandard.slice(0, 80);
+  if (input.joinPolicy) alliance.joinPolicy = input.joinPolicy;
+  saveAllianceDirectory(directory); return { ok: true };
+}
+
+export function setAllianceDiplomacy(allianceId: string, actorAddress: string, targetAllianceId: string, stance: "neutral" | "nap" | "war"): { ok: boolean; reason?: string } {
+  const directory = loadAllianceDirectory(); const alliance = allianceById(allianceId, directory);
+  const actor = alliance?.members.find((member) => normalizeAddress(member.address) === normalizeAddress(actorAddress));
+  const target = allianceById(targetAllianceId, directory);
+  if (!alliance || actor?.rank !== "R5") return { ok: false, reason: "R5 diplomatic clearance required." };
+  if (!target || target.id === alliance.id) return { ok: false, reason: "Select another active chapter." };
+  alliance.napAllianceIds = alliance.napAllianceIds.filter((id) => id !== targetAllianceId);
+  alliance.warAllianceIds = alliance.warAllianceIds.filter((id) => id !== targetAllianceId);
+  if (stance === "nap") alliance.napAllianceIds.push(targetAllianceId);
+  if (stance === "war") alliance.warAllianceIds.push(targetAllianceId);
+  saveAllianceDirectory(directory); return { ok: true };
 }
 
 export function leaveAlliance(profile: Profile, now = Date.now()): { ok: boolean; reason?: string } {
@@ -228,6 +325,7 @@ export function foundAllianceFromToken(token: TokenHolding, profile: Profile, no
     color: deterministicColor(token.address), iconUrl: token.iconUrl, contractAddress: token.address,
     minHoldingDisplay: `Hold ${symbol} · controller threshold pending`, activeStandard: "Signal once every 72 hours",
     rules: ["The contract defines the chapter.", "Founding signals remain public.", "Five independent endorsements activate command."],
+    joinPolicy: "application", applications: [], maxMembers: 100,
     napAllianceIds: [], warAllianceIds: [], members: [memberFrom(profile, now)], endorsements: {},
     decrees: [{ id: `founding-${chapter}`, title: "FOUNDING SIGNAL", body: `${symbol} Chapter ${String(chapter).padStart(3, "0")} is recruiting its first six civilizations.`, createdAt: now, author: profile.name }],
     helps: [], skillLevels: { growth: 0, warfare: 0, mutualAid: 0 }, skillPoints: 0, challenges: [], createdAt: now,
@@ -353,7 +451,13 @@ export function gmPrepareAlliance(allianceId: string, address: string): Alliance
   const actor = ready.members.find((member) => normalizeAddress(member.address) === normalizeAddress(address));
   if (actor) { actor.rank = "R5"; actor.joinedAt = Date.now() - 8 * 86400000; actor.credits = Math.max(actor.credits, 1200); actor.contribution = Math.max(actor.contribution, 5000); }
   ready.status = "active"; ready.skillPoints = Math.max(ready.skillPoints, 12); ready.lastChallengeAt = undefined;
+  if (!refreshed.alliances.some((entry) => entry.id === "sim-orbt")) refreshed.alliances.push(gmRivalAlliance("sim-orbt", "Orbital", "ORBT", 101, "#a98cff", Date.now()));
+  if (!refreshed.alliances.some((entry) => entry.id === "sim-mog")) refreshed.alliances.push(gmRivalAlliance("sim-mog", "Mog Frontier", "MOG", 102, "#ff9a67", Date.now()));
   saveAllianceDirectory(refreshed); return ready;
+}
+
+function gmRivalAlliance(id: string, name: string, symbol: string, chapter: number, color: string, now: number): AllianceRecord {
+  return { id, kind: "token", status: "active", name, symbol, chapter, color, contractAddress: `0x${id.replace(/[^a-f0-9]/g, "a").padEnd(40, "0").slice(0, 40)}`, minHoldingDisplay: `Hold ${symbol}`, activeStandard: "Signal once every 48 hours", joinPolicy: "application", applications: [], maxMembers: 100, rules: ["Protect the signal."], napAllianceIds: [], warAllianceIds: [], members: [{ address: `0x${id.padEnd(40, "0").slice(0, 40)}`, name: `${symbol} Prime`, rank: "R5", joinedAt: now - 20 * 86400000, holdingStatus: "verified", contribution: 9000, credits: 1200, lastActiveAt: now }], endorsements: {}, decrees: [], helps: [], skillLevels: { growth: 2, warfare: 2, mutualAid: 1 }, skillPoints: 0, challenges: [], createdAt: now - 30 * 86400000 };
 }
 
 export function initiateLeadershipChallenge(profile: Profile, candidateAddress: string, now = Date.now()): { ok: boolean; reason?: string; challenge?: LeadershipChallenge } {
