@@ -3,7 +3,11 @@ import { BUILDING_ORDER, RES_ORDER, TROOP_ORDER, buildingOperationBlockReason, c
 import { initGame } from "./gamestore";
 import { researchTechs } from "./research";
 
-const KEY = (address: string) => `ruglands:gm:${address.toLowerCase()}`;
+export const GM_WALLET_ADDRESSES = ["0xbb1d63c5af5d97963671c8bd8a5f73a7ebad1d1c"] as const;
+
+export function isGmWallet(address: string): boolean {
+  return GM_WALLET_ADDRESSES.includes(address.trim().toLowerCase() as typeof GM_WALLET_ADDRESSES[number]);
+}
 
 export function localGmAvailable(): boolean {
   if (!import.meta.env.DEV || typeof window === "undefined") return false;
@@ -14,31 +18,19 @@ export function localGmRequested(): boolean {
   return localGmAvailable() && new URLSearchParams(window.location.search).has("gm");
 }
 
+function isSyntheticDevAddress(address: string): boolean {
+  return /^0x0{30,}[a-z0-9-]*dev[a-z0-9-]*$/i.test(address.trim());
+}
+
 export function hasLocalGm(address: string): boolean {
-  if (!localGmAvailable() || !address) return false;
-  try {
-    return localStorage.getItem(KEY(address)) === "1";
-  } catch {
-    return false;
-  }
+  return localGmAvailable() && !!address && (isGmWallet(address) || (localGmRequested() && isSyntheticDevAddress(address)));
 }
 
 export function grantLocalGm(address: string): boolean {
-  if (!localGmAvailable() || !address) return false;
-  try {
-    localStorage.setItem(KEY(address), "1");
-    return true;
-  } catch {
-    return false;
-  }
+  return hasLocalGm(address);
 }
 
-export function revokeLocalGm(address: string): void {
-  if (!localGmAvailable() || !address) return;
-  try {
-    localStorage.removeItem(KEY(address));
-  } catch {}
-}
+export function revokeLocalGm(_address: string): void {}
 
 export function gmFillResources(state: GameState, now = Date.now()): GameState {
   const next = project(state, now);

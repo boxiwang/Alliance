@@ -1,4 +1,4 @@
-import { hasLocalGm, localGmRequested } from "./gm";
+import { hasLocalGm } from "./gm";
 import { isGraphicsTier, type GraphicsTier } from "./graphics-tier";
 
 export type LanguageCode = "en" | "zh-CN" | "zh-TW" | "ja" | "ko" | "es";
@@ -362,7 +362,7 @@ function defaultAccount(address: string): PlayerAccount {
 }
 
 function gmCosmetics(address: string): string[] {
-  if (!(localGmRequested() || hasLocalGm(address))) return [];
+  if (!hasLocalGm(address)) return [];
   return [
     ...PLANET_SKINS.map((skin) => `planet:${skin.id}`),
     ...PLANET_ORBITS.map((orbit) => `orbit:${orbit.id}`),

@@ -3,7 +3,7 @@ import { initGame } from "./gamestore";
 import { capacity, totalTroops } from "./game";
 import {
   gmFillResources, gmFillTroops, gmFinishQueues, gmMaxResearch, gmRaiseBuilding, gmRaiseTownhall, gmResetProgress,
-  grantLocalGm, hasLocalGm, localGmAvailable, localGmRequested, revokeLocalGm,
+  grantLocalGm, hasLocalGm, isGmWallet, localGmAvailable, localGmRequested, revokeLocalGm,
 } from "./gm";
 
 describe("local GM tools", () => {
@@ -21,23 +21,19 @@ describe("local GM tools", () => {
     expect(localGmAvailable()).toBe(false);
   });
 
-  it("grants and revokes the flag for one local wallet only", () => {
-    const values = new Map<string, string>();
+  it("grants GM only to the owner wallet or a synthetic dev slot", () => {
     vi.stubGlobal("window", { location: { hostname: "localhost", search: "?gm" } });
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => values.get(key) ?? null,
-      setItem: (key: string, value: string) => values.set(key, value),
-      removeItem: (key: string) => values.delete(key),
-    });
+    const owner = "0xbB1D63C5AF5D97963671C8Bd8A5F73a7EbAD1D1C";
 
     expect(localGmAvailable()).toBe(true);
     expect(localGmRequested()).toBe(true);
-    expect(grantLocalGm("0xowner")).toBe(true);
-    expect(hasLocalGm("0xowner")).toBe(true);
+    expect(isGmWallet(owner)).toBe(true);
+    expect(grantLocalGm(owner)).toBe(true);
+    expect(hasLocalGm(owner)).toBe(true);
     expect(hasLocalGm("0xsomeoneelse")).toBe(false);
-    revokeLocalGm("0xowner");
-    expect(hasLocalGm("0xowner")).toBe(false);
-
+    expect(hasLocalGm("0x000000000000000000000000000000000000dEv1")).toBe(true);
+    revokeLocalGm(owner);
+    expect(hasLocalGm(owner)).toBe(true);
   });
 
   it("fills all resources to the current Warehouse capacity", () => {

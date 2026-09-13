@@ -3,7 +3,7 @@ import type { TokenHolding } from "./blockscout";
 import type { Profile } from "./profile";
 import {
   DEFAULT_ALLIANCE_ID, HELP_LIMIT, allianceForAddress, allianceGameplayBonuses, availableAlliances, endorseCandidate, gmPrepareAlliance, helpAll,
-  castLeadershipVote, foundAllianceFromToken, gmSeedAlliance, initiateLeadershipChallenge, joinAlliance, leaveAlliance,
+  castLeadershipVote, foundAllianceFromToken, gmCompleteLeadershipChallenge, gmSeedAlliance, initiateLeadershipChallenge, joinAlliance, leaveAlliance,
   loadAllianceDirectory, relationshipBetween, requestAllianceEntry, requestAllianceHelp,
   resolveLeadershipChallenges, reviewAllianceApplication, reviewAllianceNap, setAllianceDiplomacy, setAllianceMemberRank, updateAllianceStandards,
   upgradeAllianceSkill, verifyAllianceHolding,
@@ -51,7 +51,7 @@ describe("alliance core rules", () => {
     expect(foundAllianceFromToken(token, profile(1), 1000).ok).toBe(true);
     const second = foundAllianceFromToken(token, profile(2), 1001);
     expect(second.ok).toBe(false);
-    expect(second.reason).toMatch(/registered chapter/i);
+    expect(second.reason).toMatch(/already exists/i);
   });
 
   it("requires six founders and five distinct endorsements to activate", () => {
@@ -72,6 +72,12 @@ describe("alliance core rules", () => {
     joinAlliance(DEFAULT_ALLIANCE_ID, profile(1), 1000);
     expect(leaveAlliance(profile(1), 2000).ok).toBe(true);
     expect(joinAlliance(DEFAULT_ALLIANCE_ID, profile(1), 2001).ok).toBe(false);
+  });
+
+  it("lets GM skip the 24-hour alliance switch lock", () => {
+    joinAlliance(DEFAULT_ALLIANCE_ID, profile(1), 1000);
+    expect(leaveAlliance(profile(1), 2000, true).ok).toBe(true);
+    expect(joinAlliance(DEFAULT_ALLIANCE_ID, profile(1), 2001, true).ok).toBe(true);
   });
 
   it("uses the stated diplomacy priority", () => {
@@ -156,6 +162,17 @@ describe("alliance core rules", () => {
     const voters = opened.challenge!.eligibleAddresses.slice(0, Math.ceil(opened.challenge!.eligibleAddresses.length * .4));
     voters.forEach((address) => expect(castLeadershipVote(DEFAULT_ALLIANCE_ID, address, candidate.address, now + 1000).ok).toBe(true));
     resolveLeadershipChallenges(opened.challenge!.closesAt + 1);
+    expect(allianceForAddress(initiator.address)!.members.find((member) => member.address === candidate.address)?.rank).toBe("R5");
+  });
+
+  it("lets GM start and complete a leadership vote without waiting", () => {
+    const initiator = profile(1);
+    joinAlliance(DEFAULT_ALLIANCE_ID, initiator, Date.now());
+    const alliance = gmPrepareAlliance(DEFAULT_ALLIANCE_ID, initiator.address)!;
+    const candidate = alliance.members.find((member) => member.address !== initiator.address)!;
+    const opened = initiateLeadershipChallenge(initiator, candidate.address, Date.now(), true);
+    expect(opened.ok).toBe(true);
+    expect(gmCompleteLeadershipChallenge(DEFAULT_ALLIANCE_ID).ok).toBe(true);
     expect(allianceForAddress(initiator.address)!.members.find((member) => member.address === candidate.address)?.rank).toBe("R5");
   });
 });

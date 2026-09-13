@@ -82,7 +82,7 @@ describe("player account persistence", () => {
       configurable: true,
       value: { location: { hostname: "localhost", search: "?profile&gm" } },
     });
-    const vault = loadCosmeticVault("0xabc123");
+    const vault = loadCosmeticVault("0xbB1D63C5AF5D97963671C8Bd8A5F73a7EbAD1D1C");
     expect(PLANET_SKINS.every((skin) => ownsPlanetSkin(vault, skin.id))).toBe(true);
     expect(PLANET_HALOS.every((halo) => ownsPlanetHalo(vault, halo.id))).toBe(true);
     expect(PLANET_ORBITS.every((orbit) => ownsPlanetOrbit(vault, orbit.id))).toBe(true);

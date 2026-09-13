@@ -7,7 +7,7 @@ import {
 import { loadGame, saveGame, initGame } from "./lib/gamestore";
 import { getN } from "./lib/numbers";
 import { compact } from "./lib/format";
-import { gmFillTroops, grantLocalGm, hasLocalGm, localGmRequested } from "./lib/gm";
+import { gmFillTroops, hasLocalGm } from "./lib/gm";
 import type {
   CityEntity, HeadlessMarch, MonsterEntity, Point, ResourceEntity, WorldReport,
 } from "./lib/world-engine";
@@ -530,12 +530,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const pendingCamera = useRef<Point | null>(null);
   const dispatchSeq = useRef(0);
   const seenReportCount = useRef(initial.session.world.players[initial.session.playerId].reportIds.length);
-  const gm = hasLocalGm(address) || localGmRequested();
+  const gm = hasLocalGm(address);
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { sessionRef.current = session; }, [session]);
   useEffect(() => {
-    if (localGmRequested()) grantLocalGm(address);
     const opened = openLocalWorldSession(address, loadGame(address) || initGame(address), Date.now(), N);
     opened.session.world.players[opened.session.playerId].allianceId = profile.faction;
     setGame(opened.game); gameRef.current = opened.game; setSession(opened.session); sessionRef.current = opened.session;

@@ -46,6 +46,8 @@
 
 ## 3 · Your Tribe (memecoin = faction)
 
+**Locked identity rule:** A token alliance uses the memecoin's on-chain `name` and `symbol` exactly as returned for its contract address. Never invent an alliance alias, rewrite the name, or infer identity from a ticker alone. If contract-backed metadata is unavailable, show only the ticker until it is verified.
+
 | Key | Concept (anchor — don't change) | Themed Name ✏️ | Why / original |
 |---|---|---|---|
 | `faction.term` | A memecoin CA = a faction/nation | **a Tribe** | "$FROG tribe/army" is how they already talk |

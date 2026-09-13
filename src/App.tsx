@@ -16,7 +16,7 @@ import ProfileScreen from "./ProfileScreen";
 import Alliance from "./Alliance";
 import GameMusic, { requestGameMusicStart } from "./GameMusic";
 import GameCursor from "./GameCursor";
-import { grantLocalGm, localGmRequested } from "./lib/gm";
+import { hasLocalGm, localGmRequested } from "./lib/gm";
 import { loadGame } from "./lib/gamestore";
 import { verifyAllianceHolding } from "./lib/alliance";
 
@@ -33,7 +33,7 @@ function DevGameShell({ initialView, slot, gm }: { initialView: MainStage; slot:
   };
   const [view, setView] = useState<MainStage>(initialView);
   const [profile, setProfile] = useState<Profile>(() => loadProfile(address) || fallback);
-  const gmHoldings = gm ? [{ address: `0x${slot.padStart(40, "a").slice(-40)}`, name: "Orbit Test Collective", symbol: "ORBT", decimals: 18, raw: "1000000000000000000", type: "ERC-20", exchangeRate: null, marketCap: null, iconUrl: null, reputation: null }] : [];
+  const gmHoldings = gm ? [{ address: `0x${slot.padStart(40, "a").slice(-40)}`, name: "ORBT", symbol: "ORBT", decimals: 18, raw: "1000000000000000000", type: "ERC-20", exchangeRate: null, marketCap: null, iconUrl: null, reputation: null }] : [];
 
   const navigate = (next: MainStage, replace = false) => {
     const url = `/?${next}${gm ? "&gm" : ""}&slot=${slot}`;
@@ -91,16 +91,14 @@ export default function App() {
   const [error, setError] = useState<string>("");
 
   useEffect(() => subscribeProviders(setDetected), []);
-  useEffect(() => {
-    if (address && localGmRequested()) grantLocalGm(address);
-  }, [address]);
   const wallets = useMemo(() => resolveWallets(detected), [detected]);
 
   const memes = records ? memeHoldings(records) : [];
   const pledgeable = pledgeableFrom(memes);
   const heldSymbols = new Set(memes.map((m) => (m.symbol || "").toUpperCase()));
   const iconBySym = new Map(memes.map((m) => [(m.symbol || "").toUpperCase(), m.iconUrl]));
-  const board = useMemo(() => topFactions(heldSymbols, iconBySym), [records]);
+  const nameBySym = new Map(memes.map((m) => [(m.symbol || "").toUpperCase(), m.name]));
+  const board = useMemo(() => topFactions(heldSymbols, iconBySym, nameBySym), [records]);
   const eth = records ? fromRaw(records.coinBalanceRaw, 18) : 0;
   const currentKeepLevel = profile ? (loadGame(profile.address)?.buildings.keep.lvl ?? profile.keepLevel) : 1;
 
@@ -128,7 +126,7 @@ export default function App() {
         }
       }
       setProfile(existing);
-      const nextStage = existing ? (localGmRequested() ? "town" : "resume") : "start";
+      const nextStage = existing ? (hasLocalGm(res.address) ? "town" : "resume") : "start";
       setStage(nextStage);
       report(recs, { wallet: w.name, chainOk: res.chainOk, stage: nextStage, profile: existing });
     } catch (e: any) {
@@ -152,7 +150,7 @@ export default function App() {
     };
     saveProfile(p);
     setProfile(p);
-    setStage(localGmRequested() ? "town" : "founded");
+    setStage(hasLocalGm(address) ? "town" : "founded");
     report(records, { wallet: walletName, chainOk, stage: "founded", profile: p });
   }
 
@@ -229,7 +227,7 @@ export default function App() {
       {error && <div className="banner err">{error}</div>}
       {localGmRequested() && stage !== "town" && (
         <div className="banner gm-notice">
-          🧪 GM test mode — connect your test wallet to enter its Town with Fill resources, Finish queues and Townhall +1.
+          🧪 GM access is limited to the owner wallet.
         </div>
       )}
 
@@ -347,7 +345,7 @@ export default function App() {
                   <span className="brank">{i + 1}</span>
                   <span className="bname">
                     {f.icon ? <img src={f.icon} alt="" /> : <i className="bdot" />}
-                    {f.name} <span className="btick">${f.symbol}</span>
+                    {f.name && <>{f.name} </>}<span className="btick">${f.symbol}</span>
                   </span>
                   <span className="bplayers mono">{f.players.toLocaleString()} players</span>
                   <span className="bact">{f.held ? "you hold ✓" : "buy to join"}</span>

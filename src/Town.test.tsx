@@ -46,16 +46,14 @@ describe("Town troop training UI", () => {
 
   it("shows player cheat controls for a locally granted GM wallet", () => {
     vi.stubGlobal("window", { location: { hostname: "localhost", search: "?gm" } });
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => key === "ruglands:gm:0xrender" ? "1" : null,
-    });
+    const owner = "0xbB1D63C5AF5D97963671C8Bd8A5F73a7EbAD1D1C";
 
     const html = renderToStaticMarkup(
       <Town
-        address="0xrender"
+        address={owner}
         onWorld={() => {}}
         profile={{
-          address: "0xrender",
+          address: owner,
           name: "Ruglord0000001",
           faction: null,
           factionSymbol: null,
@@ -75,7 +73,7 @@ describe("Town troop training UI", () => {
     expect(html).toContain("Townhall +1");
     expect(html).toContain("Selected building +1");
     expect(html).toContain("Reset city");
-    expect(html).toContain("Disable GM");
+    expect(html).toContain("OWNER WALLET");
   });
 
   it("renders a playable three-branch Academy with per-level gates, costs and time", () => {
