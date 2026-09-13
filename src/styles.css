@@ -1252,3 +1252,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .quickstart .or::before,.quickstart .or::after{content:"";position:absolute;top:50%;width:38%;height:1px;background:var(--line)}
 .quickstart .or::before{left:0}.quickstart .or::after{right:0}
 .quickstart .or span{background:transparent;padding:0 8px}
+/* Alliance tab parked as "Coming Soon" until shared multiplayer lands. */
+.command-tabs button.soon{cursor:not-allowed;opacity:.5}
+.command-tabs button.soon:hover{color:#5f788a}
+.command-tabs button.soon .soon-tag{position:absolute;right:5px;top:4px;font:800 6px var(--mono);font-style:normal;letter-spacing:.08em;color:#8aa9b9;border:1px solid rgba(138,169,185,.4);border-radius:6px;padding:1px 3px}
