@@ -33,6 +33,7 @@ import {
 } from "./lib/player-account";
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
+import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
 
 type SelectableEntity = ResourceEntity | MonsterEntity | CityEntity;
 type WorldLayer = "resource" | "monster" | "city";
@@ -141,7 +142,7 @@ function WorldLevelBadge({ x, y, level }: { x: number; y: number; level: number 
   return <g className="world-level-badge"><circle cx={x + 6.5} cy={y + 6.2} r="3.25" /><text x={x + 6.5} y={y + 7.25}>{level}</text></g>;
 }
 
-function CityIdentityTag({ x, y, level, name, signal = "clear-channel", own = false }: { x: number; y: number; level: number; name: string; signal?: ChatSignalId | null; own?: boolean }) {
+function CityIdentityTag({ x, y, level, name, signal = "clear-channel", own = false, relation = own ? "self" : "neutral" }: { x: number; y: number; level: number; name: string; signal?: ChatSignalId | null; own?: boolean; relation?: AllianceRelation }) {
   const label = name.slice(0, 18);
   // Width fits the actual rendered text (~1.82 units/char at this font) plus the level pill,
   // so the plate hugs the name instead of trailing empty space; the name is centred in the
@@ -151,7 +152,7 @@ function CityIdentityTag({ x, y, level, name, signal = "clear-channel", own = fa
   const width = Math.max(20, levelPad + textW + rightPad);
   const left = x - width / 2;
   const textCx = left + levelPad + textW / 2;
-  return <g className={`world-city-tag signal-${signal || "clear-channel"} ${own ? "own" : "rival"}`} pointerEvents="none">
+  return <g className={`world-city-tag signal-${signal || "clear-channel"} relation-${relation} ${own ? "own" : "rival"}`} pointerEvents="none">
     <rect x={left} y={y + 6.1} width={width} height="7.1" rx="2.2" />
     <circle cx={left} cy={y + 9.65} r="4.15" />
     <text className="world-city-level" x={left} y={y + 10.9} textAnchor="middle">{level}</text>
@@ -466,7 +467,7 @@ function reportCopy(report: WorldReport, world: LocalWorldSession["world"], now:
   return { title: `${report.outcome === "victory" ? "Victory" : report.outcome === "defeat" ? "Defeat" : "Battle result"} at ${target}`, detail: `${compact(displayTroops(wounded))} wounded · ${compact(displayTroops(dead))} dead.`, good };
 }
 
-export default function World({ address, profile, onBack, onMessages = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onBack: () => void; onMessages?: () => void; onProfile?: () => void }) {
+export default function World({ address, profile, onAlliance = () => {}, onBack, onMessages = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onAlliance?: () => void; onBack: () => void; onMessages?: () => void; onProfile?: () => void }) {
   const N = useMemo(() => getN(), []);
   const quality = useGraphicsQuality(address);
   const equippedCosmetics = useMemo(() => loadCosmeticVault(address).equipped, [address]);
@@ -483,6 +484,17 @@ export default function World({ address, profile, onBack, onMessages = () => {},
   const gameRef = useRef(initial.game);
   const sessionRef = useRef(initial.session);
   const [now, setNow] = useState(Date.now());
+  const viewerAlliance = useMemo(() => allianceForAddress(address), [address]);
+  const cityRelation = (ownerId: string): AllianceRelation => {
+    if (ownerId === session.playerId) return "self";
+    const targetAllianceId = session.world.players[ownerId]?.allianceId ?? null;
+    const actual = relationshipBetween(viewerAlliance?.id ?? null, targetAllianceId);
+    if (actual !== "neutral" || !ownerId.startsWith("npc.")) return actual;
+    // Local population carries deterministic diplomacy samples until a server
+    // directory supplies real alliance ids. This exercises every tactical tone.
+    const index = Number(ownerId.slice(-4)) || 0;
+    return index % 7 === 0 ? "ally" : index % 7 === 1 ? "nap" : index % 11 === 0 ? "war" : "neutral";
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Record<TroopKey, Record<string, number>>>(emptySelection);
   const [message, setMessage] = useState(initial.session.migratedLegacyAt ? "Old World marches were safely settled and migrated." : "");
@@ -787,7 +799,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
             </>}
           </> : <WorldEntityGlyph entity={entity} detailZoom={detailZoom} occupation={occupation} />}
           {!gpuVisualsReady && entity.kind === "city" && detailZoom && (selectedId === entity.id
-            ? <CityIdentityTag x={entity.position.x} y={entity.position.y} level={entity.townhallLevel} name={localWorldTargetName(world, entity.id)} signal={publicCosmetics?.chatSignal} />
+            ? <CityIdentityTag x={entity.position.x} y={entity.position.y} level={entity.townhallLevel} name={localWorldTargetName(world, entity.id)} signal={publicCosmetics?.chatSignal} relation={cityRelation(entity.ownerId)} />
             : <WorldLevelBadge x={entity.position.x} y={entity.position.y} level={entity.townhallLevel} />)}
           {verified && entity.kind !== "resource" && <circle cx={entity.position.x + 4.5} cy={entity.position.y - 4.5} r="1.2" className="world-verified-dot" />}
           {bookmarks.includes(entity.id) && <text x={entity.position.x + 7} y={entity.position.y - 6} className="world-bookmark-star">★</text>}
@@ -930,7 +942,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
       resources={viewGame.res}
       energy={energy} energyCap={world.config.energyCap} activeFleets={activeMarches.length} fleetCap={player.marchSlots}
       standing={totalTroops(viewGame)} wounded={viewGame.wounded} might={mightBreakdown(viewGame).total}
-      onCity={onBack} onWorld={() => {}} onMessages={onMessages} onProfile={onProfile} />
+      onAlliance={onAlliance} onCity={onBack} onWorld={() => {}} onMessages={onMessages} onProfile={onProfile} />
     {gm && <div className="world-gm-strip"><span>LOCAL GM</span><button onClick={fillTroops}>FILL TROOPS</button><button onClick={finishMarches} disabled={!activeMarches.length}>RESOLVE FLEETS</button><button onClick={() => setStrikeBurstNonce((value) => value + 1)}>CAST STRIKE SUITE</button></div>}
     {message && <div className="world-message">{message}</div>}
     <div className="world-layout">
@@ -960,7 +972,7 @@ export default function World({ address, profile, onBack, onMessages = () => {},
               {equippedPlanetHalo && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldHaloFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} halo={equippedPlanetHalo} half="front" /></g>}
             </> : <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><circle cx={playerCity.position.x} cy={playerCity.position.y} r="14" className="world-city-hit" /></g>}
             {!gpuVisualsReady && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
-              <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
+              <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own relation="self" />
               <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
             </g>}
           </g>
@@ -990,12 +1002,12 @@ export default function World({ address, profile, onBack, onMessages = () => {},
             const cosmetics = world.players[city.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS;
             return <g key={`overlay-${city.id}`} transform={`translate(${city.position.x} ${city.position.y}) scale(${markerScale}) translate(${-city.position.x} ${-city.position.y})`}>
               {selectedId === city.id
-                ? <CityIdentityTag x={city.position.x} y={city.position.y + rivalIdentityOffset} level={city.townhallLevel} name={localWorldTargetName(world, city.id)} signal={cosmetics.chatSignal} />
+                ? <CityIdentityTag x={city.position.x} y={city.position.y + rivalIdentityOffset} level={city.townhallLevel} name={localWorldTargetName(world, city.id)} signal={cosmetics.chatSignal} relation={cityRelation(city.ownerId)} />
                 : <WorldLevelBadge x={city.position.x} y={city.position.y} level={city.townhallLevel} />}
             </g>;
           })}
           <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
-            <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own />
+            <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own relation="self" />
             <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
           </g>
         </svg>}

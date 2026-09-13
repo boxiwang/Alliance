@@ -106,11 +106,12 @@ function CursorPreview({ cursor }: { cursor: GameCursorId }) {
 }
 
 export default function ProfileScreen({
-  address, profile, onProfileChange, onCity, onWorld, onMessages,
+  address, profile, onProfileChange, onAlliance = () => {}, onCity, onWorld, onMessages,
 }: {
   address: string;
   profile: Profile;
   onProfileChange: (profile: Profile) => void;
+  onAlliance?: () => void;
   onCity: () => void;
   onWorld: () => void;
   onMessages: () => void;
@@ -397,7 +398,7 @@ export default function ProfileScreen({
     <GameNav view="profile" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
       resources={game.res} energy={player ? energyAt(player, now, world!.world.config) : 100} energyCap={world?.world.config.energyCap ?? 100}
       activeFleets={activeFleets} fleetCap={player?.marchSlots ?? worldMarchSlots(game)} standing={totalTroops(game)} wounded={game.wounded}
-      might={mightBreakdown(game).total} credits={account.credits} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onProfile={() => {}} />
+      might={mightBreakdown(game).total} credits={account.credits} onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onProfile={() => {}} />
 
     {signal && <div className="profile-signal" role="status">{signal}</div>}
 

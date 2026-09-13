@@ -1,0 +1,408 @@
+import type { TokenHolding } from "./blockscout";
+import type { Profile } from "./profile";
+import { loadGame, saveGame } from "./gamestore";
+
+export const DEFAULT_ALLIANCE_ID = "gaco-001";
+export const ALLIANCE_SWITCH_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+export const ALLIANCE_HOLDING_GRACE_MS = 48 * 60 * 60 * 1000;
+export const LEADERSHIP_CHALLENGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+export const LEADERSHIP_BALLOT_MS = 48 * 60 * 60 * 1000;
+export const HELP_REDUCTION_MS = 5 * 60 * 1000;
+export const HELP_LIMIT = 25;
+export const HELP_REWARD_DAILY_LIMIT = 50;
+
+export type AllianceRank = "R1" | "R2" | "R3" | "R4" | "R5";
+export type AllianceStatus = "forming" | "active";
+export type HoldingStatus = "verified" | "suspended";
+export type AllianceRelation = "self" | "ally" | "nap" | "war" | "neutral";
+
+export interface AllianceMember {
+  address: string;
+  name: string;
+  rank: AllianceRank;
+  joinedAt: number;
+  holdingStatus: HoldingStatus;
+  holdingFailedAt?: number;
+  contribution: number;
+  credits: number;
+  lastActiveAt: number;
+}
+
+export interface AllianceDecree {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: number;
+  author: string;
+}
+
+export interface AllianceHelpRequest {
+  id: string;
+  allianceId: string;
+  ownerAddress: string;
+  ownerName: string;
+  kind: "building" | "healing";
+  targetKey: string;
+  label: string;
+  createdAt: number;
+  helpers: string[];
+  closedAt?: number;
+}
+
+export interface LeadershipChallenge {
+  id: string;
+  initiatorAddress: string;
+  initiatorName: string;
+  candidateAddress: string;
+  candidateName: string;
+  createdAt: number;
+  closesAt: number;
+  eligibleAddresses: string[];
+  votes: Record<string, string>;
+  resolvedAt?: number;
+  winnerAddress?: string;
+}
+
+export interface AllianceRecord {
+  id: string;
+  kind: "default" | "token";
+  status: AllianceStatus;
+  name: string;
+  symbol: string;
+  chapter: number;
+  color: string;
+  iconUrl?: string | null;
+  contractAddress?: string | null;
+  minHoldingDisplay: string;
+  activeStandard: string;
+  rules: string[];
+  napAllianceIds: string[];
+  warAllianceIds: string[];
+  members: AllianceMember[];
+  endorsements: Record<string, string[]>;
+  decrees: AllianceDecree[];
+  helps: AllianceHelpRequest[];
+  skillLevels: Record<"growth" | "warfare" | "mutualAid", number>;
+  skillPoints: number;
+  lastChallengeAt?: number;
+  challenges: LeadershipChallenge[];
+  createdAt: number;
+}
+
+interface AllianceDirectory { version: 1; nextChapter: number; alliances: AllianceRecord[]; switchLocks: Record<string, number>; }
+
+const DIRECTORY_KEY = "ruglands:alliances:v1";
+export const ALLIANCE_CHANGED_EVENT = "ruglands:alliance-changed";
+
+function seedDirectory(now = Date.now()): AllianceDirectory {
+  return {
+    version: 1,
+    nextChapter: 2,
+    switchLocks: {},
+    alliances: [{
+      id: DEFAULT_ALLIANCE_ID,
+      kind: "default",
+      status: "active",
+      name: "Galactic Accord",
+      symbol: "GACO",
+      chapter: 1,
+      color: "#6ed9ff",
+      contractAddress: null,
+      minHoldingDisplay: "Open passage · no token required",
+      activeStandard: "Signal once every 72 hours",
+      rules: ["Protect Accord gatherers.", "Honor declared NAP corridors.", "Answer frontier rallies when able."],
+      napAllianceIds: [],
+      warAllianceIds: [],
+      members: accordStewards(now),
+      endorsements: {},
+      decrees: [{ id: "gaco-first-light", title: "FIRST LIGHT PROTOCOL", body: "The Accord keeps a route open for every civilization entering the frontier.", createdAt: now - 86400000, author: "Accord Relay" }],
+      helps: [],
+      skillLevels: { growth: 1, warfare: 0, mutualAid: 1 },
+      skillPoints: 2,
+      challenges: [],
+      createdAt: now - 7 * 86400000,
+    }],
+  };
+}
+
+function accordStewards(now: number): AllianceMember[] {
+  return [
+    ["0x00000000000000000000000000000000gaco0001", "Aster Relay", "R5"],
+    ["0x00000000000000000000000000000000gaco0002", "Nyx Cartographer", "R4"],
+    ["0x00000000000000000000000000000000gaco0003", "Kepler Ward", "R4"],
+    ["0x00000000000000000000000000000000gaco0004", "Iona Signal", "R3"],
+    ["0x00000000000000000000000000000000gaco0005", "Vale-7", "R2"],
+  ].map(([address, name, rank], index) => ({ address, name, rank: rank as AllianceRank, joinedAt: now - (20 - index) * 86400000, holdingStatus: "verified", contribution: 5200 - index * 610, credits: 880 - index * 75, lastActiveAt: now - index * 420000 }));
+}
+
+function safeStorage(): Storage | null { try { return typeof localStorage === "undefined" ? null : localStorage; } catch { return null; } }
+function normalizeAddress(address: string): string { return address.toLowerCase(); }
+function emitChanged() { try { window.dispatchEvent(new CustomEvent(ALLIANCE_CHANGED_EVENT)); } catch {} }
+
+export function loadAllianceDirectory(): AllianceDirectory {
+  const storage = safeStorage();
+  if (!storage) return seedDirectory();
+  try {
+    const raw = storage.getItem(DIRECTORY_KEY);
+    if (!raw) { const seeded = seedDirectory(); storage.setItem(DIRECTORY_KEY, JSON.stringify(seeded)); return seeded; }
+    const parsed = JSON.parse(raw) as AllianceDirectory;
+    if (!(parsed?.version === 1 && Array.isArray(parsed.alliances))) return seedDirectory();
+    const accord = parsed.alliances.find((alliance) => alliance.id === DEFAULT_ALLIANCE_ID);
+    if (accord && !accord.members.some((member) => member.rank === "R5")) {
+      const existing = new Set(accord.members.map((member) => normalizeAddress(member.address)));
+      accord.members.unshift(...accordStewards(Date.now()).filter((member) => !existing.has(normalizeAddress(member.address))));
+      storage.setItem(DIRECTORY_KEY, JSON.stringify(parsed));
+    }
+    return parsed;
+  } catch { return seedDirectory(); }
+}
+
+export function saveAllianceDirectory(directory: AllianceDirectory) {
+  try { safeStorage()?.setItem(DIRECTORY_KEY, JSON.stringify(directory)); emitChanged(); } catch {}
+}
+
+export function allianceForAddress(address: string, directory = loadAllianceDirectory()): AllianceRecord | null {
+  const normalized = normalizeAddress(address);
+  return directory.alliances.find((alliance) => alliance.members.some((member) => normalizeAddress(member.address) === normalized)) ?? null;
+}
+
+export function allianceById(id: string | null | undefined, directory = loadAllianceDirectory()): AllianceRecord | null {
+  return id ? directory.alliances.find((alliance) => alliance.id === id) ?? null : null;
+}
+
+export function availableAlliances(holdings: TokenHolding[], directory = loadAllianceDirectory()): AllianceRecord[] {
+  const held = new Set(holdings.map((token) => normalizeAddress(token.address)));
+  return directory.alliances.filter((alliance) => alliance.kind === "default" || (!!alliance.contractAddress && held.has(normalizeAddress(alliance.contractAddress))));
+}
+
+export function tokenAllianceForHolding(token: TokenHolding, directory = loadAllianceDirectory()): AllianceRecord | null {
+  return directory.alliances.find((alliance) => alliance.contractAddress && normalizeAddress(alliance.contractAddress) === normalizeAddress(token.address)) ?? null;
+}
+
+function memberFrom(profile: Profile, now: number): AllianceMember {
+  return { address: profile.address, name: profile.name, rank: "R1", joinedAt: now, holdingStatus: "verified", contribution: 0, credits: 0, lastActiveAt: now };
+}
+
+export function joinAlliance(allianceId: string, profile: Profile, now = Date.now()): { ok: boolean; reason?: string; alliance?: AllianceRecord } {
+  const directory = loadAllianceDirectory();
+  const address = normalizeAddress(profile.address);
+  const current = allianceForAddress(address, directory);
+  if (current?.id === allianceId) return { ok: true, alliance: current };
+  if (current) return { ok: false, reason: "Withdraw from your current chapter first." };
+  if ((directory.switchLocks[address] ?? 0) > now) return { ok: false, reason: "Your jump signature is still cooling down." };
+  const alliance = directory.alliances.find((candidate) => candidate.id === allianceId);
+  if (!alliance) return { ok: false, reason: "That chapter no longer answers the relay." };
+  alliance.members.push(memberFrom(profile, now));
+  saveAllianceDirectory(directory);
+  return { ok: true, alliance };
+}
+
+export function leaveAlliance(profile: Profile, now = Date.now()): { ok: boolean; reason?: string } {
+  const directory = loadAllianceDirectory();
+  const alliance = allianceForAddress(profile.address, directory);
+  if (!alliance) return { ok: false, reason: "No chapter signal is bound to this civilization." };
+  const address = normalizeAddress(profile.address);
+  alliance.members = alliance.members.filter((member) => normalizeAddress(member.address) !== address);
+  Object.values(alliance.endorsements).forEach((addresses) => addresses.splice(0, addresses.length, ...addresses.filter((item) => normalizeAddress(item) !== address)));
+  directory.switchLocks[address] = now + ALLIANCE_SWITCH_COOLDOWN_MS;
+  saveAllianceDirectory(directory);
+  return { ok: true };
+}
+
+function deterministicColor(value: string): string {
+  let hash = 2166136261;
+  for (const char of value.toLowerCase()) { hash ^= char.charCodeAt(0); hash = Math.imul(hash, 16777619); }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue} 72% 64%)`;
+}
+
+export function foundAllianceFromToken(token: TokenHolding, profile: Profile, now = Date.now()): { ok: boolean; reason?: string; alliance?: AllianceRecord } {
+  const directory = loadAllianceDirectory();
+  if (allianceForAddress(profile.address, directory)) return { ok: false, reason: "Your signal is already pledged to a chapter." };
+  if (tokenAllianceForHolding(token, directory)) return { ok: false, reason: "This contract already has a registered chapter." };
+  const chapter = directory.nextChapter++;
+  const symbol = (token.symbol || "TOKEN").trim().toUpperCase().slice(0, 12);
+  const alliance: AllianceRecord = {
+    id: `token-${normalizeAddress(token.address)}-${chapter}`,
+    kind: "token", status: "forming", name: token.name || `${symbol} Collective`, symbol, chapter,
+    color: deterministicColor(token.address), iconUrl: token.iconUrl, contractAddress: token.address,
+    minHoldingDisplay: `Hold ${symbol} · controller threshold pending`, activeStandard: "Signal once every 72 hours",
+    rules: ["The contract defines the chapter.", "Founding signals remain public.", "Five independent endorsements activate command."],
+    napAllianceIds: [], warAllianceIds: [], members: [memberFrom(profile, now)], endorsements: {},
+    decrees: [{ id: `founding-${chapter}`, title: "FOUNDING SIGNAL", body: `${symbol} Chapter ${String(chapter).padStart(3, "0")} is recruiting its first six civilizations.`, createdAt: now, author: profile.name }],
+    helps: [], skillLevels: { growth: 0, warfare: 0, mutualAid: 0 }, skillPoints: 0, challenges: [], createdAt: now,
+  };
+  directory.alliances.push(alliance);
+  saveAllianceDirectory(directory);
+  return { ok: true, alliance };
+}
+
+export function endorseCandidate(allianceId: string, voterAddress: string, candidateAddress: string): { ok: boolean; reason?: string; activated?: boolean } {
+  const directory = loadAllianceDirectory();
+  const alliance = allianceById(allianceId, directory);
+  if (!alliance || alliance.status !== "forming") return { ok: false, reason: "Founding ballot is closed." };
+  const voter = alliance.members.find((member) => normalizeAddress(member.address) === normalizeAddress(voterAddress));
+  const candidate = alliance.members.find((member) => normalizeAddress(member.address) === normalizeAddress(candidateAddress));
+  if (!voter || !candidate || normalizeAddress(voter.address) === normalizeAddress(candidate.address)) return { ok: false, reason: "A distinct founding member must transmit this endorsement." };
+  Object.keys(alliance.endorsements).forEach((key) => { alliance.endorsements[key] = alliance.endorsements[key].filter((address) => normalizeAddress(address) !== normalizeAddress(voterAddress)); });
+  const endorsements = alliance.endorsements[candidate.address] ?? [];
+  endorsements.push(voter.address); alliance.endorsements[candidate.address] = endorsements;
+  let activated = false;
+  if (alliance.members.length >= 6 && new Set(endorsements.map(normalizeAddress)).size >= 5) {
+    alliance.status = "active"; candidate.rank = "R5"; activated = true;
+    alliance.decrees.unshift({ id: `activated-${Date.now()}`, title: "CHAPTER AWAKENED", body: `${candidate.name} now carries the R5 command signal.`, createdAt: Date.now(), author: "Founding Relay" });
+  }
+  saveAllianceDirectory(directory);
+  return { ok: true, activated };
+}
+
+export function requestAllianceHelp(profile: Profile, kind: AllianceHelpRequest["kind"], targetKey: string, label: string, now = Date.now()): { ok: boolean; reason?: string; request?: AllianceHelpRequest } {
+  const directory = loadAllianceDirectory();
+  const alliance = allianceForAddress(profile.address, directory);
+  if (!alliance || alliance.status !== "active") return { ok: false, reason: "Alliance assistance is offline until your chapter is active." };
+  const open = alliance.helps.find((help) => !help.closedAt && normalizeAddress(help.ownerAddress) === normalizeAddress(profile.address) && help.kind === kind && help.targetKey === targetKey);
+  if (open) return { ok: true, request: open };
+  const request: AllianceHelpRequest = { id: `${kind}-${normalizeAddress(profile.address)}-${targetKey}-${now}`, allianceId: alliance.id, ownerAddress: profile.address, ownerName: profile.name, kind, targetKey, label, createdAt: now, helpers: [] };
+  alliance.helps.push(request); saveAllianceDirectory(directory); return { ok: true, request };
+}
+
+export function openHelpFor(profile: Profile, kind: AllianceHelpRequest["kind"], targetKey: string): AllianceHelpRequest | null {
+  const alliance = allianceForAddress(profile.address);
+  return alliance?.helps.find((help) => !help.closedAt && normalizeAddress(help.ownerAddress) === normalizeAddress(profile.address) && help.kind === kind && help.targetKey === targetKey) ?? null;
+}
+
+function rewardDateKey(now: number): string { return new Date(now).toISOString().slice(0, 10); }
+
+export function helpAll(profile: Profile, now = Date.now()): { helped: number; rewarded: number; secondsRemoved: number; reason?: string } {
+  const directory = loadAllianceDirectory();
+  const alliance = allianceForAddress(profile.address, directory);
+  if (!alliance || alliance.status !== "active") return { helped: 0, rewarded: 0, secondsRemoved: 0, reason: "No active chapter assistance channel." };
+  const helperAddress = normalizeAddress(profile.address);
+  const helper = alliance.members.find((member) => normalizeAddress(member.address) === helperAddress);
+  if (!helper || helper.holdingStatus !== "verified") return { helped: 0, rewarded: 0, secondsRemoved: 0, reason: "Your chapter signal is suspended." };
+  const eligible = alliance.helps.filter((request) => !request.closedAt && normalizeAddress(request.ownerAddress) !== helperAddress && request.helpers.length < HELP_LIMIT && !request.helpers.some((address) => normalizeAddress(address) === helperAddress));
+  const date = rewardDateKey(now);
+  const rewardKey = `ruglands:alliance-help-rewards:${helperAddress}:${date}`;
+  const storage = safeStorage();
+  const prior = Math.max(0, Number(storage?.getItem(rewardKey)) || 0);
+  let rewarded = 0;
+  let helped = 0;
+  eligible.forEach((request) => {
+    const game = loadGame(request.ownerAddress);
+    let applied = false;
+    if (game) {
+      if (request.kind === "building" && game.buildings[request.targetKey as keyof typeof game.buildings]?.finishAt > now) {
+        game.buildings[request.targetKey as keyof typeof game.buildings].finishAt = Math.max(now, game.buildings[request.targetKey as keyof typeof game.buildings].finishAt - HELP_REDUCTION_MS);
+        applied = true;
+      } else if (request.kind === "healing" && game.healing.finishAt > now) { game.healing.finishAt = Math.max(now, game.healing.finishAt - HELP_REDUCTION_MS); applied = true; }
+      saveGame(game);
+    }
+    if (!applied) { request.closedAt = now; return; }
+    request.helpers.push(profile.address); helped += 1;
+    const queueDone = request.kind === "building"
+      ? (game?.buildings[request.targetKey as keyof typeof game.buildings]?.finishAt ?? 0) <= now
+      : (game?.healing.finishAt ?? 0) <= now;
+    if (request.helpers.length >= HELP_LIMIT || queueDone) request.closedAt = now;
+    if (prior + rewarded < HELP_REWARD_DAILY_LIMIT) rewarded += 1;
+  });
+  helper.contribution += rewarded;
+  helper.credits += rewarded * 2;
+  if (storage) storage.setItem(rewardKey, String(prior + rewarded));
+  saveAllianceDirectory(directory);
+  return { helped, rewarded, secondsRemoved: helped * HELP_REDUCTION_MS / 1000 };
+}
+
+export function relationshipBetween(viewerAllianceId: string | null, targetAllianceId: string | null, own = false, directory = loadAllianceDirectory()): AllianceRelation {
+  if (own) return "self";
+  if (viewerAllianceId && targetAllianceId && viewerAllianceId === targetAllianceId) return "ally";
+  const viewer = allianceById(viewerAllianceId, directory);
+  if (viewer && targetAllianceId && viewer.warAllianceIds.includes(targetAllianceId)) return "war";
+  if (viewer && targetAllianceId && viewer.napAllianceIds.includes(targetAllianceId)) return "nap";
+  return "neutral";
+}
+
+export function verifyAllianceHolding(profile: Profile, holdings: TokenHolding[], now = Date.now()): { status: "none" | "verified" | "suspended" | "removed"; alliance?: AllianceRecord } {
+  const directory = loadAllianceDirectory();
+  const alliance = allianceForAddress(profile.address, directory);
+  if (!alliance) return { status: "none" };
+  const member = alliance.members.find((candidate) => normalizeAddress(candidate.address) === normalizeAddress(profile.address))!;
+  if (alliance.kind === "default" || holdings.some((holding) => alliance.contractAddress && normalizeAddress(holding.address) === normalizeAddress(alliance.contractAddress))) {
+    member.holdingStatus = "verified"; delete member.holdingFailedAt; member.lastActiveAt = now; saveAllianceDirectory(directory); return { status: "verified", alliance };
+  }
+  if (!member.holdingFailedAt) { member.holdingFailedAt = now; member.holdingStatus = "suspended"; saveAllianceDirectory(directory); return { status: "suspended", alliance }; }
+  if (now - member.holdingFailedAt < ALLIANCE_HOLDING_GRACE_MS) return { status: "suspended", alliance };
+  alliance.members = alliance.members.filter((candidate) => normalizeAddress(candidate.address) !== normalizeAddress(profile.address));
+  directory.switchLocks[normalizeAddress(profile.address)] = now + ALLIANCE_SWITCH_COOLDOWN_MS;
+  saveAllianceDirectory(directory); return { status: "removed", alliance };
+}
+
+export function gmSeedAlliance(allianceId: string, count = 6): AllianceRecord | null {
+  const directory = loadAllianceDirectory(); const alliance = allianceById(allianceId, directory); if (!alliance) return null;
+  while (alliance.members.length < count) {
+    const index = alliance.members.length + 1;
+    alliance.members.push({ address: `0x00000000000000000000000000000000a11y${String(index).padStart(4, "0")}`, name: `Relay-${String(index).padStart(2, "0")}`, rank: index <= 2 ? "R4" : "R2", joinedAt: Date.now() - index * 86400000, holdingStatus: "verified", contribution: 1300 - index * 73, credits: 240 + index * 11, lastActiveAt: Date.now() - index * 600000 });
+  }
+  saveAllianceDirectory(directory); return alliance;
+}
+
+export function gmPrepareAlliance(allianceId: string, address: string): AllianceRecord | null {
+  const directory = loadAllianceDirectory(); const alliance = allianceById(allianceId, directory); if (!alliance) return null;
+  gmSeedAlliance(allianceId, 8);
+  const refreshed = loadAllianceDirectory(); const ready = allianceById(allianceId, refreshed); if (!ready) return null;
+  ready.members.forEach((member) => { if (member.rank === "R5") member.rank = "R4"; });
+  const actor = ready.members.find((member) => normalizeAddress(member.address) === normalizeAddress(address));
+  if (actor) { actor.rank = "R5"; actor.joinedAt = Date.now() - 8 * 86400000; actor.credits = Math.max(actor.credits, 1200); actor.contribution = Math.max(actor.contribution, 5000); }
+  ready.status = "active"; ready.skillPoints = Math.max(ready.skillPoints, 12); ready.lastChallengeAt = undefined;
+  saveAllianceDirectory(refreshed); return ready;
+}
+
+export function initiateLeadershipChallenge(profile: Profile, candidateAddress: string, now = Date.now()): { ok: boolean; reason?: string; challenge?: LeadershipChallenge } {
+  const directory = loadAllianceDirectory(); const alliance = allianceForAddress(profile.address, directory);
+  if (!alliance || alliance.status !== "active") return { ok: false, reason: "Governance is not online." };
+  const initiator = alliance.members.find((member) => normalizeAddress(member.address) === normalizeAddress(profile.address));
+  const candidate = alliance.members.find((member) => normalizeAddress(member.address) === normalizeAddress(candidateAddress));
+  if (!initiator || !candidate || initiator.holdingStatus !== "verified") return { ok: false, reason: "A verified chapter signal is required." };
+  if (now - initiator.joinedAt < 7 * 86400000) return { ok: false, reason: "Your signal must remain in this chapter for seven days." };
+  if (alliance.challenges.some((challenge) => !challenge.resolvedAt && challenge.closesAt > now)) return { ok: false, reason: "A command ballot is already live." };
+  if (alliance.lastChallengeAt && now - alliance.lastChallengeAt < LEADERSHIP_CHALLENGE_COOLDOWN_MS) return { ok: false, reason: "The command channel is inside its seven-day cooldown." };
+  const eligibleAddresses = alliance.members.filter((member) => member.holdingStatus === "verified" && now - member.joinedAt >= 7 * 86400000).map((member) => member.address);
+  const challenge: LeadershipChallenge = { id: `command-${now}`, initiatorAddress: initiator.address, initiatorName: initiator.name, candidateAddress: candidate.address, candidateName: candidate.name, createdAt: now, closesAt: now + LEADERSHIP_BALLOT_MS, eligibleAddresses, votes: {} };
+  alliance.challenges.unshift(challenge); alliance.lastChallengeAt = now; saveAllianceDirectory(directory); return { ok: true, challenge };
+}
+
+export function castLeadershipVote(allianceId: string, voterAddress: string, candidateAddress: string, now = Date.now()): { ok: boolean; reason?: string } {
+  const directory = loadAllianceDirectory(); const alliance = allianceById(allianceId, directory);
+  const challenge = alliance?.challenges.find((item) => !item.resolvedAt && item.closesAt > now);
+  if (!alliance || !challenge) return { ok: false, reason: "No command ballot is accepting signals." };
+  const voterKey = normalizeAddress(voterAddress);
+  if (!challenge.eligibleAddresses.some((address) => normalizeAddress(address) === voterKey)) return { ok: false, reason: "This signal was not in the eligible roster snapshot." };
+  if (!alliance.members.some((member) => normalizeAddress(member.address) === normalizeAddress(candidateAddress))) return { ok: false, reason: "Candidate is no longer in the chapter." };
+  challenge.votes[voterKey] = candidateAddress; saveAllianceDirectory(directory); return { ok: true };
+}
+
+export function resolveLeadershipChallenges(now = Date.now()): void {
+  const directory = loadAllianceDirectory(); let changed = false;
+  directory.alliances.forEach((alliance) => alliance.challenges.forEach((challenge) => {
+    if (challenge.resolvedAt || challenge.closesAt > now) return;
+    challenge.resolvedAt = now; changed = true;
+    const tally = new Map<string, number>(); Object.values(challenge.votes).forEach((address) => tally.set(normalizeAddress(address), (tally.get(normalizeAddress(address)) ?? 0) + 1));
+    const quorum = Math.ceil(challenge.eligibleAddresses.length * .4);
+    const incumbent = alliance.members.find((member) => member.rank === "R5");
+    let winner = incumbent;
+    if (Object.keys(challenge.votes).length >= quorum) {
+      const ranked = alliance.members.map((member) => ({ member, votes: tally.get(normalizeAddress(member.address)) ?? 0 })).sort((a, b) => b.votes - a.votes);
+      if (ranked[0] && (!incumbent || ranked[0].votes > (tally.get(normalizeAddress(incumbent.address)) ?? 0))) winner = ranked[0].member;
+    }
+    if (winner) { alliance.members.forEach((member) => { if (member.rank === "R5") member.rank = "R4"; }); winner.rank = "R5"; challenge.winnerAddress = winner.address; }
+  }));
+  if (changed) saveAllianceDirectory(directory);
+}
+
+export function upgradeAllianceSkill(allianceId: string, actorAddress: string, branch: keyof AllianceRecord["skillLevels"]): { ok: boolean; reason?: string } {
+  const directory = loadAllianceDirectory(); const alliance = allianceById(allianceId, directory);
+  const actor = alliance?.members.find((member) => normalizeAddress(member.address) === normalizeAddress(actorAddress));
+  if (!alliance || !actor || !(["R4", "R5"] as AllianceRank[]).includes(actor.rank)) return { ok: false, reason: "R4 command clearance required." };
+  if (alliance.skillPoints < 1) return { ok: false, reason: "No doctrine points remain." };
+  if (alliance.skillLevels[branch] >= 5) return { ok: false, reason: "Doctrine branch is already at maximum resonance." };
+  alliance.skillPoints -= 1; alliance.skillLevels[branch] += 1; saveAllianceDirectory(directory); return { ok: true };
+}

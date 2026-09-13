@@ -12,6 +12,7 @@ import {
 } from "./world-engine";
 import { clearWorld as clearLegacyWorld, loadWorld as loadLegacyWorld, projectWorld as projectLegacyWorld } from "./world";
 import { CHAT_SIGNALS, MARCH_SIGNATURES, PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, STRIKE_SIGNATURES, loadCosmeticVault } from "./player-account";
+import { allianceForAddress } from "./alliance";
 
 export interface WorldGameSnapshot {
   troops: TroopManifest;
@@ -191,6 +192,7 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
   let world = initHeadlessWorld(`local:${playerId}`, now, worldEngineConfig(numbers));
   world = spawnPlayers(world, [{
     id: playerId,
+    allianceId: allianceForAddress(address)?.id ?? null,
     cosmetics: publicCosmetics(address),
     townhallLevel: game.buildings.keep.lvl,
     wallLevel: Math.max(1, game.buildings.wall.lvl),
@@ -431,6 +433,8 @@ export function openLocalWorldSession(address: string, sourceGame: GameState, no
       // snapshots renderable and move their owners to the issued Dust body.
       if ((player.cosmetics.planetBody as string) === "civic-core") player.cosmetics.planetBody = "dust-homestead";
     });
+    const viewer = stored.world.players[stored.playerId];
+    if (viewer) viewer.allianceId = allianceForAddress(address)?.id ?? null;
     if ((stored as any).version < 5) {
       stored.world = redistributeWorldTargets(stored.world, now, numbers);
       retuneLocalNpcs(stored.world, numbers);

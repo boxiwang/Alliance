@@ -14,9 +14,9 @@ const RESOURCE_BUILDING: Record<ResKey, BKey> = { cash: "bank", oil: "oilwell", 
 
 export default function GameNav({
   view, profile, townhallLevel, location, resources,
-  energy, energyCap, activeFleets, fleetCap, standing, wounded, might, credits, onCity, onWorld, onMessages, onProfile,
+  energy, energyCap, activeFleets, fleetCap, standing, wounded, might, credits, onAlliance, onCity, onWorld, onMessages, onProfile,
 }: {
-  view: "city" | "world" | "messages" | "profile";
+  view: "alliance" | "city" | "world" | "messages" | "profile";
   profile: Profile;
   townhallLevel: number;
   location: string;
@@ -29,6 +29,7 @@ export default function GameNav({
   wounded: number;
   might: number;
   credits?: number;
+  onAlliance: () => void;
   onCity: () => void;
   onWorld: () => void;
   onMessages: () => void;
@@ -49,6 +50,9 @@ export default function GameNav({
         <div className="command-nav-controls">
           <div className="command-might"><small>MIGHT</small><b>{compact(might)}</b></div>
           <div className="command-tabs">
+            <button className={view === "alliance" ? "active" : ""} aria-current={view === "alliance" ? "page" : undefined} onClick={onAlliance}>
+              <span>◇</span><b>ALLIANCE</b>
+            </button>
             <button className={view === "city" ? "active" : ""} aria-current={view === "city" ? "page" : undefined} onClick={onCity}>
               <span>▦</span><b>CITY</b>
             </button>

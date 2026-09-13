@@ -34,6 +34,7 @@ import GameNav from "./GameNav";
 import BuildingGlyph from "./BuildingGlyph";
 import CosmicBackdrop from "./CosmicBackdrop";
 import MiniComms from "./MiniComms";
+import { ALLIANCE_CHANGED_EVENT, openHelpFor, requestAllianceHelp } from "./lib/alliance";
 
 const ECONOMY_BUILDINGS: BKey[] = ["bank", "oilwell", "powerplant"];
 const COMMAND_BUILDINGS: BKey[] = ["storage", "wall"];
@@ -94,7 +95,7 @@ function queuePct(durationSec: number, finishAt: number, now: number): number {
   return Math.min(100, Math.max(0, ((total - (finishAt - now)) / total) * 100));
 }
 
-export default function Town({ address, profile, onWorld, onMessages = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onWorld: () => void; onMessages?: () => void; onProfile?: () => void }) {
+export default function Town({ address, profile, onAlliance = () => {}, onWorld, onMessages = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onAlliance?: () => void; onWorld: () => void; onMessages?: () => void; onProfile?: () => void }) {
   const [game, setGame] = useState<GameState>(() => loadGame(address) || initGame(address));
   const [now, setNow] = useState(Date.now());
   const [msg, setMsg] = useState<string>("");
@@ -111,6 +112,7 @@ export default function Town({ address, profile, onWorld, onMessages = () => {},
   const [gm, setGm] = useState(() => hasLocalGm(address));
   const [gmBuilding, setGmBuilding] = useState<BKey>("keep");
   const savedOnce = useRef(false);
+  const [allianceRevision, setAllianceRevision] = useState(0);
 
   // Offline progress on entry (once).
   useEffect(() => {
@@ -125,6 +127,13 @@ export default function Town({ address, profile, onWorld, onMessages = () => {},
     setGame(projected);
     saveGame(projected);
     savedOnce.current = true;
+  }, [address]);
+
+  useEffect(() => {
+    const sync = () => { const latest = loadGame(address); if (latest) setGame(latest); setAllianceRevision((value) => value + 1); };
+    window.addEventListener(ALLIANCE_CHANGED_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => { window.removeEventListener(ALLIANCE_CHANGED_EVENT, sync); window.removeEventListener("storage", sync); };
   }, [address]);
 
   // Local testing only: visiting localhost/?gm grants this connected wallet a
@@ -206,7 +215,7 @@ export default function Town({ address, profile, onWorld, onMessages = () => {},
       <GameNav view="city" profile={profile} townhallLevel={view.buildings.keep.lvl} location={worldStatus.location}
         resources={view.res} energy={worldStatus.energy} energyCap={worldStatus.energyCap}
         activeFleets={worldStatus.activeFleets} fleetCap={worldStatus.fleetCap} standing={troopsTotal} wounded={view.wounded}
-        might={mightScore.total} onCity={() => {}} onWorld={onWorld} onMessages={onMessages} onProfile={onProfile} />
+        might={mightScore.total} onAlliance={onAlliance} onCity={() => {}} onWorld={onWorld} onMessages={onMessages} onProfile={onProfile} />
 
 
       {gm && (
@@ -749,6 +758,8 @@ export default function Town({ address, profile, onWorld, onMessages = () => {},
                 : !resourcesMet ? "INSUFFICIENT RESOURCES"
                   : "READY";
 
+    const helpRequest = upgrading ? openHelpFor(profile, "building", k) : null;
+    void allianceRevision;
     return <section className={`upgrade-inspector${ready ? " ready" : " blocked"}`}>
       <div className="upgrade-inspector-level">
         <span>NEXT</span>
@@ -769,7 +780,7 @@ export default function Town({ address, profile, onWorld, onMessages = () => {},
       {!!missingRequirements.length && <div className="upgrade-requirements">
         {missingRequirements.map((requirement) => <span key={requirement.key}>🔒 {BUILDINGS[requirement.key].label} LV.{requirement.requiredLevel}</span>)}
       </div>}
-      {upgrading ? <div className="upgrade-inspector-progress"><div className="rmeter"><i style={{ width: upPct(k, building, now) + "%" }} /></div><b className="mono">{fmtMs(building.finishAt - now)}</b></div>
+      {upgrading ? <><div className="upgrade-inspector-progress"><div className="rmeter"><i style={{ width: upPct(k, building, now) + "%" }} /></div><b className="mono">{fmtMs(building.finishAt - now)}</b></div><button className="alliance-help-request" disabled={!!helpRequest} onClick={() => { const result = requestAllianceHelp(profile, "building", k, `${BUILDINGS[k].label} LV.${target}`); setMsg(result.reason || "Alliance assistance signal transmitted."); setAllianceRevision((value) => value + 1); }}>{helpRequest ? `ALLIANCE AID · ${helpRequest.helpers.length}/25` : "REQUEST ALLIANCE AID"}</button></>
         : <button className={ready ? "ready" : "blocked"} disabled={!ready} onClick={() => act(() => startUpgrade(game, k))}><span>{blockLabel}</span>{ready && <b>{building.lvl === 0 ? "BUILD" : "UPGRADE"} →</b>}</button>}
     </section>;
   }
@@ -793,7 +804,9 @@ export default function Town({ address, profile, onWorld, onMessages = () => {},
     if (view.healing.finishAt > 0) {
       const total = Math.max(1, view.healing.durationSec * 1000);
       const progress = Math.min(100, Math.max(0, ((total - (view.healing.finishAt - now)) / total) * 100));
-      return <div className="hospital-queue"><div className="tr-row"><span>Healing {compact(displayTroops(view.healing.qty))}</span><span className="mono">{fmtMs(view.healing.finishAt - now)}</span></div><div className="rmeter"><i style={{ width: progress + "%" }} /></div></div>;
+      const helpRequest = openHelpFor(profile, "healing", "hospital");
+      void allianceRevision;
+      return <div className="hospital-queue"><div className="tr-row"><span>Healing {compact(displayTroops(view.healing.qty))}</span><span className="mono">{fmtMs(view.healing.finishAt - now)}</span></div><div className="rmeter"><i style={{ width: progress + "%" }} /></div><button className="alliance-help-request" disabled={!!helpRequest} onClick={() => { const result = requestAllianceHelp(profile, "healing", "hospital", `Heal ${compact(displayTroops(view.healing.qty))} wounded`); setMsg(result.reason || "Alliance medical signal transmitted."); setAllianceRevision((value) => value + 1); }}>{helpRequest ? `ALLIANCE AID · ${helpRequest.helpers.length}/25` : "REQUEST ALLIANCE AID"}</button></div>;
     }
     return <div className="hospital-controls">
       <div className="hospital-stats mono"><span>Wounded {compact(displayTroops(view.wounded))}/{compact(displayTroops(hospitalCap))}</span><span>Healing speed ×{healingSpeedMult(view).toFixed(2)}</span></div>
