@@ -164,10 +164,21 @@ export default function App() {
           saveProfile(existing);
         }
       }
-      setProfile(existing);
-      const nextStage = existing ? (hasLocalGm(res.address) ? "town" : "resume") : "start";
-      setStage(nextStage);
-      report(recs, { wallet: w.name, chainOk: res.chainOk, stage: nextStage, profile: existing });
+      if (existing) {
+        setProfile(existing);
+        const nextStage = hasLocalGm(res.address) ? "town" : "resume";
+        setStage(nextStage);
+        report(recs, { wallet: w.name, chainOk: res.chainOk, stage: nextStage, profile: existing });
+      } else {
+        // Faction/token data is unavailable while Blockscout is gated, so skip the
+        // faction picker and drop a new wallet player straight into a solo keep
+        // (same as Quick Play). Faction join can return once reads work.
+        const p: Profile = { address: res.address, name: autoName(res.address), faction: null, factionSymbol: null, keepLevel: 1, createdAt: new Date().toISOString(), renamedOnce: false };
+        saveProfile(p);
+        setProfile(p);
+        setStage("founded");
+        report(recs, { wallet: w.name, chainOk: res.chainOk, stage: "founded", profile: p });
+      }
     } catch (e: any) {
       setError(e?.message || "Couldn't connect. Try again?");
     } finally {
