@@ -1,0 +1,6 @@
+# Cloudflare Pages config for the Alliance web build.
+# Deploy:  npm run build  &&  npx wrangler pages deploy dist
+# (first time:  npx wrangler login  — uses YOUR Cloudflare account)
+name = "alliance"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "dist"

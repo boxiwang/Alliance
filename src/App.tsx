@@ -23,6 +23,21 @@ import { verifyAllianceHolding } from "./lib/alliance";
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
 
+// Google OAuth client id (set VITE_GOOGLE_CLIENT_ID at build/deploy). When unset,
+// the Google button is hidden and Quick Play still works.
+const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || "";
+
+// Guest / Google players have no wallet, but the whole app is keyed on a 0x
+// address, so derive a stable synthetic one from their id. FNV-1a expanded to 40 hex.
+function synthAddress(seed: string): string {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i += 1) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  let hex = "";
+  let x = h >>> 0;
+  while (hex.length < 40) { x = Math.imul(x ^ (x >>> 15), 2246822507) >>> 0; hex += (x >>> 0).toString(16).padStart(8, "0"); }
+  return "0x" + hex.slice(0, 40);
+}
+
 function DevGameShell({ initialView, slot, gm }: { initialView: MainStage; slot: string; gm: boolean }) {
   const address = slot === "1" ? "0x000000000000000000000000000000000000dEv1" : `0x00000000000000000000000000000000000dEv-${slot}`;
   const fallback: Profile = {
@@ -93,6 +108,32 @@ export default function App() {
   useEffect(() => subscribeProviders(setDetected), []);
   const wallets = useMemo(() => resolveWallets(detected), [detected]);
 
+  // Load Google Identity Services on the connect screen when a client id is set.
+  useEffect(() => {
+    if (stage !== "connect" || !GOOGLE_CLIENT_ID) return;
+    const init = () => {
+      const g = (window as any).google;
+      if (!g?.accounts?.id) return;
+      g.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: (resp: any) => {
+          try {
+            const payload = JSON.parse(atob(String(resp.credential).split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+            beginLocalSession(synthAddress("google:" + payload.sub), payload.name || payload.email || "", "Google");
+          } catch { setError("Google sign-in failed. Try again or use Quick Play."); }
+        },
+      });
+      const el = document.getElementById("gbtn");
+      if (el) { el.innerHTML = ""; g.accounts.id.renderButton(el, { theme: "filled_black", size: "large", text: "continue_with", shape: "pill", width: 280 }); }
+    };
+    if ((window as any).google?.accounts?.id) { init(); return; }
+    const existing = document.getElementById("gis-script") as HTMLScriptElement | null;
+    if (existing) { existing.addEventListener("load", init); return () => existing.removeEventListener("load", init); }
+    const s = document.createElement("script");
+    s.id = "gis-script"; s.src = "https://accounts.google.com/gsi/client"; s.async = true; s.defer = true; s.onload = init;
+    document.head.appendChild(s);
+  }, [stage]);
+
   const memes = records ? memeHoldings(records) : [];
   const pledgeable = pledgeableFrom(memes);
   const heldSymbols = new Set(memes.map((m) => (m.symbol || "").toUpperCase()));
@@ -152,6 +193,46 @@ export default function App() {
     setProfile(p);
     setStage(hasLocalGm(address) ? "town" : "founded");
     report(records, { wallet: walletName, chainOk, stage: "founded", profile: p });
+  }
+
+  // Wallet-free entry (Quick Play / Google): synthetic address + empty records,
+  // no chain/Blockscout. Drops a new player straight into a solo keep.
+  function beginLocalSession(addr: string, displayName: string, sourceLabel: string) {
+    setError("");
+    setProvider(null);
+    setAddress(addr);
+    setChainOk(true);
+    setWalletName(sourceLabel);
+    const stub: WalletRecords = { address: addr, coinBalanceRaw: "0", ethPrice: null, isContract: false, txCount: 0, tokenTransferCount: 0, tokens: [], recentTxs: [], oldestSeen: null };
+    setRecords(stub);
+    const existing = loadProfile(addr);
+    if (existing) {
+      setProfile(existing);
+      setStage(hasLocalGm(addr) ? "town" : "resume");
+      return;
+    }
+    const p: Profile = {
+      address: addr,
+      name: displayName || autoName(addr),
+      faction: null,
+      factionSymbol: null,
+      keepLevel: 1,
+      createdAt: new Date().toISOString(),
+      renamedOnce: false,
+    };
+    saveProfile(p);
+    setProfile(p);
+    setStage("founded");
+  }
+
+  function startGuest() {
+    let id = "";
+    try { id = localStorage.getItem("alliance:guest-id") || ""; } catch {}
+    if (!id) {
+      id = "guest:" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      try { localStorage.setItem("alliance:guest-id", id); } catch {}
+    }
+    beginLocalSession(synthAddress(id), "", "Guest");
   }
 
   function switchFaction(ca: string | null, sym: string | null) {
@@ -236,8 +317,13 @@ export default function App() {
           <h1>Claim your corner of the chain</h1>
           <p className="lead">
             Build a stronghold, raid the frontier, and rally a memecoin army.
-            Connect a wallet to begin — we only read it to set up your keep.
+            Jump in with one tap — or connect a wallet if you have one.
           </p>
+          <div className="quickstart">
+            <button className="cta big" onClick={startGuest}>▶ Quick Play — no wallet</button>
+            {GOOGLE_CLIENT_ID && <div id="gbtn" className="gbtn" />}
+            <div className="or"><span>or connect a wallet</span></div>
+          </div>
           <div className="wgrid">
             {wallets.map((w) => (
               <button

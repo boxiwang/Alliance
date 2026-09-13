@@ -1241,3 +1241,11 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world-surface-mark.power{color:#45ddff;fill:#8eeaff;stroke:#11789b;stroke-width:.42}
 .world-surface-mark.rogue{color:#ff647f;fill:rgba(175,38,66,.5);stroke:#ff91a3;stroke-width:.7}
 .world-surface-mark.rogue circle{fill:#ff5f78}
+/* Wallet-free entry (Quick Play / Google) on the connect screen. */
+.quickstart{display:flex;flex-direction:column;align-items:center;gap:14px;margin:0 auto 22px;max-width:320px}
+.quickstart .cta.big{width:100%}
+.quickstart .gbtn{min-height:40px;display:flex;justify-content:center}
+.quickstart .or{position:relative;width:100%;text-align:center;color:var(--ink3);font:600 10px var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.quickstart .or::before,.quickstart .or::after{content:"";position:absolute;top:50%;width:38%;height:1px;background:var(--line)}
+.quickstart .or::before{left:0}.quickstart .or::after{right:0}
+.quickstart .or span{background:transparent;padding:0 8px}
