@@ -16,6 +16,7 @@ import { loadPlayerAccount } from "./lib/player-account";
 import { refreshLocalCommsIntel, saveLocalComms, type LocalCommsMessage } from "./lib/comms-local";
 import { clearQueuedCommsShare, loadQueuedCommsShare, queueWorldFocus, sharedIntelIsActive, type SharedWorldIntel } from "./lib/shared-intel";
 import { playerSystemReports } from "./lib/world-reports";
+import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME } from "./lib/sfx";
 
 // Comms is Task-1 chat. This is the frontend + a LOCAL adapter: channels/threads are seeded and
 // your own sends echo locally. A server adapter (Cloudflare Durable Objects) replaces the data
@@ -173,6 +174,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     if (dmWith) {
       if (!body) return;
       rtRef.current?.sendDM(dmWith.id, body);
+      if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME);
       setDraft("");
       return;
     }
@@ -188,6 +190,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       }
       if (!text) return;
       rtRef.current?.sendChat(text);
+      if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME);
       setDraft(""); setPendingShare(null); clearQueuedCommsShare(address); setShareTrayOpen(false);
       return;
     }
