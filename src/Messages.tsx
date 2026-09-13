@@ -34,64 +34,9 @@ const CHANNELS: Array<{ id: ChannelId; icon: string; label: string; detail: stri
   { id: "cosmos", icon: "◎", label: "Cosmos", detail: "Frontier I" },
   { id: "system", icon: "⌁", label: "System", detail: "Reports" },
 ];
-type DirectThread = { id: ChannelId; icon: string; label: string; detail: string; faction: string; signal: PlayerSignal };
-const DMS: DirectThread[] = [
-  { id: "dm-nyx", icon: "N", label: "NyxValidator", detail: "online", faction: "ORBT", signal: { username: "NyxValidator", allianceSymbol: "ORBT", title: "RIFT CARTOGRAPHER", wallet: "0x71bE5D5F2B6e17a4b4D0F29c9a807E71b6bAAa01", skin: { id: "solar-imperator", name: "Solar Imperator", rarity: "RELIC" }, nameSignal: "void-whisper", coreLevel: 18, might: 428_500, achievements: [{ mark: "Ⅰ", name: "FIRST LIGHT" }, { mark: "⌁", name: "RIFT WARDEN" }], online: true } },
-  { id: "dm-whale", icon: "W", label: "WhaleSignal", detail: "12m ago", faction: "MOG", signal: { username: "WhaleSignal", allianceSymbol: "MOG", title: "EVENT HORIZON", wallet: "0x9a72F0C890e8d413B250021b970Bbb12A998002a", skin: { id: "event-horizon", name: "Event Horizon", rarity: "SOVEREIGN" }, nameSignal: "sovereign-flare", coreLevel: 24, might: 1_820_400, achievements: [{ mark: "◈", name: "WHALE FALL" }, { mark: "◎", name: "MARKET MAKER" }], online: false } },
-];
-const PLAYER_SIGNALS: Record<string, PlayerSignal> = {
-  ...Object.fromEntries(DMS.map((thread) => [thread.label, thread.signal])),
-  GreenOrbit: { username: "GreenOrbit", allianceSymbol: "PEPE", title: "CASH BLOOMER", wallet: "0x2E05D571d9a4aB04b082F409870a6A11436E112c", skin: { id: "dust-homestead", name: "Dust Homestead", rarity: "ISSUED" }, nameSignal: "verdant-hail", coreLevel: 11, might: 164_200, achievements: [{ mark: "Ⅰ", name: "FIRST LIGHT" }], online: true },
-  VoidRunner: { username: "VoidRunner", allianceSymbol: "ORBT", title: "NAME ERASED", wallet: "0x4A801Bbe20f64391219F043df4374DA0A1b3B7f2", skin: { id: "void-touched", name: "Void-Touched", rarity: "MYTHIC" }, nameSignal: "eclipse-herald", coreLevel: 16, might: 337_900, achievements: [{ mark: "◈", name: "ECHO HUNTER" }, { mark: "⌁", name: "VOID WALKER" }], online: true },
-  MuchCommand: { username: "MuchCommand", allianceSymbol: "DOGE", title: "MOON ENGINEER", wallet: "0xD06E51c33Ea18E73908dE0F6b0ACD6e79Fb09A12", skin: { id: "solar-imperator", name: "Solar Imperator", rarity: "RELIC" }, nameSignal: "ember-cipher", coreLevel: 13, might: 208_700, achievements: [{ mark: "Ⅰ", name: "FIRST LIGHT" }], online: false },
-};
-const CONTACTS = [
-  { a: "NyxValidator", f: "ORBT", v: true, on: true, note: "2 fleets" },
-  { a: "WhaleSignal", f: "MOG", v: true, on: true, note: "air ×2" },
-  { a: "VoidRunner", f: "ORBT", v: true, on: true, note: "idle" },
-  { a: "GreenOrbit", f: "PEPE", v: true, on: false, note: "3h ago" },
-  { a: "MuchCommand", f: "DOGE", on: false, note: "1d ago" },
-];
-
-const THREADS: Record<string, ChatMessage[]> = {
-  cosmos: [
-    { a: "GreenOrbit", f: "PEPE", v: true, t: "19:38", b: "Cash planets respawned all along the north-west arc — go go go" },
-    { a: "MuchCommand", f: "DOGE", v: true, t: "19:44", b: "anyone else seeing the L12 rogue cluster near 312:094?" },
-    { a: "GreenOrbit", f: "PEPE", t: "19:44", b: "repeat", spam: 3 },
-    { a: "NyxValidator", f: "ORBT", v: true, t: "19:48", b: "confirmed via scout — leave the occupied Power planet alone" },
-    { a: "VoidCat", f: "MOG", v: true, t: "19:52", b: "gg to whoever held 201:177 with half a fleet 🫡" },
-    { a: "NoName", f: "WIF", t: "19:53", b: "free cash here → dexpump·win/x", blocked: "external link removed" },
-  ],
-  general: [
-    { pin: "Wormhole watch 20:00 UTC — keep one fleet free. Full brief on the Alliance page." },
-    { a: "NyxValidator", f: "ORBT", v: true, tag: "officer", t: "19:47", b: "Rogue activity rising on the east arc. Farm west until the rally leaves." },
-    { a: "WhaleSignal", f: "MOG", v: true, t: "19:51", b: "Shared a target", coord: { c: "284:119", k: "Cash Planet · L8 · unoccupied" } },
-    { a: "Ruglord", f: "ORBT", own: true, t: "19:53", b: "I can cover the second march. Ping me when the rally opens." },
-    { a: "NyxValidator", f: "ORBT", v: true, tag: "officer", t: "19:55", b: "Spinning up a War Room for the Wormhole Sentinel — jump to that tab if you're bringing air." },
-  ],
-  warroom: [
-    { a: "NyxValidator", f: "ORBT", v: true, tag: "officer", t: "19:56", b: "Target is air-dominant. Bring air, we counter with army. Staggered arrival." },
-    { a: "WhaleSignal", f: "MOG", v: true, t: "19:57", b: "2 air fleets ready, 40K T8" },
-    { a: "NyxValidator", f: "ORBT", v: true, t: "19:58", b: "Rally below. Recommended fleet is pre-filled — one tap to join.", rally: true },
-  ],
-  system: [
-    { sys: "eco", tag: "Returned", t: "19:57", b: "Harvest complete · Oil Planet L7 · +4.20M Oil" },
-    { sys: "mil", tag: "Victory", t: "19:31", b: "Rogue Planet L6 defeated · 1.20K wounded · report ready" },
-    { sys: "eco", tag: "Complete", t: "18:46", b: "Research Institute reached L8" },
-    { sys: "sec", tag: "Shield", t: "17:20", b: "Civilization shield has 1d 12h remaining" },
-    { sys: "mil", tag: "Under attack", t: "16:10", b: "WhaleSignal requested reinforcement at 201:177" },
-  ],
-  "dm-nyx": [
-    { a: "NyxValidator", f: "ORBT", v: true, t: "19:21", b: "Joining the Wormhole watch tonight?" },
-    { a: "Ruglord", f: "ORBT", own: true, t: "19:24", b: "Yes, two fleets free by then." },
-    { a: "NyxValidator", f: "ORBT", v: true, t: "19:25", b: "Perfect — you're on the east approach." },
-  ],
-  "dm-whale": [
-    { a: "WhaleSignal", f: "MOG", v: true, t: "18:02", b: "Found an unoccupied L8 cash planet, sending coords" },
-    { a: "WhaleSignal", f: "MOG", v: true, t: "18:03", b: "Target", coord: { c: "284:119", k: "Cash Planet · L8" } },
-    { a: "Ruglord", f: "ORBT", own: true, t: "18:05", b: "saved, thanks 🙏" },
-  ],
-};
+// Player identity lookup for name styling in chat. Real players resolve their
+// own name signal via presence; this stays empty (no seeded/placeholder people).
+const PLAYER_SIGNALS: Record<string, PlayerSignal> = {};
 
 function initialChannel(): ChannelId {
   const requested = new URLSearchParams(window.location.search).get("channel") as ChannelId | null;
@@ -201,12 +146,8 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     ? `SECTOR ${stored!.world.stateId.slice(-6).toUpperCase()} · HOME ${Math.round(city.position.x).toString().padStart(3, "0")}:${Math.round(city.position.y).toString().padStart(3, "0")}`
     : "SECTOR 00DEV1";
 
-  const isAlliance = active === "alliance";
   const isSystem = active === "system";
-  const isDM = active.startsWith("dm");
-  const isWar = isAlliance && allianceTab === "warroom";
-  const key = isAlliance ? allianceTab : active;
-  const dm = DMS.find((d) => d.id === active);
+  const key = active;
 
   // Real world reports (attacks, harvests, recon) feed the System channel — the
   // same reports the starmap shows — so a battle result appears in both places.
@@ -220,7 +161,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   const messages = useMemo(() => {
     if (dmWith) return dmMessages;
     if (isCosmos) return cosmosLive; // live shared chat
-    let list = isSystem ? [...systemReports] : [...(THREADS[key] ?? []), ...(sent[key] ?? [])];
+    let list = isSystem ? [...systemReports] : [...(sent[key] ?? [])];
     if (isSystem && sysFilter !== "all") list = list.filter((m) => m.sys === sysFilter);
     return list;
   }, [key, sent, isSystem, sysFilter, systemReports, isCosmos, cosmosLive, dmWith, dmMessages]);
@@ -335,13 +276,6 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
           <div className="th-actions"><button className="cm-icon">☆</button><button className="cm-icon">⋯</button></div>
         </div>
 
-        {isAlliance && <div className="subtabs">
-          <button className={allianceTab === "general" ? "on" : ""} onClick={() => setAllianceTab("general")}>◇ General</button>
-          <button className={`${allianceTab === "warroom" ? "on" : ""} ${ALLIANCE_MANAGEMENT ? "" : "locked"}`}
-            title={ALLIANCE_MANAGEMENT ? "" : "Requires alliance management"}
-            onClick={() => ALLIANCE_MANAGEMENT && setAllianceTab("warroom")}>⚔ War Room {ALLIANCE_MANAGEMENT ? (WARROOM_ACTIVE ? <span className="live-dot" /> : null) : "🔒"}</button>
-        </div>}
-        {isWar && <div className="warroom-strip">⚔ Wormhole Sentinel op<span className="who">6 fleets · Nyx, Whale +4</span></div>}
         {isSystem && <div className="sysfilter">{(["all", "mil", "eco", "sec"] as const).map((f) => <button key={f} className={f === sysFilter ? "on" : ""} onClick={() => setSysFilter(f)}>{({ all: "All", mil: "Military", eco: "Economy", sec: "Security" } as const)[f]}</button>)}</div>}
 
         {active === "contacts" && !dmWith
@@ -361,9 +295,8 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
               {onlineCount === 0 && Object.keys(dmThreads).length === 0 && <div className="spam">No commanders online yet — invite a friend with Quick Play and they'll show up here.</div>}
             </div>
           : <div className="stream">
-              {isWar && <div className="spam">⚔ Fresh op session · clears when the op ends</div>}
               {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} reducedMotion={account.reducedMotion} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} />)}
-              {messages.length === 0 && <div className="spam">{isWar ? "No active op — a War Room opens fresh when an officer starts one." : "No messages yet."}</div>}
+              {messages.length === 0 && <div className="spam">{dmWith ? "No messages yet — say hi." : isCosmos ? "Be the first to signal the frontier." : "No messages yet."}</div>}
             </div>}
 
         {!isSystem && active !== "contacts" && <div className="compose">

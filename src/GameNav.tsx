@@ -14,7 +14,7 @@ const RESOURCE_BUILDING: Record<ResKey, BKey> = { cash: "bank", oil: "oilwell", 
 
 export default function GameNav({
   view, profile, townhallLevel, location, resources,
-  energy, energyCap, activeFleets, fleetCap, standing, wounded, might, credits, onAlliance, onCity, onWorld, onMessages, onProfile,
+  energy, energyCap, activeFleets, fleetCap, standing, wounded, might, credits, unread = 0, onAlliance, onCity, onWorld, onMessages, onProfile,
 }: {
   view: "alliance" | "city" | "world" | "messages" | "profile";
   profile: Profile;
@@ -29,6 +29,8 @@ export default function GameNav({
   wounded: number;
   might: number;
   credits?: number;
+  /** Real unread count for the Messages tab (DMs + System; Cosmos never counts). */
+  unread?: number;
   onAlliance: () => void;
   onCity: () => void;
   onWorld: () => void;
@@ -60,7 +62,7 @@ export default function GameNav({
               <span>◎</span><b>STAR MAP</b>
             </button>
             <button className={view === "messages" ? "active" : ""} aria-current={view === "messages" ? "page" : undefined} onClick={onMessages}>
-              <span>✉</span><b>MESSAGES</b><i className="command-unread">12</i>
+              <span>✉</span><b>MESSAGES</b>{unread > 0 ? <i className="command-unread">{unread > 99 ? "99+" : unread}</i> : null}
             </button>
           </div>
         </div>
