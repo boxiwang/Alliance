@@ -414,7 +414,7 @@ export default function ProfileScreen({
   };
 
   return <section className={`profile-screen ${account.reducedMotion ? "profile-motion-stilled" : ""}`}>
-    <CosmicBackdrop />
+    <CosmicBackdrop address={address} />
     <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="profile" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
       resources={game.res} energy={player ? energyAt(player, now, world!.world.config) : 100} energyCap={world?.world.config.energyCap ?? 100}

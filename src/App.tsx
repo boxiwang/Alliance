@@ -24,7 +24,7 @@ import { verifyAllianceHolding } from "./lib/alliance";
 import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
 import { loadPlayerAccount } from "./lib/player-account";
-import { playSfx, SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME } from "./lib/sfx";
+import { playSfx, SFX_LOGIN_HOVER, SFX_LOGIN_HOVER_VOLUME, SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME } from "./lib/sfx";
 import { authenticateGoogle, authenticateGuest, authenticateWallet, loadBackendSession, mirrorPlayerState, trackEvents, updatePlayerName } from "./lib/backend";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
@@ -189,8 +189,18 @@ export default function App() {
   const eth = records ? fromRaw(records.coinBalanceRaw, 18) : 0;
   const currentKeepLevel = profile ? (loadGame(profile.address)?.buildings.keep.lvl ?? profile.keepLevel) : 1;
 
+  function playLoginSelectSfx() {
+    playSfx(SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME);
+    requestGameMusicStart();
+  }
+
+  function playLoginHoverSfx() {
+    playSfx(SFX_LOGIN_HOVER, SFX_LOGIN_HOVER_VOLUME);
+  }
+
   async function pick(w: WalletButton) {
     if (busy) return; // one wallet request at a time — avoids "-32002 already pending"
+    playLoginSelectSfx();
     setError("");
     if (!w.provider) {
       if (w.install) window.open(w.install, "_blank", "noopener");
@@ -331,6 +341,7 @@ export default function App() {
 
   async function startGuest() {
     if (busy) return;
+    playLoginSelectSfx();
     setBusy("guest");
     setError("");
     let id = "";
@@ -402,7 +413,7 @@ export default function App() {
   return (
     <div className="page">
       {!MAIN_STAGES.includes(stage as MainStage) && <CosmicBackdrop />}
-      <GameMusic address={address} active={stage === "alliance" || stage === "town" || stage === "world" || stage === "messages" || stage === "profile"} />
+      <GameMusic address={address} active />
       <GameCursor address={address} active={!!address && (stage === "alliance" || stage === "town" || stage === "world" || stage === "messages" || stage === "profile")} />
       <header className={`topbar${stage === "connect" ? " connect-topbar" : ""}`}>
         <AllianceWordmark />
@@ -441,6 +452,7 @@ export default function App() {
                   className={"wbtn" + (w.detected ? "" : " off")}
                   style={{ ["--wc" as any]: w.color }}
                   onClick={() => pick(w)}
+                  onMouseEnter={playLoginHoverSfx}
                   disabled={!!busy}
                 >
                   <span className="wicon">
@@ -455,8 +467,8 @@ export default function App() {
             </div>
             <div className="quickstart">
               <div className="or"><span>OR ENTER WITHOUT A WALLET</span></div>
-              <button className="cta big secondary-entry" onClick={startGuest} disabled={!!busy}>{busy === "guest" ? "OPENING SECTOR…" : "ENTER AS GUEST"}</button>
-              {firebaseConfigured && <button className="gbtn" onClick={signInGoogle} disabled={busy === "google"}>{busy === "google" ? "OPENING GOOGLE…" : "CONTINUE WITH GOOGLE"}</button>}
+              <button className="cta big secondary-entry" onMouseEnter={playLoginHoverSfx} onClick={startGuest} disabled={!!busy}>{busy === "guest" ? "OPENING SECTOR…" : "ENTER AS GUEST"}</button>
+              {firebaseConfigured && <button className="gbtn" onMouseEnter={playLoginHoverSfx} onClick={() => { playLoginSelectSfx(); void signInGoogle(); }} disabled={busy === "google"}>{busy === "google" ? "OPENING GOOGLE…" : "CONTINUE WITH GOOGLE"}</button>}
             </div>
             <footer>Wallet commanders can enter token-gated alliances and trade on the marketplace.</footer>
           </div>

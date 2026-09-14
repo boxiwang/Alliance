@@ -269,7 +269,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   const headColor = dmWith ? "var(--gold)" : "var(--cyan)";
 
   return <section className="comms-page">
-    <CosmicBackdrop />
+    <CosmicBackdrop address={address} />
     <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="messages" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
       resources={game.res} energy={energy} energyCap={energyCap} activeFleets={activeFleets} fleetCap={fleetCap}

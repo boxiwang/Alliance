@@ -24,6 +24,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
   filter:blur(20px) saturate(1.14);animation:cosmic-nebula-drift 110s ease-in-out infinite alternate}
 @keyframes cosmic-nebula-drift{to{transform:translate3d(5%,-3%,0) scale(1.05)}}
 @media(prefers-reduced-motion:reduce){.cosmic-nebula{animation:none}}
+.cosmic-backdrop.is-still .cosmic-nebula{animation:none}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .page{max-width:1180px;margin:0 auto;padding:0 20px 60px}
 

@@ -1012,7 +1012,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   }
 
   return <section className="world world-crypto world-cosmos">
-    <CosmicBackdrop />
+    <CosmicBackdrop address={address} />
     <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="world" profile={profile} townhallLevel={viewGame.buildings.keep.lvl}
       location={`SECTOR ${world.stateId.slice(-6).toUpperCase()} · HOME ${Math.round(playerCity.position.x).toString().padStart(3, "0")}:${Math.round(playerCity.position.y).toString().padStart(3, "0")}`}

@@ -96,7 +96,7 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
   if (!alliance) {
     const eligible = availableAlliances(holdings, directory, gm);
     const unregistered = holdings.filter((token) => !tokenAllianceForHolding(token, directory));
-    return <section className="alliance-page"><CosmicBackdrop />{nav}<main className="alliance-entry">
+    return <section className="alliance-page"><CosmicBackdrop address={address} />{nav}<main className="alliance-entry">
       <header><small>ALLIANCES</small><h1>Join an alliance.</h1><p>Fight together, help members, and unlock alliance bonuses.</p></header>
       {notice && <div className="alliance-notice">{notice}</div>}
       <div className="alliance-entry-grid">
@@ -114,7 +114,7 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
   const openHelps = alliance.helps.filter((help) => !help.closedAt && help.helpers.length < 25);
   if (alliance.status === "forming") {
     const endorsements = alliance.endorsements[address] ?? [];
-    return <section className="alliance-page"><CosmicBackdrop />{nav}<main className="alliance-forming">
+    return <section className="alliance-page"><CosmicBackdrop address={address} />{nav}<main className="alliance-forming">
       <header style={{ "--alliance": alliance.color } as React.CSSProperties}><small>FORMING // ALLIANCE #{String(alliance.chapter).padStart(3, "0")}</small><h1>[{alliance.symbol}] {alliance.name}</h1><p>Recruit at least 6 members. The alliance activates when 5 members support the same R5.</p></header>
       {notice && <div className="alliance-notice">{notice}</div>}
       <div className="alliance-forming-meter"><div><span>MEMBERS</span><b>{alliance.members.length}/6</b></div><i><em style={{ width: `${Math.min(100, alliance.members.length / 6 * 100)}%` }} /></i><div><span>SUPPORT FOR YOU</span><b>{endorsements.length}/5</b></div></div>
@@ -126,7 +126,7 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
 
   const activeChallenge = alliance.challenges.find((challenge) => !challenge.resolvedAt && challenge.closesAt > now);
   const incomingNap = directory.alliances.flatMap((entry) => entry.diplomacyRequests.map((request) => ({ request, source: entry }))).filter(({ request }) => request.toAllianceId === alliance.id && request.status === "pending");
-  return <section className="alliance-page"><CosmicBackdrop />{nav}<main className="alliance-command">
+  return <section className="alliance-page"><CosmicBackdrop address={address} />{nav}<main className="alliance-command">
     {notice && <div className="alliance-notice">{notice}</div>}
     {gm && <div className="alliance-gm-strip"><span>LOCAL GM // ALLIANCE</span><button onClick={() => { gmPrepareAlliance(alliance.id, address); refresh("GM: R5 access, members, credits, and skill points added."); }}>ENABLE ALL FEATURES</button></div>}
     <header className="alliance-command-head" style={{ "--alliance": alliance.color } as React.CSSProperties}>

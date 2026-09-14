@@ -7,6 +7,7 @@ export const SFX_BUILDING_SELECT = "/audio/building-select.mp3";
 export const SFX_TAB_SWITCH = "/audio/tab-switch.mp3";
 export const SFX_CHANNEL_SWITCH = "/audio/channel-switch.mp3";
 export const SFX_SUBTAB_SWITCH = "/audio/subtab-switch.mp3";
+export const SFX_LOGIN_HOVER = "/audio/login-hover.wav";
 
 // Per-cue base levels. These are loudness-matched, not uniform: the source
 // clips differ by up to ~16 dB RMS, so a flat 0.5 made tab-switch far louder
@@ -18,6 +19,9 @@ export const SFX_BUILDING_SELECT_VOLUME = 0.33;  // clip RMS -24.5 dB
 export const SFX_TAB_SWITCH_VOLUME = 0.25;       // clip RMS -21.9 dB
 export const SFX_CHANNEL_SWITCH_VOLUME = 0.19;   // clip RMS -19.3 dB
 export const SFX_SUBTAB_SWITCH_VOLUME = 0.42;    // clip RMS -26.5 dB
+// Supplied hover clip was RMS -39.8 dB; the shipped WAV is source-normalized
+// by +5.8 dB to the shared -34 dB target, so its base level stays at 1.
+export const SFX_LOGIN_HOVER_VOLUME = 1;
 
 export function playSfx(src: string, volume = 1): void {
   try {

@@ -1,4 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { detectAutoTier, resolveGraphicsQuality } from "./lib/graphics-tier";
+import { loadPlayerAccount, PLAYER_ACCOUNT_CHANGED_EVENT } from "./lib/player-account";
 
 type Star = {
   x: number;
@@ -27,8 +29,29 @@ function wrap(value: number, limit: number) {
   return ((value % limit) + limit) % limit;
 }
 
-export default function CosmicBackdrop() {
+function backgroundShouldAnimate(address: string): boolean {
+  if (!address) return true;
+  const account = loadPlayerAccount(address);
+  return resolveGraphicsQuality(account.graphicsTier, {
+    autoTier: detectAutoTier(),
+    reducedMotion: account.reducedMotion,
+  }).bgAnimate;
+}
+
+export default function CosmicBackdrop({ address = "" }: { address?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [animate, setAnimate] = useState(() => backgroundShouldAnimate(address));
+
+  useEffect(() => {
+    const refresh = () => setAnimate(backgroundShouldAnimate(address));
+    refresh();
+    window.addEventListener(PLAYER_ACCOUNT_CHANGED_EVENT, refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener(PLAYER_ACCOUNT_CHANGED_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, [address]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -74,7 +97,7 @@ export default function CosmicBackdrop() {
 
     let last = 0;
     const draw = (timestamp: number) => {
-      animationFrame = window.requestAnimationFrame(draw);
+      if (animate) animationFrame = window.requestAnimationFrame(draw);
       if (document.hidden) return;        // don't burn CPU/GPU when the tab/window is hidden
       if (timestamp - last < 33) return;  // cap ~30fps — plenty for an ambient starfield
       last = timestamp;
@@ -107,10 +130,10 @@ export default function CosmicBackdrop() {
       window.removeEventListener("resize", resize);
       window.cancelAnimationFrame(animationFrame);
     };
-  }, []);
+  }, [animate]);
 
   return (
-    <div className="cosmic-backdrop" aria-hidden="true">
+    <div className={`cosmic-backdrop${animate ? " is-moving" : " is-still"}`} aria-hidden="true">
       <div className="cosmic-nebula" />
       <canvas ref={canvasRef} />
     </div>
