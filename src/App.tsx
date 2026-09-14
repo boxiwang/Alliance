@@ -4,7 +4,7 @@ import { subscribeProviders, resolveWallets, connect, WalletButton } from "./lib
 import { readWallet, WalletRecords } from "./lib/blockscout";
 import { buildTasks, memeHoldings } from "./lib/tasks";
 import { topFactions, pledgeableFrom } from "./lib/factions";
-import { loadProfile, saveProfile, clearProfile, autoName, Profile } from "./lib/profile";
+import { loadProfile, saveProfile, clearProfile, autoName, normalizeUsername, Profile } from "./lib/profile";
 import { fromRaw, compact, usd, shortAddr } from "./lib/format";
 import Town from "./Town";
 import Admin from "./Admin";
@@ -16,6 +16,7 @@ import ProfileScreen from "./ProfileScreen";
 import Alliance from "./Alliance";
 import GameMusic, { requestGameMusicStart } from "./GameMusic";
 import GameCursor from "./GameCursor";
+import AlphaFeedback from "./AlphaFeedback";
 import { hasLocalGm, localGmRequested, registerOwnerGm } from "./lib/gm";
 import { loadGame } from "./lib/gamestore";
 import { verifyAllianceHolding } from "./lib/alliance";
@@ -23,7 +24,7 @@ import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
 import { loadPlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME } from "./lib/sfx";
-import { authenticateGoogle, authenticateGuest, authenticateWallet, mirrorPlayerState, trackEvents } from "./lib/backend";
+import { authenticateGoogle, authenticateGuest, authenticateWallet, loadBackendSession, mirrorPlayerState, trackEvents, updatePlayerName } from "./lib/backend";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
@@ -216,6 +217,16 @@ export default function App() {
         }
       }
       if (existing) {
+        if (normalizeUsername(existing.name) !== normalizeUsername(session.player.displayName) && existing.name !== "Commander") {
+          try {
+            const renamed = await updatePlayerName(connectedAddress, existing.name);
+            existing = { ...existing, name: renamed.displayName, lastRenamedAt: renamed.lastRenamedAt ? new Date(renamed.lastRenamedAt).toISOString() : existing.lastRenamedAt };
+            saveProfile(existing);
+          } catch {
+            existing = { ...existing, name: session.player.displayName };
+            saveProfile(existing);
+          }
+        }
         setProfile(existing);
         const nextStage = hasLocalGm(connectedAddress) ? "town" : "resume";
         setStage(nextStage);
@@ -224,7 +235,7 @@ export default function App() {
         // Faction/token data is unavailable while Blockscout is gated, so skip the
         // faction picker and drop a new wallet player straight into a solo keep
         // (same as Quick Play). Faction join can return once reads work.
-        const p: Profile = { address: connectedAddress, name: autoName(connectedAddress), faction: null, factionSymbol: null, keepLevel: 1, createdAt: new Date().toISOString(), renamedOnce: false };
+        const p: Profile = { address: connectedAddress, name: session.player.displayName || autoName(connectedAddress), faction: null, factionSymbol: null, keepLevel: 1, createdAt: new Date().toISOString(), renamedOnce: false };
         saveProfile(p);
         setProfile(p);
         setStage("founded");
@@ -250,9 +261,10 @@ export default function App() {
   function found(factionCA: string | null) {
     if (!records) return;
     const chosen = memes.find((m) => m.address === factionCA) || null;
+    const serverName = loadBackendSession(address)?.player.displayName;
     const p: Profile = {
       address,
-      name: autoName(address),
+      name: serverName || autoName(address),
       faction: chosen?.address || null,
       factionSymbol: chosen?.symbol || null,
       keepLevel: 1,
@@ -277,6 +289,19 @@ export default function App() {
     setRecords(stub);
     const existing = loadProfile(addr);
     if (existing) {
+      const serverName = displayName || autoName(addr);
+      if (existing.name === "Commander") {
+        existing.name = serverName;
+        saveProfile(existing);
+      } else if ( (normalizeUsername(existing.name) !== normalizeUsername(serverName))) {
+        void updatePlayerName(addr, existing.name).then((renamed) => {
+          const synced = { ...existing, name: renamed.displayName, lastRenamedAt: renamed.lastRenamedAt ? new Date(renamed.lastRenamedAt).toISOString() : existing.lastRenamedAt };
+          saveProfile(synced); setProfile(synced);
+        }).catch(() => {
+          const synced = { ...existing, name: serverName };
+          saveProfile(synced); setProfile(synced);
+        });
+      }
       setProfile(existing);
       setStage(hasLocalGm(addr) ? "town" : "resume");
       return;
@@ -374,7 +399,7 @@ export default function App() {
           <span className="crest">⚔️</span>
           <div>
             <div className="bname">ALLIANCE</div>
-            <div className="bsub">on-chain civilization · local alpha</div>
+            <div className="bsub">on-chain civilization · private alpha</div>
           </div>
         </div>
         {address ? (
@@ -449,7 +474,7 @@ export default function App() {
             </div>
           )}
           {profile.faction && <button className="mini out center" onClick={() => switchFaction(null, null)}>Leave current alliance</button>}
-          <button className="mini out center" onClick={resetDev}>(dev) start over</button>
+          {import.meta.env.DEV && <button className="mini out center" onClick={resetDev}>Reset onboarding</button>}
         </section>
       )}
 
@@ -534,6 +559,7 @@ export default function App() {
       {stage === "world" && profile && <World address={address} profile={profile} onAlliance={() => setStage("alliance")} onBack={() => setStage("town")} onMessages={() => setStage("messages")} onProfile={() => setStage("profile")} />}
       {stage === "messages" && profile && <Messages address={address} profile={profile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onProfile={() => setStage("profile")} />}
       {stage === "profile" && profile && <ProfileScreen address={address} profile={profile} onProfileChange={updateProfile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} />}
+      {address && MAIN_STAGES.includes(stage as MainStage) && <AlphaFeedback address={address} page={stage} />}
 
       {stage === "founded" && profile && (
         <section className="mid">
@@ -548,8 +574,8 @@ export default function App() {
               <div><span>Protection</span><b>until Lv.10</b></div>
             </div>
             <button className="cta big" onClick={() => { requestGameMusicStart(); setStage("town"); }}>Enter your Townhall →</button>
-            <p className="soon">The world map — explore, gather, raid — is the next build.</p>
-            <button className="mini out" onClick={resetDev}>(dev) start over</button>
+            <p className="soon">Your sector is ready. Build your city, explore the Star Map, and open Comms to meet other commanders.</p>
+            {import.meta.env.DEV && <button className="mini out" onClick={resetDev}>Reset onboarding</button>}
           </div>
         </section>
       )}

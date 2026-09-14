@@ -444,17 +444,24 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     if (worldStatus.activeFleets > 0) signals.push({ time: "LIVE", text: `${worldStatus.activeFleets} fleet${worldStatus.activeFleets === 1 ? "" : "s"} active in the Star Map` });
     if (view.wounded > 0) signals.push({ time: "MED", text: `${compact(displayTroops(view.wounded))} wounded troops await recovery` });
 
+    const localWorld = loadLocalWorldSession(address);
+    const localPlayer = localWorld?.world.players[localWorld.playerId];
+    const reports = localWorld ? Object.values(localWorld.world.reports).filter((report) => report.playerId === localWorld.playerId) : [];
+    const priorities = [
+      { label: "Raise Townhall to Lv.2", detail: `Lv.${view.buildings.keep.lvl} / 2`, done: view.buildings.keep.lvl >= 2 },
+      { label: "Train 100 combat units", detail: `${Math.min(100, troopsTotal).toLocaleString()} / 100`, done: troopsTotal >= 100 },
+      { label: "Complete a resource run", detail: reports.some((report) => report.action === "gather" && report.stage === "return") ? "COMPLETED" : "0 / 1", done: reports.some((report) => report.action === "gather" && report.stage === "return") },
+      { label: "Defeat a Lv.1 Rogue", detail: `Lv.${localPlayer?.highestMonsterDefeated || 0} / 1`, done: (localPlayer?.highestMonsterDefeated || 0) >= 1 },
+    ];
+    const priorityDone = priorities.filter((item) => item.done).length;
+
     return <>
       <div className="command-feed-status"><span><i /> SYSTEMS NOMINAL</span><em>RHCHAIN 4663</em></div>
       <div className="command-feed-tabs"><button className={commandTab === "today" ? "active" : ""} onClick={() => setCommandTab("today")}>TODAY</button><button className={commandTab === "signals" ? "active" : ""} onClick={() => setCommandTab("signals")}>SIGNALS</button></div>
       {commandTab === "today" ? <div className="daily-operations">
-        <header><div><small>DAILY OPERATIONS</small><b>Daily Tasks</b></div><strong className="mono">2 / 5</strong></header>
-        <div className="daily-progress"><i /></div>
-        <div className="daily-task done"><span>✓</span><div><b>Collect sector resources</b><small>500K / 500K</small></div><em>DONE</em></div>
-        <div className="daily-task done"><span>✓</span><div><b>Train combat units</b><small>1,000 / 1,000</small></div><em>DONE</em></div>
-        <div className="daily-task"><span>3</span><div><b>Complete expeditions</b><small>2 / 3</small></div><em>67%</em></div>
-        <div className="daily-task"><span>4</span><div><b>Defeat a rogue fleet</b><small>0 / 1</small></div><em>0%</em></div>
-        <div className="daily-task"><span>5</span><div><b>Use fleet energy</b><small>670 / 1,000</small></div><em>67%</em></div>
+        <header><div><small>FIRST ORDERS</small><b>Current priorities</b></div><strong className="mono">{priorityDone} / {priorities.length}</strong></header>
+        <div className="daily-progress"><i style={{ width: `${priorityDone / priorities.length * 100}%` }} /></div>
+        {priorities.map((item, index) => <div className={`daily-task${item.done ? " done" : ""}`} key={item.label}><span>{item.done ? "✓" : index + 1}</span><div><b>{item.label}</b><small>{item.detail}</small></div><em>{item.done ? "DONE" : "OPEN"}</em></div>)}
       </div> : <div className="command-signals"><header><small>LIVE OPERATIONS</small><b>Signal Log</b></header>{signals.length ? signals.map((signal, index) => <div className="command-signal" key={`${signal.text}-${index}`}><time className="mono">{signal.time}</time><span>{signal.text}</span></div>) : <div className="command-signal-empty"><div className="facility-empty-scan"><i /><i /><i /></div><b>All channels idle</b></div>}</div>}
     </>;
   }

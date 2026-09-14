@@ -10,6 +10,8 @@ import { CursorGlyph } from "./GameCursor";
 import { playSfx, SFX_SUBTAB_SWITCH, SFX_SUBTAB_SWITCH_VOLUME } from "./lib/sfx";
 import { detectAutoTier, GRAPHICS_TIER_HINT, GRAPHICS_TIER_LABEL, type GraphicsTier } from "./lib/graphics-tier";
 import { canRenameForFree, nextFreeRenameAt, normalizeUsername, usernameLength, type Profile } from "./lib/profile";
+import { updatePlayerName } from "./lib/backend";
+import { hasLocalGm } from "./lib/gm";
 import { mightBreakdown, project, totalTroops, worldMarchSlots } from "./lib/game";
 import { initGame, loadGame } from "./lib/gamestore";
 import { loadLocalWorldSession } from "./lib/world-adapter";
@@ -188,24 +190,34 @@ export default function ProfileScreen({
     if (announce) flash("PROTOCOL WRITTEN");
   }
 
-  function saveIdentity() {
+  async function saveIdentity() {
     const nextName = normalizeUsername(callsign);
     const nameChanged = nextName !== normalizeUsername(profile.name);
     if (usernameLength(nextName) < 3 || usernameLength(nextName) > 24) {
       flash("NAME SIGNAL MUST HOLD 3–24 GLYPHS");
       return;
     }
-    if (nameChanged && !canRenameForFree(profile, now)) {
+    if (nameChanged && !hasLocalGm(address) && !canRenameForFree(profile, now)) {
       flash("RENAME RELIC REQUIRED");
       return;
     }
+    let serverRename: Awaited<ReturnType<typeof updatePlayerName>> | null = null;
+    if (nameChanged) {
+      try {
+        serverRename = await updatePlayerName(address, nextName);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "";
+        flash(reason === "name_taken" ? "NAME ALREADY CLAIMED" : reason === "rename_cooldown" ? "FREE RENAME NOT READY" : reason === "invalid_name" ? "USE LETTERS, NUMBERS, . _ OR -" : "NAME CHANGE FAILED");
+        return;
+      }
+    }
     const next: Profile = {
       ...profile,
-      name: nextName,
+      name: serverRename?.displayName || nextName,
       motto: motto.trim().slice(0, 72),
       avatarId,
       title: profile.title,
-      lastRenamedAt: nameChanged ? new Date(now).toISOString() : profile.lastRenamedAt,
+      lastRenamedAt: serverRename?.lastRenamedAt ? new Date(serverRename.lastRenamedAt).toISOString() : nameChanged ? new Date(now).toISOString() : profile.lastRenamedAt,
       renamedOnce: nameChanged ? true : profile.renamedOnce,
     };
     onProfileChange(next);
@@ -455,7 +467,7 @@ export default function ProfileScreen({
         <header><small>IDENTITY SCRIBE</small><span>{renameWindow}</span></header>
         <div className="profile-field-grid"><label><span>UNIVERSAL NAME</span><input value={callsign} onChange={(event) => setCallsign(event.target.value)} /></label><label><span>RENAME RELICS</span><input value="0 RECOVERED" disabled /></label><label className="wide"><span>OATHLINE</span><input value={motto} maxLength={72} onChange={(event) => setMotto(event.target.value)} /></label></div>
         <div className="profile-sigil-array"><button className={avatarId === "genesis" ? "selected" : ""} onClick={() => setAvatarId("genesis")}><i className="genesis" /><span>GENESIS</span></button><button className={avatarId === "orbit" ? "selected" : ""} onClick={() => setAvatarId("orbit")}><i className="orbit" /><span>ORBITAL</span></button><button disabled><i className="void" /><span>VOID SEAL · LOCKED</span></button></div>
-        <div className="profile-scribe-actions"><button className="profile-action" onClick={() => setEditing(false)}>DISCARD</button><button className="profile-action primary" onClick={saveIdentity}>SEAL DOSSIER</button></div>
+        <div className="profile-scribe-actions"><button className="profile-action" onClick={() => setEditing(false)}>DISCARD</button><button className="profile-action primary" onClick={() => void saveIdentity()}>SEAL DOSSIER</button></div>
       </article>}
     </div>}
 

@@ -6,6 +6,7 @@
 
 import { verifySession } from "./auth";
 import { handlePlayerApi, type BackendEnv } from "./player-api";
+import { assignOuterRingCoord, type WorldCoord } from "./world-coords";
 
 export interface Env extends BackendEnv {
   WORLD_ROOM: DurableObjectNamespace;
@@ -76,13 +77,12 @@ export default {
 
 const MAX_CHAT = 80;         // stored chat history (ring, per channel/thread)
 const RETAIN_MS = 7 * 24 * 60 * 60 * 1000; // drop chat older than a week (save storage)
-const WORLD_SIZE = 512;      // must match the client world config width
-const RESERVE = 70;          // keep spawns off the central wormhole
+const COORD_VERSION = 2;
 
 type PlayerRow = {
   id: string; name: string; coords: { x: number; y: number };
   might: number; keepLevel: number; faction: string | null;
-  cosmetics: unknown; online: boolean; lastSeen: number;
+  cosmetics: unknown; online: boolean; lastSeen: number; coordVersion?: number;
 };
 type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown };
 type SocketAttachment = { pid: string; name: string; sessionId: string; windowStart: number; messageCount: number };
@@ -129,7 +129,8 @@ function finiteInteger(value: unknown, min: number, max: number): number | null 
 
 export class WorldRoom {
   state: DurableObjectState;
-  constructor(state: DurableObjectState) { this.state = state; }
+  env: Env;
+  constructor(state: DurableObjectState, env: Env) { this.state = state; this.env = env; }
 
   async fetch(req: Request): Promise<Response> {
     const pid = (req.headers.get("x-alliance-player") || "").slice(0, 64);
@@ -170,40 +171,44 @@ export class WorldRoom {
 
   async onJoin(ws: WebSocket, pid: string, name: string) {
     const players = ((await this.state.storage.get<Record<string, PlayerRow>>("players")) || {});
+    const coordKey = `coord:v${COORD_VERSION}:${pid}`;
+    let coord = await this.state.storage.get<WorldCoord>(coordKey);
+    if (!coord) {
+      const assigned = Object.values(players)
+        .filter((player) => player.id !== pid && player.coordVersion === COORD_VERSION)
+        .map((player) => player.coords);
+      coord = assignOuterRingCoord(assigned);
+      await this.state.storage.put(coordKey, coord);
+    }
     if (!players[pid]) {
-      players[pid] = { id: pid, name, coords: this.assignCoord(players), might: 0, keepLevel: 1, faction: null, cosmetics: null, online: true, lastSeen: Date.now() };
+      players[pid] = { id: pid, name, coords: coord, might: 0, keepLevel: 1, faction: null, cosmetics: null, online: true, lastSeen: Date.now(), coordVersion: COORD_VERSION };
     } else {
-      players[pid].name = name; players[pid].lastSeen = Date.now();
+      players[pid].name = name; players[pid].coords = coord; players[pid].coordVersion = COORD_VERSION; players[pid].lastSeen = Date.now();
     }
     // This socket is already accepted, so liveIds() includes it; this both marks
     // the joiner online and clears any stale ghosts from earlier dead sockets.
     const flipped = this.reconcileOnline(players);
     await this.state.storage.put("players", players);
-    const chat = prune((await this.state.storage.get<ChatRow[]>("chat:cosmos")) || []);
+    const storedChat = prune((await this.state.storage.get<ChatRow[]>("chat:cosmos")) || []);
+    const chat = storedChat.map((message) => message.name === "Commander" && players[message.pid]?.name
+      ? { ...message, name: players[message.pid].name }
+      : message);
+    if (chat.some((message, index) => message.name !== storedChat[index]?.name)) await this.state.storage.put("chat:cosmos", chat);
     // Only this player's DM threads, pruned to the retention window.
     const dmsAll = (await this.state.storage.get<Record<string, ChatRow[]>>("dms")) || {};
     const dms: Record<string, ChatRow[]> = {};
     for (const [k, arr] of Object.entries(dmsAll)) {
-      if (k.split("|").includes(pid)) { const p = prune(arr); if (p.length) dms[k] = p; }
+      if (k.split("|").includes(pid)) {
+        const p = prune(arr).map((message) => message.name === "Commander" && players[message.pid]?.name
+          ? { ...message, name: players[message.pid].name }
+          : message);
+        if (p.length) dms[k] = p;
+      }
     }
     ws.send(JSON.stringify({ type: "snapshot", you: pid, players: Object.values(players), chat, dms }));
     this.broadcast({ type: "player", player: players[pid] }, ws);
     // Tell everyone about any ghosts we just cleared (or others revived).
     for (const id of flipped) if (id !== pid) this.broadcast({ type: "player", player: players[id] });
-  }
-
-  // Deterministic-ish spread on a grid, avoiding the central reserve, so every
-  // client renders the same shared map with no two cities on top of each other.
-  assignCoord(players: Record<string, PlayerRow>): { x: number; y: number } {
-    const taken = new Set(Object.values(players).map((p) => `${p.coords.x},${p.coords.y}`));
-    const cols = 10, cell = WORLD_SIZE / cols, cx = WORLD_SIZE / 2, cy = WORLD_SIZE / 2;
-    for (let i = 0; i < cols * cols; i++) {
-      const gx = (i * 7 + 3) % cols, gy = Math.floor((i * 7 + 3) / cols) % cols;
-      const x = Math.round(gx * cell + cell / 2), y = Math.round(gy * cell + cell / 2);
-      if (Math.hypot(x - cx, y - cy) < RESERVE) continue;
-      if (!taken.has(`${x},${y}`)) return { x, y };
-    }
-    return { x: 40 + Math.floor(Math.random() * (WORLD_SIZE - 80)), y: 40 + Math.floor(Math.random() * (WORLD_SIZE - 80)) };
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
@@ -252,6 +257,8 @@ export class WorldRoom {
     } else if (data.type === "presence") {
       const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
       const p = players[pid]; if (!p) return;
+      const account = await this.env.DB.prepare("SELECT display_name FROM players WHERE id = ?").bind(pid).first<{ display_name: string }>();
+      if (account?.display_name) p.name = account.display_name;
       const cosmetics = sanitizeCosmetics(data.cosmetics);
       if (cosmetics) p.cosmetics = cosmetics;
       const might = finiteInteger(data.might, 0, 10_000_000_000);

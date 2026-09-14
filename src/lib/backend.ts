@@ -136,6 +136,25 @@ export async function grantGmInventory(address: string): Promise<InventoryBalanc
   return (await post<{ inventory: InventoryBalance[] }>("/inventory/grant-alpha", { idempotencyKey: crypto.randomUUID() }, session.token)).inventory;
 }
 
+export async function updatePlayerName(address: string, name: string): Promise<{ displayName: string; lastRenamedAt?: number; nextFreeRenameAt: number }> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  const result = await post<{ displayName: string; lastRenamedAt?: number; nextFreeRenameAt: number }>("/profile/name", { name }, session.token);
+  const updated = { ...session, player: { ...session.player, displayName: result.displayName } };
+  saveBackendSession(updated);
+  return result;
+}
+
+export async function submitAlphaFeedback(address: string, input: { category: "bug" | "ux" | "balance" | "other"; page: string; message: string }): Promise<void> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  await post("/feedback", { ...input, context: {
+    userAgent: navigator.userAgent.slice(0, 300),
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+    online: navigator.onLine,
+  } }, session.token);
+}
+
 /**
  * Private-alpha recovery mirror. This is deliberately not called authoritative:
  * the client still produced these values, so combat/economy validation must move

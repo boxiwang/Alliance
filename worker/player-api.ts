@@ -32,11 +32,14 @@ type PlayerRow = {
   created_at: number;
   last_seen_at: number;
   last_login_at: number;
+  name_key: string | null;
+  last_renamed_at: number | null;
 };
 
 const MAX_BODY_BYTES = 600_000;
 const SESSION_SECONDS = 24 * 60 * 60;
 const CHALLENGE_MS = 10 * 60 * 1000;
+const FREE_RENAME_MS = 30 * 24 * 60 * 60 * 1000;
 
 function response(data: unknown, status = 200): Response {
   return Response.json(data, { status, headers: { "cache-control": "no-store" } });
@@ -60,9 +63,23 @@ function listed(value: string | undefined, candidate: string | null): boolean {
   return (value || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean).includes(candidate.toLowerCase());
 }
 
-function safeName(value: unknown): string {
-  const name = String(value || "Commander").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 24);
-  return name || "Commander";
+function validPlayerName(value: unknown): { name: string; key: string } | null {
+  const name = String(value || "").replace(/[\u0000-\u001f\u007f]/g, "").trim().normalize("NFKC");
+  const length = Array.from(name).length;
+  if (length < 3 || length > 24 || !/^[\p{L}\p{N}_.-]+$/u.test(name)) return null;
+  return { name, key: name.toLocaleLowerCase("en-US") };
+}
+
+function generatedName(playerId: string, preferred?: string): { name: string; key: string } {
+  const clean = validPlayerName(preferred);
+  const suffix = playerId.replace(/^0x/, "").slice(-10).toLowerCase();
+  if (clean && clean.name !== "Commander") {
+    const stem = Array.from(clean.name).slice(0, 13).join("");
+    const name = `${stem}-${suffix}`;
+    return { name, key: name.toLocaleLowerCase("en-US") };
+  }
+  const name = `Ruglord${suffix}`;
+  return { name, key: name.toLowerCase() };
 }
 
 async function findPlayer(env: BackendEnv, id: string): Promise<PlayerRow | null> {
@@ -74,15 +91,17 @@ async function savePlayer(env: BackendEnv, input: {
   wallet?: string | null; displayName?: string; role?: PlayerRole; secretHash?: string | null;
 }): Promise<PlayerRow> {
   const now = Date.now();
-  const displayName = safeName(input.displayName);
+  const initialName = generatedName(input.id, input.displayName);
+  const displayName = initialName.name;
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO players (id, auth_method, wallet_address, display_name, role, status, created_at, last_seen_at, last_login_at)
-      VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)
+    env.DB.prepare(`INSERT INTO players (id, auth_method, wallet_address, display_name, name_key, role, status, created_at, last_seen_at, last_login_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET auth_method = excluded.auth_method,
         wallet_address = COALESCE(excluded.wallet_address, players.wallet_address),
-        display_name = CASE WHEN excluded.display_name = 'Commander' THEN players.display_name ELSE excluded.display_name END,
+        display_name = CASE WHEN players.display_name = 'Commander' THEN excluded.display_name ELSE players.display_name END,
+        name_key = CASE WHEN players.name_key IS NULL THEN excluded.name_key ELSE players.name_key END,
         role = excluded.role, last_seen_at = excluded.last_seen_at, last_login_at = excluded.last_login_at`)
-      .bind(input.id, input.method, input.wallet || null, displayName, input.role || "player", now, now, now),
+      .bind(input.id, input.method, input.wallet || null, displayName, initialName.key, input.role || "player", now, now, now),
     env.DB.prepare(`INSERT INTO player_identities (provider, provider_subject, player_id, secret_hash, created_at, last_verified_at)
       VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(provider, provider_subject) DO UPDATE SET player_id = excluded.player_id,
@@ -280,6 +299,47 @@ async function me(request: Request, env: BackendEnv, claims: SessionClaims): Pro
   return response({ player: { id: player.id, displayName: player.display_name, role: player.role, authMethod: player.auth_method, walletAddress: player.wallet_address } });
 }
 
+async function renamePlayer(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
+  const data = await body(request);
+  const candidate = validPlayerName(data?.name);
+  if (!candidate) return response({ error: "invalid_name" }, 400);
+  const player = await findPlayer(env, claims.sub);
+  if (!player || player.status !== "active") return response({ error: "account_unavailable" }, 403);
+  if (player.name_key === candidate.key) return response({ displayName: player.display_name, nextFreeRenameAt: player.last_renamed_at ? player.last_renamed_at + FREE_RENAME_MS : 0 });
+  const now = Date.now();
+  const nextFreeRenameAt = (player.last_renamed_at || 0) + FREE_RENAME_MS;
+  if (claims.role !== "gm" && player.last_renamed_at && now < nextFreeRenameAt) return response({ error: "rename_cooldown", nextFreeRenameAt }, 429);
+  try {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE players SET display_name = ?, name_key = ?, last_renamed_at = ?, last_seen_at = ? WHERE id = ?")
+        .bind(candidate.name, candidate.key, now, now, claims.sub),
+      env.DB.prepare(`INSERT INTO account_audit_log (id, player_id, action, actor_player_id, metadata_json, created_at)
+        VALUES (?, ?, 'profile.rename', ?, ?, ?)`).bind(crypto.randomUUID(), claims.sub, claims.sub, JSON.stringify({ from: player.display_name, to: candidate.name }), now),
+    ]);
+  } catch (error) {
+    if (String(error).toLowerCase().includes("unique")) return response({ error: "name_taken" }, 409);
+    throw error;
+  }
+  return response({ displayName: candidate.name, lastRenamedAt: now, nextFreeRenameAt: now + FREE_RENAME_MS });
+}
+
+async function submitFeedback(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
+  const data = await body(request);
+  const message = String(data?.message || "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, 2000);
+  const category = String(data?.category || "other");
+  const page = String(data?.page || "").slice(0, 32) || null;
+  if (message.length < 5 || !["bug", "ux", "balance", "other"].includes(category)) return response({ error: "invalid_feedback" }, 400);
+  let context = "{}";
+  try { context = JSON.stringify(data?.context && typeof data.context === "object" ? data.context : {}); } catch {}
+  if (context.length > 4000) context = "{}";
+  const id = crypto.randomUUID();
+  await env.DB.prepare(`INSERT INTO alpha_feedback (id, player_id, category, page, message, client_context_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(id, claims.sub, category, page, message, context, Date.now()).run();
+  return response({ id, received: true }, 201);
+}
+
 async function storeEvents(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
   const data = await body(request);
   const events = Array.isArray(data?.events) ? data.events.slice(0, 50) : [];
@@ -332,10 +392,12 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (request.method === "POST" && pathname === "/auth/wallet/verify") return walletVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/google") return googleVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/guest") return guestVerify(request, env);
-  if (!["/me", "/events", "/state", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha"].includes(pathname)) return null;
+  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha"].includes(pathname)) return null;
   const claims = await authClaims(request, env);
   if (!claims) return response({ error: "unauthorized" }, 401);
   if (request.method === "GET" && pathname === "/me") return me(request, env, claims);
+  if (pathname === "/profile/name") return renamePlayer(request, env, claims);
+  if (pathname === "/feedback") return submitFeedback(request, env, claims);
   if (request.method === "POST" && pathname === "/events") return storeEvents(request, env, claims);
   if ((request.method === "GET" || request.method === "PUT") && pathname === "/state") return stateRoute(request, env, claims);
   if (pathname === "/inventory") return inventory(request, env, claims);

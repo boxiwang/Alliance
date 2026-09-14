@@ -31,7 +31,8 @@ describe("Town troop training UI", () => {
     expect(html).toContain("ARMY TRAIN");
     expect(html).toContain("RESEARCH");
     expect(html).toContain("RALLY");
-    expect(html).toContain("Daily Tasks");
+    expect(html).toContain("FIRST ORDERS");
+    expect(html).toContain("Current priorities");
     expect(html).toContain("CREDITS");
     expect(html).toContain('aria-label="Army Camp details"');
     expect(html).not.toContain("Army quantity");
