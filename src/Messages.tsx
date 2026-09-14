@@ -169,16 +169,29 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   }, [key, sent, isSystem, sysFilter, systemReports, isCosmos, cosmosLive, dmWith, dmMessages]);
 
   // Keep the transcript pinned to the newest message when you open/switch a
-  // thread, and whenever your own send lands (including the server echo). We
-  // don't yank the view for others' messages if you've scrolled up to read.
+  // thread, and whenever your own send lands. Cosmos/DM sends have no local echo
+  // (the message returns from the server a beat later), so a plain "is the last
+  // message mine?" check races the round-trip — instead we arm a flag on send
+  // and honour it on the next messages update. rAF ensures the new row is laid
+  // out before we scroll.
   const streamRef = useRef<HTMLDivElement>(null);
-  const scrollToLatest = () => { const el = streamRef.current; if (el) el.scrollTop = el.scrollHeight; };
+  const forceScrollRef = useRef(false);
+  const scrollToLatest = () => {
+    requestAnimationFrame(() => { const el = streamRef.current; if (el) el.scrollTop = el.scrollHeight; });
+  };
   useEffect(scrollToLatest, [active, dmWith]);
-  useEffect(() => { const last = messages[messages.length - 1] as ChatMessage | undefined; if (last?.own) scrollToLatest(); }, [messages]);
+  useEffect(() => {
+    const last = messages[messages.length - 1] as ChatMessage | undefined;
+    if (forceScrollRef.current || last?.own) { forceScrollRef.current = false; scrollToLatest(); }
+  }, [messages]);
 
   function send() {
     const body = draft.trim();
     if ((!body && !pendingShare) || isSystem) return;
+    // Arm the auto-scroll so the newest line (this send, or its server echo) lands
+    // in view; also pin to the current bottom immediately for instant feedback.
+    forceScrollRef.current = true;
+    scrollToLatest();
     // Private DM — send to the server, which delivers to both participants.
     if (dmWith) {
       if (!body) return;
