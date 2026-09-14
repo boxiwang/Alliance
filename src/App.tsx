@@ -39,7 +39,7 @@ function AllianceWordmark({ hero = false }: { hero?: boolean }) {
   </div>;
 }
 
-export function isMobileClient(nav: Navigator = navigator): boolean {
+function isMobileClient(nav: Navigator = navigator): boolean {
   const modern = nav as Navigator & { userAgentData?: { mobile?: boolean } };
   if (modern.userAgentData?.mobile === true) return true;
   if (/Android|iPhone|iPad|iPod|IEMobile|Opera Mini|Mobile/i.test(nav.userAgent)) return true;
