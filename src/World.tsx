@@ -11,7 +11,7 @@ import { gmFillTroops, hasLocalGm } from "./lib/gm";
 import type {
   CityEntity, HeadlessMarch, MonsterEntity, Point, ResourceEntity, WorldReport,
 } from "./lib/world-engine";
-import { ISSUED_WORLD_COSMETICS, distance, energyAt, isInsidePlayableWorld, isScoutReportActive, scoutReportExpiresAt, worldCenter, worldPlayableRadius, worldRogueMaxLevel } from "./lib/world-engine";
+import { ISSUED_WORLD_COSMETICS, distance, energyAt, isInsidePlayableWorld, isScoutReportActive, scoutReportExpiresAt, worldCenter, worldPlayableRadius, worldRogueMaxLevel, zoneForPoint } from "./lib/world-engine";
 import { carryCapacity, resolveCombat } from "./lib/expedition";
 import type { LocalWorldSession } from "./lib/world-adapter";
 import {
@@ -505,12 +505,19 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // scouting/attacking real players is the next milestone (server-side combat).
   const [remotePlayers, setRemotePlayers] = useState<PresenceCity[]>([]);
   const [remoteSelectedId, setRemoteSelectedId] = useState<string | null>(null);
+  // My own spawn coordinate, owned by the server (shared map). Once known, the
+  // home city is moved here so "where I see my home" == "where others see me".
+  const [serverHomeCoord, setServerHomeCoord] = useState<Point | null>(null);
   const rtRef = useRef<RealtimeClient | null>(null);
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
     rtRef.current = rt;
     const keep = (list: PresenceCity[]) => list.filter((p) => p.id !== address && p.coords);
-    rt.handlers.onSnapshot = (_you, players) => setRemotePlayers(keep(players));
+    rt.handlers.onSnapshot = (_you, players) => {
+      setRemotePlayers(keep(players));
+      const mine = players.find((p) => p.id === address)?.coords;
+      if (mine && Number.isFinite(mine.x) && Number.isFinite(mine.y)) setServerHomeCoord({ x: mine.x, y: mine.y });
+    };
     rt.handlers.onPlayer = (p) => {
       if (p.id === address || !p.coords) return;
       setRemotePlayers((cur) => { const i = cur.findIndex((x) => x.id === p.id); if (i < 0) return [...cur, p]; const next = cur.slice(); next[i] = p; return next; });
@@ -583,6 +590,20 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     seenReportCount.current = opened.session.world.players[opened.session.playerId].reportIds.length;
     if (opened.session.migratedLegacyAt) setMessage("Old World marches were safely settled and migrated.");
   }, [address, N, profile.faction]);
+  // Shared-map coordinate unification: once the server hands us our spawn coord,
+  // move the home city there (PvE targets are placed globally by radius, so only
+  // the city moves) and recenter. Runs once per distinct coord.
+  useEffect(() => {
+    if (!serverHomeCoord) return;
+    const s = sessionRef.current;
+    const cityId = s.world.players[s.playerId]?.cityId;
+    const city = cityId ? (s.world.entities[cityId] as CityEntity | undefined) : undefined;
+    if (!cityId || !city) return;
+    if (Math.round(city.position.x) === Math.round(serverHomeCoord.x) && Math.round(city.position.y) === Math.round(serverHomeCoord.y)) return;
+    const next: LocalWorldSession = { ...s, world: { ...s.world, entities: { ...s.world.entities, [cityId]: { ...city, position: { ...serverHomeCoord }, zone: zoneForPoint(serverHomeCoord, s.world.config) } } } };
+    sessionRef.current = next; setSession(next); saveLocalWorldSession(next);
+    setCamera({ ...serverHomeCoord });
+  }, [serverHomeCoord]);
   useEffect(() => {
     const timer = window.setInterval(() => {
       const tick = Date.now(); setNow(tick);
