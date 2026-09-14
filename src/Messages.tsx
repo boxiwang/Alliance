@@ -16,7 +16,7 @@ import { loadPlayerAccount } from "./lib/player-account";
 import { refreshLocalCommsIntel, saveLocalComms, type LocalCommsMessage } from "./lib/comms-local";
 import { clearQueuedCommsShare, loadQueuedCommsShare, queueWorldFocus, sharedIntelIsActive, type SharedWorldIntel } from "./lib/shared-intel";
 import { playerSystemReports } from "./lib/world-reports";
-import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME } from "./lib/sfx";
+import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME, SFX_SUBTAB_SWITCH, SFX_SUBTAB_SWITCH_VOLUME } from "./lib/sfx";
 
 // Comms is Task-1 chat. This is the frontend + a LOCAL adapter: channels/threads are seeded and
 // your own sends echo locally. A server adapter (Cloudflare Durable Objects) replaces the data
@@ -106,6 +106,9 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
 
   function playChannelSfx() {
     if (account.soundEnabled) playSfx(SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME * account.sfxVolume);
+  }
+  function playSubtabSfx() {
+    if (account.soundEnabled) playSfx(SFX_SUBTAB_SWITCH, SFX_SUBTAB_SWITCH_VOLUME * account.sfxVolume);
   }
   function openDM(id: string, name: string) {
     if (!id || id === address) return;
@@ -308,7 +311,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
           <div className="th-actions"><button className="cm-icon">☆</button><button className="cm-icon">⋯</button></div>
         </div>
 
-        {isSystem && <div className="sysfilter">{(["all", "mil", "eco", "sec"] as const).map((f) => <button key={f} className={f === sysFilter ? "on" : ""} onClick={() => setSysFilter(f)}>{({ all: "All", mil: "Military", eco: "Economy", sec: "Security" } as const)[f]}</button>)}</div>}
+        {isSystem && <div className="sysfilter">{(["all", "mil", "eco", "sec"] as const).map((f) => <button key={f} className={f === sysFilter ? "on" : ""} onClick={() => { if (f !== sysFilter) playSubtabSfx(); setSysFilter(f); }}>{({ all: "All", mil: "Military", eco: "Economy", sec: "Security" } as const)[f]}</button>)}</div>}
 
         {active === "contacts" && !dmWith
           ? <div className="stream">

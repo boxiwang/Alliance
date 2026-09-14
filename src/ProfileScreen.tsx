@@ -7,6 +7,7 @@ import StrikeSignaturePreview from "./StrikeSignaturePreview";
 import PlayerCard from "./PlayerCard";
 import NameSignal from "./NameSignal";
 import { CursorGlyph } from "./GameCursor";
+import { playSfx, SFX_SUBTAB_SWITCH, SFX_SUBTAB_SWITCH_VOLUME } from "./lib/sfx";
 import { detectAutoTier, GRAPHICS_TIER_HINT, GRAPHICS_TIER_LABEL, type GraphicsTier } from "./lib/graphics-tier";
 import { canRenameForFree, nextFreeRenameAt, normalizeUsername, usernameLength, type Profile } from "./lib/profile";
 import { mightBreakdown, project, totalTroops, worldMarchSlots } from "./lib/game";
@@ -289,7 +290,15 @@ export default function ProfileScreen({
     if (kind === "title") onProfileChange({ ...profile, title: "" });
   }
 
+  function playSubtabSfx() {
+    if (account.soundEnabled) playSfx(SFX_SUBTAB_SWITCH, SFX_SUBTAB_SWITCH_VOLUME * account.sfxVolume);
+  }
+  function switchSection(next: ArchiveSection) {
+    if (next !== section) playSubtabSfx();
+    setSection(next);
+  }
   function openVaultSection(nextSection: RelicVaultSection) {
+    if (nextSection !== vaultSection) playSubtabSfx();
     setVaultSection(nextSection);
     if (nextSection === "celestial") {
       setPreviewKind("planet");
@@ -408,7 +417,7 @@ export default function ProfileScreen({
     </header>
 
     <nav className="profile-tabs" aria-label="Commander archive">
-      {(["dossier", "vault", "wallet", "protocols"] as ArchiveSection[]).map((tab) => <button key={tab} className={section === tab ? "active" : ""} aria-current={section === tab ? "page" : undefined} onClick={() => setSection(tab)}>
+      {(["dossier", "vault", "wallet", "protocols"] as ArchiveSection[]).map((tab) => <button key={tab} className={section === tab ? "active" : ""} aria-current={section === tab ? "page" : undefined} onClick={() => switchSection(tab)}>
         <span>{tab === "dossier" ? "01" : tab === "vault" ? "02" : tab === "wallet" ? "03" : "04"}</span>
         <b>{tab === "dossier" ? "DOSSIER" : tab === "vault" ? "RELIC VAULT" : tab === "wallet" ? "WALLET LINK" : "PROTOCOLS"}</b>
       </button>)}
