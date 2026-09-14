@@ -35,7 +35,7 @@ import CosmicBackdrop from "./CosmicBackdrop";
 import MiniComms from "./MiniComms";
 import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAllianceHelp } from "./lib/alliance";
 import { loadPlayerAccount } from "./lib/player-account";
-import { playSfx, SFX_BUILDING_SELECT, SFX_SELECT_VOLUME } from "./lib/sfx";
+import { playSfx, SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME } from "./lib/sfx";
 
 const ECONOMY_BUILDINGS: BKey[] = ["bank", "oilwell", "powerplant"];
 const COMMAND_BUILDINGS: BKey[] = ["storage", "wall"];
@@ -112,7 +112,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   // Profile change to sound / SFX volume applies without remounting).
   function openFacility(building: BKey) {
     const acc = loadPlayerAccount(address);
-    if (acc.soundEnabled) playSfx(SFX_BUILDING_SELECT, SFX_SELECT_VOLUME * acc.sfxVolume);
+    if (acc.soundEnabled) playSfx(SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME * acc.sfxVolume);
     setFacilityOpen(building);
   }
   const [commandTab, setCommandTab] = useState<"today" | "signals">("today");

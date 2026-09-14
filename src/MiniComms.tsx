@@ -3,7 +3,7 @@ import type { Profile } from "./lib/profile";
 import { loadCosmeticVault, loadPlayerAccount } from "./lib/player-account";
 import NameSignal from "./NameSignal";
 import { RealtimeClient, type LiveChat, type PresenceCity } from "./lib/realtime";
-import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME } from "./lib/sfx";
+import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME } from "./lib/sfx";
 
 function messageTime(ts: number): string {
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ts));
@@ -55,9 +55,13 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
     if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME * account.sfxVolume);
     setDraft("");
   }
+  function toggleExpanded(next: boolean) {
+    if (account.soundEnabled) playSfx(SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME * account.sfxVolume);
+    setExpanded(next);
+  }
 
   if (!expanded) return <aside className="mini-comms collapsed" aria-label="Quick communications">
-    <button className="mini-comms-peek" onClick={() => setExpanded(true)}>
+    <button className="mini-comms-peek" onClick={() => toggleExpanded(true)}>
       <span className="mini-comms-mark">✦</span>
       <span className="mini-comms-peek-copy"><small>◎ COSMOS // {connected ? "LIVE" : "…"}</small><b><em>{latest?.pid === address ? <NameSignal signal={ownNameSignal} mode="demo" reducedMotion={account.reducedMotion}>{latest.name}</NameSignal> : latest?.name || ""}</em>{latest?.text || "No transmissions yet — say hello."}</b></span>
       {unread > 0 && <span className="mini-comms-unread">{unread}</span>}
@@ -68,7 +72,7 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
   return <aside className="mini-comms expanded" aria-label="Quick communications">
     <header>
       <div><span>✦</span><b>COSMOS // LIVE</b><small>{connected ? `${onlineCount} online` : "connecting…"}</small></div>
-      <div><button onClick={onOpenMessages}>OPEN COMMS ↗</button><button aria-label="Collapse quick communications" onClick={() => setExpanded(false)}>⌄</button></div>
+      <div><button onClick={onOpenMessages}>OPEN COMMS ↗</button><button aria-label="Collapse quick communications" onClick={() => toggleExpanded(false)}>⌄</button></div>
     </header>
     <div className="mini-comms-stream">
       {messages.map((message) => <div className={`mini-comms-message${message.pid === address ? " own" : ""}`} key={message.id}>

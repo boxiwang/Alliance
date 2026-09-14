@@ -16,7 +16,7 @@ import { loadPlayerAccount } from "./lib/player-account";
 import { refreshLocalCommsIntel, saveLocalComms, type LocalCommsMessage } from "./lib/comms-local";
 import { clearQueuedCommsShare, loadQueuedCommsShare, queueWorldFocus, sharedIntelIsActive, type SharedWorldIntel } from "./lib/shared-intel";
 import { playerSystemReports } from "./lib/world-reports";
-import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME } from "./lib/sfx";
+import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME } from "./lib/sfx";
 
 // Comms is Task-1 chat. This is the frontend + a LOCAL adapter: channels/threads are seeded and
 // your own sends echo locally. A server adapter (Cloudflare Durable Objects) replaces the data
@@ -104,8 +104,12 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     return () => rt.close();
   }, [address, profile.name, profile.factionSymbol]);
 
+  function playChannelSfx() {
+    if (account.soundEnabled) playSfx(SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME * account.sfxVolume);
+  }
   function openDM(id: string, name: string) {
     if (!id || id === address) return;
+    playChannelSfx();
     setDmNames((cur) => ({ ...cur, [id]: name || cur[id] || "Commander" }));
     setDmWith({ id, name: name || dmNames[id] || "Commander" });
     setActive("cosmos"); // base channel so the composer shows; dmWith overrides the view
@@ -246,6 +250,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   }
 
   function openChannel(channel: ChannelId) {
+    if (channel !== active || dmWith) playChannelSfx();
     setActive(channel);
     setInspectedSignal(null);
     setDmWith(null);
