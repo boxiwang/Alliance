@@ -16,11 +16,11 @@ import ProfileScreen from "./ProfileScreen";
 import Alliance from "./Alliance";
 import GameMusic, { requestGameMusicStart } from "./GameMusic";
 import GameCursor from "./GameCursor";
-import { hasLocalGm, localGmRequested } from "./lib/gm";
+import { hasLocalGm, localGmRequested, isGmOwnerEmail, registerOwnerGm } from "./lib/gm";
 import { loadGame } from "./lib/gamestore";
 import { verifyAllianceHolding } from "./lib/alliance";
 import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
@@ -104,6 +104,17 @@ export default function App() {
   const [error, setError] = useState<string>("");
 
   useEffect(() => subscribeProviders(setDetected), []);
+
+  // Restore owner GM on reload: Firebase persists the session, so re-stamp the
+  // owner flag as soon as auth resolves — no need to click "Continue with Google"
+  // again just to keep GM powers.
+  useEffect(() => {
+    const auth = firebaseAuth();
+    if (!auth) return;
+    return onAuthStateChanged(auth, (u) => {
+      if (u && isGmOwnerEmail(u.email)) registerOwnerGm(synthAddress("google:" + u.uid));
+    });
+  }, []);
   const wallets = useMemo(() => resolveWallets(detected), [detected]);
 
   // Google sign-in via Firebase Auth (reuses the Blockwick Firebase project).
@@ -115,7 +126,9 @@ export default function App() {
     try {
       const cred = await signInWithPopup(auth, new GoogleAuthProvider());
       const u = cred.user;
-      beginLocalSession(synthAddress("google:" + u.uid), u.displayName || u.email || "", "Google");
+      const addr = synthAddress("google:" + u.uid);
+      if (isGmOwnerEmail(u.email)) registerOwnerGm(addr);
+      beginLocalSession(addr, u.displayName || u.email || "", "Google");
     } catch (e: any) {
       const msg = String(e?.code || e?.message || "");
       if (!msg.includes("popup-closed") && !msg.includes("cancelled")) setError("Google sign-in failed. Try again or use Quick Play.");

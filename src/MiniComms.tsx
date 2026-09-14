@@ -17,7 +17,12 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
   const [live, setLive] = useState<LiveChat[]>([]);
   const [roster, setRoster] = useState<PresenceCity[]>([]);
   const [connected, setConnected] = useState(false);
+  const [unread, setUnread] = useState(0);
   const rtRef = useRef<RealtimeClient | null>(null);
+  const expandedRef = useRef(expanded);
+  // Clear unread whenever the widget is opened; the ref lets the socket handler
+  // (bound once) read the current open/closed state without re-subscribing.
+  useEffect(() => { expandedRef.current = expanded; if (expanded) setUnread(0); }, [expanded]);
   const account = useMemo(() => loadPlayerAccount(address), [address]);
   const ownNameSignal = useMemo(() => loadCosmeticVault(address).equipped.chatSignal, [address]);
 
@@ -25,7 +30,10 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
     const rt = new RealtimeClient(address, profile.name || "Commander");
     rtRef.current = rt;
     rt.handlers.onSnapshot = (_you, players, chat) => { setLive(chat); setRoster(players); };
-    rt.handlers.onChat = (m) => setLive((cur) => [...cur, m].slice(-40));
+    rt.handlers.onChat = (m) => {
+      setLive((cur) => [...cur, m].slice(-40));
+      if (!expandedRef.current && m.pid !== address) setUnread((n) => Math.min(n + 1, 99));
+    };
     rt.handlers.onPlayer = (p) => setRoster((cur) => {
       const i = cur.findIndex((x) => x.id === p.id);
       if (i < 0) return [...cur, p];
@@ -52,7 +60,7 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
     <button className="mini-comms-peek" onClick={() => setExpanded(true)}>
       <span className="mini-comms-mark">✦</span>
       <span className="mini-comms-peek-copy"><small>◎ COSMOS // {connected ? "LIVE" : "…"}</small><b><em>{latest?.pid === address ? <NameSignal signal={ownNameSignal} mode="demo" reducedMotion={account.reducedMotion}>{latest.name}</NameSignal> : latest?.name || ""}</em>{latest?.text || "No transmissions yet — say hello."}</b></span>
-      {onlineCount > 0 && <span className="mini-comms-unread">{onlineCount}</span>}
+      {unread > 0 && <span className="mini-comms-unread">{unread}</span>}
       <span className="mini-comms-chevron">⌃</span>
     </button>
   </aside>;

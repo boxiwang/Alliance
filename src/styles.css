@@ -729,9 +729,9 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 
 /* ── Comms (Task-1 chat) — scoped to .comms-page; uses the shared app tokens ── */
 .comms-page{max-width:1240px;margin:0 auto;padding:14px 20px 60px}
-.comms-page .comms{display:grid;grid-template-columns:220px minmax(0,1fr) 264px;gap:12px;align-items:start;margin-top:12px}
-.comms-page .col{border:1px solid var(--line);border-radius:13px;background:var(--bg2);min-height:560px}
-.comms-page .col-mid{display:flex;flex-direction:column;min-height:600px}
+.comms-page .comms{display:grid;grid-template-columns:220px minmax(0,1fr) 264px;gap:12px;align-items:stretch;margin-top:12px;height:calc(100dvh - 150px);min-height:480px}
+.comms-page .col{border:1px solid var(--line);border-radius:13px;background:var(--bg2);min-height:0;overflow:auto}
+.comms-page .col-mid{display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .comms-page .cm-icon{width:26px;height:26px;border:1px solid var(--line);border-radius:7px;background:var(--bg3);color:var(--ink2);cursor:pointer;font-size:13px;display:grid;place-items:center}
 .comms-page .cm-search{margin:12px;display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink3);font:11px var(--mono)}
 .comms-page .cm-grp{margin:8px 13px 3px;font:700 8px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink3)}
@@ -762,7 +762,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .comms-page .sysfilter{display:flex;gap:6px;padding:9px 15px;border-bottom:1px solid var(--line)}
 .comms-page .sysfilter button{border:1px solid var(--line);background:var(--bg2);color:var(--ink3);font:700 8.5px var(--hud);letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:6px;cursor:pointer}
 .comms-page .sysfilter button.on{border-color:#38d9ff;color:#dffaff;background:rgba(56,217,255,.12)}
-.comms-page .stream{flex:1;overflow:auto;padding:14px 15px;display:flex;flex-direction:column;gap:12px}
+.comms-page .stream{flex:1;min-height:0;overflow:auto;padding:14px 15px;display:flex;flex-direction:column;gap:12px}
 .comms-page .pinned{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border:1px solid rgba(232,178,76,.28);background:rgba(232,178,76,.06);border-radius:9px;font-size:11.5px;color:var(--gold)}
 .comms-page .pinned b{font:700 8px var(--mono);letter-spacing:.1em;padding:2px 5px;border:1px solid rgba(232,178,76,.4);border-radius:4px;flex:none}
 .comms-page .msg{display:grid;grid-template-columns:30px 1fr;gap:10px}
@@ -844,9 +844,19 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .comms-page .obj .ob-l{display:flex;justify-content:space-between;font:9.5px var(--mono);color:var(--ink2);margin-bottom:5px}
 .comms-page .obj .ob-bar{height:5px;border-radius:3px;background:var(--bg3);border:1px solid var(--line);overflow:hidden}
 .comms-page .obj .ob-bar i{display:block;height:100%;background:linear-gradient(90deg,#38d9ff,#8fe6ff)}
-.comms-page .roster{display:flex;flex-direction:column;gap:6px}
+.comms-page .roster{display:flex;flex-direction:column;gap:3px}
 .comms-page .rm{display:flex;align-items:center;gap:9px;font-size:11.5px}
 .comms-page .rm .rm-f{margin-left:auto;font:9px var(--mono);color:var(--ink3)}
+.comms-page .rm-empty{padding:6px 8px;color:var(--ink3);font:10px var(--mono)}
+.comms-page .rm-btn{width:100%;display:flex;align-items:center;gap:9px;padding:6px 8px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--ink2);text-align:left;cursor:pointer;transition:background .12s,border-color .12s}
+.comms-page .rm-btn:hover:not(:disabled){background:var(--bg3);border-color:var(--line)}
+.comms-page .rm-btn.self{cursor:default}
+.comms-page .rm-av{position:relative;flex:none;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font:700 10px var(--mono);color:#8fd4e6;background:var(--bg3);border:1px solid var(--line2)}
+.comms-page .rm-av .rm-online{position:absolute;right:-2px;bottom:-2px;width:8px;height:8px;border-radius:50%;background:var(--ok);border:2px solid var(--bg2);box-shadow:0 0 6px var(--ok)}
+.comms-page .rm-btn .rm-nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 11.5px var(--hud);letter-spacing:.01em}
+.comms-page .rm-btn.self .rm-nm{color:var(--ink3)}
+.comms-page .rm-pm{margin-left:auto;flex:none;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:#65bdd0;font-size:12px;opacity:0;transform:translateX(3px);transition:opacity .12s,transform .12s}
+.comms-page .rm-btn:hover:not(:disabled) .rm-pm{opacity:1;transform:none}
 .comms-page .qlinks{display:flex;flex-direction:column;gap:6px}
 .comms-page .ql{display:flex;align-items:center;gap:9px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:11px;color:var(--ink2);cursor:pointer}
 .comms-page .ql .qbadge{margin-left:auto;min-width:16px;height:16px;border-radius:8px;background:var(--err);color:#150a0c;font:700 9px var(--mono);display:grid;place-items:center;padding:0 4px}
@@ -855,7 +865,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .comms-page .fchip i{width:8px;height:8px;border-radius:50%}
 .comms-page .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok);animation:comms-live 1.6s ease-in-out infinite}
 @keyframes comms-live{50%{opacity:.35}}
-@media(max-width:1000px){.comms-page .comms{grid-template-columns:1fr}.comms-page .col-mid{order:-1}}
+@media(max-width:1000px){.comms-page .comms{grid-template-columns:1fr;height:auto;align-items:start}.comms-page .col-mid{order:-1;height:70dvh}.comms-page .col{overflow:hidden}}
 
 /* Perf: the backdrop's black hole / accretion / nebula are large blurred+filtered layers.
    Animating them (drift/rotate) forces continuous GPU compositing every frame — the biggest

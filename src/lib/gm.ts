@@ -5,6 +5,27 @@ import { researchTechs } from "./research";
 
 export const GM_WALLET_ADDRESSES = ["0xbb1d63c5af5d97963671c8bd8a5f73a7ebad1d1c"] as const;
 
+// Owner accounts (Google sign-in). When one of these emails signs in we stamp
+// its synthetic session address into localStorage so GM works on production too
+// — GM is otherwise locked to DEV/localhost. Keyed by the exact session address
+// so only that owner's own device+account is elevated.
+export const GM_OWNER_EMAILS = ["boxiwang1992@gmail.com"] as const;
+const GM_OWNER_KEY = "alliance:gm-owner";
+
+export function isGmOwnerEmail(email: string | null | undefined): boolean {
+  return !!email && GM_OWNER_EMAILS.includes(email.trim().toLowerCase() as typeof GM_OWNER_EMAILS[number]);
+}
+
+/** Remember an owner's session address so hasLocalGm() elevates it on any env. */
+export function registerOwnerGm(address: string): void {
+  if (!address) return;
+  try { localStorage.setItem(GM_OWNER_KEY, address.trim().toLowerCase()); } catch {}
+}
+
+export function ownerGmAddress(): string | null {
+  try { return localStorage.getItem(GM_OWNER_KEY); } catch { return null; }
+}
+
 export function isGmWallet(address: string): boolean {
   return GM_WALLET_ADDRESSES.includes(address.trim().toLowerCase() as typeof GM_WALLET_ADDRESSES[number]);
 }
@@ -23,7 +44,13 @@ function isSyntheticDevAddress(address: string): boolean {
 }
 
 export function hasLocalGm(address: string): boolean {
-  return localGmAvailable() && !!address && (isGmWallet(address) || (localGmRequested() && isSyntheticDevAddress(address)));
+  if (!address) return false;
+  const a = address.trim().toLowerCase();
+  // Owner wallet or a registered owner session (Google) get GM on any env.
+  if (isGmWallet(a)) return true;
+  if (ownerGmAddress() === a) return true;
+  // Otherwise GM is limited to a `?gm` dev synthetic on localhost.
+  return localGmAvailable() && localGmRequested() && isSyntheticDevAddress(a);
 }
 
 export function grantLocalGm(address: string): boolean {

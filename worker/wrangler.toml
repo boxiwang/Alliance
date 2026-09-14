@@ -1,0 +1,14 @@
+# Alliance realtime backend (chat + shared star-map presence).
+# Deploy:  cd worker && npx wrangler deploy   (uses YOUR Cloudflare account)
+name = "alliance-realtime"
+main = "index.ts"
+compatibility_date = "2024-11-01"
+
+[[durable_objects.bindings]]
+name = "WORLD_ROOM"
+class_name = "WorldRoom"
+
+# Free plan requires SQLite-backed Durable Objects.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WorldRoom"]

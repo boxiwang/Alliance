@@ -125,6 +125,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     a: c.name, f: c.faction || undefined, own: c.pid === address,
     t: new Date(c.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
     b: c.text,
+    intel: (c.intel as SharedWorldIntel | undefined) || undefined,
   })), [live, address]);
 
   useEffect(() => {
@@ -183,13 +184,15 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     // coordinate/recon goes through as a text summary.
     if (isCosmos) {
       let text = body;
+      let intel: SharedWorldIntel | undefined;
       if (pendingShare && sharedIntelIsActive(pendingShare, now)) {
         const tag = pendingShare.kind === "scout-intel" ? "Recon" : pendingShare.targetKind === "monster" ? "Rogue" : pendingShare.targetKind === "resource" ? "Resource" : "City";
         const pos = pendingShare.position ? ` ${Math.round(pendingShare.position.x)}:${Math.round(pendingShare.position.y)}` : "";
         text = `${body ? body + " — " : ""}[${tag}] ${pendingShare.targetName || ""}${pos}`.trim();
+        intel = pendingShare; // rides along so it renders as a clickable star-map card
       }
       if (!text) return;
-      rtRef.current?.sendChat(text);
+      rtRef.current?.sendChat(text, intel);
       if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME);
       setDraft(""); setPendingShare(null); clearQueuedCommsShare(address); setShareTrayOpen(false);
       return;
@@ -384,10 +387,12 @@ function renderContext(ctx: { active: ChannelId; roster: PresenceCity[]; onlineC
   if (dmWith || active === "cosmos" || active === "contacts") return <>
     <div className="ct-title">Online · {onlineCount}</div>
     <div className="roster">
-      {online.map((p) => <button key={p.id} className="rm rm-btn" disabled={p.id === address} onClick={() => openDM(p.id, p.name)}>
-        <span className="dot on" /><span className="rm-nm">{p.name}{p.id === address ? " (you)" : ""}</span>{p.id !== address && <span className="rm-f">PM</span>}
+      {online.map((p) => <button key={p.id} className={`rm rm-btn${p.id === address ? " self" : ""}`} disabled={p.id === address} title={p.id === address ? undefined : `Message ${p.name}`} onClick={() => openDM(p.id, p.name)}>
+        <span className="rm-av">{(p.name || "?").slice(0, 1)}<i className="rm-online" /></span>
+        <span className="rm-nm">{p.name}{p.id === address ? " (you)" : ""}</span>
+        {p.id !== address && <span className="rm-pm" aria-hidden="true">✉</span>}
       </button>)}
-      {online.length === 0 && <div className="rm"><span className="dot" />No commanders online yet</div>}
+      {online.length === 0 && <div className="rm rm-empty"><span className="dot" />No commanders online yet</div>}
     </div>
   </>;
   if (active === "system") return <>

@@ -9,7 +9,7 @@ export type PresenceCity = {
   might: number; keepLevel: number; faction: string | null;
   cosmetics: unknown; online: boolean; lastSeen: number;
 };
-export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string };
+export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown };
 
 type Handlers = {
   onSnapshot?: (you: string, players: PresenceCity[], chat: LiveChat[], dms: Record<string, LiveChat[]>) => void;
@@ -65,7 +65,7 @@ export class RealtimeClient {
     else this.queue.push(s);
   }
 
-  sendChat(text: string) { this.send({ type: "chat", text }); }
+  sendChat(text: string, intel?: unknown) { this.send({ type: "chat", text, ...(intel ? { intel } : {}) }); }
   sendDM(to: string, text: string) { this.send({ type: "dm", to, text }); }
   sendPresence(p: { name?: string; might?: number; keepLevel?: number; faction?: string | null; cosmetics?: unknown }) {
     this.send({ type: "presence", ...p });

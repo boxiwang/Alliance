@@ -47,7 +47,7 @@ type PlayerRow = {
   might: number; keepLevel: number; faction: string | null;
   cosmetics: unknown; online: boolean; lastSeen: number;
 };
-type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string };
+type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown };
 
 function prune(arr: ChatRow[]): ChatRow[] {
   const cut = Date.now() - RETAIN_MS;
@@ -56,6 +56,20 @@ function prune(arr: ChatRow[]): ChatRow[] {
   return out;
 }
 const dmKey = (a: string, b: string) => [a, b].sort().join("|");
+
+// Accept a relayed intel payload only when it is a small, shaped object — never
+// trust arbitrary client JSON into stored/broadcast chat.
+function sanitizeIntel(value: unknown): unknown | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const pos = v.position as { x?: unknown; y?: unknown } | undefined;
+  if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number") return null;
+  if (v.kind !== "coordinate" && v.kind !== "scout-intel") return null;
+  let json: string;
+  try { json = JSON.stringify(v); } catch { return null; }
+  if (json.length > 2000) return null;
+  return JSON.parse(json);
+}
 
 export class WorldRoom {
   state: DurableObjectState;
@@ -73,13 +87,40 @@ export class WorldRoom {
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  // The authoritative "who's online" set is the currently-open sockets, not a
+  // stored flag — a socket that dies without a clean close (tab crash, network
+  // drop, hibernation) would otherwise leave a ghost marked online forever.
+  liveIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const ws of this.state.getWebSockets()) {
+      const a = ((ws.deserializeAttachment() || {}) as { pid?: string }).pid;
+      if (a) ids.add(a);
+    }
+    return ids;
+  }
+
+  // Sync every player's `online` flag to the live socket set. Returns the ids
+  // whose state flipped so callers can broadcast just those.
+  reconcileOnline(players: Record<string, PlayerRow>): string[] {
+    const live = this.liveIds();
+    const changed: string[] = [];
+    for (const p of Object.values(players)) {
+      const on = live.has(p.id);
+      if (p.online !== on) { p.online = on; changed.push(p.id); }
+    }
+    return changed;
+  }
+
   async onJoin(ws: WebSocket, pid: string, name: string) {
     const players = ((await this.state.storage.get<Record<string, PlayerRow>>("players")) || {});
     if (!players[pid]) {
       players[pid] = { id: pid, name, coords: this.assignCoord(players), might: 0, keepLevel: 1, faction: null, cosmetics: null, online: true, lastSeen: Date.now() };
     } else {
-      players[pid].online = true; players[pid].name = name; players[pid].lastSeen = Date.now();
+      players[pid].name = name; players[pid].lastSeen = Date.now();
     }
+    // This socket is already accepted, so liveIds() includes it; this both marks
+    // the joiner online and clears any stale ghosts from earlier dead sockets.
+    const flipped = this.reconcileOnline(players);
     await this.state.storage.put("players", players);
     const chat = prune((await this.state.storage.get<ChatRow[]>("chat:cosmos")) || []);
     // Only this player's DM threads, pruned to the retention window.
@@ -90,6 +131,8 @@ export class WorldRoom {
     }
     ws.send(JSON.stringify({ type: "snapshot", you: pid, players: Object.values(players), chat, dms }));
     this.broadcast({ type: "player", player: players[pid] }, ws);
+    // Tell everyone about any ghosts we just cleared (or others revived).
+    for (const id of flipped) if (id !== pid) this.broadcast({ type: "player", player: players[id] });
   }
 
   // Deterministic-ish spread on a grid, avoiding the central reserve, so every
@@ -117,7 +160,10 @@ export class WorldRoom {
       const text = String(data.text || "").slice(0, 500).trim();
       if (!text) return;
       const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
-      const msg: ChatRow = { id: crypto.randomUUID(), pid, name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null };
+      // A relayed coordinate/recon rides along as a small JSON payload so the
+      // message renders as a clickable star-map card, not just a text line.
+      const intel = sanitizeIntel(data.intel);
+      const msg: ChatRow = { id: crypto.randomUUID(), pid, name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null, ...(intel ? { intel } : {}) };
       const chat = (await this.state.storage.get<ChatRow[]>("chat:cosmos")) || [];
       chat.push(msg);
       await this.state.storage.put("chat:cosmos", prune(chat));
@@ -156,13 +202,24 @@ export class WorldRoom {
   async webSocketClose(ws: WebSocket) {
     const att = (ws.deserializeAttachment() || {}) as { pid?: string };
     const pid = att.pid; if (!pid) return;
+    // A player may hold several sockets (multiple tabs). Only mark offline once
+    // no other open socket carries this pid — the closing socket may still be
+    // present in getWebSockets(), so exclude it explicitly.
+    let stillOnline = false;
+    for (const sock of this.state.getWebSockets()) {
+      if (sock === ws) continue;
+      const a = ((sock.deserializeAttachment() || {}) as { pid?: string }).pid;
+      if (a === pid) { stillOnline = true; break; }
+    }
     const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
-    if (players[pid]) {
-      players[pid].online = false; players[pid].lastSeen = Date.now();
+    if (players[pid] && players[pid].online !== stillOnline) {
+      players[pid].online = stillOnline; players[pid].lastSeen = Date.now();
       await this.state.storage.put("players", players);
       this.broadcast({ type: "player", player: players[pid] });
     }
   }
+
+  async webSocketError(ws: WebSocket) { await this.webSocketClose(ws); }
 
   broadcast(obj: unknown, except?: WebSocket) {
     const s = JSON.stringify(obj);
