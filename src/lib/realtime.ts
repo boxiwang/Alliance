@@ -2,7 +2,7 @@
 // One shared "world room": live chat + player presence for the shared star map.
 // Auto-reconnects; queues sends while offline.
 
-const WORKER_WS = "wss://alliance-realtime.blockwick.workers.dev/ws";
+import { BACKEND_WS, loadBackendSession } from "./backend";
 
 export type PresenceCity = {
   id: string; name: string; coords: { x: number; y: number };
@@ -28,8 +28,10 @@ export class RealtimeClient {
   handlers: Handlers = {};
 
   constructor(id: string, name: string) {
-    this.url = `${WORKER_WS}?id=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`;
-    this.connect();
+    const session = loadBackendSession(id);
+    this.url = session ? `${BACKEND_WS}?token=${encodeURIComponent(session.token)}` : "";
+    if (this.url) this.connect();
+    else queueMicrotask(() => this.handlers.onStatus?.(false));
   }
 
   private connect() {
@@ -62,7 +64,10 @@ export class RealtimeClient {
   private send(obj: unknown) {
     const s = JSON.stringify(obj);
     if (this.ws && this.ws.readyState === WebSocket.OPEN) { try { this.ws.send(s); } catch { this.queue.push(s); } }
-    else this.queue.push(s);
+    else {
+      this.queue.push(s);
+      if (this.queue.length > 100) this.queue.splice(0, this.queue.length - 100);
+    }
   }
 
   sendChat(text: string, intel?: unknown) { this.send({ type: "chat", text, ...(intel ? { intel } : {}) }); }

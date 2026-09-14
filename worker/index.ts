@@ -1,25 +1,50 @@
 // Alliance realtime backend: one Durable Object ("world room") that holds the
 // shared player registry (cities on the star map) and a live chat channel.
 // Free-tier friendly: hibernatable WebSockets, event-driven, bounded storage.
-// Personal economy/city stays client-local; only public presence + chat sync here.
+// Personal economy/city is progressively mirrored to D1; public presence + chat
+// stay in a hibernatable Durable Object for low-latency coordination.
 
-export interface Env {
+import { verifySession } from "./auth";
+import { handlePlayerApi, type BackendEnv } from "./player-api";
+
+export interface Env extends BackendEnv {
   WORLD_ROOM: DurableObjectNamespace;
 }
 
 const ALLOWED_ORIGINS = [
   "https://alliance-7q2.pages.dev",
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5174",
   "http://localhost:4173",
+  "http://127.0.0.1:4173",
 ];
 
+function originAllowed(origin: string | null): boolean {
+  if (!origin) return false;
+  try {
+    const url = new URL(origin);
+    return ALLOWED_ORIGINS.includes(origin) || (url.protocol === "https:" && url.hostname.endsWith(".alliance-7q2.pages.dev"));
+  } catch {
+    return false;
+  }
+}
+
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allow = origin && (ALLOWED_ORIGINS.includes(origin) || origin.endsWith(".alliance-7q2.pages.dev")) ? origin : ALLOWED_ORIGINS[0];
+  const allow = originAllowed(origin) ? origin! : ALLOWED_ORIGINS[0];
   return {
     "access-control-allow-origin": allow,
-    "access-control-allow-methods": "GET,OPTIONS",
-    "access-control-allow-headers": "content-type",
+    "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
+    "access-control-allow-headers": "authorization,content-type",
   };
+}
+
+function addCors(response: Response, origin: string | null): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(corsHeaders(origin))) headers.set(key, value);
+  headers.set("vary", "Origin");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 export default {
@@ -29,10 +54,22 @@ export default {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(origin) });
     if (url.pathname === "/health") return new Response("ok", { headers: corsHeaders(origin) });
     if (url.pathname === "/ws") {
+      if (!originAllowed(origin)) return new Response("origin not allowed", { status: 403 });
       if (req.headers.get("Upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
+      const claims = await verifySession(env.AUTH_SECRET, url.searchParams.get("token") || "");
+      if (!claims) return new Response("unauthorized", { status: 401 });
+      const player = await env.DB.prepare("SELECT display_name, status FROM players WHERE id = ?").bind(claims.sub)
+        .first<{ display_name: string; status: string }>();
+      if (!player || player.status !== "active") return new Response("account unavailable", { status: 403 });
       const id = env.WORLD_ROOM.idFromName("frontier-1"); // single shared world for the beta
-      return env.WORLD_ROOM.get(id).fetch(req);
+      const headers = new Headers(req.headers);
+      headers.set("x-alliance-player", claims.sub);
+      headers.set("x-alliance-name", player.display_name);
+      headers.set("x-alliance-session", claims.sid);
+      return env.WORLD_ROOM.get(id).fetch(new Request(req, { headers }));
     }
+    const api = await handlePlayerApi(req, env);
+    if (api) return addCors(api, origin);
     return new Response("Alliance realtime", { status: 200, headers: corsHeaders(origin) });
   },
 };
@@ -48,6 +85,7 @@ type PlayerRow = {
   cosmetics: unknown; online: boolean; lastSeen: number;
 };
 type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown };
+type SocketAttachment = { pid: string; name: string; sessionId: string; windowStart: number; messageCount: number };
 
 function prune(arr: ChatRow[]): ChatRow[] {
   const cut = Date.now() - RETAIN_MS;
@@ -71,18 +109,37 @@ function sanitizeIntel(value: unknown): unknown | null {
   return JSON.parse(json);
 }
 
+function sanitizeCosmetics(value: unknown): unknown | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const allowed = ["planetBody", "marchSignature", "strikeSignature", "chatSignal", "halo", "surface", "orbit", "glyph", "trail", "title", "cursor"];
+  const input = value as Record<string, unknown>;
+  const output: Record<string, string | null> = {};
+  for (const key of allowed) {
+    const item = input[key];
+    if (item === null) output[key] = null;
+    else if (typeof item === "string" && item.length <= 48 && /^[a-z0-9-]*$/i.test(item)) output[key] = item;
+  }
+  return output;
+}
+
+function finiteInteger(value: unknown, min: number, max: number): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.floor(number))) : null;
+}
+
 export class WorldRoom {
   state: DurableObjectState;
   constructor(state: DurableObjectState) { this.state = state; }
 
   async fetch(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-    const pid = (url.searchParams.get("id") || "anon-" + Math.random().toString(36).slice(2)).slice(0, 64);
-    const name = (url.searchParams.get("name") || "Commander").slice(0, 24);
+    const pid = (req.headers.get("x-alliance-player") || "").slice(0, 64);
+    const name = (req.headers.get("x-alliance-name") || "Commander").slice(0, 24);
+    const sessionId = (req.headers.get("x-alliance-session") || "").slice(0, 64);
+    if (!pid || !sessionId) return new Response("unauthorized", { status: 401 });
     const pair = new WebSocketPair();
     const client = pair[0], server = pair[1];
     this.state.acceptWebSocket(server, [pid]);
-    server.serializeAttachment({ pid, name });
+    server.serializeAttachment({ pid, name, sessionId, windowStart: Date.now(), messageCount: 0 } satisfies SocketAttachment);
     await this.onJoin(server, pid, name);
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -93,7 +150,7 @@ export class WorldRoom {
   liveIds(): Set<string> {
     const ids = new Set<string>();
     for (const ws of this.state.getWebSockets()) {
-      const a = ((ws.deserializeAttachment() || {}) as { pid?: string }).pid;
+      const a = ((ws.deserializeAttachment() || {}) as Partial<SocketAttachment>).pid;
       if (a) ids.add(a);
     }
     return ids;
@@ -150,11 +207,18 @@ export class WorldRoom {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    const rawLength = typeof message === "string" ? message.length : message.byteLength;
+    if (rawLength > 12_000) { ws.close(1009, "message too large"); return; }
     let data: any;
     try { data = JSON.parse(typeof message === "string" ? message : new TextDecoder().decode(message)); } catch { return; }
-    const att = (ws.deserializeAttachment() || {}) as { pid?: string; name?: string };
+    const att = (ws.deserializeAttachment() || {}) as Partial<SocketAttachment>;
     const pid = att.pid;
     if (!pid) return;
+    const now = Date.now();
+    if (!att.windowStart || now - att.windowStart >= 10_000) { att.windowStart = now; att.messageCount = 0; }
+    att.messageCount = (att.messageCount || 0) + 1;
+    ws.serializeAttachment(att);
+    if (att.messageCount > 25) { ws.close(1008, "rate limit"); return; }
 
     if (data.type === "chat") {
       const text = String(data.text || "").slice(0, 500).trim();
@@ -182,17 +246,20 @@ export class WorldRoom {
       await this.state.storage.put("dms", dmsAll);
       const payload = JSON.stringify({ type: "dm", key, msg });
       for (const sock of this.state.getWebSockets()) {
-        const a = ((sock.deserializeAttachment() || {}) as { pid?: string }).pid;
+        const a = ((sock.deserializeAttachment() || {}) as Partial<SocketAttachment>).pid;
         if (a === pid || a === to) { try { sock.send(payload); } catch {} }
       }
     } else if (data.type === "presence") {
       const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
       const p = players[pid]; if (!p) return;
-      if (typeof data.name === "string") p.name = data.name.slice(0, 24);
-      if (data.cosmetics) p.cosmetics = data.cosmetics;
-      if (typeof data.might === "number") p.might = data.might;
-      if (typeof data.keepLevel === "number") p.keepLevel = data.keepLevel;
-      if (data.faction !== undefined) p.faction = data.faction;
+      const cosmetics = sanitizeCosmetics(data.cosmetics);
+      if (cosmetics) p.cosmetics = cosmetics;
+      const might = finiteInteger(data.might, 0, 10_000_000_000);
+      const keepLevel = finiteInteger(data.keepLevel, 1, 30);
+      if (might !== null) p.might = might;
+      if (keepLevel !== null) p.keepLevel = keepLevel;
+      if (data.faction === null) p.faction = null;
+      else if (typeof data.faction === "string") p.faction = data.faction.replace(/[^a-z0-9_$.-]/gi, "").slice(0, 24) || null;
       p.online = true; p.lastSeen = Date.now();
       await this.state.storage.put("players", players);
       this.broadcast({ type: "player", player: p });
@@ -200,7 +267,7 @@ export class WorldRoom {
   }
 
   async webSocketClose(ws: WebSocket) {
-    const att = (ws.deserializeAttachment() || {}) as { pid?: string };
+    const att = (ws.deserializeAttachment() || {}) as Partial<SocketAttachment>;
     const pid = att.pid; if (!pid) return;
     // A player may hold several sockets (multiple tabs). Only mark offline once
     // no other open socket carries this pid — the closing socket may still be
@@ -208,7 +275,7 @@ export class WorldRoom {
     let stillOnline = false;
     for (const sock of this.state.getWebSockets()) {
       if (sock === ws) continue;
-      const a = ((sock.deserializeAttachment() || {}) as { pid?: string }).pid;
+      const a = ((sock.deserializeAttachment() || {}) as Partial<SocketAttachment>).pid;
       if (a === pid) { stillOnline = true; break; }
     }
     const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};

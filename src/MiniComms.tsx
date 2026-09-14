@@ -4,6 +4,7 @@ import { loadCosmeticVault, loadPlayerAccount } from "./lib/player-account";
 import NameSignal from "./NameSignal";
 import { RealtimeClient, type LiveChat, type PresenceCity } from "./lib/realtime";
 import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME } from "./lib/sfx";
+import { trackEvents } from "./lib/backend";
 
 function messageTime(ts: number): string {
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ts));
@@ -52,6 +53,7 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
     const body = draft.trim();
     if (!body) return;
     rtRef.current?.sendChat(body);
+    void trackEvents(address, [{ name: "chat.message_sent", page: "mini_chat", properties: { channel: "cosmos" } }]).catch(() => {});
     if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME * account.sfxVolume);
     setDraft("");
   }

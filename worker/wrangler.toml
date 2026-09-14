@@ -2,7 +2,22 @@
 # Deploy:  cd worker && npx wrangler deploy   (uses YOUR Cloudflare account)
 name = "alliance-realtime"
 main = "index.ts"
-compatibility_date = "2024-11-01"
+compatibility_date = "2026-09-13"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+FIREBASE_PROJECT_ID = "blockwick-540dd"
+GM_WALLETS = "0xbb1d63c5af5d97963671c8bd8a5f73a7ebad1d1c"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[[d1_databases]]
+binding = "DB"
+database_name = "alliance-player-data"
+database_id = "b4c44779-82d8-4f70-b12e-a74c438fb75d"
+migrations_dir = "migrations"
 
 [[durable_objects.bindings]]
 name = "WORLD_ROOM"

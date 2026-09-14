@@ -17,6 +17,7 @@ import { refreshLocalCommsIntel, saveLocalComms, type LocalCommsMessage } from "
 import { clearQueuedCommsShare, loadQueuedCommsShare, queueWorldFocus, sharedIntelIsActive, type SharedWorldIntel } from "./lib/shared-intel";
 import { playerSystemReports } from "./lib/world-reports";
 import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME, SFX_SUBTAB_SWITCH, SFX_SUBTAB_SWITCH_VOLUME } from "./lib/sfx";
+import { trackEvents } from "./lib/backend";
 
 // Comms is Task-1 chat. This is the frontend + a LOCAL adapter: channels/threads are seeded and
 // your own sends echo locally. A server adapter (Cloudflare Durable Objects) replaces the data
@@ -203,6 +204,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     if (dmWith) {
       if (!body) return;
       rtRef.current?.sendDM(dmWith.id, body);
+      void trackEvents(address, [{ name: "chat.message_sent", page: "messages", properties: { channel: "dm" } }]).catch(() => {});
       if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME * account.sfxVolume);
       setDraft("");
       return;
@@ -221,6 +223,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       }
       if (!text) return;
       rtRef.current?.sendChat(text, intel);
+      void trackEvents(address, [{ name: pendingShare ? "chat.intel_shared" : "chat.message_sent", page: "messages", properties: { channel: "cosmos", intelType: pendingShare?.kind || null } }]).catch(() => {});
       if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME * account.sfxVolume);
       setDraft(""); setPendingShare(null); clearQueuedCommsShare(address); setShareTrayOpen(false);
       return;

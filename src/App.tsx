@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Eip1193Provider, Eip6963ProviderDetail } from "./global";
-import { subscribeProviders, resolveWallets, connect, signIn, WalletButton } from "./lib/wallet";
+import { subscribeProviders, resolveWallets, connect, WalletButton } from "./lib/wallet";
 import { readWallet, WalletRecords } from "./lib/blockscout";
 import { buildTasks, memeHoldings } from "./lib/tasks";
 import { topFactions, pledgeableFrom } from "./lib/factions";
@@ -16,13 +16,14 @@ import ProfileScreen from "./ProfileScreen";
 import Alliance from "./Alliance";
 import GameMusic, { requestGameMusicStart } from "./GameMusic";
 import GameCursor from "./GameCursor";
-import { hasLocalGm, localGmRequested, isGmOwnerEmail, registerOwnerGm } from "./lib/gm";
+import { hasLocalGm, localGmRequested, registerOwnerGm } from "./lib/gm";
 import { loadGame } from "./lib/gamestore";
 import { verifyAllianceHolding } from "./lib/alliance";
 import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
 import { loadPlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME } from "./lib/sfx";
+import { authenticateGoogle, authenticateGuest, authenticateWallet, trackEvents } from "./lib/backend";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
@@ -122,18 +123,25 @@ export default function App() {
   const [error, setError] = useState<string>("");
   useTabSwitchSfx(address, stage);
 
+  useEffect(() => {
+    if (!address || !MAIN_STAGES.includes(stage as MainStage)) return;
+    void trackEvents(address, [{ name: "session.page_viewed", page: stage }]).catch(() => {});
+  }, [address, stage]);
+
   useEffect(() => subscribeProviders(setDetected), []);
 
-  // Restore owner GM on reload: Firebase persists the session, so re-stamp the
-  // owner flag as soon as auth resolves — no need to click "Continue with Google"
-  // again just to keep GM powers.
+  // Restore a Firebase session through the backend so roles are never inferred
+  // from user-controlled browser storage.
   useEffect(() => {
     const auth = firebaseAuth();
     if (!auth) return;
     return onAuthStateChanged(auth, (u) => {
-      if (u && isGmOwnerEmail(u.email)) registerOwnerGm(synthAddress("google:" + u.uid));
+      if (!u || address) return;
+      void u.getIdToken().then(authenticateGoogle).then((session) => {
+        if (session.player.role === "gm") registerOwnerGm(session.player.id);
+      }).catch(() => {});
     });
-  }, []);
+  }, [address]);
   const wallets = useMemo(() => resolveWallets(detected), [detected]);
 
   // Google sign-in via Firebase Auth (reuses the Blockwick Firebase project).
@@ -145,9 +153,10 @@ export default function App() {
     try {
       const cred = await signInWithPopup(auth, new GoogleAuthProvider());
       const u = cred.user;
-      const addr = synthAddress("google:" + u.uid);
-      if (isGmOwnerEmail(u.email)) registerOwnerGm(addr);
-      beginLocalSession(addr, u.displayName || u.email || "", "Google");
+      const session = await authenticateGoogle(await u.getIdToken());
+      if (session.player.role === "gm") registerOwnerGm(session.player.id);
+      beginLocalSession(session.player.id, session.player.displayName || u.displayName || "", "Google");
+      void trackEvents(session.player.id, [{ name: "auth.login", page: "connect", properties: { method: "google" } }]);
     } catch (e: any) {
       const msg = String(e?.code || e?.message || "");
       if (!msg.includes("popup-closed") && !msg.includes("cancelled")) setError("Google sign-in failed. Try again or use Quick Play.");
@@ -175,21 +184,25 @@ export default function App() {
     setBusy(w.key);
     try {
       const res = await connect(w.provider);
+      const session = await authenticateWallet(w.provider, res.address);
+      if (session.player.role === "gm") registerOwnerGm(session.player.id);
+      const connectedAddress = session.player.id;
       setProvider(w.provider);
-      setAddress(res.address);
+      setAddress(connectedAddress);
       setChainOk(res.chainOk);
       setWalletName(w.name);
+      void trackEvents(connectedAddress, [{ name: "auth.login", page: "connect", properties: { method: "wallet", wallet: w.name, chainOk: res.chainOk } }]);
       // Blockscout sits behind a Cloudflare challenge that our server-side proxy
       // can't always clear; don't let a failed read block a wallet player from
       // entering — fall through with empty records (solo, no token/faction data).
       let recs: WalletRecords;
       try {
-        recs = await readWallet(res.address);
+        recs = await readWallet(connectedAddress);
       } catch {
-        recs = { address: res.address, coinBalanceRaw: "0", ethPrice: null, isContract: false, txCount: 0, tokenTransferCount: 0, tokens: [], recentTxs: [], oldestSeen: null };
+        recs = { address: connectedAddress, coinBalanceRaw: "0", ethPrice: null, isContract: false, txCount: 0, tokenTransferCount: 0, tokens: [], recentTxs: [], oldestSeen: null };
       }
       setRecords(recs);
-      let existing = loadProfile(res.address);
+      let existing = loadProfile(connectedAddress);
       if (existing) {
         const holdingCheck = verifyAllianceHolding(existing, memeHoldings(recs));
         if (holdingCheck.status === "removed") {
@@ -199,14 +212,14 @@ export default function App() {
       }
       if (existing) {
         setProfile(existing);
-        const nextStage = hasLocalGm(res.address) ? "town" : "resume";
+        const nextStage = hasLocalGm(connectedAddress) ? "town" : "resume";
         setStage(nextStage);
         report(recs, { wallet: w.name, chainOk: res.chainOk, stage: nextStage, profile: existing });
       } else {
         // Faction/token data is unavailable while Blockscout is gated, so skip the
         // faction picker and drop a new wallet player straight into a solo keep
         // (same as Quick Play). Faction join can return once reads work.
-        const p: Profile = { address: res.address, name: autoName(res.address), faction: null, factionSymbol: null, keepLevel: 1, createdAt: new Date().toISOString(), renamedOnce: false };
+        const p: Profile = { address: connectedAddress, name: autoName(connectedAddress), faction: null, factionSymbol: null, keepLevel: 1, createdAt: new Date().toISOString(), renamedOnce: false };
         saveProfile(p);
         setProfile(p);
         setStage("founded");
@@ -277,14 +290,26 @@ export default function App() {
     setStage("founded");
   }
 
-  function startGuest() {
+  async function startGuest() {
+    if (busy) return;
+    setBusy("guest");
+    setError("");
     let id = "";
     try { id = localStorage.getItem("alliance:guest-id") || ""; } catch {}
     if (!id) {
       id = "guest:" + Math.random().toString(36).slice(2) + Date.now().toString(36);
       try { localStorage.setItem("alliance:guest-id", id); } catch {}
     }
-    beginLocalSession(synthAddress(id), "", "Guest");
+    try {
+      const playerId = synthAddress(id);
+      const session = await authenticateGuest(id, playerId);
+      beginLocalSession(session.player.id, session.player.displayName, "Guest");
+      void trackEvents(session.player.id, [{ name: "auth.login", page: "connect", properties: { method: "guest" } }]);
+    } catch {
+      setError("Quick Play couldn't reach the frontier. Check your connection and try again.");
+    } finally {
+      setBusy("");
+    }
   }
 
   function switchFaction(ca: string | null, sym: string | null) {
@@ -372,7 +397,7 @@ export default function App() {
             Jump in with one tap — or connect a wallet if you have one.
           </p>
           <div className="quickstart">
-            <button className="cta big" onClick={startGuest}>▶ Quick Play — no wallet</button>
+            <button className="cta big" onClick={startGuest} disabled={!!busy}>{busy === "guest" ? "Opening a sector…" : "▶ Quick Play — no wallet"}</button>
             {firebaseConfigured && <button className="gbtn" onClick={signInGoogle} disabled={busy === "google"}>{busy === "google" ? "Opening Google…" : "Continue with Google"}</button>}
             <div className="or"><span>or connect a wallet</span></div>
           </div>
