@@ -92,14 +92,23 @@ export default function GameMusic({ address, active }: { address: string; active
     }
 
     const begin = () => { void audio.play().catch(() => {}); };
+    const beginWhenVisible = () => { if (!document.hidden) begin(); };
     begin();
     // Direct-link dev sessions can arrive without a browser-approved gesture.
-    // The first click/key then unlocks the same continuous soundtrack.
+    // The first click/key then unlocks the same continuous soundtrack. Wallet
+    // popups can also suspend audio; resume the same element on return so the
+    // loop keeps its position rather than restarting.
     window.addEventListener("pointerdown", begin, { passive: true });
     window.addEventListener("keydown", begin);
+    window.addEventListener("focus", begin);
+    window.addEventListener("pageshow", begin);
+    document.addEventListener("visibilitychange", beginWhenVisible);
     return () => {
       window.removeEventListener("pointerdown", begin);
       window.removeEventListener("keydown", begin);
+      window.removeEventListener("focus", begin);
+      window.removeEventListener("pageshow", begin);
+      document.removeEventListener("visibilitychange", beginWhenVisible);
     };
   }, [active, settings]);
 

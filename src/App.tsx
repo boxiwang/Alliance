@@ -39,6 +39,61 @@ function AllianceWordmark({ hero = false }: { hero?: boolean }) {
   </div>;
 }
 
+export function isMobileClient(nav: Navigator = navigator): boolean {
+  const modern = nav as Navigator & { userAgentData?: { mobile?: boolean } };
+  if (modern.userAgentData?.mobile === true) return true;
+  if (/Android|iPhone|iPad|iPod|IEMobile|Opera Mini|Mobile/i.test(nav.userAgent)) return true;
+  // iPadOS can identify itself as desktop Safari (MacIntel).
+  return nav.platform === "MacIntel" && nav.maxTouchPoints > 1;
+}
+
+function MobileGate() {
+  const [copied, setCopied] = useState(false);
+  const desktopUrl = `${window.location.origin}/`;
+
+  async function copyDesktopLink() {
+    try {
+      await navigator.clipboard.writeText(desktopUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2200);
+    } catch {
+      // Older mobile browsers still get a selectable URL beneath the button.
+      setCopied(false);
+    }
+  }
+
+  return (
+    <main className="mobile-gate">
+      <CosmicBackdrop />
+      <section className="mobile-gate-shell">
+        <i className="mobile-gate-corner top-left" aria-hidden="true" />
+        <i className="mobile-gate-corner top-right" aria-hidden="true" />
+        <i className="mobile-gate-corner bottom-left" aria-hidden="true" />
+        <i className="mobile-gate-corner bottom-right" aria-hidden="true" />
+        <AllianceWordmark />
+
+        <div className="mobile-command-display" aria-hidden="true">
+          <div className="mobile-command-orbit"><i /><i /><i /></div>
+          <div className="mobile-command-screen">
+            <span /><span /><span />
+          </div>
+          <div className="mobile-command-stand" />
+        </div>
+
+        <p className="mobile-gate-kicker">DESKTOP REQUIRED</p>
+        <h1>OPEN THE FRONTIER<br />ON A BIGGER SCREEN.</h1>
+        <p className="mobile-gate-copy">ALLIANCE is built for desktop play. Open this page on a computer. Chrome is recommended for wallet extensions.</p>
+
+        <button type="button" className="mobile-gate-copy-button" onClick={() => void copyDesktopLink()}>
+          {copied ? "LINK COPIED" : "COPY DESKTOP LINK"}
+        </button>
+        <code className="mobile-gate-url">{desktopUrl}</code>
+        <footer><i /> MOBILE ACCESS LOCKED</footer>
+      </section>
+    </main>
+  );
+}
+
 // Cue when switching between the main tabs (city / star map / alliance / comms /
 // profile). Driven off the view state so every navigation path — nav bar, back
 // buttons, deep links from comms — plays it exactly once.
@@ -104,7 +159,7 @@ function DevGameShell({ initialView, slot, gm }: { initialView: MainStage; slot:
   </div>;
 }
 
-export default function App() {
+function DesktopApp() {
   const params = new URLSearchParams(window.location.search);
   if (params.has("admin")) {
     return <Admin />;
@@ -131,6 +186,7 @@ export default function App() {
   const [selectedCA, setSelectedCA] = useState<string | null>(null);
   const [busy, setBusy] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const loginAttemptRef = useRef(0);
   useTabSwitchSfx(address, stage);
 
   useEffect(() => {
@@ -161,22 +217,27 @@ export default function App() {
 
   // Google sign-in via Firebase Auth (reuses the Blockwick Firebase project).
   async function signInGoogle() {
+    const attempt = ++loginAttemptRef.current;
+    playLoginSelectSfx();
     setError("");
     const auth = firebaseAuth();
     if (!auth) { setError("Google sign-in is not configured."); return; }
     setBusy("google");
     try {
       const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+      if (attempt !== loginAttemptRef.current) return;
       const u = cred.user;
       const session = await authenticateGoogle(await u.getIdToken());
+      if (attempt !== loginAttemptRef.current) return;
       if (session.player.role === "gm") registerOwnerGm(session.player.id);
       beginLocalSession(session.player.id, session.player.displayName || u.displayName || "", "Google");
       void trackEvents(session.player.id, [{ name: "auth.login", page: "connect", properties: { method: "google" } }]);
     } catch (e: any) {
+      if (attempt !== loginAttemptRef.current) return;
       const msg = String(e?.code || e?.message || "");
       if (!msg.includes("popup-closed") && !msg.includes("cancelled")) setError("Google sign-in failed. Try again or use Quick Play.");
     } finally {
-      setBusy("");
+      if (attempt === loginAttemptRef.current) setBusy("");
     }
   }
 
@@ -199,17 +260,20 @@ export default function App() {
   }
 
   async function pick(w: WalletButton) {
-    if (busy) return; // one wallet request at a time — avoids "-32002 already pending"
+    const attempt = ++loginAttemptRef.current;
     playLoginSelectSfx();
     setError("");
     if (!w.provider) {
+      setBusy("");
       if (w.install) window.open(w.install, "_blank", "noopener");
       return;
     }
     setBusy(w.key);
     try {
       const res = await connect(w.provider);
+      if (attempt !== loginAttemptRef.current) return;
       const session = await authenticateWallet(w.provider, res.address);
+      if (attempt !== loginAttemptRef.current) return;
       if (session.player.role === "gm") registerOwnerGm(session.player.id);
       const connectedAddress = session.player.id;
       setProvider(w.provider);
@@ -261,6 +325,9 @@ export default function App() {
         report(recs, { wallet: w.name, chainOk: res.chainOk, stage: "founded", profile: p });
       }
     } catch (e: any) {
+      if (attempt !== loginAttemptRef.current) return;
+      playSfx(SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME);
+      requestGameMusicStart();
       const code = e?.code;
       const msg = String(e?.message || "");
       if (msg.startsWith("__timeout__")) {
@@ -273,7 +340,7 @@ export default function App() {
         setError(e?.message || "Couldn't connect. Try again — or use Quick Play.");
       }
     } finally {
-      setBusy("");
+      if (attempt === loginAttemptRef.current) setBusy("");
     }
   }
 
@@ -340,7 +407,7 @@ export default function App() {
   }
 
   async function startGuest() {
-    if (busy) return;
+    const attempt = ++loginAttemptRef.current;
     playLoginSelectSfx();
     setBusy("guest");
     setError("");
@@ -353,12 +420,14 @@ export default function App() {
     try {
       const playerId = synthAddress(id);
       const session = await authenticateGuest(id, playerId);
+      if (attempt !== loginAttemptRef.current) return;
       beginLocalSession(session.player.id, session.player.displayName, "Guest");
       void trackEvents(session.player.id, [{ name: "auth.login", page: "connect", properties: { method: "guest" } }]);
     } catch {
+      if (attempt !== loginAttemptRef.current) return;
       setError("Quick Play couldn't reach the frontier. Check your connection and try again.");
     } finally {
-      setBusy("");
+      if (attempt === loginAttemptRef.current) setBusy("");
     }
   }
 
@@ -453,7 +522,7 @@ export default function App() {
                   style={{ ["--wc" as any]: w.color }}
                   onClick={() => pick(w)}
                   onMouseEnter={playLoginHoverSfx}
-                  disabled={!!busy}
+                  disabled={busy === w.key}
                 >
                   <span className="wicon">
                     {w.icon ? <img src={w.icon} alt="" /> : <span className="emoji">{w.emoji}</span>}
@@ -467,8 +536,8 @@ export default function App() {
             </div>
             <div className="quickstart">
               <div className="or"><span>OR ENTER WITHOUT A WALLET</span></div>
-              <button className="cta big secondary-entry" onMouseEnter={playLoginHoverSfx} onClick={startGuest} disabled={!!busy}>{busy === "guest" ? "OPENING SECTOR…" : "ENTER AS GUEST"}</button>
-              {firebaseConfigured && <button className="gbtn" onMouseEnter={playLoginHoverSfx} onClick={() => { playLoginSelectSfx(); void signInGoogle(); }} disabled={busy === "google"}>{busy === "google" ? "OPENING GOOGLE…" : "CONTINUE WITH GOOGLE"}</button>}
+              <button className="cta big secondary-entry" onMouseEnter={playLoginHoverSfx} onClick={startGuest} disabled={busy === "guest"}>{busy === "guest" ? "OPENING SECTOR…" : "ENTER AS GUEST"}</button>
+              {firebaseConfigured && <button className="gbtn" onMouseEnter={playLoginHoverSfx} onClick={() => void signInGoogle()} disabled={busy === "google"}>{busy === "google" ? "OPENING GOOGLE…" : "CONTINUE WITH GOOGLE"}</button>}
             </div>
             <footer>Wallet commanders can enter token-gated alliances and trade on the marketplace.</footer>
           </div>
@@ -603,4 +672,9 @@ export default function App() {
       )}
     </div>
   );
+}
+
+export default function App() {
+  const previewMobileGate = import.meta.env.DEV && new URLSearchParams(window.location.search).has("mobile-preview");
+  return isMobileClient() || previewMobileGate ? <MobileGate /> : <DesktopApp />;
 }
