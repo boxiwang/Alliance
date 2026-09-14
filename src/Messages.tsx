@@ -353,7 +353,6 @@ function MessageRow({ m, now, ownChatSignal, reducedMotion, onInspect, onOpenWor
         <div className="rr-meta"><span>Fleets <b>3 / 6</b></span><span>Your rec: <b>Army T8 ×42K</b></span></div>
         <div className="rr-bar"><i /></div><button className="rr-join">Join with recommended fleet →</button></div>}
       {m.blocked && <div className="spam" style={{ marginTop: 5 }}>🚫 {m.blocked}</div>}
-      <div className="row-actions"><button>Reply</button><button>Report</button><button>Mute</button></div>
     </div>
   </div>;
 }
