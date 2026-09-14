@@ -23,7 +23,7 @@ import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
 import { loadPlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME } from "./lib/sfx";
-import { authenticateGoogle, authenticateGuest, authenticateWallet, trackEvents } from "./lib/backend";
+import { authenticateGoogle, authenticateGuest, authenticateWallet, mirrorPlayerState, trackEvents } from "./lib/backend";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
@@ -126,7 +126,12 @@ export default function App() {
   useEffect(() => {
     if (!address || !MAIN_STAGES.includes(stage as MainStage)) return;
     void trackEvents(address, [{ name: "session.page_viewed", page: stage }]).catch(() => {});
-  }, [address, stage]);
+    void mirrorPlayerState(address, {
+      profile,
+      game: loadGame(address),
+      account: loadPlayerAccount(address),
+    }).catch(() => {});
+  }, [address, stage, profile]);
 
   useEffect(() => subscribeProviders(setDetected), []);
 

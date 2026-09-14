@@ -84,3 +84,22 @@ export async function trackEvents(address: string, events: PlayerEvent[]): Promi
   await post("/events", { events: events.map((event) => ({ ...event, clientTs: event.clientTs || Date.now() })) }, session.token);
 }
 
+/**
+ * Private-alpha recovery mirror. This is deliberately not called authoritative:
+ * the client still produced these values, so combat/economy validation must move
+ * to server commands before purchases or tradable inventory depend on them.
+ */
+export async function mirrorPlayerState(address: string, snapshot: { profile?: unknown; game?: unknown; account?: unknown }): Promise<void> {
+  const session = loadBackendSession(address);
+  if (!session) return;
+  const headers = { authorization: `Bearer ${session.token}`, "content-type": "application/json" };
+  const currentResponse = await fetch(`${BACKEND_HTTP}/state`, { headers });
+  if (!currentResponse.ok) return;
+  const current = await currentResponse.json().catch(() => ({})) as { state?: { revision?: number } | null };
+  const revision = Math.max(0, Math.floor(Number(current.state?.revision) || 0));
+  await fetch(`${BACKEND_HTTP}/state`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ revision, ...snapshot }),
+  });
+}
