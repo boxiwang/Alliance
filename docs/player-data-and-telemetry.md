@@ -25,7 +25,13 @@ This is the minimum data contract for the friends-and-family alpha. It separates
 | `language`, `time_zone`, client version | Support, localization and release diagnosis |
 | terms/privacy versions and timestamps | Consent history; never overwrite the prior acceptance |
 
-## Authoritative history — next backend batch
+## Authoritative inventory history — implemented for alpha
+
+`inventory_balances` is the fast current projection and `inventory_transactions` is the append-only source of every grant and consume. Consumption requires an authenticated session, an idempotency key and a non-negative conditional balance update. GM grants are also written to the same ledger. The city applies a speedup only after the server confirms consumption.
+
+The remaining city economy, combat outcome, alliance state and credits still originate on the client. Their events are useful alpha telemetry, but are not yet authority for purchases or trade.
+
+## Authoritative history — required before paid/tradable economy
 
 Keep append-only ledgers for anything that can change value or power:
 
@@ -49,10 +55,10 @@ Never represent balances as a mutable number without a ledger behind it. The cur
 
 ### Core loop
 
-- `city.building_started`, `city.building_completed`
-- `research.started`, `research.completed`
-- `troops.training_started`, `troops.training_completed`
-- `hospital.healing_started`, `hospital.healing_completed`
+- `city.build_started`, `city.build_completed`
+- `city.research_started`, `city.research_completed`
+- `city.training_started`, `city.training_completed`
+- `city.healing_started`, `city.healing_completed`
 - `world.scan_started`, `world.scan_completed`
 - `world.march_dispatched`, `world.march_arrived`, `world.march_recalled`
 - `world.gather_started`, `world.gather_completed`
@@ -64,7 +70,7 @@ Never represent balances as a mutable number without a ledger behind it. The cur
 - `alliance.eligibility_checked`, `alliance.joined`, `alliance.left`, `alliance.suspended`
 - `alliance.help_requested`, `alliance.help_given`
 - `alliance.rally_created`, `alliance.rally_joined`
-- `governance.challenge_started`, `governance.vote_cast`, `governance.result`
+- `alliance.challenge_started`, `alliance.vote_cast`, `alliance.governance_result`
 - `chat.message_sent`, `chat.dm_started`, `chat.intel_shared`, `chat.translation_used`
 - Properties may contain channel type and alliance ID, but never chat body or a voter's choice.
 
@@ -121,3 +127,17 @@ The backend adds `event_id`, authenticated `player_id`, `session_id` and `server
 
 Before opening beyond invited testers, add an in-game data/export/delete request path and publish the exact retention periods in the privacy policy.
 
+## MVP item catalog
+
+The canonical catalog lives in `src/lib/mvp-items.ts` and is shared by the Worker and client. `active` means the item has a complete grant → inventory → consume → gameplay-effect path. `planned` items already have stable IDs so future rewards, offers and migrations do not invent competing names.
+
+| Group | Active in alpha | Planned next |
+| --- | --- | --- |
+| Universal speedups | 5m, 1h, 3h | — |
+| Specialist speedups | Construction, Research, Training and Healing in 5m/1h | — |
+| Resource packs | — | Cash, Oil and Power reserves |
+| Star Map energy | — | 10-energy cell |
+| War utility | — | 8h shield, random and precision relocators |
+| Identity and relics | — | Rename Signal, standard Relic Key |
+
+New alpha accounts receive ten Universal 5m, two Universal 1h, and five 5m charges for each specialist queue. The authenticated GM wallet can stock every active item to 99 from the City screen.

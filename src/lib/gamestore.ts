@@ -3,6 +3,7 @@ const N: any = getN();
 import type { GameState, BKey, ResKey, TroopKey } from "./game";
 import { BUILDING_ORDER, RES_ORDER, TROOP_ORDER, emptyTroopRoster, troopRosterCount } from "./game";
 import { EMPTY_RESEARCH_QUEUE, researchTech } from "./research";
+import { queuePlayerEvent, type PlayerEvent } from "./backend";
 
 const KEY = (a: string) => `ruglands:game:${a.toLowerCase()}`;
 
@@ -16,6 +17,26 @@ export function loadGame(address: string): GameState | null {
 }
 export function saveGame(s: GameState) {
   try {
+    const previousRaw = localStorage.getItem(KEY(s.address));
+    if (previousRaw) {
+      const previous = migrateGame(JSON.parse(previousRaw), s.address);
+      const events: PlayerEvent[] = [];
+      BUILDING_ORDER.forEach((key) => {
+        const before = previous.buildings[key], after = s.buildings[key];
+        if (before.finishAt <= 0 && after.finishAt > 0) events.push({ name: "city.build_started", page: "city", properties: { building: key, fromLevel: before.lvl, targetLevel: before.lvl + 1, durationSec: after.durationSec || 0 } });
+        if (before.finishAt > 0 && after.finishAt <= 0 && after.lvl > before.lvl) events.push({ name: "city.build_completed", page: "city", properties: { building: key, level: after.lvl } });
+      });
+      TROOP_ORDER.forEach((key) => {
+        const before = previous.training[key], after = s.training[key];
+        if (before.finishAt <= 0 && after.finishAt > 0) events.push({ name: `city.${after.mode === "promote" ? "promotion" : "training"}_started`, page: "city", properties: { troop: key, tier: after.tier, sourceTier: after.sourceTier, quantity: after.qty, durationSec: Math.ceil(after.qty * after.per) } });
+        if (before.finishAt > 0 && after.finishAt <= 0) events.push({ name: `city.${before.mode === "promote" ? "promotion" : "training"}_completed`, page: "city", properties: { troop: key, tier: before.tier, sourceTier: before.sourceTier, quantity: before.qty } });
+      });
+      if (previous.researchQueue.finishAt <= 0 && s.researchQueue.finishAt > 0) events.push({ name: "city.research_started", page: "city", properties: { tech: s.researchQueue.tech, targetLevel: s.researchQueue.targetLevel, durationSec: s.researchQueue.durationSec } });
+      if (previous.researchQueue.finishAt > 0 && s.researchQueue.finishAt <= 0) events.push({ name: "city.research_completed", page: "city", properties: { tech: previous.researchQueue.tech, level: previous.researchQueue.targetLevel } });
+      if (previous.healing.finishAt <= 0 && s.healing.finishAt > 0) events.push({ name: "city.healing_started", page: "city", properties: { quantity: s.healing.qty, durationSec: s.healing.durationSec } });
+      if ( (previous.healing.finishAt > 0 && s.healing.finishAt <= 0)) events.push({ name: "city.healing_completed", page: "city", properties: { quantity: previous.healing.qty } });
+      events.forEach((event) => queuePlayerEvent(s.address, event));
+    }
     localStorage.setItem(KEY(s.address), JSON.stringify(s));
   } catch {}
 }

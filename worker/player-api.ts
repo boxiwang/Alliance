@@ -12,6 +12,7 @@ import {
   type PlayerRole,
   type SessionClaims,
 } from "./auth";
+import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS } from "../src/lib/mvp-items";
 
 export interface BackendEnv {
   DB: D1Database;
@@ -89,10 +90,105 @@ async function savePlayer(env: BackendEnv, input: {
       .bind(input.provider, input.subject, input.id, input.secretHash || null, now, now),
     env.DB.prepare("INSERT INTO player_state (player_id, revision, updated_at) VALUES (?, 0, ?) ON CONFLICT(player_id) DO NOTHING")
       .bind(input.id, now),
+    ...Object.entries(ALPHA_STARTER_ITEMS).flatMap(([itemId, quantity]) => [
+      env.DB.prepare(`INSERT INTO inventory_balances (player_id, item_id, quantity, updated_at)
+        VALUES (?, ?, ?, ?) ON CONFLICT(player_id, item_id) DO NOTHING`).bind(input.id, itemId, quantity, now),
+      env.DB.prepare(`INSERT INTO inventory_transactions
+        (id, player_id, item_id, delta, balance_after, reason, idempotency_key, status, created_at, committed_at)
+        VALUES (?, ?, ?, ?, ?, 'alpha_starter', ?, 'committed', ?, ?)
+        ON CONFLICT(player_id, idempotency_key) DO NOTHING`)
+        .bind(crypto.randomUUID(), input.id, itemId, quantity, quantity, `starter:${itemId}`, now, now),
+    ]),
   ]);
   const player = await findPlayer(env, input.id);
   if (!player) throw new Error("player upsert failed");
   return player;
+}
+
+function inventoryRows(env: BackendEnv, playerId: string) {
+  return env.DB.prepare(`SELECT item_id AS itemId, quantity, updated_at AS updatedAt
+    FROM inventory_balances WHERE player_id = ? ORDER BY item_id`).bind(playerId).all<{ itemId: string; quantity: number; updatedAt: number }>();
+}
+
+async function inventory(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (request.method !== "GET") return response({ error: "method_not_allowed" }, 405);
+  return response({ inventory: (await inventoryRows(env, claims.sub)).results });
+}
+
+async function inventoryHistory(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (request.method !== "GET") return response({ error: "method_not_allowed" }, 405);
+  const rows = await env.DB.prepare(`SELECT id, item_id AS itemId, delta, balance_after AS balanceAfter,
+    reason, reference_id AS referenceId, status, created_at AS createdAt
+    FROM inventory_transactions WHERE player_id = ? ORDER BY created_at DESC LIMIT 100`).bind(claims.sub).all();
+  return response({ transactions: rows.results });
+}
+
+async function consumeInventory(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  const data = await body(request);
+  const itemId = String(data?.itemId || "");
+  const quantity = Math.max(1, Math.min(99, Math.floor(Number(data?.quantity) || 1)));
+  const idempotencyKey = String(data?.idempotencyKey || "").slice(0, 128);
+  const referenceId = String(data?.referenceId || "").slice(0, 128) || null;
+  const item = MVP_ITEM_BY_ID.get(itemId);
+  if (!item || item.status !== "active" || !idempotencyKey) return response({ error: "invalid_item" }, 400);
+
+  const prior = await env.DB.prepare(`SELECT status, balance_after AS balanceAfter FROM inventory_transactions
+    WHERE player_id = ? AND idempotency_key = ?`).bind(claims.sub, idempotencyKey)
+    .first<{ status: string; balanceAfter: number | null }>();
+  if (prior?.status === "committed") return response({ itemId, quantity: prior.balanceAfter, effect: { speedupSeconds: item.speedupSeconds, speedupQueue: item.speedupQueue }, replayed: true });
+  if (prior) return response({ error: "operation_pending" }, 409);
+
+  const now = Date.now();
+  const txId = crypto.randomUUID();
+  await env.DB.prepare(`INSERT INTO inventory_transactions
+    (id, player_id, item_id, delta, reason, reference_id, idempotency_key, status, metadata_json, created_at)
+    VALUES (?, ?, ?, ?, 'item_used', ?, ?, 'pending', ?, ?)`)
+    .bind(txId, claims.sub, itemId, -quantity, referenceId, idempotencyKey, JSON.stringify({ speedupQueue: item.speedupQueue }), now).run();
+  const update = await env.DB.prepare(`UPDATE inventory_balances SET quantity = quantity - ?, updated_at = ?
+    WHERE player_id = ? AND item_id = ? AND quantity >= ?`).bind(quantity, now, claims.sub, itemId, quantity).run();
+  if (!update.meta.changes) {
+    await env.DB.prepare("UPDATE inventory_transactions SET status = 'rejected', committed_at = ? WHERE id = ?").bind(now, txId).run();
+    return response({ error: "insufficient_inventory" }, 409);
+  }
+  const balance = await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
+    .bind(claims.sub, itemId).first<{ quantity: number }>();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE inventory_transactions SET status = 'committed', balance_after = ?, committed_at = ? WHERE id = ?")
+      .bind(balance?.quantity ?? 0, now, txId),
+    env.DB.prepare(`INSERT INTO account_audit_log (id, player_id, action, actor_player_id, metadata_json, created_at)
+      VALUES (?, ?, 'inventory.consume', ?, ?, ?)`).bind(crypto.randomUUID(), claims.sub, claims.sub, JSON.stringify({ itemId, quantity, referenceId }), now),
+  ]);
+  return response({ itemId, quantity: balance?.quantity ?? 0, effect: { speedupSeconds: item.speedupSeconds, speedupQueue: item.speedupQueue } });
+}
+
+async function grantAlphaInventory(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (claims.role !== "gm") return response({ error: "gm_required" }, 403);
+  const data = await body(request);
+  const requestKey = String(data?.idempotencyKey || "").slice(0, 128);
+  if (!requestKey) return response({ error: "idempotency_required" }, 400);
+  const now = Date.now();
+  const statements: D1PreparedStatement[] = [];
+  for (const item of MVP_ITEMS.filter((entry) => entry.status === "active")) {
+    const key = `gm:${requestKey}:${item.id}`;
+    const exists = await env.DB.prepare("SELECT 1 FROM inventory_transactions WHERE player_id = ? AND idempotency_key = ?")
+      .bind(claims.sub, key).first();
+    if (exists) continue;
+    const current = await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
+      .bind(claims.sub, item.id).first<{ quantity: number }>();
+    const delta = Math.max(0, 99 - (current?.quantity || 0));
+    if (!delta) continue;
+    statements.push(
+      env.DB.prepare(`INSERT INTO inventory_balances (player_id, item_id, quantity, updated_at) VALUES (?, ?, ?, ?)
+        ON CONFLICT(player_id, item_id) DO UPDATE SET quantity = inventory_balances.quantity + excluded.quantity, updated_at = excluded.updated_at`)
+        .bind(claims.sub, item.id, delta, now),
+      env.DB.prepare(`INSERT INTO inventory_transactions
+        (id, player_id, item_id, delta, balance_after, reason, idempotency_key, status, created_at, committed_at)
+        VALUES (?, ?, ?, ?, 99, 'gm_alpha_test', ?, 'committed', ?, ?)`)
+        .bind(crypto.randomUUID(), claims.sub, item.id, delta, key, now, now),
+    );
+  }
+  if (statements.length) await env.DB.batch(statements);
+  return response({ inventory: (await inventoryRows(env, claims.sub)).results });
 }
 
 async function sessionResponse(env: BackendEnv, player: PlayerRow, method: AuthMethod, extra: Record<string, unknown> = {}): Promise<Response> {
@@ -231,15 +327,20 @@ async function stateRoute(request: Request, env: BackendEnv, claims: SessionClai
 
 export async function handlePlayerApi(request: Request, env: BackendEnv): Promise<Response | null> {
   const { pathname } = new URL(request.url);
+  if (request.method === "GET" && pathname === "/items") return response({ items: MVP_ITEMS });
   if (request.method === "POST" && pathname === "/auth/wallet/challenge") return walletChallenge(request, env);
   if (request.method === "POST" && pathname === "/auth/wallet/verify") return walletVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/google") return googleVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/guest") return guestVerify(request, env);
-  if (!["/me", "/events", "/state"].includes(pathname)) return null;
+  if (!["/me", "/events", "/state", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha"].includes(pathname)) return null;
   const claims = await authClaims(request, env);
   if (!claims) return response({ error: "unauthorized" }, 401);
   if (request.method === "GET" && pathname === "/me") return me(request, env, claims);
   if (request.method === "POST" && pathname === "/events") return storeEvents(request, env, claims);
   if ((request.method === "GET" || request.method === "PUT") && pathname === "/state") return stateRoute(request, env, claims);
+  if (pathname === "/inventory") return inventory(request, env, claims);
+  if (pathname === "/inventory/history") return inventoryHistory(request, env, claims);
+  if (request.method === "POST" && pathname === "/inventory/consume") return consumeInventory(request, env, claims);
+  if (request.method === "POST" && pathname === "/inventory/grant-alpha") return grantAlphaInventory(request, env, claims);
   return response({ error: "method_not_allowed" }, 405);
 }

@@ -31,6 +31,15 @@ async function post<T>(path: string, payload: unknown, token?: string): Promise<
   return data;
 }
 
+async function get<T>(path: string, token?: string): Promise<T> {
+  const response = await fetch(`${BACKEND_HTTP}${path}`, {
+    headers: token ? { authorization: `Bearer ${token}` } : undefined,
+  });
+  const data = await response.json().catch(() => ({})) as T & { error?: string };
+  if (!response.ok) throw new Error(data.error || `backend_${response.status}`);
+  return data;
+}
+
 export function saveBackendSession(session: BackendSession): void {
   try { localStorage.setItem(sessionKey(session.player.id), JSON.stringify(session)); } catch {}
 }
@@ -82,6 +91,49 @@ export async function trackEvents(address: string, events: PlayerEvent[]): Promi
   const session = loadBackendSession(address);
   if (!session || !events.length) return;
   await post("/events", { events: events.map((event) => ({ ...event, clientTs: event.clientTs || Date.now() })) }, session.token);
+}
+
+const pendingEvents = new Map<string, PlayerEvent[]>();
+const eventTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function scheduleEventFlush(key: string): void {
+  if (eventTimers.has(key)) return;
+  eventTimers.set(key, setTimeout(() => {
+    eventTimers.delete(key);
+    const batch = pendingEvents.get(key)?.splice(0, 50) || [];
+    if (batch.length) void trackEvents(key, batch).catch(() => {});
+    if (pendingEvents.get(key)?.length) scheduleEventFlush(key);
+  }, 650));
+}
+
+/** Non-blocking, batched telemetry. Gameplay must never wait for analytics. */
+export function queuePlayerEvent(address: string, event: PlayerEvent): void {
+  if (!address) return;
+  const key = address.toLowerCase();
+  const queue = pendingEvents.get(key) || [];
+  queue.push({ ...event, clientTs: event.clientTs || Date.now() });
+  pendingEvents.set(key, queue.slice(-100));
+  scheduleEventFlush(key);
+}
+
+export type InventoryBalance = { itemId: string; quantity: number; updatedAt: number };
+
+export async function loadInventory(address: string): Promise<InventoryBalance[]> {
+  const session = loadBackendSession(address);
+  if (!session) return [];
+  return (await get<{ inventory: InventoryBalance[] }>("/inventory", session.token)).inventory;
+}
+
+export async function consumeInventoryItem(address: string, itemId: string, referenceId: string): Promise<{ itemId: string; quantity: number; effect: Record<string, unknown> }> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  return post("/inventory/consume", { itemId, quantity: 1, referenceId, idempotencyKey: referenceId }, session.token);
+}
+
+export async function grantGmInventory(address: string): Promise<InventoryBalance[]> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  return (await post<{ inventory: InventoryBalance[] }>("/inventory/grant-alpha", { idempotencyKey: crypto.randomUUID() }, session.token)).inventory;
 }
 
 /**

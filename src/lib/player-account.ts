@@ -1,5 +1,6 @@
 import { hasLocalGm } from "./gm";
 import { isGraphicsTier, type GraphicsTier } from "./graphics-tier";
+import { queuePlayerEvent } from "./backend";
 
 export type LanguageCode = "en" | "zh-CN" | "zh-TW" | "ja" | "ko" | "es";
 export type NumberFormat = "compact" | "full";
@@ -444,6 +445,7 @@ export function loadPlayerAccount(address: string): PlayerAccount {
 }
 
 export function savePlayerAccount(account: PlayerAccount): void {
+  const prior = readJson<Partial<PlayerAccount>>(ACCOUNT_KEY(account.playerId));
   writeJson(ACCOUNT_KEY(account.playerId), account);
   Array.from(new Set([account.primaryWallet, ...account.linkedWallets].filter((wallet): wallet is string => typeof wallet === "string" && !!wallet))).forEach((wallet) => writeJson(WALLET_INDEX_KEY(wallet), account.playerId));
   try {
@@ -451,6 +453,17 @@ export function savePlayerAccount(account: PlayerAccount): void {
       window.dispatchEvent(new Event(PLAYER_ACCOUNT_CHANGED_EVENT));
     }
   } catch {}
+  if (prior) {
+    const settingKeys: Array<keyof PlayerAccount> = ["language", "timeZone", "numberFormat", "soundEnabled", "musicEnabled", "musicVolume", "sfxVolume", "reducedMotion", "graphicsTier", "autoTranslateComms", "criticalNotifications", "showAchievements", "allowDirectMessages"];
+    settingKeys.forEach((key) => {
+      if (prior[key] !== account[key]) queuePlayerEvent(account.playerId, { name: "settings.changed", page: "profile", properties: { setting: key, value: account[key] } });
+    });
+    const oldWallets = new Set(prior.linkedWallets || []);
+    account.linkedWallets.filter((wallet) => !oldWallets.has(wallet)).forEach(() => queuePlayerEvent(account.playerId, { name: "account.wallet_linked", page: "profile" }));
+    (Object.keys(account.consents) as ConsentKey[]).forEach((key) => {
+      if (!prior.consents?.[key]?.acceptedAt && account.consents[key].acceptedAt) queuePlayerEvent(account.playerId, { name: "consent.accepted", page: "profile", properties: { document: key, version: account.consents[key].version } });
+    });
+  }
 }
 
 export function loadCosmeticVault(address: string): CosmeticVault {
@@ -516,10 +529,18 @@ export function loadCosmeticVault(address: string): CosmeticVault {
 }
 
 export function saveCosmeticVault(address: string, vault: CosmeticVault): void {
+  const prior = readJson<Partial<CosmeticVault>>(VAULT_KEY(address));
   writeJson(VAULT_KEY(address), vault);
   try {
     if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") window.dispatchEvent(new Event(COSMETIC_VAULT_CHANGED_EVENT));
   } catch {}
+  if (prior?.equipped) {
+    (Object.keys(vault.equipped) as Array<keyof CosmeticLoadout>).forEach((slot) => {
+      if (prior.equipped?.[slot] !== vault.equipped[slot]) queuePlayerEvent(address, { name: vault.equipped[slot] == null ? "relic.unequipped" : "relic.equipped", page: "profile", properties: { slot, itemId: vault.equipped[slot] } });
+    });
+    const oldOwned = new Set(prior.owned || []);
+    vault.owned.filter((itemId) => !oldOwned.has(itemId)).forEach((itemId) => queuePlayerEvent(address, { name: "relic.acquired", page: "profile", properties: { itemId } }));
+  }
 }
 
 export function ownsPlanetSkin(vault: CosmeticVault, skinId: PlanetSkinId): boolean {

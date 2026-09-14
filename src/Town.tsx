@@ -36,6 +36,9 @@ import MiniComms from "./MiniComms";
 import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAllianceHelp } from "./lib/alliance";
 import { loadPlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME } from "./lib/sfx";
+import { consumeInventoryItem, grantGmInventory, loadInventory, type InventoryBalance } from "./lib/backend";
+import { MVP_ITEM_BY_ID } from "./lib/mvp-items";
+import { activeSpeedupTargets, applySpeedup, speedupCompatible, speedupTargetId, type SpeedupTarget } from "./lib/speedups";
 
 const ECONOMY_BUILDINGS: BKey[] = ["bank", "oilwell", "powerplant"];
 const COMMAND_BUILDINGS: BKey[] = ["storage", "wall"];
@@ -90,6 +93,13 @@ function researchEffectTarget(key: string): string {
   return RESEARCH_EFFECT_TARGET[key] ?? researchEffectName(key);
 }
 
+function speedupTargetLabel(target: SpeedupTarget): string {
+  if (target.kind === "construction") return `Build · ${BUILDINGS[target.key].label}`;
+  if (target.kind === "training") return `Train · ${TROOPS_META[target.key].label}`;
+  if (target.kind === "research") return "Research";
+  return "Medical";
+}
+
 function queuePct(durationSec: number, finishAt: number, now: number): number {
   const total = Math.max(0, durationSec) * 1000;
   if (total <= 0 || finishAt <= 0) return 0;
@@ -121,6 +131,9 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [gmBuilding, setGmBuilding] = useState<BKey>("keep");
   const savedOnce = useRef(false);
   const [allianceRevision, setAllianceRevision] = useState(0);
+  const [inventory, setInventory] = useState<InventoryBalance[]>([]);
+  const [speedupTarget, setSpeedupTarget] = useState("");
+  const [inventoryBusy, setInventoryBusy] = useState(false);
 
   // Offline progress on entry (once).
   useEffect(() => {
@@ -146,6 +159,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
 
   useEffect(() => {
     setGm(hasLocalGm(address));
+    void loadInventory(address).then(setInventory).catch(() => {});
   }, [address]);
 
   // Heartbeat: re-render every second; commit when something finishes.
@@ -183,6 +197,12 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const activeOperationQueues = buildQueues.length + activeTrainingQueues
     + (view.researchQueue.finishAt > 0 ? 1 : 0) + (view.healing.finishAt > 0 ? 1 : 0);
   const operationQueueSlots = buildQueueSlots + TROOP_ORDER.length + 3;
+  const speedupTargets = activeSpeedupTargets(view);
+  const selectedSpeedupTarget = speedupTargets.find((target) => speedupTargetId(target) === speedupTarget) || speedupTargets[0];
+  const usableSpeedups = selectedSpeedupTarget ? inventory.filter((entry) => {
+    const item = MVP_ITEM_BY_ID.get(entry.itemId);
+    return entry.quantity > 0 && item?.status === "active" && item.category === "speedup" && speedupCompatible(item.speedupQueue, selectedSpeedupTarget);
+  }) : [];
   const worldStatus = useMemo(() => {
     const stored = loadLocalWorldSession(address);
     if (!stored) {
@@ -232,6 +252,26 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     setMsg(message);
   }
 
+  async function useSpeedup(itemId: string) {
+    if (!selectedSpeedupTarget || inventoryBusy) return;
+    const item = MVP_ITEM_BY_ID.get(itemId);
+    if (!item?.speedupSeconds || !speedupCompatible(item.speedupQueue, selectedSpeedupTarget)) return;
+    const result = applySpeedup(game, selectedSpeedupTarget, item.speedupSeconds, Date.now());
+    if (!result.secondsApplied) { setMsg("That operation has already finished."); return; }
+    setInventoryBusy(true);
+    const referenceId = `speedup:${speedupTargetId(selectedSpeedupTarget)}:${crypto.randomUUID()}`;
+    try {
+      const consumed = await consumeInventoryItem(address, itemId, referenceId);
+      setGame(result.state);
+      saveGame(result.state);
+      setInventory((current) => current.map((entry) => entry.itemId === itemId ? { ...entry, quantity: consumed.quantity, updatedAt: Date.now() } : entry));
+      setMsg(`${item.name} used. ${fmtSec(result.secondsApplied)} removed.`);
+    } catch (error) {
+      setMsg(error instanceof Error && error.message === "insufficient_inventory" ? "No speedups left." : "Speedup failed. Try again.");
+      void loadInventory(address).then(setInventory).catch(() => {});
+    } finally { setInventoryBusy(false); }
+  }
+
   return (
     <section className="town">
       <CosmicBackdrop />
@@ -248,6 +288,10 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
             <button onClick={() => gmAct(gmFillResources, "GM: resources filled to Warehouse capacity.")}>Fill resources</button>
             <button onClick={() => gmAct(gmFillTroops, "GM: every trained arm filled to capacity at its highest unlocked tier.")}>Fill troops</button>
             <button onClick={() => gmAct(gmFinishQueues, "GM: active build, research, training and healing queues completed.")}>Finish queues</button>
+            <button disabled={inventoryBusy} onClick={() => {
+              setInventoryBusy(true);
+              void grantGmInventory(address).then((items) => { setInventory(items); setMsg("GM: active MVP items stocked to 99."); }).catch(() => setMsg("GM inventory grant failed.")).finally(() => setInventoryBusy(false));
+            }}>Stock MVP items</button>
             <button onClick={() => gmAct(gmMaxResearch, "GM: all three Research categories maxed. Account bonuses are active.")}>Max research</button>
             <button onClick={() => {
               const next = game.buildings.academy.lvl >= 1 ? game : gmRaiseBuilding(game, "academy");
@@ -319,6 +363,19 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
             {view.healing.finishAt > 0 && <i className="operation-meter" style={{ width: queuePct(view.healing.durationSec, view.healing.finishAt, now) + "%" }} />}
           </button>
           <div className="operation-slot idle rally"><small>RALLY</small><b>NO ACTIVE RALLY</b><time className="mono">AVAILABLE</time></div>
+        </div>
+        <div className="speedup-console">
+          <div><small>SPEEDUPS</small><b>{selectedSpeedupTarget ? "Select a queue and item" : "Start an operation to use speedups"}</b></div>
+          {selectedSpeedupTarget && <select aria-label="Speedup target" value={speedupTargetId(selectedSpeedupTarget)} onChange={(event) => setSpeedupTarget(event.target.value)}>
+            {speedupTargets.map((target) => <option key={speedupTargetId(target)} value={speedupTargetId(target)}>{speedupTargetLabel(target)}</option>)}
+          </select>}
+          <div className="speedup-items">
+            {usableSpeedups.map((entry) => {
+              const item = MVP_ITEM_BY_ID.get(entry.itemId)!;
+              return <button key={entry.itemId} disabled={inventoryBusy} onClick={() => void useSpeedup(entry.itemId)}><b>{item.name}</b><span>×{entry.quantity}</span></button>;
+            })}
+            {selectedSpeedupTarget && usableSpeedups.length === 0 && <i>NO SPEEDUPS AVAILABLE</i>}
+          </div>
         </div>
       </section>
 

@@ -1,6 +1,7 @@
 import type { TokenHolding } from "./blockscout";
 import type { Profile } from "./profile";
 import { loadGame, saveGame } from "./gamestore";
+import { queuePlayerEvent } from "./backend";
 
 export const DEFAULT_ALLIANCE_ID = "gaco-001";
 export const ALLIANCE_SWITCH_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -170,6 +171,9 @@ function accordStewards(now: number): AllianceMember[] {
 
 function safeStorage(): Storage | null { try { return typeof localStorage === "undefined" ? null : localStorage; } catch { return null; } }
 function normalizeAddress(address: string): string { return address.toLowerCase(); }
+function trackAlliance(address: string, name: string, properties: Record<string, unknown> = {}): void {
+  queuePlayerEvent(address, { name, page: "alliance", properties });
+}
 function emitChanged() { try { window.dispatchEvent(new CustomEvent(ALLIANCE_CHANGED_EVENT)); } catch {} }
 
 export function loadAllianceDirectory(): AllianceDirectory {
@@ -260,6 +264,7 @@ export function joinAlliance(allianceId: string, profile: Profile, now = Date.no
   if (alliance.members.length >= alliance.maxMembers) return { ok: false, reason: "This alliance is full." };
   alliance.members.push(memberFrom(profile, now));
   saveAllianceDirectory(directory);
+  trackAlliance(profile.address, "alliance.joined", { allianceId: alliance.id, kind: alliance.kind, status: alliance.status });
   return { ok: true, alliance };
 }
 
@@ -275,7 +280,7 @@ export function requestAllianceEntry(allianceId: string, profile: Profile, holdi
   if (prior) return { ok: true, applied: true, alliance };
   const holding = holdings.find((token) => alliance.contractAddress && normalizeAddress(token.address) === normalizeAddress(alliance.contractAddress));
   alliance.applications.unshift({ address: profile.address, name: profile.name, appliedAt: now, holdingDisplay: holding ? `${alliance.minHoldingAmount}+ ${alliance.symbol} verified` : "No token required", status: "pending" });
-  saveAllianceDirectory(directory); return { ok: true, applied: true, alliance };
+  saveAllianceDirectory(directory); trackAlliance(profile.address, "alliance.application_submitted", { allianceId: alliance.id }); return { ok: true, applied: true, alliance };
 }
 
 function commandMember(alliance: AllianceRecord, address: string): AllianceMember | null {
@@ -291,7 +296,7 @@ export function reviewAllianceApplication(allianceId: string, actorAddress: stri
   if (approve && alliance.members.length >= alliance.maxMembers) return { ok: false, reason: "This alliance is full." };
   application.status = approve ? "approved" : "rejected"; application.reviewedBy = actorAddress; application.reviewedAt = now;
   if (approve && !allianceForAddress(application.address, directory)) alliance.members.push({ address: application.address, name: application.name, rank: "R1", joinedAt: now, holdingStatus: "verified", contribution: 0, credits: 0, lastActiveAt: now });
-  saveAllianceDirectory(directory); return { ok: true };
+  saveAllianceDirectory(directory); trackAlliance(actorAddress, "alliance.application_reviewed", { allianceId, approved: approve }); return { ok: true };
 }
 
 export function setAllianceMemberRank(allianceId: string, actorAddress: string, targetAddress: string, rank: Exclude<AllianceRank, "R5">): { ok: boolean; reason?: string } {
@@ -300,7 +305,7 @@ export function setAllianceMemberRank(allianceId: string, actorAddress: string, 
   const target = alliance?.members.find((member) => normalizeAddress(member.address) === normalizeAddress(targetAddress));
   if (!alliance || actor?.rank !== "R5") return { ok: false, reason: "Only the R5 can change member ranks." };
   if (!target || target.rank === "R5") return { ok: false, reason: "You cannot change this member's rank." };
-  target.rank = rank; saveAllianceDirectory(directory); return { ok: true };
+  target.rank = rank; saveAllianceDirectory(directory); trackAlliance(actorAddress, "alliance.rank_changed", { allianceId, rank }); return { ok: true };
 }
 
 export function removeAllianceMember(allianceId: string, actorAddress: string, targetAddress: string, now = Date.now()): { ok: boolean; reason?: string } {
@@ -312,7 +317,7 @@ export function removeAllianceMember(allianceId: string, actorAddress: string, t
   if (actor.rank !== "R5" && !(actor.rank === "R4" && Number(target.rank.slice(1)) < 4)) return { ok: false, reason: "You do not have permission to remove this member." };
   alliance.members = alliance.members.filter((member) => normalizeAddress(member.address) !== normalizeAddress(targetAddress));
   directory.switchLocks[normalizeAddress(targetAddress)] = now + ALLIANCE_SWITCH_COOLDOWN_MS;
-  saveAllianceDirectory(directory); return { ok: true };
+  saveAllianceDirectory(directory); trackAlliance(actorAddress, "alliance.member_removed", { allianceId }); return { ok: true };
 }
 
 export function updateAllianceStandards(allianceId: string, actorAddress: string, input: { minHoldingAmount?: string; activeStandard?: string; joinPolicy?: AllianceRecord["joinPolicy"] }): { ok: boolean; reason?: string } {
@@ -327,7 +332,7 @@ export function updateAllianceStandards(allianceId: string, actorAddress: string
   }
   if (input.activeStandard) alliance.activeStandard = input.activeStandard.slice(0, 80);
   if (input.joinPolicy) alliance.joinPolicy = alliance.kind === "default" ? "open" : input.joinPolicy;
-  saveAllianceDirectory(directory); return { ok: true };
+  saveAllianceDirectory(directory); trackAlliance(actorAddress, "alliance.standards_changed", { allianceId, fields: Object.keys(input) }); return { ok: true };
 }
 
 export function setAllianceDiplomacy(allianceId: string, actorAddress: string, targetAllianceId: string, stance: "neutral" | "nap" | "war"): { ok: boolean; reason?: string } {
@@ -379,6 +384,7 @@ export function leaveAlliance(profile: Profile, now = Date.now(), gm = false): {
   if (gm) delete directory.switchLocks[address];
   else directory.switchLocks[address] = now + ALLIANCE_SWITCH_COOLDOWN_MS;
   saveAllianceDirectory(directory);
+  trackAlliance(profile.address, "alliance.left", { allianceId: alliance.id, cooldownApplied: !gm });
   return { ok: true };
 }
 
@@ -408,6 +414,7 @@ export function foundAllianceFromToken(token: TokenHolding, profile: Profile, no
   };
   directory.alliances.push(alliance);
   saveAllianceDirectory(directory);
+  trackAlliance(profile.address, "alliance.founded", { allianceId: alliance.id, symbol: alliance.symbol, contractAddress: alliance.contractAddress });
   return { ok: true, alliance };
 }
 
@@ -427,6 +434,7 @@ export function endorseCandidate(allianceId: string, voterAddress: string, candi
     alliance.decrees.unshift({ id: `activated-${Date.now()}`, title: "ALLIANCE ACTIVATED", body: `${candidate.name} is now the R5.`, createdAt: Date.now(), author: "Alliance System" });
   }
   saveAllianceDirectory(directory);
+  trackAlliance(voterAddress, "alliance.founding_endorsement", { allianceId, activated });
   return { ok: true, activated };
 }
 
@@ -437,7 +445,7 @@ export function requestAllianceHelp(profile: Profile, kind: AllianceHelpRequest[
   const open = alliance.helps.find((help) => !help.closedAt && normalizeAddress(help.ownerAddress) === normalizeAddress(profile.address) && help.kind === kind && help.targetKey === targetKey);
   if (open) return { ok: true, request: open };
   const request: AllianceHelpRequest = { id: `${kind}-${normalizeAddress(profile.address)}-${targetKey}-${now}`, allianceId: alliance.id, ownerAddress: profile.address, ownerName: profile.name, kind, targetKey, label, createdAt: now, helpers: [] };
-  alliance.helps.push(request); saveAllianceDirectory(directory); return { ok: true, request };
+  alliance.helps.push(request); saveAllianceDirectory(directory); trackAlliance(profile.address, "alliance.help_requested", { allianceId: alliance.id, kind, targetKey }); return { ok: true, request };
 }
 
 export function openHelpFor(profile: Profile, kind: AllianceHelpRequest["kind"], targetKey: string): AllianceHelpRequest | null {
@@ -483,6 +491,7 @@ export function helpAll(profile: Profile, now = Date.now()): { helped: number; r
   helper.credits += rewarded * 2;
   if (storage) storage.setItem(rewardKey, String(prior + rewarded));
   saveAllianceDirectory(directory);
+  if (helped > 0) trackAlliance(profile.address, "alliance.help_given", { allianceId: alliance.id, helped, rewarded, secondsRemoved: helped * HELP_REDUCTION_MS / 1000 });
   return { helped, rewarded, secondsRemoved: helped * HELP_REDUCTION_MS / 1000 };
 }
 
@@ -501,13 +510,13 @@ export function verifyAllianceHolding(profile: Profile, holdings: TokenHolding[]
   if (!alliance) return { status: "none" };
   const member = alliance.members.find((candidate) => normalizeAddress(candidate.address) === normalizeAddress(profile.address))!;
   if (holdingMeetsAllianceThreshold(alliance, holdings)) {
-    member.holdingStatus = "verified"; delete member.holdingFailedAt; member.lastActiveAt = now; saveAllianceDirectory(directory); return { status: "verified", alliance };
+    member.holdingStatus = "verified"; delete member.holdingFailedAt; member.lastActiveAt = now; saveAllianceDirectory(directory); trackAlliance(profile.address, "alliance.holding_verified", { allianceId: alliance.id }); return { status: "verified", alliance };
   }
-  if (!member.holdingFailedAt) { member.holdingFailedAt = now; member.holdingStatus = "suspended"; saveAllianceDirectory(directory); return { status: "suspended", alliance }; }
+  if (!member.holdingFailedAt) { member.holdingFailedAt = now; member.holdingStatus = "suspended"; saveAllianceDirectory(directory); trackAlliance(profile.address, "alliance.holding_suspended", { allianceId: alliance.id }); return { status: "suspended", alliance }; }
   if (now - member.holdingFailedAt < ALLIANCE_HOLDING_GRACE_MS) return { status: "suspended", alliance };
   alliance.members = alliance.members.filter((candidate) => normalizeAddress(candidate.address) !== normalizeAddress(profile.address));
   directory.switchLocks[normalizeAddress(profile.address)] = now + ALLIANCE_SWITCH_COOLDOWN_MS;
-  saveAllianceDirectory(directory); return { status: "removed", alliance };
+  saveAllianceDirectory(directory); trackAlliance(profile.address, "alliance.holding_removed", { allianceId: alliance.id }); return { status: "removed", alliance };
 }
 
 export function gmSeedAlliance(allianceId: string, count = 6): AllianceRecord | null {
@@ -547,7 +556,7 @@ export function initiateLeadershipChallenge(profile: Profile, candidateAddress: 
   if (!gm && alliance.lastChallengeAt && now - alliance.lastChallengeAt < LEADERSHIP_CHALLENGE_COOLDOWN_MS) return { ok: false, reason: "Another challenge can begin after the 7-day cooldown." };
   const eligibleAddresses = alliance.members.filter((member) => member.holdingStatus === "verified" && now - member.joinedAt >= 7 * 86400000).map((member) => member.address);
   const challenge: LeadershipChallenge = { id: `command-${now}`, initiatorAddress: initiator.address, initiatorName: initiator.name, candidateAddress: candidate.address, candidateName: candidate.name, createdAt: now, closesAt: now + LEADERSHIP_BALLOT_MS, eligibleAddresses, votes: {} };
-  alliance.challenges.unshift(challenge); alliance.lastChallengeAt = now; saveAllianceDirectory(directory); return { ok: true, challenge };
+  alliance.challenges.unshift(challenge); alliance.lastChallengeAt = now; saveAllianceDirectory(directory); trackAlliance(profile.address, "alliance.challenge_started", { allianceId: alliance.id, eligibleVoters: eligibleAddresses.length }); return { ok: true, challenge };
 }
 
 export function castLeadershipVote(allianceId: string, voterAddress: string, candidateAddress: string, now = Date.now()): { ok: boolean; reason?: string } {
@@ -557,7 +566,7 @@ export function castLeadershipVote(allianceId: string, voterAddress: string, can
   const voterKey = normalizeAddress(voterAddress);
   if (!challenge.eligibleAddresses.some((address) => normalizeAddress(address) === voterKey)) return { ok: false, reason: "You are not eligible to vote in this challenge." };
   if (!alliance.members.some((member) => normalizeAddress(member.address) === normalizeAddress(candidateAddress))) return { ok: false, reason: "This candidate is no longer in the alliance." };
-  challenge.votes[voterKey] = candidateAddress; saveAllianceDirectory(directory); return { ok: true };
+  challenge.votes[voterKey] = candidateAddress; saveAllianceDirectory(directory); trackAlliance(voterAddress, "alliance.vote_cast", { allianceId, challengeId: challenge.id }); return { ok: true };
 }
 
 export function resolveLeadershipChallenges(now = Date.now()): void {
@@ -599,7 +608,7 @@ export function upgradeAllianceSkill(allianceId: string, actorAddress: string, b
   if (!alliance || !actor || !(["R4", "R5"] as AllianceRank[]).includes(actor.rank)) return { ok: false, reason: "Only R4 and R5 members can upgrade alliance skills." };
   if (alliance.skillPoints < 1) return { ok: false, reason: "No skill points available." };
   if (alliance.skillLevels[branch] >= 5) return { ok: false, reason: "This skill is already at max level." };
-  alliance.skillPoints -= 1; alliance.skillLevels[branch] += 1; saveAllianceDirectory(directory); return { ok: true };
+  alliance.skillPoints -= 1; alliance.skillLevels[branch] += 1; saveAllianceDirectory(directory); trackAlliance(actorAddress, "alliance.skill_upgraded", { allianceId, branch, level: alliance.skillLevels[branch] }); return { ok: true };
 }
 
 export interface AllianceGameplayBonuses {

@@ -13,6 +13,7 @@ import {
 import { clearWorld as clearLegacyWorld, loadWorld as loadLegacyWorld, projectWorld as projectLegacyWorld } from "./world";
 import { CHAT_SIGNALS, MARCH_SIGNATURES, PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, STRIKE_SIGNATURES, loadCosmeticVault } from "./player-account";
 import { allianceForAddress, allianceGameplayBonuses } from "./alliance";
+import { queuePlayerEvent } from "./backend";
 
 export interface WorldGameSnapshot {
   troops: TroopManifest;
@@ -404,7 +405,32 @@ export function loadLocalWorldSession(address: string): LocalWorldSession | null
 }
 
 export function saveLocalWorldSession(session: LocalWorldSession): void {
-  try { localStorage.setItem(KEY(session.address), JSON.stringify(session)); } catch {}
+  try {
+    const priorRaw = localStorage.getItem(KEY(session.address));
+    const prior = priorRaw ? JSON.parse(priorRaw) as LocalWorldSession : null;
+    if (prior?.world?.version === 2) {
+      const oldMarches = new Set(Object.keys(prior.world.marches));
+      Object.values(session.world.marches).filter((march) => march.playerId === session.playerId && !oldMarches.has(march.id)).forEach((march) => {
+        const target = session.world.entities[march.targetId];
+        const force = TROOP_ORDER.reduce((sum, arm) => sum + Object.values(march.force[arm] || {}).reduce((part, qty) => part + Number(qty || 0), 0), 0);
+        queuePlayerEvent(session.address, { name: "world.march_dispatched", page: "world", properties: {
+          action: march.action, targetKind: target?.kind || "unknown", targetLevel: target && "level" in target ? target.level : null,
+          force, travelSeconds: Math.max(0, Math.round((march.arriveAt - march.dispatchedAt) / 1000)),
+        } });
+      });
+      const oldReports = new Set(Object.keys(prior.world.reports));
+      Object.values(session.world.reports).filter((report) => report.playerId === session.playerId && !oldReports.has(report.id)).forEach((report) => {
+        const target = session.world.entities[report.targetId];
+        queuePlayerEvent(session.address, { name: `world.${report.action}_${report.stage}`, page: "world", properties: {
+          outcome: report.outcome, targetKind: target?.kind || "unknown", targetLevel: target && "level" in target ? target.level : null,
+        } });
+      });
+      Object.values(session.world.marches).filter((march) => march.playerId === session.playerId && prior.world.marches[march.id]?.state !== "recalled" && march.state === "recalled").forEach((march) => {
+        queuePlayerEvent(session.address, { name: "world.march_recalled", page: "world", properties: { action: march.action } });
+      });
+    }
+    localStorage.setItem(KEY(session.address), JSON.stringify(session));
+  } catch {}
 }
 
 function settleLegacyWorld(address: string, sourceGame: GameState, now: number): { game: GameState; migrated: boolean } {
