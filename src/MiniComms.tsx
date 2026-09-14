@@ -5,6 +5,7 @@ import NameSignal from "./NameSignal";
 import { RealtimeClient, type LiveChat, type PresenceCity } from "./lib/realtime";
 import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME } from "./lib/sfx";
 import { trackEvents } from "./lib/backend";
+import { shouldSubmitTextEntry } from "./lib/ime";
 
 function messageTime(ts: number): string {
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ts));
@@ -34,6 +35,7 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
   const [connected, setConnected] = useState(false);
   const [unread, setUnread] = useState(0);
   const rtRef = useRef<RealtimeClient | null>(null);
+  const composingRef = useRef(false);
   const expandedRef = useRef(expanded);
   // Clear unread whenever the widget is opened; the ref lets the socket handler
   // (bound once) read the current open/closed state without re-subscribing.
@@ -108,7 +110,16 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
     </div>
     <div className="mini-comms-compose">
       <span>◎</span>
-      <input aria-label="Transmit to Cosmos" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") transmit(); }} placeholder="Signal the cosmos…" maxLength={280} />
+      <input
+        aria-label="Transmit to Cosmos"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onCompositionStart={() => { composingRef.current = true; }}
+        onCompositionEnd={() => { composingRef.current = false; }}
+        onKeyDown={(event) => { if (shouldSubmitTextEntry(event.nativeEvent, composingRef.current)) transmit(); }}
+        placeholder="Signal the cosmos…"
+        maxLength={280}
+      />
       <button disabled={!draft.trim()} onClick={transmit}>TRANSMIT</button>
     </div>
   </aside>;

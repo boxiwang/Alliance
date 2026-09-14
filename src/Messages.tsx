@@ -10,6 +10,7 @@ import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
 import CosmicBackdrop from "./CosmicBackdrop";
 import PlayerCard, { type PlayerSignal } from "./PlayerCard";
+import { shouldSubmitTextEntry } from "./lib/ime";
 import NameSignal from "./NameSignal";
 import { loadCosmeticVault, type ChatSignalId } from "./lib/player-account";
 import { loadPlayerAccount } from "./lib/player-account";
@@ -75,6 +76,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   const [dmNames, setDmNames] = useState<Record<string, string>>({});
   const [dmWith, setDmWith] = useState<{ id: string; name: string } | null>(null);
   const rtRef = useRef<RealtimeClient | null>(null);
+  const composingRef = useRef(false);
   const partnerOf = (key: string) => key.split("|").find((x) => x !== address) || key;
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
@@ -343,7 +345,14 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
           {pendingShare && <div className="comms-pending-share"><SharedIntelCard share={pendingShare} now={now} onOpen={() => openSharedTarget(pendingShare)} compactView /><button className="comms-share-remove" aria-label="Remove intelligence attachment" onClick={removePendingShare}>×</button></div>}
           <div className="box">
             <button className={`attach ${pendingShare ? "loaded" : ""}`} title="Relay a coordinate or recon envelope" onClick={() => setShareTrayOpen((value) => !value)}>+</button>
-            <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Message · @mention · attach a coordinate, report or rally with +" />
+            <input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onCompositionStart={() => { composingRef.current = true; }}
+              onCompositionEnd={() => { composingRef.current = false; }}
+              onKeyDown={(event) => { if (shouldSubmitTextEntry(event.nativeEvent, composingRef.current)) send(); }}
+              placeholder="Message · @mention · attach a coordinate, report or rally with +"
+            />
             <button className="cm-send" disabled={!!pendingShare && !sharedIntelIsActive(pendingShare, now)} onClick={send}>Send</button>
           </div>
         </div>}
