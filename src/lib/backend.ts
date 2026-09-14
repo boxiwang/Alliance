@@ -156,6 +156,36 @@ export async function submitAlphaFeedback(address: string, input: { category: "b
 }
 
 /**
+ * Pull the mirrored save back down (new device / cleared cache). Returns the last
+ * snapshot the backend holds, or null if none / no session. The caller decides
+ * whether to write it into local storage (only when local is empty, so active
+ * progress is never clobbered).
+ */
+export async function restorePlayerState(address: string): Promise<{ profile?: unknown; game?: unknown; account?: unknown; revision?: number } | null> {
+  const session = loadBackendSession(address);
+  if (!session) return null;
+  try {
+    const res = await get<{ state?: Record<string, unknown> | null }>("/state", session.token);
+    const s = res.state;
+    if (!s) return null;
+    // The backend stores these as JSON strings in *_json columns; accept plain
+    // keys too for forward-compat.
+    const parse = (v: unknown) => {
+      if (v == null) return undefined;
+      if (typeof v === "string") { try { return JSON.parse(v); } catch { return undefined; } }
+      return v;
+    };
+    const profile = parse(s.profile_json ?? s.profile);
+    const game = parse(s.game_json ?? s.game);
+    const account = parse(s.account_json ?? s.account);
+    if (!profile && !game && !account) return null;
+    return { profile, game, account, revision: Number(s.revision) || 0 };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Private-alpha recovery mirror. This is deliberately not called authoritative:
  * the client still produced these values, so combat/economy validation must move
  * to server commands before purchases or tradable inventory depend on them.

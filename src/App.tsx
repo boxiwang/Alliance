@@ -19,13 +19,13 @@ import GameCursor from "./GameCursor";
 import AlphaFeedback from "./AlphaFeedback";
 import CosmicBackdrop from "./CosmicBackdrop";
 import { hasLocalGm, localGmRequested, registerOwnerGm } from "./lib/gm";
-import { loadGame } from "./lib/gamestore";
+import { loadGame, saveGame } from "./lib/gamestore";
 import { verifyAllianceHolding } from "./lib/alliance";
 import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
-import { loadPlayerAccount } from "./lib/player-account";
+import { loadPlayerAccount, savePlayerAccount } from "./lib/player-account";
 import { playSfx, preloadSfx, SFX_LOGIN_HOVER, SFX_LOGIN_HOVER_VOLUME, SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME } from "./lib/sfx";
-import { authenticateGoogle, authenticateGuest, authenticateWallet, loadBackendSession, mirrorPlayerState, trackEvents, updatePlayerName } from "./lib/backend";
+import { authenticateGoogle, authenticateGuest, authenticateWallet, loadBackendSession, mirrorPlayerState, restorePlayerState, trackEvents, updatePlayerName } from "./lib/backend";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
@@ -214,6 +214,10 @@ function DesktopApp() {
       if (!u || address) return;
       void u.getIdToken().then(authenticateGoogle).then((session) => {
         if (session.player.role === "gm") registerOwnerGm(session.player.id);
+        // Auto-login on refresh: Firebase persisted the Google session, so resume
+        // straight into the game (and restore the mirrored save) rather than
+        // dropping back to the connect screen.
+        void beginLocalSession(session.player.id, session.player.displayName || u.displayName || "", "Google");
       }).catch(() => {});
     });
   }, [address]);
@@ -234,7 +238,7 @@ function DesktopApp() {
       const session = await authenticateGoogle(await u.getIdToken());
       if (attempt !== loginAttemptRef.current) return;
       if (session.player.role === "gm") registerOwnerGm(session.player.id);
-      beginLocalSession(session.player.id, session.player.displayName || u.displayName || "", "Google");
+      await beginLocalSession(session.player.id, session.player.displayName || u.displayName || "", "Google");
       void trackEvents(session.player.id, [{ name: "auth.login", page: "connect", properties: { method: "google" } }]);
     } catch (e: any) {
       if (attempt !== loginAttemptRef.current) return;
@@ -295,6 +299,7 @@ function DesktopApp() {
         recs = { address: connectedAddress, coinBalanceRaw: "0", ethPrice: null, isContract: false, txCount: 0, tokenTransferCount: 0, tokens: [], recentTxs: [], oldestSeen: null };
       }
       setRecords(recs);
+      await hydrateFromBackend(connectedAddress);
       let existing = loadProfile(connectedAddress);
       if (existing) {
         const holdingCheck = verifyAllianceHolding(existing, memeHoldings(recs));
@@ -369,7 +374,20 @@ function DesktopApp() {
 
   // Wallet-free entry (Quick Play / Google): synthetic address + empty records,
   // no chain/Blockscout. Drops a new player straight into a solo keep.
-  function beginLocalSession(addr: string, displayName: string, sourceLabel: string) {
+  // Dataloss recovery: a new device / cleared cache has no local save, but the
+  // backend may hold a mirrored one. Pull it down and write it locally BEFORE we
+  // decide new-vs-resume — but only when local is empty, so active progress on
+  // this device is never clobbered.
+  async function hydrateFromBackend(addr: string) {
+    if (loadProfile(addr)) return;
+    const restored = await restorePlayerState(addr).catch(() => null);
+    if (!restored) return;
+    try { const a = restored.account as Parameters<typeof savePlayerAccount>[0]; if (a && (a as { playerId?: string }).playerId) savePlayerAccount(a); } catch {}
+    try { const g = restored.game as Parameters<typeof saveGame>[0]; if (g && (g as { address?: string }).address) saveGame(g); } catch {}
+    try { const p = restored.profile as Profile; if (p && p.address) saveProfile(p); } catch {}
+  }
+
+  async function beginLocalSession(addr: string, displayName: string, sourceLabel: string) {
     setError("");
     setProvider(null);
     setAddress(addr);
@@ -377,6 +395,7 @@ function DesktopApp() {
     setWalletName(sourceLabel);
     const stub: WalletRecords = { address: addr, coinBalanceRaw: "0", ethPrice: null, isContract: false, txCount: 0, tokenTransferCount: 0, tokens: [], recentTxs: [], oldestSeen: null };
     setRecords(stub);
+    await hydrateFromBackend(addr);
     const existing = loadProfile(addr);
     if (existing) {
       const serverName = displayName || autoName(addr);
@@ -425,7 +444,7 @@ function DesktopApp() {
       const playerId = synthAddress(id);
       const session = await authenticateGuest(id, playerId);
       if (attempt !== loginAttemptRef.current) return;
-      beginLocalSession(session.player.id, session.player.displayName, "Guest");
+      await beginLocalSession(session.player.id, session.player.displayName, "Guest");
       void trackEvents(session.player.id, [{ name: "auth.login", page: "connect", properties: { method: "guest" } }]);
     } catch {
       if (attempt !== loginAttemptRef.current) return;
