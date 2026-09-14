@@ -2,9 +2,24 @@
 
 New requirement (owner, 2026-09-13): the Contacts page needs a real friends
 system — **search + add**, **accept / reject** incoming requests, and **remove**
-existing contacts. Ties into map privacy: locating a player on the star map is a
-**friends-only** capability (strangers are found only by navigating/scouting;
-spawns are random so no one can be found by spawn order — see below).
+existing contacts.
+
+## LOCATION PRIVACY — DEATH RULE (owner, 2026-09-14)
+Location is **absolutely private**. **Nobody** gets your coordinates — **not even
+friends** (guard against a friend turning traitor). The ONLY exceptions:
+- Members of the **same alliance** see each other's coordinates / can locate.
+- Anyone else can only find you by **manually panning + zooming the star map**
+  ("放大一点点找"). Cities render on the map (that IS the find-by-exploring
+  mechanism), but no coordinate is ever handed out **by identity**, and there is
+  **no locate/jump-to-player shortcut** outside your alliance.
+
+Consequences already applied client-side (World.tsx remote-commander card): the
+card shows name / faction / core, but LOCATION = "🔒 HIDDEN" and there is **no
+CENTER/locate button**. When the alliance system ships, same-alliance members get
+coord + locate; everyone else never does.
+
+**Search key:** exact **username** (globally unique via `name_key`) or a pasted
+**0x address** — exact match only, returns 0 or 1, never fuzzy/prefix enumeration.
 
 ## Split
 - **Server (Codex)** — friend graph + request inbox + directory search. This is
@@ -23,8 +38,9 @@ Over the existing WS (or a small HTTP API on the worker):
   reject (drop the request).
 - `friend.remove { id }` → remove from both sides.
 - `friend.list` (in snapshot or on demand) → `{ friends:[{id,name,faction,
-  keepLevel,online,coords?}], incoming:[...], outgoing:[...] }`. **coords only
-  for accepted friends**, never for pending/strangers.
+  keepLevel,online}], incoming:[...], outgoing:[...] }`. **NEVER include coords —
+  not even for accepted friends** (death rule above). Coordinates are exposed
+  only through the alliance channel, to same-alliance members.
 - Broadcast a `friend` event to the two parties on request/accept/reject/remove
   so both UIs update live.
 
@@ -34,8 +50,9 @@ Persist the friend graph per player id (D1). Requests expire? optional later.
 - Contacts page: a search field → results with "Add" buttons; a "Requests"
   section (incoming = accept/reject, outgoing = pending/cancel); the friends list
   with "Message" + "Locate on map" + "Remove".
-- Star map: a friends-only "locate" (jump camera to a friend's coord). Do NOT add
-  a locate for arbitrary online strangers — that would leak position.
+- Star map: **NO locate for friends** (death rule). A locate/jump-to-player
+  shortcut exists ONLY for same-alliance members (ships with the alliance system).
+  Friends list actions are Message + Remove only — no coord, no locate.
 
 ## Related correction: spawns must be RANDOM on the outer ring
 Owner clarified spawns should be **random** around the outer ring, NOT sequential
