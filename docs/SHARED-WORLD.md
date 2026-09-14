@@ -2,8 +2,10 @@
 
 Goal: one shared star map where every real player sees every other real player at
 the **same** coordinates. This is the SLG foundation. Owner decision (2026-09-13):
-**server is the coordinate authority, spawns are assigned fresh (random/grid), no
-migration of old local coords** — there is effectively one real player today.
+**server is the coordinate authority; every player spawns on the OUTER RING of the
+map (not random, not a grid); no migration of old local coords** — there is
+effectively one real player today. The central wormhole (256,256) is the
+contested endgame objective, so players start at the edge and push inward.
 
 Status: client-side read-only overlay of other players is DONE and on
 `feat/graphics-tiers` (`594d14d`, World.tsx). This doc covers the remaining
@@ -21,8 +23,12 @@ one space.
 ## Contract
 
 ### Server (Codex)
-1. Remains coordinate authority. On join, assign a spawn coord (existing
-   `assignCoord` grid in the DO is fine) and persist it per player id.
+1. Remains coordinate authority. On join, assign a spawn coord **on the outer
+   ring** and persist it per player id. Replace the current 10x10 grid
+   `assignCoord` in the DO: place spawns near the playable-boundary radius
+   (~0.9R of `worldPlayableRadius`, centered on 256,256), distributed by angle so
+   they don't overlap; as the ring fills, step the radius inward slightly rather
+   than falling back to the center. Never spawn inside the central reserve.
 2. The `snapshot` message already carries `you` (my id) and `players[]` with
    `coords`. **No protocol change required** — the client can read its own coord
    as `players.find(p => p.id === you).coords`. (If convenient, echo it as a
@@ -31,7 +37,8 @@ one space.
    online (already implemented).
 
 ### Client (Claude)
-1. `World` reads its own server coord from the snapshot.
+1. `World` reads its own server coord from the snapshot (which is on the outer
+   ring per the server rule above).
 2. World init positions the player's **home at that server coord**, with the
    local PvE cluster generated around it — this is an engine-level change to
    `spawnPlayers` / `spawnAnchors` (accept an explicit anchor for the human
