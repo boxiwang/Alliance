@@ -531,6 +531,18 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     });
     return () => rt.close();
   }, [address, profile.name, profile.factionSymbol]);
+  // Presence liveness: re-broadcast when the publicly-visible fields change (keep
+  // level, faction, name, cosmetics) so others see fresh stats without a scan.
+  // Might stays scan-gated, so we don't poll it — event-driven is enough until
+  // alliance/leaderboards need faster, targeted refresh.
+  useEffect(() => {
+    rtRef.current?.sendPresence({
+      name: profile.name, faction: profile.factionSymbol || null,
+      keepLevel: game.buildings.keep.lvl,
+      might: mightBreakdown(project(game, Date.now())).total,
+      cosmetics: loadCosmeticVault(address).equipped,
+    });
+  }, [game.buildings.keep.lvl, profile.factionSymbol, profile.name, address]);
   const [selection, setSelection] = useState<Record<TroopKey, Record<string, number>>>(emptySelection);
   const [message, setMessage] = useState(initial.session.migratedLegacyAt ? "Old World marches were safely settled and migrated." : "");
   const [zoom, setZoom] = useState(1.8);
@@ -1100,7 +1112,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             <div style={{ font: "700 7px var(--mono)", letterSpacing: ".16em", color: "#5c8296" }}>COMMANDER</div>
             <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "3px 0 8px" }}><span style={{ width: 9, height: 9, borderRadius: 2, background: col, boxShadow: `0 0 8px ${col}` }} /><b style={{ font: "700 14px var(--hud)", color: "#eaf4fa" }}>{remoteSelected.name || "Commander"}</b></div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
-              {([["FACTION", remoteSelected.faction ? `$${remoteSelected.faction}` : "UNALIGNED"], ["CORE", `Lv.${remoteSelected.keepLevel || 1}`], ["MIGHT", compact(remoteSelected.might || 0)], ["SECTOR", coord]] as Array<[string, string]>).map(([k, v]) => <div key={k} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(120,160,190,.14)", borderRadius: 7, padding: "5px 7px" }}><div style={{ font: "700 6px var(--mono)", letterSpacing: ".1em", color: "#567689" }}>{k}</div><div style={{ font: "700 11px var(--mono)", color: "#cfe6f2" }}>{v}</div></div>)}
+              {([["FACTION", remoteSelected.faction ? `$${remoteSelected.faction}` : "UNALIGNED"], ["CORE", `Lv.${remoteSelected.keepLevel || 1}`], ["MIGHT", "🔒 SCAN"], ["SECTOR", coord]] as Array<[string, string]>).map(([k, v]) =><div key={k} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(120,160,190,.14)", borderRadius: 7, padding: "5px 7px" }}><div style={{ font: "700 6px var(--mono)", letterSpacing: ".1em", color: "#567689" }}>{k}</div><div style={{ font: "700 11px var(--mono)", color: "#cfe6f2" }}>{v}</div></div>)}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button style={btn} onClick={() => setCamera({ ...remoteSelected.coords })}>CENTER</button>
