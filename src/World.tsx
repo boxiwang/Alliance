@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Profile } from "./lib/profile";
 import {
   GameState, RES, RES_ORDER, TROOP_ORDER, TROOPS_META, TroopKey,
@@ -32,6 +32,7 @@ import {
   type ChatSignalId, type MarchSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
 } from "./lib/player-account";
 import { playSfx, SFX_STARMAP_SELECT, SFX_STARMAP_SELECT_VOLUME } from "./lib/sfx";
+import { RealtimeClient, type PresenceCity } from "./lib/realtime";
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
@@ -48,6 +49,8 @@ const KIND_META = {
 };
 
 const RESOURCE_COLORS = { cash: "#43f2a1", oil: "#ffb454", power: "#38d9ff" };
+// Faction accent for remote players on the shared map (falls back to cyan).
+const REMOTE_FACTION_COLOR: Record<string, string> = { ORBT: "#38d9ff", PEPE: "#43f2a1", DOGE: "#ffb454", MOG: "#aa82ff", WIF: "#7cc0ff" };
 const RESOURCE_EMOJI = { cash: "💰", oil: "⛽", power: "⚡" };
 const RESOURCE_GRADIENT = { cash: "url(#world-planet-cash)", oil: "url(#world-planet-oil)", power: "url(#world-planet-power)" };
 // In-flight gather milestones (shown live in Live Fleets) are kept out of the results archive.
@@ -497,6 +500,30 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     return index % 7 === 0 ? "ally" : index % 7 === 1 ? "nap" : index % 11 === 0 ? "war" : "neutral";
   };
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Shared star map: other real commanders from the realtime presence roster.
+  // Read-only for now — you can see them, open their card and message them;
+  // scouting/attacking real players is the next milestone (server-side combat).
+  const [remotePlayers, setRemotePlayers] = useState<PresenceCity[]>([]);
+  const [remoteSelectedId, setRemoteSelectedId] = useState<string | null>(null);
+  const rtRef = useRef<RealtimeClient | null>(null);
+  useEffect(() => {
+    const rt = new RealtimeClient(address, profile.name || "Commander");
+    rtRef.current = rt;
+    const keep = (list: PresenceCity[]) => list.filter((p) => p.id !== address && p.coords);
+    rt.handlers.onSnapshot = (_you, players) => setRemotePlayers(keep(players));
+    rt.handlers.onPlayer = (p) => {
+      if (p.id === address || !p.coords) return;
+      setRemotePlayers((cur) => { const i = cur.findIndex((x) => x.id === p.id); if (i < 0) return [...cur, p]; const next = cur.slice(); next[i] = p; return next; });
+    };
+    const g = loadGame(address);
+    rt.sendPresence({
+      name: profile.name, faction: profile.factionSymbol || null,
+      keepLevel: g?.buildings?.keep?.lvl ?? 1,
+      might: g ? mightBreakdown(project(g, Date.now())).total : 0,
+      cosmetics: loadCosmeticVault(address).equipped,
+    });
+    return () => rt.close();
+  }, [address, profile.name, profile.factionSymbol]);
   const [selection, setSelection] = useState<Record<TroopKey, Record<string, number>>>(emptySelection);
   const [message, setMessage] = useState(initial.session.migratedLegacyAt ? "Old World marches were safely settled and migrated." : "");
   const [zoom, setZoom] = useState(1.8);
@@ -786,7 +813,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         const color = entityColor(entity); const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id; const verified = entity.kind === "resource" || scoutedTargetIds.has(entity.id);
         const occupation = entity.kind === "resource" ? resourceOccupationDisposition(entity, world.marches, world.players, session.playerId, profile.faction) : "neutral";
         const publicCosmetics = entity.kind === "city" ? world.players[entity.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS : null;
-        return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setHomeSelected(false); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
+        return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setHomeSelected(false); setRemoteSelectedId(null); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
           {selectedTarget && (entity.kind !== "city" || !gpuVisualsReady) && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
           {(!gpuVisualsReady || entity.kind !== "city") && <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />}
           {entity.kind === "city" && publicCosmetics ? <>
@@ -806,6 +833,28 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         </g>;
       });
   }, [filteredTargets, strategicZoom, detailZoom, markerScale, selectedId, bookmarks, scoutedTargetIds, world.marches, world.players, world.entities, session.playerId, profile.faction, viewport.width, viewport.height, cullQX, cullQY, cullCell, gpuVisualsReady]);
+
+  // Other real commanders overlaid on the shared map (read-only). Culled to the
+  // viewport and only shown once you're zoomed past strategic, same as targets.
+  const mapRemotePlayers = useMemo(() => {
+    if (strategicZoom) return null;
+    const pad = 30;
+    const minX = viewX - pad, maxX = viewX + viewport.width + pad, minY = viewY - pad, maxY = viewY + viewport.height + pad;
+    const bodyR = detailZoom ? 7.2 : 4.2;
+    return remotePlayers.filter((p) => p.online && p.coords.x >= minX && p.coords.x <= maxX && p.coords.y >= minY && p.coords.y <= maxY)
+      .map((p) => {
+        const sel = remoteSelectedId === p.id;
+        const col = REMOTE_FACTION_COLOR[String(p.faction || "")] || "#7cc0ff";
+        const cos = (p.cosmetics || {}) as { chatSignal?: ChatSignalId | null };
+        return <g key={`rp-${p.id}`} transform={`translate(${p.coords.x} ${p.coords.y}) scale(${markerScale}) translate(${-p.coords.x} ${-p.coords.y})`} className={`world-remote-player ${sel ? "selected" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setRemoteSelectedId(p.id); setSelectedId(null); setHomeSelected(false); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
+          {sel && <circle cx={p.coords.x} cy={p.coords.y} r={bodyR + 3.4} fill="none" stroke={col} strokeWidth={0.8} opacity={0.9} />}
+          <circle cx={p.coords.x} cy={p.coords.y} r={bodyR} fill="#0c1c2e" stroke={col} strokeWidth={0.9} />
+          <circle cx={p.coords.x} cy={p.coords.y} r={bodyR * 0.36} fill={col} />
+          <CityIdentityTag x={p.coords.x} y={p.coords.y} level={p.keepLevel || 1} name={p.name || "Commander"} signal={cos.chatSignal ?? "clear-channel"} relation="neutral" />
+        </g>;
+      });
+  }, [strategicZoom, remotePlayers, remoteSelectedId, viewX, viewY, viewport.width, viewport.height, markerScale, detailZoom]);
+  const remoteSelected = useMemo(() => remotePlayers.find((p) => p.id === remoteSelectedId) || null, [remotePlayers, remoteSelectedId]);
 
   function commit(result: ReturnType<typeof advanceLocalWorldSession>) {
     sessionRef.current = result.session; setSession(result.session); setGame(result.game); gameRef.current = result.game; saveLocalWorldSession(result.session); saveGame(result.game);
@@ -964,7 +1013,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           {!gpuVisualsReady && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {mapClusters}
           {mapTargets}
-          <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera({ ...playerCity.position }); setSelectedId(null); setHomeSelected(true); playSelectSfx(); }}>
+          {mapRemotePlayers}
+          <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera({ ...playerCity.position }); setSelectedId(null); setHomeSelected(true); setRemoteSelectedId(null); playSelectSfx(); }}>
             {strategicZoom && !gpuVisualsReady ? <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
               <circle cx={playerCity.position.x} cy={playerCity.position.y} r="9" className="world-home-ring" />
               <rect x={playerCity.position.x - 4.5} y={playerCity.position.y - 4.5} width="9" height="9" rx="1" transform={`rotate(45 ${playerCity.position.x} ${playerCity.position.y})`} />
@@ -1020,6 +1070,24 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         </svg>}
         {!gpuVisualsReady && voidSkinEquipped && <VoidPlanetOverlay svgRef={svgRef} home={playerCity.position} zoom={zoom} strategic={strategicZoom} onActiveChange={setVoidShaderActive} />}
         {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
+        {remoteSelected && (() => {
+          const col = REMOTE_FACTION_COLOR[String(remoteSelected.faction || "")] || "#7cc0ff";
+          const coord = `${Math.round(remoteSelected.coords.x).toString().padStart(3, "0")}:${Math.round(remoteSelected.coords.y).toString().padStart(3, "0")}`;
+          const btn: CSSProperties = { flex: 1, padding: "7px 8px", borderRadius: 7, border: "1px solid rgba(120,160,190,.28)", background: "rgba(12,26,44,.9)", color: "#cfe6f2", font: "700 9px var(--hud)", letterSpacing: ".08em", cursor: "pointer", textTransform: "uppercase" };
+          return <div style={{ position: "absolute", left: 14, bottom: 64, width: 232, padding: "12px 13px", borderRadius: 12, border: `1px solid ${col}55`, background: "linear-gradient(160deg,rgba(9,18,32,.96),rgba(6,12,22,.96))", boxShadow: "0 14px 34px rgba(0,0,0,.4)", backdropFilter: "blur(6px)", zIndex: 6 }}>
+            <button aria-label="Close commander card" onClick={() => setRemoteSelectedId(null)} style={{ position: "absolute", right: 8, top: 7, width: 20, height: 20, borderRadius: 6, border: "1px solid rgba(120,160,190,.25)", background: "transparent", color: "#7f9bad", cursor: "pointer", lineHeight: 1 }}>×</button>
+            <div style={{ font: "700 7px var(--mono)", letterSpacing: ".16em", color: "#5c8296" }}>COMMANDER</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "3px 0 8px" }}><span style={{ width: 9, height: 9, borderRadius: 2, background: col, boxShadow: `0 0 8px ${col}` }} /><b style={{ font: "700 14px var(--hud)", color: "#eaf4fa" }}>{remoteSelected.name || "Commander"}</b></div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+              {([["FACTION", remoteSelected.faction ? `$${remoteSelected.faction}` : "UNALIGNED"], ["CORE", `Lv.${remoteSelected.keepLevel || 1}`], ["MIGHT", compact(remoteSelected.might || 0)], ["SECTOR", coord]] as Array<[string, string]>).map(([k, v]) => <div key={k} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(120,160,190,.14)", borderRadius: 7, padding: "5px 7px" }}><div style={{ font: "700 6px var(--mono)", letterSpacing: ".1em", color: "#567689" }}>{k}</div><div style={{ font: "700 11px var(--mono)", color: "#cfe6f2" }}>{v}</div></div>)}
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button style={btn} onClick={() => setCamera({ ...remoteSelected.coords })}>CENTER</button>
+              <button style={{ ...btn, borderColor: `${col}66`, color: "#eaf4fa" }} onClick={onMessages}>MESSAGE ▸</button>
+            </div>
+            <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".06em", color: "#5c8296" }}>Scouting &amp; attacks on real commanders arrive with server-side combat.</div>
+          </div>;
+        })()}
         <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")} title={detailZoom ? "Civilization signatures resolved" : "Civilization signatures resolve inside Tactical range"}><i className="city" />{detailZoom ? "CIVILIZATIONS" : "CIV SIGNALS · TAC LOCK"}</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>
         <div className="world-map-hint">FRONTIER I · ROGUE L1–{rogueMaxLevel} · {world.config.width}×{world.config.height} · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS{renderStressCount ? ` · ${renderStressCount.toLocaleString()} FX PROBES` : ""}{strikeStressCount ? ` · ${strikeStressCount} STRIKES` : ""}</div>
       </div>
