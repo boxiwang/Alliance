@@ -31,7 +31,7 @@ import {
   PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, loadCosmeticVault, loadPlayerAccount,
   type ChatSignalId, type MarchSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
 } from "./lib/player-account";
-import { playSfx, SFX_STARMAP_SELECT } from "./lib/sfx";
+import { playSfx, SFX_STARMAP_SELECT, SFX_SELECT_VOLUME } from "./lib/sfx";
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
@@ -855,7 +855,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // fresh so a Profile change (sound toggle / SFX volume) applies immediately.
   function playSelectSfx() {
     const acc = loadPlayerAccount(address);
-    if (acc.soundEnabled) playSfx(SFX_STARMAP_SELECT, acc.sfxVolume);
+    if (acc.soundEnabled) playSfx(SFX_STARMAP_SELECT, SFX_SELECT_VOLUME * acc.sfxVolume);
   }
   function focusTarget(targetId: string) {
     const target = targets.find((entity) => entity.id === targetId);
