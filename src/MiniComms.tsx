@@ -10,13 +10,27 @@ function messageTime(ts: number): string {
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ts));
 }
 
+// Town, Star Map and Alliance mount their own MiniComms instance. Keep the last
+// live payload in module memory so switching tabs never flashes an empty feed
+// while the replacement socket is waiting for its snapshot.
+const miniCommsCache = new Map<string, { live: LiveChat[]; roster: PresenceCity[] }>();
+
+function cachedComms(address: string) {
+  return miniCommsCache.get(address.toLowerCase()) || { live: [], roster: [] };
+}
+
+function cacheComms(address: string, patch: Partial<{ live: LiveChat[]; roster: PresenceCity[] }>) {
+  const key = address.toLowerCase();
+  miniCommsCache.set(key, { ...cachedComms(key), ...patch });
+}
+
 // Quick live peek at the shared Cosmos channel (same backend as the Comms page).
 // No seeded/placeholder messages; DMs + other channels live in full Comms.
 export default function MiniComms({ address, profile, onOpenMessages }: { address: string; profile: Profile; onOpenMessages: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState("");
-  const [live, setLive] = useState<LiveChat[]>([]);
-  const [roster, setRoster] = useState<PresenceCity[]>([]);
+  const [live, setLive] = useState<LiveChat[]>(() => cachedComms(address).live);
+  const [roster, setRoster] = useState<PresenceCity[]>(() => cachedComms(address).roster);
   const [connected, setConnected] = useState(false);
   const [unread, setUnread] = useState(0);
   const rtRef = useRef<RealtimeClient | null>(null);
@@ -30,15 +44,24 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
     rtRef.current = rt;
-    rt.handlers.onSnapshot = (_you, players, chat) => { setLive(chat); setRoster(players); };
+    rt.handlers.onSnapshot = (_you, players, chat) => {
+      cacheComms(address, { live: chat, roster: players });
+      setLive(chat); setRoster(players);
+    };
     rt.handlers.onChat = (m) => {
-      setLive((cur) => [...cur, m].slice(-40));
+      setLive((cur) => {
+        const next = [...cur, m].slice(-40);
+        cacheComms(address, { live: next });
+        return next;
+      });
       if (!expandedRef.current && m.pid !== address) setUnread((n) => Math.min(n + 1, 99));
     };
     rt.handlers.onPlayer = (p) => setRoster((cur) => {
       const i = cur.findIndex((x) => x.id === p.id);
-      if (i < 0) return [...cur, p];
-      const next = cur.slice(); next[i] = p; return next;
+      const next = i < 0 ? [...cur, p] : cur.slice();
+      if (i >= 0) next[i] = p;
+      cacheComms(address, { roster: next });
+      return next;
     });
     rt.handlers.onStatus = setConnected;
     rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null });

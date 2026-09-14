@@ -41,6 +41,7 @@ export default function CosmicBackdrop() {
     let height = 1;
     let stars: Star[] = [];
     let animationFrame = 0;
+    const motionScale = reducedMotion ? 0.5 : 1;
 
     const resize = () => {
       const ratio = Math.min(1.5, window.devicePixelRatio || 1);
@@ -73,15 +74,15 @@ export default function CosmicBackdrop() {
 
     let last = 0;
     const draw = (timestamp: number) => {
-      if (!reducedMotion) animationFrame = window.requestAnimationFrame(draw);
+      animationFrame = window.requestAnimationFrame(draw);
       if (document.hidden) return;        // don't burn CPU/GPU when the tab/window is hidden
       if (timestamp - last < 33) return;  // cap ~30fps — plenty for an ambient starfield
       last = timestamp;
       const seconds = timestamp / 1000;
       context.clearRect(0, 0, width, height);
       for (const star of stars) {
-        const x = wrap(star.x + seconds * star.vx, width);
-        const y = wrap(star.y + seconds * star.vy, height);
+        const x = wrap(star.x + seconds * star.vx * motionScale, width);
+        const y = wrap(star.y + seconds * star.vy * motionScale, height);
         const pulse = reducedMotion ? 0 : Math.sin(seconds * star.twinkle + star.phase) * 0.13;
         const alpha = Math.max(0.12, Math.min(0.9, star.alpha + pulse));
         const tone = star.phase > Math.PI ? "190,225,255" : "213,203,255";

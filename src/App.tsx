@@ -429,7 +429,7 @@ export default function App() {
           <div className="connect-hero">
             <small>THE FRONTIER IS OPEN</small>
             <AllianceWordmark hero />
-            <p>Build your city. Rally your fleet. Take the center.</p>
+            <p>TAKE THE CENTER.</p>
           </div>
           <div className="access-frame">
             <i className="access-corner c1" /><i className="access-corner c2" /><i className="access-corner c3" /><i className="access-corner c4" />
