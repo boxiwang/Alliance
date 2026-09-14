@@ -433,12 +433,7 @@ export default function App() {
           </div>
           <div className="access-frame">
             <i className="access-corner c1" /><i className="access-corner c2" /><i className="access-corner c3" /><i className="access-corner c4" />
-            <header><span>CHOOSE YOUR ENTRY</span><em><i /> FRONTIER ONLINE</em></header>
-            <div className="quickstart">
-              <button className="cta big" onClick={startGuest} disabled={!!busy}>{busy === "guest" ? "OPENING SECTOR…" : "ENTER AS GUEST"}</button>
-              {firebaseConfigured && <button className="gbtn" onClick={signInGoogle} disabled={busy === "google"}>{busy === "google" ? "OPENING GOOGLE…" : "CONTINUE WITH GOOGLE"}</button>}
-              <div className="or"><span>CONNECT WALLET</span></div>
-            </div>
+            <header><span>CONNECT WALLET</span><em><i /> FRONTIER ONLINE</em></header>
             <div className="wgrid">
               {wallets.map((w) => (
                 <button
@@ -458,7 +453,12 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <footer>A wallet is only required for token-gated alliances and the marketplace.</footer>
+            <div className="quickstart">
+              <div className="or"><span>OR ENTER WITHOUT A WALLET</span></div>
+              <button className="cta big secondary-entry" onClick={startGuest} disabled={!!busy}>{busy === "guest" ? "OPENING SECTOR…" : "ENTER AS GUEST"}</button>
+              {firebaseConfigured && <button className="gbtn" onClick={signInGoogle} disabled={busy === "google"}>{busy === "google" ? "OPENING GOOGLE…" : "CONTINUE WITH GOOGLE"}</button>}
+            </div>
+            <footer>Wallet commanders can enter token-gated alliances and trade on the marketplace.</footer>
           </div>
         </section>
       )}
