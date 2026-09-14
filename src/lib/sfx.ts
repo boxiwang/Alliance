@@ -1,5 +1,6 @@
-// Tiny sound-effects helper. Gated by the account's "Combat audio" (soundEnabled)
-// setting at the call site. A fresh Audio per play so rapid triggers overlap.
+// Sound-effects helper. Gated by the account's "Combat audio" (soundEnabled)
+// setting at the call site. Small preloaded pools preserve the user's first
+// post-refresh gesture instead of waiting for a newly-created element to load.
 
 export const SFX_CHAT_SEND = "/audio/chat-send.mp3";
 export const SFX_STARMAP_SELECT = "/audio/starmap-select.mp3";
@@ -23,9 +24,44 @@ export const SFX_SUBTAB_SWITCH_VOLUME = 0.42;    // clip RMS -26.5 dB
 // by +5.8 dB to the shared -34 dB target, so its base level stays at 1.
 export const SFX_LOGIN_HOVER_VOLUME = 1;
 
+const SFX_POOL_SIZE = 3;
+const pools = new Map<string, HTMLAudioElement[]>();
+
+function createPlayer(src: string): HTMLAudioElement {
+  const audio = new Audio(src);
+  audio.preload = "auto";
+  return audio;
+}
+
+function poolFor(src: string): HTMLAudioElement[] {
+  let pool = pools.get(src);
+  if (!pool) {
+    pool = [createPlayer(src)];
+    pools.set(src, pool);
+  }
+  return pool;
+}
+
+export function preloadSfx(sources: string[]): void {
+  if (typeof Audio === "undefined") return;
+  for (const src of sources) {
+    try {
+      const pool = poolFor(src);
+      while (pool.length < SFX_POOL_SIZE) pool.push(createPlayer(src));
+      for (const audio of pool) audio.load();
+    } catch {}
+  }
+}
+
 export function playSfx(src: string, volume = 1): void {
   try {
-    const audio = new Audio(src);
+    const pool = poolFor(src);
+    let audio = pool.find((candidate) => candidate.paused || candidate.ended);
+    if (!audio) {
+      audio = createPlayer(src);
+      if (pool.length < SFX_POOL_SIZE) pool.push(audio);
+    }
+    audio.currentTime = 0;
     audio.volume = Math.max(0, Math.min(1, volume));
     void audio.play().catch(() => {});
   } catch {}

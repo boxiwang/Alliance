@@ -18,6 +18,7 @@ export function requestGameMusicStart(): void {
 
 export default function GameMusic({ address, active }: { address: string; active: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const audioUnlockedRef = useRef(false);
   const [settings, setSettings] = useState(() => {
     const account = address ? loadPlayerAccount(address) : null;
     return { enabled: account?.musicEnabled ?? true, volume: account?.musicVolume ?? 1 };
@@ -53,6 +54,8 @@ export default function GameMusic({ address, active }: { address: string; active
     const beginFromEntry = () => {
       const audio = audioRef.current;
       if (!audio || !settings.enabled) return;
+      audioUnlockedRef.current = true;
+      audio.muted = false;
       audio.volume = gameMusicOutputVolume(settings.volume);
       void audio.play().catch(() => {});
     };
@@ -91,23 +94,44 @@ export default function GameMusic({ address, active }: { address: string; active
       return;
     }
 
-    const begin = () => { void audio.play().catch(() => {}); };
-    const beginWhenVisible = () => { if (!document.hidden) begin(); };
-    begin();
+    const primeOrBegin = () => {
+      audio.muted = false;
+      void audio.play().then(() => {
+        audioUnlockedRef.current = true;
+      }).catch(() => {
+        // Autoplay was blocked after a refresh. Muted playback is allowed and
+        // keeps the loop warm at its saved position until a trusted gesture.
+        if (audioUnlockedRef.current) return;
+        audio.muted = true;
+        void audio.play().catch(() => {});
+      });
+    };
+    const unlock = () => {
+      audioUnlockedRef.current = true;
+      audio.muted = false;
+      audio.volume = gameMusicOutputVolume(settings.volume);
+      void audio.play().catch(() => {});
+    };
+    const resume = () => {
+      if (audioUnlockedRef.current) unlock();
+      else primeOrBegin();
+    };
+    const beginWhenVisible = () => { if (!document.hidden) resume(); };
+    primeOrBegin();
     // Direct-link dev sessions can arrive without a browser-approved gesture.
     // The first click/key then unlocks the same continuous soundtrack. Wallet
     // popups can also suspend audio; resume the same element on return so the
     // loop keeps its position rather than restarting.
-    window.addEventListener("pointerdown", begin, { passive: true });
-    window.addEventListener("keydown", begin);
-    window.addEventListener("focus", begin);
-    window.addEventListener("pageshow", begin);
+    window.addEventListener("pointerdown", unlock, { passive: true, capture: true });
+    window.addEventListener("keydown", unlock, { capture: true });
+    window.addEventListener("focus", resume);
+    window.addEventListener("pageshow", resume);
     document.addEventListener("visibilitychange", beginWhenVisible);
     return () => {
-      window.removeEventListener("pointerdown", begin);
-      window.removeEventListener("keydown", begin);
-      window.removeEventListener("focus", begin);
-      window.removeEventListener("pageshow", begin);
+      window.removeEventListener("pointerdown", unlock, { capture: true });
+      window.removeEventListener("keydown", unlock, { capture: true });
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("pageshow", resume);
       document.removeEventListener("visibilitychange", beginWhenVisible);
     };
   }, [active, settings]);
