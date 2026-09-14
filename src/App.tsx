@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Eip1193Provider, Eip6963ProviderDetail } from "./global";
 import { subscribeProviders, resolveWallets, connect, signIn, WalletButton } from "./lib/wallet";
 import { readWallet, WalletRecords } from "./lib/blockscout";
@@ -21,9 +21,26 @@ import { loadGame } from "./lib/gamestore";
 import { verifyAllianceHolding } from "./lib/alliance";
 import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
+import { loadPlayerAccount } from "./lib/player-account";
+import { playSfx, SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME } from "./lib/sfx";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
+const MAIN_STAGES: MainStage[] = ["alliance", "town", "world", "messages", "profile"];
+
+// Cue when switching between the main tabs (city / star map / alliance / comms /
+// profile). Driven off the view state so every navigation path — nav bar, back
+// buttons, deep links from comms — plays it exactly once.
+function useTabSwitchSfx(address: string, view: string) {
+  const prev = useRef(view);
+  useEffect(() => {
+    const from = prev.current; prev.current = view;
+    if (from !== view && MAIN_STAGES.includes(from as MainStage) && MAIN_STAGES.includes(view as MainStage)) {
+      const acc = loadPlayerAccount(address);
+      if (acc.soundEnabled) playSfx(SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME * acc.sfxVolume);
+    }
+  }, [view, address]);
+}
 
 // Guest / Google players have no wallet, but the whole app is keyed on a 0x
 // address, so derive a stable synthetic one from their id. FNV-1a expanded to 40 hex.
@@ -45,6 +62,7 @@ function DevGameShell({ initialView, slot, gm }: { initialView: MainStage; slot:
     title: "FRONTIER BORN", avatarId: "genesis",
   };
   const [view, setView] = useState<MainStage>(initialView);
+  useTabSwitchSfx(address, view);
   const [profile, setProfile] = useState<Profile>(() => loadProfile(address) || fallback);
   const gmHoldings = gm ? [{ address: `0x${slot.padStart(40, "a").slice(-40)}`, name: "ORBT", symbol: "ORBT", decimals: 18, raw: "1000000000000000000", type: "ERC-20", exchangeRate: null, marketCap: null, iconUrl: null, reputation: null }] : [];
 
@@ -102,6 +120,7 @@ export default function App() {
   const [selectedCA, setSelectedCA] = useState<string | null>(null);
   const [busy, setBusy] = useState<string>("");
   const [error, setError] = useState<string>("");
+  useTabSwitchSfx(address, stage);
 
   useEffect(() => subscribeProviders(setDetected), []);
 
