@@ -36,6 +36,8 @@ export interface PlayerAccount {
   musicEnabled: boolean;
   /** Player-selected mix inside the game's deliberately quiet music ceiling. */
   musicVolume: number;
+  /** Master level for game sound effects (clicks, selections, comms). */
+  sfxVolume: number;
   reducedMotion: boolean;
   /** Rendering quality: "auto" adapts to the device, or a pinned tier. */
   graphicsTier: GraphicsTier;
@@ -347,6 +349,7 @@ function defaultAccount(address: string): PlayerAccount {
     soundEnabled: true,
     musicEnabled: true,
     musicVolume: 1,
+    sfxVolume: 1,
     reducedMotion: false,
     graphicsTier: "auto",
     autoTranslateComms: false,
@@ -430,6 +433,7 @@ export function loadPlayerAccount(address: string): PlayerAccount {
     linkedWallets,
     credits: Math.max(0, Number(saved.credits) || 0),
     musicVolume: saved.musicVolume == null ? fallback.musicVolume : Math.max(0, Math.min(1, Number(saved.musicVolume) || 0)),
+    sfxVolume: saved.sfxVolume == null ? fallback.sfxVolume : Math.max(0, Math.min(1, Number(saved.sfxVolume) || 0)),
     graphicsTier: isGraphicsTier(saved.graphicsTier) ? saved.graphicsTier : fallback.graphicsTier,
     consents: {
       terms: { ...fallback.consents.terms, ...saved.consents?.terms },

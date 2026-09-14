@@ -52,7 +52,7 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
     const body = draft.trim();
     if (!body) return;
     rtRef.current?.sendChat(body);
-    if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME);
+    if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME * account.sfxVolume);
     setDraft("");
   }
 

@@ -175,7 +175,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     if (dmWith) {
       if (!body) return;
       rtRef.current?.sendDM(dmWith.id, body);
-      if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME);
+      if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME * account.sfxVolume);
       setDraft("");
       return;
     }
@@ -193,7 +193,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       }
       if (!text) return;
       rtRef.current?.sendChat(text, intel);
-      if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME);
+      if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME * account.sfxVolume);
       setDraft(""); setPendingShare(null); clearQueuedCommsShare(address); setShareTrayOpen(false);
       return;
     }

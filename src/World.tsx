@@ -28,9 +28,10 @@ import WorldMarchLayer from "./WorldMarchLayer";
 import { useGraphicsQuality } from "./useGraphicsQuality";
 import type { GraphicsQuality } from "./lib/graphics-tier";
 import {
-  PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, loadCosmeticVault,
+  PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, loadCosmeticVault, loadPlayerAccount,
   type ChatSignalId, type MarchSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
 } from "./lib/player-account";
+import { playSfx, SFX_TARGET_SELECT } from "./lib/sfx";
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
@@ -785,7 +786,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         const color = entityColor(entity); const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id; const verified = entity.kind === "resource" || scoutedTargetIds.has(entity.id);
         const occupation = entity.kind === "resource" ? resourceOccupationDisposition(entity, world.marches, world.players, session.playerId, profile.faction) : "neutral";
         const publicCosmetics = entity.kind === "city" ? world.players[entity.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS : null;
-        return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setHomeSelected(false); setSelection(emptySelection()); setMessage(""); setTileMark(null); }}>
+        return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setHomeSelected(false); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
           {selectedTarget && (entity.kind !== "city" || !gpuVisualsReady) && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
           {(!gpuVisualsReady || entity.kind !== "city") && <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />}
           {entity.kind === "city" && publicCosmetics ? <>
@@ -850,10 +851,17 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const result = advanceLocalWorldSession(session, gmFillTroops(viewGame), Date.now(), N); commit(result);
     setMessage("GM: standing troops filled to current training-building capacity.");
   }
+  // Sound cue when the player selects a target on the star map. Read the account
+  // fresh so a Profile change (sound toggle / SFX volume) applies immediately.
+  function playSelectSfx() {
+    const acc = loadPlayerAccount(address);
+    if (acc.soundEnabled) playSfx(SFX_TARGET_SELECT, acc.sfxVolume);
+  }
   function focusTarget(targetId: string) {
     const target = targets.find((entity) => entity.id === targetId);
     if (!target) { setMessage("That signal has left the current sector."); return; }
     setSelectedId(target.id); setCamera({ ...target.position }); setZoom((value) => Math.max(value, target.kind === "city" ? 3.2 : 2.1)); setMessage("");
+    playSelectSfx();
   }
   function shareSelected() {
     if (!selected) return;
@@ -879,7 +887,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const target = result.session.world.entities[result.targetId];
     if (!target || target.kind !== "monster") return;
     setSelectedId(target.id); setSelection(emptySelection()); setCamera({ ...target.position });
-    setZoom((value) => Math.max(value, 2.1)); setTileMark(null);
+    setZoom((value) => Math.max(value, 2.1)); setTileMark(null); playSelectSfx();
     setMessage(result.spawned
       ? `Deep Scan discovered an uncharted L${target.level} Rogue signal.`
       : `Tracking the nearest L${target.level} Rogue signal.`);
@@ -956,7 +964,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           {!gpuVisualsReady && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {mapClusters}
           {mapTargets}
-          <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera({ ...playerCity.position }); setSelectedId(null); setHomeSelected(true); }}>
+          <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera({ ...playerCity.position }); setSelectedId(null); setHomeSelected(true); playSelectSfx(); }}>
             {strategicZoom && !gpuVisualsReady ? <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
               <circle cx={playerCity.position.x} cy={playerCity.position.y} r="9" className="world-home-ring" />
               <rect x={playerCity.position.x - 4.5} y={playerCity.position.y - 4.5} width="9" height="9" rx="1" transform={`rotate(45 ${playerCity.position.x} ${playerCity.position.y})`} />
