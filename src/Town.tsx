@@ -34,6 +34,8 @@ import BuildingGlyph from "./BuildingGlyph";
 import CosmicBackdrop from "./CosmicBackdrop";
 import MiniComms from "./MiniComms";
 import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAllianceHelp } from "./lib/alliance";
+import { loadPlayerAccount } from "./lib/player-account";
+import { playSfx, SFX_TARGET_SELECT } from "./lib/sfx";
 
 const ECONOMY_BUILDINGS: BKey[] = ["bank", "oilwell", "powerplant"];
 const COMMAND_BUILDINGS: BKey[] = ["storage", "wall"];
@@ -106,6 +108,13 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [healQty, setHealQty] = useState(10);
   const [researchBranch, setResearchBranch] = useState<ResearchBranch>("development");
   const [facilityOpen, setFacilityOpen] = useState<BKey | null>(null);
+  // Select a building's facility, with a click cue (read the account fresh so a
+  // Profile change to sound / SFX volume applies without remounting).
+  function openFacility(building: BKey) {
+    const acc = loadPlayerAccount(address);
+    if (acc.soundEnabled) playSfx(SFX_TARGET_SELECT, acc.sfxVolume);
+    setFacilityOpen(building);
+  }
   const [commandTab, setCommandTab] = useState<"today" | "signals">("today");
   const [selectedResearchKey, setSelectedResearchKey] = useState("");
   const [gm, setGm] = useState(() => hasLocalGm(address));
@@ -280,7 +289,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           {Array.from({ length: buildQueueSlots }, (_, slot) => {
             const building = buildQueues[slot];
             const state = building ? view.buildings[building] : null;
-            return <button className={`operation-slot${building ? " active" : " idle"}`} key={`build-${slot}`} onClick={() => building && setFacilityOpen(building)}>
+            return <button className={`operation-slot${building ? " active" : " idle"}`} key={`build-${slot}`} onClick={() => building && openFacility(building)}>
               <small>BUILD {slot + 1}</small><b>{building ? `${BUILDINGS[building].label} → L${state!.lvl + 1}` : "IDLE"}</b>
               <time className="mono">{state ? fmtMs(state.finishAt - now) : "AVAILABLE"}</time>
               {building && <i className="operation-meter" style={{ width: upPct(building, state!, now) + "%" }} />}
@@ -293,18 +302,18 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
             const detail = active ? queue.mode === "promote"
               ? `${compact(displayTroops(queue.qty))} · T${queue.sourceTier} → T${queue.tier}`
               : `${compact(displayTroops(queue.qty))} · T${queue.tier}` : "IDLE";
-            return <button className={`operation-slot${active ? " active training" : " idle"}`} key={`train-${type}`} onClick={() => setFacilityOpen(building)}>
+            return <button className={`operation-slot${active ? " active training" : " idle"}`} key={`train-${type}`} onClick={() => openFacility(building)}>
               <small>{TROOPS_META[type].label.toUpperCase()} {active && queue.mode === "promote" ? "PROMOTE" : "TRAIN"}</small><b>{detail}</b>
               <time className="mono">{active ? fmtMs(queue.finishAt - now) : "AVAILABLE"}</time>
               {active && <i className="operation-meter" style={{ width: trainPct(view, type, now) + "%" }} />}
             </button>;
           })}
-          <button className={`operation-slot${view.researchQueue.finishAt > 0 ? " active research" : " idle"}`} onClick={() => view.buildings.academy.lvl >= 1 && setFacilityOpen("academy")}>
+          <button className={`operation-slot${view.researchQueue.finishAt > 0 ? " active research" : " idle"}`} onClick={() => view.buildings.academy.lvl >= 1 && openFacility("academy")}>
             <small>RESEARCH</small><b>{view.researchQueue.finishAt > 0 ? researchTech(view.researchQueue.tech)?.name ?? "Researching" : view.buildings.academy.lvl >= 1 ? "IDLE" : "LOCKED"}</b>
             <time className="mono">{view.researchQueue.finishAt > 0 ? fmtMs(view.researchQueue.finishAt - now) : view.buildings.academy.lvl >= 1 ? "AVAILABLE" : "RI L1"}</time>
             {view.researchQueue.finishAt > 0 && <i className="operation-meter" style={{ width: queuePct(view.researchQueue.durationSec, view.researchQueue.finishAt, now) + "%" }} />}
           </button>
-          <button className={`operation-slot${view.healing.finishAt > 0 ? " active medical" : " idle"}`} onClick={() => setFacilityOpen("hospital")}>
+          <button className={`operation-slot${view.healing.finishAt > 0 ? " active medical" : " idle"}`} onClick={() => openFacility("hospital")}>
             <small>MEDICAL</small><b>{view.healing.finishAt > 0 ? `${compact(displayTroops(view.healing.qty))} HEALING` : "IDLE"}</b>
             <time className="mono">{view.healing.finishAt > 0 ? fmtMs(view.healing.finishAt - now) : "AVAILABLE"}</time>
             {view.healing.finishAt > 0 && <i className="operation-meter" style={{ width: queuePct(view.healing.durationSec, view.healing.finishAt, now) + "%" }} />}
@@ -323,7 +332,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       {/* buildings */}
       <div className={`city-workspace${facilityOpen === "academy" && view.buildings.academy.lvl >= 1 ? " research-focus" : ""}`}>
         <div className="city-directory">
-          <button type="button" className={`civilization-core${facilityOpen === "keep" ? " selected" : ""}`} onClick={() => setFacilityOpen("keep")}>
+          <button type="button" className={`civilization-core${facilityOpen === "keep" ? " selected" : ""}`} onClick={() => openFacility("keep")}>
             <span className="civilization-core-glyph"><BuildingGlyph building="keep" /></span>
             <span className="civilization-core-copy"><small>CIVILIZATION CORE</small><b>{profile.name}</b><em>ONLINE</em></span>
             <span className="civilization-core-metrics"><span><small>CORE LEVEL</small><b className="mono">{view.buildings.keep.lvl}</b></span><span><small>SHIELD</small><b className="mono">{view.buildings.keep.lvl < 10 ? "ACTIVE" : "OFFLINE"}</b></span><i>›</i></span>
@@ -690,8 +699,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         role={selectableBuilding ? "button" : undefined}
         aria-label={selectableBuilding ? `${meta.label} details` : undefined}
         tabIndex={selectableBuilding ? 0 : undefined}
-        onClick={selectableBuilding ? () => setFacilityOpen(k) : undefined}
-        onKeyDown={selectableBuilding ? (event) => { if (event.key === "Enter" || event.key === " ") setFacilityOpen(k); } : undefined}>
+        onClick={selectableBuilding ? () => openFacility(k) : undefined}
+        onKeyDown={selectableBuilding ? (event) => { if (event.key === "Enter" || event.key === " ") openFacility(k); } : undefined}>
         <header className="bcard-head">
           <div className="bicon"><BuildingGlyph building={k} /></div>
           <div className="brow1"><span className="blabel">{meta.label}</span>
@@ -734,8 +743,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     return (
       <article className={`economy-node ${resource}${locked ? " locked" : ""}${facilityOpen === k ? " selected" : ""}`} key={k}
         role={!locked ? "button" : undefined} aria-label={!locked ? `${meta.label} details` : undefined} tabIndex={!locked ? 0 : undefined}
-        onClick={!locked ? () => setFacilityOpen(k) : undefined}
-        onKeyDown={!locked ? (event) => { if (event.key === "Enter" || event.key === " ") setFacilityOpen(k); } : undefined}>
+        onClick={!locked ? () => openFacility(k) : undefined}
+        onKeyDown={!locked ? (event) => { if (event.key === "Enter" || event.key === " ") openFacility(k); } : undefined}>
         <div className="economy-node-main">
           <span className="economy-glyph"><BuildingGlyph building={k} /></span>
           <div><small>{RES[resource].label}</small><b>{meta.label}</b></div>

@@ -168,6 +168,14 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     return list;
   }, [key, sent, isSystem, sysFilter, systemReports, isCosmos, cosmosLive, dmWith, dmMessages]);
 
+  // Keep the transcript pinned to the newest message when you open/switch a
+  // thread, and whenever your own send lands (including the server echo). We
+  // don't yank the view for others' messages if you've scrolled up to read.
+  const streamRef = useRef<HTMLDivElement>(null);
+  const scrollToLatest = () => { const el = streamRef.current; if (el) el.scrollTop = el.scrollHeight; };
+  useEffect(scrollToLatest, [active, dmWith]);
+  useEffect(() => { const last = messages[messages.length - 1] as ChatMessage | undefined; if (last?.own) scrollToLatest(); }, [messages]);
+
   function send() {
     const body = draft.trim();
     if ((!body && !pendingShare) || isSystem) return;
@@ -300,7 +308,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
               </div>)}
               {onlineCount === 0 && Object.keys(dmThreads).length === 0 && <div className="spam">No commanders online yet — invite a friend with Quick Play and they'll show up here.</div>}
             </div>
-          : <div className="stream">
+          : <div className="stream" ref={streamRef}>
               {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} reducedMotion={account.reducedMotion} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} />)}
               {messages.length === 0 && <div className="spam">{dmWith ? "No messages yet — say hi." : isCosmos ? "Be the first to signal the frontier." : "No messages yet."}</div>}
             </div>}
