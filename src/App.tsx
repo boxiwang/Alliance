@@ -25,6 +25,7 @@ import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
 import { loadPlayerAccount, savePlayerAccount } from "./lib/player-account";
 import { playSfx, preloadSfx, SFX_LOGIN_HOVER, SFX_LOGIN_HOVER_VOLUME, SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME } from "./lib/sfx";
+import { setErrorReportingAddress } from "./lib/error-reporting";
 import { authenticateGoogle, authenticateGuest, authenticateWallet, loadBackendSession, mirrorPlayerState, restorePlayerState, trackEvents, updatePlayerName } from "./lib/backend";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
@@ -192,6 +193,9 @@ function DesktopApp() {
   useEffect(() => {
     preloadSfx([SFX_LOGIN_HOVER, SFX_TAB_SWITCH]);
   }, []);
+
+  // Attach the signed-in player to global error reports (""/anon before login).
+  useEffect(() => { setErrorReportingAddress(address); }, [address]);
 
   useEffect(() => {
     if (!address || !MAIN_STAGES.includes(stage as MainStage)) return;

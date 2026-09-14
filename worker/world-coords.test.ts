@@ -19,9 +19,19 @@ describe("shared-world outer-ring coordinates", () => {
     }
   });
 
-  it("returns the first free stable slot", () => {
+  it("spawns on the outer ring at a random angle, never on an occupied slot", () => {
     const slots = outerRingSlots();
-    expect(assignOuterRingCoord([])).toEqual(slots[0]);
-    expect(assignOuterRingCoord(slots.slice(0, 3))).toEqual(slots[3]);
+    const outerRadius = WORLD_COORD_LIMITS.outerSpawnRadius;
+    const near = (coord: { x: number; y: number }) => Math.hypot(coord.x - WORLD_COORD_LIMITS.center, coord.y - WORLD_COORD_LIMITS.center);
+    // Deterministic rand stubs pick different slots on the SAME outer ring.
+    const low = assignOuterRingCoord([], () => 0);
+    const high = assignOuterRingCoord([], () => 0.999);
+    expect(near(low)).toBeCloseTo(outerRadius, 0);
+    expect(near(high)).toBeCloseTo(outerRadius, 0);
+    expect(low).not.toEqual(high); // random angle, not always slot[0]
+    // Never returns an occupied slot.
+    const takenAll = slots.slice(0, 50);
+    const next = assignOuterRingCoord(takenAll, () => 0);
+    expect(takenAll.some((c) => c.x === next.x && c.y === next.y)).toBe(false);
   });
 });

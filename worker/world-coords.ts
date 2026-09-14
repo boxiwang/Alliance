@@ -37,9 +37,24 @@ export function outerRingSlots(): WorldCoord[] {
 
 const SLOTS = outerRingSlots();
 
-export function assignOuterRingCoord(taken: WorldCoord[]): WorldCoord {
+const radiusOf = (coord: WorldCoord): number => Math.hypot(coord.x - CENTER, coord.y - CENTER);
+
+/**
+ * Assign a spawn on the outer ring at a RANDOM angle — not by join order — so a
+ * player's location can't be inferred from when they joined (owner rule). Still
+ * outer-first: pick randomly among the free slots on the current outermost ring
+ * that has space, and only step inward once a ring fills. Coords stay stable
+ * because the DO persists each player's assigned slot.
+ */
+export function assignOuterRingCoord(taken: WorldCoord[], rand: () => number = Math.random): WorldCoord {
   const occupied = new Set(taken.map((coord) => `${coord.x},${coord.y}`));
-  return SLOTS.find((coord) => !occupied.has(`${coord.x},${coord.y}`)) || SLOTS[taken.length % SLOTS.length];
+  const free = SLOTS.filter((coord) => !occupied.has(`${coord.x},${coord.y}`));
+  if (!free.length) return SLOTS[taken.length % SLOTS.length];
+  // SLOTS are ordered outermost-ring first, so free[0] is on the current
+  // outermost ring with space; take that whole ring and pick a random slot.
+  const outerRadius = radiusOf(free[0]);
+  const ring = free.filter((coord) => radiusOf(coord) >= outerRadius - RING_STEP * 0.5);
+  return ring[Math.floor(rand() * ring.length)] || free[0];
 }
 
 export const WORLD_COORD_LIMITS = {
