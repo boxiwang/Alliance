@@ -17,6 +17,7 @@ import Alliance from "./Alliance";
 import GameMusic, { requestGameMusicStart } from "./GameMusic";
 import GameCursor from "./GameCursor";
 import AlphaFeedback from "./AlphaFeedback";
+import CosmicBackdrop from "./CosmicBackdrop";
 import { hasLocalGm, localGmRequested, registerOwnerGm } from "./lib/gm";
 import { loadGame } from "./lib/gamestore";
 import { verifyAllianceHolding } from "./lib/alliance";
@@ -29,6 +30,14 @@ import { authenticateGoogle, authenticateGuest, authenticateWallet, loadBackendS
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
 const MAIN_STAGES: MainStage[] = ["alliance", "town", "world", "messages", "profile"];
+
+function AllianceWordmark({ hero = false }: { hero?: boolean }) {
+  return <div className={`alliance-wordmark${hero ? " hero" : ""}`} aria-label="ALLIANCE">
+    <i aria-hidden="true" />
+    <span>ALLIANCE</span>
+    <i aria-hidden="true" />
+  </div>;
+}
 
 // Cue when switching between the main tabs (city / star map / alliance / comms /
 // profile). Driven off the view state so every navigation path — nav bar, back
@@ -392,23 +401,18 @@ export default function App() {
 
   return (
     <div className="page">
+      {!MAIN_STAGES.includes(stage as MainStage) && <CosmicBackdrop />}
       <GameMusic address={address} active={stage === "alliance" || stage === "town" || stage === "world" || stage === "messages" || stage === "profile"} />
       <GameCursor address={address} active={!!address && (stage === "alliance" || stage === "town" || stage === "world" || stage === "messages" || stage === "profile")} />
-      <header className="topbar">
-        <div className="brand">
-          <span className="crest">⚔️</span>
-          <div>
-            <div className="bname">ALLIANCE</div>
-            <div className="bsub">on-chain civilization · private alpha</div>
-          </div>
-        </div>
+      <header className={`topbar${stage === "connect" ? " connect-topbar" : ""}`}>
+        <AllianceWordmark />
         {address ? (
           <div className="chips">
             <span className="chip"><i className="dot" /> {shortAddr(address)}</span>
             <button className="mini out" onClick={disconnect}>Disconnect</button>
           </div>
         ) : (
-          <span className="chip lock">🔒 View-only — we can’t move your funds</span>
+          <span className="chip lock">SIGNATURE ONLY · NO FUNDS MOVE</span>
         )}
       </header>
 
@@ -421,34 +425,40 @@ export default function App() {
 
       {stage === "connect" && (
         <section className="connect">
-          <h1>Claim your corner of the chain</h1>
-          <p className="lead">
-            Build a stronghold, raid the frontier, and rally a memecoin army.
-            Jump in with one tap — or connect a wallet if you have one.
-          </p>
-          <div className="quickstart">
-            <button className="cta big" onClick={startGuest} disabled={!!busy}>{busy === "guest" ? "Opening a sector…" : "▶ Quick Play — no wallet"}</button>
-            {firebaseConfigured && <button className="gbtn" onClick={signInGoogle} disabled={busy === "google"}>{busy === "google" ? "Opening Google…" : "Continue with Google"}</button>}
-            <div className="or"><span>or connect a wallet</span></div>
+          <div className="connect-horizon" aria-hidden="true"><i /><i /><i /></div>
+          <div className="connect-hero">
+            <small>THE FRONTIER IS OPEN</small>
+            <AllianceWordmark hero />
+            <p>Build your city. Rally your fleet. Take the center.</p>
           </div>
-          <div className="wgrid">
-            {wallets.map((w) => (
-              <button
-                key={w.key}
-                className={"wbtn" + (w.detected ? "" : " off")}
-                style={{ ["--wc" as any]: w.color }}
-                onClick={() => pick(w)}
-                disabled={!!busy}
-              >
-                <span className="wicon">
-                  {w.icon ? <img src={w.icon} alt="" /> : <span className="emoji">{w.emoji}</span>}
-                </span>
-                <span className="wmeta">
-                  <span className="wn">{w.name}</span>
-                  <span className="ws">{busy === w.key ? "opening…" : w.detected ? "connect" : "get it ↗"}</span>
-                </span>
-              </button>
-            ))}
+          <div className="access-frame">
+            <i className="access-corner c1" /><i className="access-corner c2" /><i className="access-corner c3" /><i className="access-corner c4" />
+            <header><span>CHOOSE YOUR ENTRY</span><em><i /> FRONTIER ONLINE</em></header>
+            <div className="quickstart">
+              <button className="cta big" onClick={startGuest} disabled={!!busy}>{busy === "guest" ? "OPENING SECTOR…" : "ENTER AS GUEST"}</button>
+              {firebaseConfigured && <button className="gbtn" onClick={signInGoogle} disabled={busy === "google"}>{busy === "google" ? "OPENING GOOGLE…" : "CONTINUE WITH GOOGLE"}</button>}
+              <div className="or"><span>CONNECT WALLET</span></div>
+            </div>
+            <div className="wgrid">
+              {wallets.map((w) => (
+                <button
+                  key={w.key}
+                  className={"wbtn" + (w.detected ? "" : " off")}
+                  style={{ ["--wc" as any]: w.color }}
+                  onClick={() => pick(w)}
+                  disabled={!!busy}
+                >
+                  <span className="wicon">
+                    {w.icon ? <img src={w.icon} alt="" /> : <span className="emoji">{w.emoji}</span>}
+                  </span>
+                  <span className="wmeta">
+                    <span className="wn">{w.name}</span>
+                    <span className="ws">{busy === w.key ? "OPENING…" : w.detected ? "READY" : "GET WALLET ↗"}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <footer>A wallet is only required for token-gated alliances and the marketplace.</footer>
           </div>
         </section>
       )}
