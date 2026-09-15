@@ -9,7 +9,7 @@ export type PresenceCity = {
   might: number; keepLevel: number; faction: string | null;
   cosmetics: unknown; online: boolean; lastSeen: number;
 };
-export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown };
+export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown; signal?: string | null };
 
 type Handlers = {
   onSnapshot?: (you: string, players: PresenceCity[], chat: LiveChat[], dms: Record<string, LiveChat[]>) => void;

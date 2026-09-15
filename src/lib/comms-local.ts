@@ -1,4 +1,4 @@
-import type { LanguageCode } from "./player-account";
+import type { ChatSignalId, LanguageCode } from "./player-account";
 import type { SharedWorldIntel } from "./shared-intel";
 import type { HeadlessWorld } from "./world-engine";
 
@@ -6,6 +6,8 @@ export type LocalCommsMessage = {
   id?: string;
   a?: string;
   f?: string;
+  /** Sender's equipped chat name-signature (so others see it, not just you). */
+  sig?: ChatSignalId | null;
   v?: boolean;
   t?: string;
   b?: string;

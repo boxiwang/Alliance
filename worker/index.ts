@@ -84,7 +84,14 @@ type PlayerRow = {
   might: number; keepLevel: number; faction: string | null;
   cosmetics: unknown; online: boolean; lastSeen: number; coordVersion?: number;
 };
-type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown };
+type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown; signal?: string | null };
+
+// A player's equipped chat name-signature, so everyone (not just the sender)
+// sees the effect in chat. Read from the sanitized cosmetics on the player row.
+function chatSignalOf(player?: PlayerRow): string | null {
+  const cos = player?.cosmetics as { chatSignal?: string } | null | undefined;
+  return cos && typeof cos.chatSignal === "string" ? cos.chatSignal : null;
+}
 type SocketAttachment = { pid: string; name: string; sessionId: string; windowStart: number; messageCount: number };
 
 function prune(arr: ChatRow[]): ChatRow[] {
@@ -232,7 +239,7 @@ export class WorldRoom {
       // A relayed coordinate/recon rides along as a small JSON payload so the
       // message renders as a clickable star-map card, not just a text line.
       const intel = sanitizeIntel(data.intel);
-      const msg: ChatRow = { id: crypto.randomUUID(), pid, name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null, ...(intel ? { intel } : {}) };
+      const msg: ChatRow = { id: crypto.randomUUID(), pid, name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null, signal: chatSignalOf(players[pid]), ...(intel ? { intel } : {}) };
       const chat = (await this.state.storage.get<ChatRow[]>("chat:cosmos")) || [];
       chat.push(msg);
       await this.state.storage.put("chat:cosmos", prune(chat));
@@ -245,7 +252,7 @@ export class WorldRoom {
       const key = dmKey(pid, to);
       const dmsAll = (await this.state.storage.get<Record<string, ChatRow[]>>("dms")) || {};
       const arr = dmsAll[key] || [];
-      const msg: ChatRow = { id: crypto.randomUUID(), pid, to, name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null };
+      const msg: ChatRow = { id: crypto.randomUUID(), pid, to, name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null, signal: chatSignalOf(players[pid]) };
       arr.push(msg);
       dmsAll[key] = prune(arr);
       await this.state.storage.put("dms", dmsAll);

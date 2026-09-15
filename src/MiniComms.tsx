@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Profile } from "./lib/profile";
-import { loadCosmeticVault, loadPlayerAccount } from "./lib/player-account";
+import { loadCosmeticVault, loadPlayerAccount, type ChatSignalId } from "./lib/player-account";
 import NameSignal from "./NameSignal";
 import { RealtimeClient, type LiveChat, type PresenceCity } from "./lib/realtime";
 import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME } from "./lib/sfx";
@@ -66,7 +66,7 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
       return next;
     });
     rt.handlers.onStatus = setConnected;
-    rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null });
+    rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, cosmetics: loadCosmeticVault(address).equipped });
     return () => rt.close();
   }, [address, profile.name, profile.factionSymbol]);
 
@@ -90,7 +90,7 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
   if (!expanded) return <aside className="mini-comms collapsed" aria-label="Quick communications">
     <button className="mini-comms-peek" onClick={() => toggleExpanded(true)}>
       <span className="mini-comms-mark">✦</span>
-      <span className="mini-comms-peek-copy"><small>◎ COSMOS // {connected ? "LIVE" : "…"}</small><b><em>{latest?.pid === address ? <NameSignal signal={ownNameSignal} mode="demo" reducedMotion={account.reducedMotion}>{latest.name}</NameSignal> : latest?.name || ""}</em>{latest?.text || "No transmissions yet — say hello."}</b></span>
+      <span className="mini-comms-peek-copy"><small>◎ COSMOS // {connected ? "LIVE" : "…"}</small><b><em>{latest ? <NameSignal signal={latest.pid === address ? ownNameSignal : ((latest.signal as ChatSignalId | null) ?? null)} mode="demo" reducedMotion={account.reducedMotion}>{latest.name}</NameSignal> : ""}</em>{latest?.text || "No transmissions yet — say hello."}</b></span>
       {unread > 0 && <span className="mini-comms-unread">{unread}</span>}
       <span className="mini-comms-chevron">⌃</span>
     </button>
@@ -104,7 +104,7 @@ export default function MiniComms({ address, profile, onOpenMessages }: { addres
     <div className="mini-comms-stream">
       {messages.map((message) => <div className={`mini-comms-message${message.pid === address ? " own" : ""}`} key={message.id}>
         <span className="mini-comms-avatar">{(message.name || "?").slice(0, 1)}</span>
-        <div><small><b>{message.pid === address ? <NameSignal signal={ownNameSignal} mode="demo" reducedMotion={account.reducedMotion}>{message.name}</NameSignal> : message.name}</b><time>{messageTime(message.ts)}</time></small><p>{message.text}</p></div>
+        <div><small><b><NameSignal signal={message.pid === address ? ownNameSignal : ((message.signal as ChatSignalId | null) ?? null)} mode="demo" reducedMotion={account.reducedMotion}>{message.name}</NameSignal></b><time>{messageTime(message.ts)}</time></small><p>{message.text}</p></div>
       </div>)}
       {messages.length === 0 && <div className="mini-comms-empty">No transmissions yet — be the first to signal the frontier.</div>}
     </div>

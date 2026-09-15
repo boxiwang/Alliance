@@ -125,6 +125,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     if (!dmWith) return [];
     return (dmThreads[dmWith.id] || []).map((c) => ({
       a: c.name, own: c.pid === address,
+      sig: (c.signal as ChatSignalId | null | undefined) ?? undefined,
       t: new Date(c.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
       b: c.text,
     }));
@@ -133,6 +134,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   const onlineCount = useMemo(() => roster.filter((p) => p.online).length, [roster]);
   const cosmosLive = useMemo<ChatMessage[]>(() => live.map((c) => ({
     a: c.name, f: c.faction || undefined, own: c.pid === address,
+    sig: (c.signal as ChatSignalId | null | undefined) ?? undefined,
     t: new Date(c.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
     b: c.text,
     intel: (c.intel as SharedWorldIntel | undefined) || undefined,
@@ -373,7 +375,7 @@ function MessageRow({ m, now, ownChatSignal, reducedMotion, onInspect, onOpenWor
     <div className="bd">
       <div className="meta">
         {m.f && <span className="tick" style={{ color: fcol(m.f), background: `${fcol(m.f)}1a` }}>[{m.f}]</span>}
-        <button className="nm player-name-button" disabled={!m.a || !PLAYER_SIGNALS[m.a]} onClick={() => m.a && onInspect(m.a)}><NameSignal signal={m.own ? ownChatSignal : m.a ? PLAYER_SIGNALS[m.a]?.nameSignal : null} mode="demo" reducedMotion={reducedMotion}>{m.a || "UNKNOWN"}</NameSignal></button>
+        <button className="nm player-name-button" disabled={!m.a || !PLAYER_SIGNALS[m.a]} onClick={() => m.a && onInspect(m.a)}><NameSignal signal={m.own ? ownChatSignal : (m.sig ?? null)} mode="demo" reducedMotion={reducedMotion}>{m.a || "UNKNOWN"}</NameSignal></button>
         {m.v && <span className="vbadge" title="on-chain pledge observed">✓</span>}
         {m.tag && <span className={`mtag ${m.tag}`}>{m.tag}</span>}
         <span className="mtime">{m.t}</span>
