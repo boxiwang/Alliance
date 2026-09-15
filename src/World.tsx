@@ -878,12 +878,21 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       .map((p) => {
         const sel = remoteSelectedId === p.id;
         const col = REMOTE_FACTION_COLOR[String(p.faction || "")] || "#7cc0ff";
-        const cos = (p.cosmetics || {}) as { chatSignal?: ChatSignalId | null };
-        return <g key={`rp-${p.id}`} transform={`translate(${p.coords.x} ${p.coords.y}) scale(${markerScale}) translate(${-p.coords.x} ${-p.coords.y})`} className={`world-remote-player ${sel ? "selected" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setRemoteSelectedId(p.id); setSelectedId(null); setHomeSelected(false); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
-          {sel && <circle cx={p.coords.x} cy={p.coords.y} r={bodyR + 3.4} fill="none" stroke={col} strokeWidth={0.8} opacity={0.9} />}
-          <circle cx={p.coords.x} cy={p.coords.y} r={bodyR} fill="#0c1c2e" stroke={col} strokeWidth={0.9} />
-          <circle cx={p.coords.x} cy={p.coords.y} r={bodyR * 0.36} fill={col} />
-          <CityIdentityTag x={p.coords.x} y={p.coords.y} level={p.keepLevel || 1} name={p.name || "Commander"} signal={cos.chatSignal ?? "clear-channel"} relation="neutral" />
+        const cos = (p.cosmetics || {}) as { chatSignal?: ChatSignalId | null; planetBody?: string; halo?: string; orbit?: string };
+        // Render the player's actual equipped planet look (skin/halo/orbit) from
+        // their presence cosmetics, falling back to defaults for anything absent.
+        const cx = p.coords.x, cy = p.coords.y;
+        const skin = (PLANET_SKINS.some((s) => s.id === cos.planetBody) ? cos.planetBody : "dust-homestead") as PlanetSkinId;
+        const halo = (PLANET_HALOS.some((h) => h.id === cos.halo) ? cos.halo : null) as PlanetHaloId | null;
+        const orbit = (PLANET_ORBITS.some((o) => o.id === cos.orbit) ? cos.orbit : null) as PlanetOrbitId | null;
+        return <g key={`rp-${p.id}`} transform={`translate(${cx} ${cy}) scale(${markerScale}) translate(${-cx} ${-cy})`} className={`world-remote-player ${sel ? "selected" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setRemoteSelectedId(p.id); setSelectedId(null); setHomeSelected(false); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
+          {sel && <circle cx={cx} cy={cy} r={bodyR + 3.6} fill="none" stroke={col} strokeWidth={0.8} opacity={0.9} />}
+          {halo && <WorldHaloFx cx={cx} cy={cy} r={bodyR} halo={halo} half="back" />}
+          {orbit && <WorldOrbitFx cx={cx} cy={cy} r={bodyR} orbit={orbit} half="back" />}
+          <WorldPlanetFx cx={cx} cy={cy} r={bodyR} skin={skin} />
+          {orbit && <WorldOrbitFx cx={cx} cy={cy} r={bodyR} orbit={orbit} half="front" />}
+          {halo && <WorldHaloFx cx={cx} cy={cy} r={bodyR} halo={halo} half="front" />}
+          <CityIdentityTag x={cx} y={cy} level={p.keepLevel || 1} name={p.name || "Commander"} signal={cos.chatSignal ?? "clear-channel"} relation="neutral" />
         </g>;
       });
   }, [strategicZoom, remotePlayers, remoteSelectedId, viewX, viewY, viewport.width, viewport.height, markerScale, detailZoom]);
