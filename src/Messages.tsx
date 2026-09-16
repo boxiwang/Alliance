@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RealtimeClient, type LiveChat, type PresenceCity } from "./lib/realtime";
+import { RealtimeClient, type LiveChat, type PresenceCity, type ServerReport } from "./lib/realtime";
 import type { Profile } from "./lib/profile";
 import { displayResource, displayTroops, mightBreakdown, project, totalTroops, worldMarchSlots } from "./lib/game";
 import { compact } from "./lib/format";
@@ -75,14 +75,15 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   const [dmThreads, setDmThreads] = useState<Record<string, LiveChat[]>>({});
   const [dmNames, setDmNames] = useState<Record<string, string>>({});
   const [dmWith, setDmWith] = useState<{ id: string; name: string } | null>(null);
+  const [serverReports, setServerReports] = useState<ServerReport[]>([]);
   const rtRef = useRef<RealtimeClient | null>(null);
   const composingRef = useRef(false);
   const partnerOf = (key: string) => key.split("|").find((x) => x !== address) || key;
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
     rtRef.current = rt;
-    rt.handlers.onSnapshot = (_you, players, chat, dms) => {
-      setLive(chat); setRoster(players);
+    rt.handlers.onSnapshot = (_you, players, chat, dms, reports) => {
+      setLive(chat); setRoster(players); setServerReports(reports || []);
       const threads: Record<string, LiveChat[]> = {}; const names: Record<string, string> = {};
       for (const [k, arr] of Object.entries(dms)) {
         const partner = partnerOf(k); threads[partner] = arr;
@@ -102,6 +103,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       const next = cur.slice(); next[i] = p; return next;
     });
     rt.handlers.onStatus = setRtConnected;
+    rt.handlers.onReport = (report) => setServerReports((cur) => [...cur, report].slice(-80));
     const g = loadGame(address);
     rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, keepLevel: g?.buildings?.keep?.lvl ?? 1, cosmetics: loadCosmeticVault(address).equipped });
     return () => rt.close();
@@ -168,8 +170,17 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   // Falls back to the seeded sample lines only when a fresh account has none.
   const systemReports = useMemo(() => {
     const lines = playerSystemReports(stored, stored?.playerId ?? "");
-    return lines.map(({ sys, tag, t, b }) => ({ sys, tag, t, b }));
-  }, [stored, clock]);
+    const local = lines.map(({ sys, tag, t, b }) => ({ sys, tag, t, b }));
+    // Server-authoritative PvP reports (scouted / incoming / battle) from the
+    // shared world, newest first, merged into the System channel.
+    const server = [...serverReports].reverse().map((r) => {
+      const t = new Date(r.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+      if (r.kind === "scouted") return { sys: "sec" as const, tag: "RECON", t, b: `${r.byName || "A commander"} scouted your city.` };
+      if (r.kind === "incoming") return { sys: "mil" as const, tag: "INBOUND", t, b: `${r.byName || "A commander"}'s army is marching on you.` };
+      return { sys: "mil" as const, tag: "BATTLE", t, b: String(r.payload?.summary || "Battle resolved.") };
+    });
+    return [...server, ...local];
+  }, [stored, clock, serverReports]);
 
   const isCosmos = active === "cosmos";
   const messages = useMemo(() => {

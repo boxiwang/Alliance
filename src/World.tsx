@@ -32,7 +32,7 @@ import {
   type ChatSignalId, type MarchSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
 } from "./lib/player-account";
 import { playSfx, SFX_STARMAP_SELECT, SFX_STARMAP_SELECT_VOLUME } from "./lib/sfx";
-import { RealtimeClient, type PresenceCity } from "./lib/realtime";
+import { RealtimeClient, type PresenceCity, type ScoutSnapshot } from "./lib/realtime";
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
@@ -508,6 +508,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // My own spawn coordinate, owned by the server (shared map). Once known, the
   // home city is moved here so "where I see my home" == "where others see me".
   const [serverHomeCoord, setServerHomeCoord] = useState<Point | null>(null);
+  const [scoutIntel, setScoutIntel] = useState<{ name: string; snapshot: ScoutSnapshot } | null>(null);
+  const [scoutingId, setScoutingId] = useState<string | null>(null);
   const rtRef = useRef<RealtimeClient | null>(null);
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
@@ -521,6 +523,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     rt.handlers.onPlayer = (p) => {
       if (p.id === address || !p.coords) return;
       setRemotePlayers((cur) => { const i = cur.findIndex((x) => x.id === p.id); if (i < 0) return [...cur, p]; const next = cur.slice(); next[i] = p; return next; });
+    };
+    rt.handlers.onScoutResult = (_target, name, _coords, snapshot) => { setScoutingId(null); setScoutIntel({ name, snapshot }); };
+    // Live alarm when someone scouts you (also filed to Comms > System).
+    rt.handlers.onReport = (report) => {
+      if (report.kind === "scouted") setResultNotice({ title: "You were scouted", detail: `${report.byName || "A commander"} scanned your city.`, good: false });
     };
     const g = loadGame(address);
     rt.sendPresence({
@@ -1123,9 +1130,31 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
               {([["FACTION", remoteSelected.faction ? `$${remoteSelected.faction}` : "UNALIGNED"], ["CORE", `Lv.${remoteSelected.keepLevel || 1}`], ["MIGHT", "🔒 SCAN"], ["LOCATION", "🔒 HIDDEN"]] as Array<[string, string]>).map(([k, v]) =><div key={k} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(120,160,190,.14)", borderRadius: 7, padding: "5px 7px" }}><div style={{ font: "700 6px var(--mono)", letterSpacing: ".1em", color: "#567689" }}>{k}</div><div style={{ font: "700 11px var(--mono)", color: "#cfe6f2" }}>{v}</div></div>)}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
+              <button style={btn} disabled={scoutingId === remoteSelected.id} onClick={() => { setScoutingId(remoteSelected.id); setScoutIntel(null); rtRef.current?.sendScout(remoteSelected.id); }}>{scoutingId === remoteSelected.id ? "SCANNING…" : "◎ SCOUT"}</button>
               <button style={{ ...btn, borderColor: `${col}66`, color: "#eaf4fa" }} onClick={onMessages}>MESSAGE ▸</button>
             </div>
-            <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".06em", color: "#5c8296" }}>Location is hidden unless you share an alliance. Scouting &amp; attacks arrive with server-side combat.</div>
+            <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".06em", color: "#5c8296" }}>Scouting alerts the target. Attacks arrive with server-side combat.</div>
+          </div>;
+        })()}
+        {scoutIntel && (() => {
+          const s = scoutIntel.snapshot;
+          const tileStyle: CSSProperties = { background: "rgba(255,255,255,.03)", border: "1px solid rgba(120,160,190,.14)", borderRadius: 7, padding: "5px 7px" };
+          const Tile = ({ k, v, tone = "#cfe6f2" }: { k: string; v: string; tone?: string }) => <div style={tileStyle}><div style={{ font: "700 6px var(--mono)", letterSpacing: ".1em", color: "#567689" }}>{k}</div><div style={{ font: "700 11px var(--mono)", color: tone }}>{v}</div></div>;
+          return <div style={{ position: "absolute", left: 14, top: 52, width: 236, padding: "12px 13px", borderRadius: 12, border: "1px solid rgba(67,242,161,.4)", background: "linear-gradient(160deg,rgba(9,20,18,.97),rgba(6,14,12,.98))", boxShadow: "0 14px 34px rgba(0,0,0,.42)", zIndex: 7 }}>
+            <button aria-label="Close intel" onClick={() => setScoutIntel(null)} style={{ position: "absolute", right: 8, top: 7, width: 20, height: 20, borderRadius: 6, border: "1px solid rgba(120,160,190,.25)", background: "transparent", color: "#7f9bad", cursor: "pointer", lineHeight: 1 }}>×</button>
+            <div style={{ font: "700 7px var(--mono)", letterSpacing: ".16em", color: "#57b98f" }}>▤ RECON ENVELOPE</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "3px 0 9px" }}><b style={{ font: "700 13px var(--hud)", color: "#eaf4fa" }}>{scoutIntel.name || "Commander"}</b>{s.shielded && <span style={{ font: "700 6.5px var(--mono)", letterSpacing: ".08em", padding: "2px 6px", borderRadius: 10, background: "rgba(67,242,161,.14)", color: "var(--teal)", border: "1px solid rgba(67,242,161,.4)" }}>SHIELDED</span>}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 6 }}>
+              <Tile k="ARMY" v={compact(s.troops.army)} /><Tile k="NAVY" v={compact(s.troops.navy)} /><Tile k="AIR" v={compact(s.troops.air)} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 6 }}>
+              <Tile k="CORE" v={`Lv.${s.keepLevel}`} /><Tile k="WALL" v={`Lv.${s.wallLevel}`} />
+              <Tile k="MIGHT" v={compact(s.might)} /><Tile k="WOUNDED" v={compact(s.wounded)} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+              <Tile k="CASH" v={compact(s.resources.cash)} tone="#7fe6b6" /><Tile k="OIL" v={compact(s.resources.oil)} tone="#ffcf8f" /><Tile k="POWER" v={compact(s.resources.power)} tone="#9ad7ff" />
+            </div>
+            <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".05em", color: "#4f7a68" }}>Estimate · recon decays. The target was alerted.</div>
           </div>;
         })()}
         <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")} title={detailZoom ? "Civilization signatures resolved" : "Civilization signatures resolve inside Tactical range"}><i className="city" />{detailZoom ? "CIVILIZATIONS" : "CIV SIGNALS · TAC LOCK"}</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>

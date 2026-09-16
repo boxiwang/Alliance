@@ -11,12 +11,22 @@ export type PresenceCity = {
 };
 export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown; signal?: string | null };
 
+// Server-authoritative combat/intel report (scouted / incoming / battle).
+export type ServerReport = { id: string; kind: "scouted" | "incoming" | "battle"; ts: number; by?: string; byName?: string; payload?: Record<string, unknown> };
+export type ScoutSnapshot = {
+  keepLevel: number; might: number; faction: string | null; wounded: number; wallLevel: number; shielded: boolean;
+  troops: { army: number; navy: number; air: number };
+  resources: { cash: number; oil: number; power: number };
+};
+
 type Handlers = {
-  onSnapshot?: (you: string, players: PresenceCity[], chat: LiveChat[], dms: Record<string, LiveChat[]>) => void;
+  onSnapshot?: (you: string, players: PresenceCity[], chat: LiveChat[], dms: Record<string, LiveChat[]>, reports: ServerReport[]) => void;
   onChat?: (msg: LiveChat) => void;
   onDM?: (key: string, msg: LiveChat) => void;
   onPlayer?: (player: PresenceCity) => void;
   onStatus?: (connected: boolean) => void;
+  onReport?: (report: ServerReport) => void;
+  onScoutResult?: (target: string, name: string, coords: { x: number; y: number } | null, snapshot: ScoutSnapshot) => void;
 };
 
 export class RealtimeClient {
@@ -45,10 +55,12 @@ export class RealtimeClient {
     };
     this.ws.onmessage = (ev) => {
       let d: any; try { d = JSON.parse(ev.data); } catch { return; }
-      if (d.type === "snapshot") this.handlers.onSnapshot?.(d.you, d.players || [], d.chat || [], d.dms || {});
+      if (d.type === "snapshot") this.handlers.onSnapshot?.(d.you, d.players || [], d.chat || [], d.dms || {}, d.reports || []);
       else if (d.type === "chat") this.handlers.onChat?.(d.msg);
       else if (d.type === "dm") this.handlers.onDM?.(d.key, d.msg);
       else if (d.type === "player") this.handlers.onPlayer?.(d.player);
+      else if (d.type === "report") this.handlers.onReport?.(d.report);
+      else if (d.type === "scout_result") this.handlers.onScoutResult?.(d.target, d.name, d.coords || null, d.snapshot);
     };
     this.ws.onclose = () => { this.handlers.onStatus?.(false); this.scheduleReconnect(); };
     this.ws.onerror = () => { try { this.ws?.close(); } catch {} };
@@ -72,6 +84,7 @@ export class RealtimeClient {
 
   sendChat(text: string, intel?: unknown) { this.send({ type: "chat", text, ...(intel ? { intel } : {}) }); }
   sendDM(to: string, text: string) { this.send({ type: "dm", to, text }); }
+  sendScout(to: string) { this.send({ type: "scout", to }); }
   sendPresence(p: { name?: string; might?: number; keepLevel?: number; faction?: string | null; cosmetics?: unknown }) {
     this.send({ type: "presence", ...p });
   }

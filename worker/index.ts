@@ -86,6 +86,37 @@ type PlayerRow = {
 };
 type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown; signal?: string | null };
 
+// Server-authoritative per-player combat/intel reports (scouted / incoming /
+// battle). Delivered on join (offline players see them on return) and live.
+type ServerReport = { id: string; kind: "scouted" | "incoming" | "battle"; ts: number; by?: string; byName?: string; payload?: Record<string, unknown> };
+
+const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+
+// Build a scout intel snapshot from a target's mirrored game state + presence.
+// Estimates (recon is not exact): troop totals per arm, resources, wall, shield.
+function buildScoutSnapshot(player: PlayerRow, gameJson: string | null | undefined): Record<string, unknown> {
+  let game: any = null;
+  if (gameJson) { try { game = JSON.parse(gameJson); } catch { game = null; } }
+  const armTotal = (arm: string): number => {
+    const tiers = game?.troops?.[arm];
+    return tiers && typeof tiers === "object" ? Object.values(tiers).reduce((s: number, n) => s + num(n), 0) : 0;
+  };
+  const res = game?.res || {};
+  const keepLevel = num(game?.buildings?.keep?.lvl) || player.keepLevel || 1;
+  return {
+    keepLevel,
+    might: player.might || 0,
+    faction: player.faction || null,
+    troops: { army: armTotal("army"), navy: armTotal("navy"), air: armTotal("air") },
+    wounded: num(game?.wounded),
+    resources: { cash: num(res.cash), oil: num(res.oil), power: num(res.power) },
+    wallLevel: num(game?.buildings?.wall?.lvl),
+    // v1 shield estimate: cities under Keep 10 are protected (attack-drops-it is a
+    // later refinement). Presence has no PvP-active flag yet.
+    shielded: keepLevel < 10,
+  };
+}
+
 // A player's equipped chat name-signature, so everyone (not just the sender)
 // sees the effect in chat. Read from the sanitized cosmetics on the player row.
 function chatSignalOf(player?: PlayerRow): string | null {
@@ -212,7 +243,8 @@ export class WorldRoom {
         if (p.length) dms[k] = p;
       }
     }
-    ws.send(JSON.stringify({ type: "snapshot", you: pid, players: Object.values(players), chat, dms }));
+    const reports = (await this.state.storage.get<ServerReport[]>(`reports:${pid}`)) || [];
+    ws.send(JSON.stringify({ type: "snapshot", you: pid, players: Object.values(players), chat, dms, reports }));
     this.broadcast({ type: "player", player: players[pid] }, ws);
     // Tell everyone about any ghosts we just cleared (or others revived).
     for (const id of flipped) if (id !== pid) this.broadcast({ type: "player", player: players[id] });
@@ -261,6 +293,16 @@ export class WorldRoom {
         const a = ((sock.deserializeAttachment() || {}) as Partial<SocketAttachment>).pid;
         if (a === pid || a === to) { try { sock.send(payload); } catch {} }
       }
+    } else if (data.type === "scout") {
+      const to = String(data.to || "").slice(0, 64);
+      if (!to || to === pid) return;
+      const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+      if (!players[to]) return; // unknown target
+      const row = await this.env.DB.prepare("SELECT game_json FROM player_state WHERE player_id = ?").bind(to).first<{ game_json: string | null }>();
+      const snapshot = buildScoutSnapshot(players[to], row?.game_json);
+      this.sendToPlayer(pid, { type: "scout_result", target: to, name: players[to].name, coords: players[to].coords, snapshot });
+      // Alert the target they were scouted (persisted → seen even if offline now).
+      await this.pushReport(to, { id: crypto.randomUUID(), kind: "scouted", ts: Date.now(), by: pid, byName: players[pid]?.name || "A commander" });
     } else if (data.type === "presence") {
       const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
       const p = players[pid]; if (!p) return;
@@ -308,5 +350,26 @@ export class WorldRoom {
       if (ws === except) continue;
       try { ws.send(s); } catch {}
     }
+  }
+
+  // Send to every open socket for one player (multi-tab safe). No-op if offline.
+  sendToPlayer(pid: string, obj: unknown) {
+    const s = JSON.stringify(obj);
+    for (const ws of this.state.getWebSockets()) {
+      const a = ((ws.deserializeAttachment() || {}) as Partial<SocketAttachment>).pid;
+      if (a === pid) { try { ws.send(s); } catch {} }
+    }
+  }
+
+  // Persist a report for a player (so an offline target sees it on return) and
+  // deliver it live if they're connected. Pruned to the retention window + cap.
+  async pushReport(pid: string, report: ServerReport) {
+    const key = `reports:${pid}`;
+    const list = (await this.state.storage.get<ServerReport[]>(key)) || [];
+    list.push(report);
+    const cut = Date.now() - RETAIN_MS;
+    const pruned = list.filter((r) => r.ts >= cut).slice(-60);
+    await this.state.storage.put(key, pruned);
+    this.sendToPlayer(pid, { type: "report", report });
   }
 }
