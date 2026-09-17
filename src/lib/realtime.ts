@@ -18,15 +18,22 @@ export type ScoutSnapshot = {
   troops: { army: number; navy: number; air: number };
   resources: { cash: number; oil: number; power: number };
 };
+export type LiveMarch = {
+  id: string; attacker: string; attackerName: string; defender: string; defenderName: string;
+  from: { x: number; y: number }; to: { x: number; y: number }; departAt: number; arriveAt: number; armyTotal: number;
+};
 
 type Handlers = {
-  onSnapshot?: (you: string, players: PresenceCity[], chat: LiveChat[], dms: Record<string, LiveChat[]>, reports: ServerReport[]) => void;
+  onSnapshot?: (you: string, players: PresenceCity[], chat: LiveChat[], dms: Record<string, LiveChat[]>, reports: ServerReport[], marches: LiveMarch[]) => void;
   onChat?: (msg: LiveChat) => void;
   onDM?: (key: string, msg: LiveChat) => void;
   onPlayer?: (player: PresenceCity) => void;
   onStatus?: (connected: boolean) => void;
   onReport?: (report: ServerReport) => void;
   onScoutResult?: (target: string, name: string, coords: { x: number; y: number } | null, snapshot: ScoutSnapshot) => void;
+  onMarch?: (march: LiveMarch) => void;
+  onMarchDone?: (id: string) => void;
+  onMarchRejected?: (reason: string) => void;
 };
 
 export class RealtimeClient {
@@ -55,12 +62,15 @@ export class RealtimeClient {
     };
     this.ws.onmessage = (ev) => {
       let d: any; try { d = JSON.parse(ev.data); } catch { return; }
-      if (d.type === "snapshot") this.handlers.onSnapshot?.(d.you, d.players || [], d.chat || [], d.dms || {}, d.reports || []);
+      if (d.type === "snapshot") this.handlers.onSnapshot?.(d.you, d.players || [], d.chat || [], d.dms || {}, d.reports || [], d.marches || []);
       else if (d.type === "chat") this.handlers.onChat?.(d.msg);
       else if (d.type === "dm") this.handlers.onDM?.(d.key, d.msg);
       else if (d.type === "player") this.handlers.onPlayer?.(d.player);
       else if (d.type === "report") this.handlers.onReport?.(d.report);
       else if (d.type === "scout_result") this.handlers.onScoutResult?.(d.target, d.name, d.coords || null, d.snapshot);
+      else if (d.type === "march") this.handlers.onMarch?.(d.march);
+      else if (d.type === "march_done") this.handlers.onMarchDone?.(d.id);
+      else if (d.type === "march_rejected") this.handlers.onMarchRejected?.(d.reason);
     };
     this.ws.onclose = () => { this.handlers.onStatus?.(false); this.scheduleReconnect(); };
     this.ws.onerror = () => { try { this.ws?.close(); } catch {} };
@@ -85,6 +95,7 @@ export class RealtimeClient {
   sendChat(text: string, intel?: unknown) { this.send({ type: "chat", text, ...(intel ? { intel } : {}) }); }
   sendDM(to: string, text: string) { this.send({ type: "dm", to, text }); }
   sendScout(to: string) { this.send({ type: "scout", to }); }
+  sendMarch(to: string) { this.send({ type: "march", to }); }
   sendPresence(p: { name?: string; might?: number; keepLevel?: number; faction?: string | null; cosmetics?: unknown }) {
     this.send({ type: "presence", ...p });
   }

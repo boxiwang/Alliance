@@ -32,7 +32,7 @@ import {
   type ChatSignalId, type MarchSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
 } from "./lib/player-account";
 import { playSfx, SFX_STARMAP_SELECT, SFX_STARMAP_SELECT_VOLUME } from "./lib/sfx";
-import { RealtimeClient, type PresenceCity, type ScoutSnapshot } from "./lib/realtime";
+import { RealtimeClient, type PresenceCity, type ScoutSnapshot, type LiveMarch } from "./lib/realtime";
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
@@ -510,13 +510,15 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [serverHomeCoord, setServerHomeCoord] = useState<Point | null>(null);
   const [scoutIntel, setScoutIntel] = useState<{ name: string; snapshot: ScoutSnapshot } | null>(null);
   const [scoutingId, setScoutingId] = useState<string | null>(null);
+  const [marches, setMarches] = useState<LiveMarch[]>([]);
   const rtRef = useRef<RealtimeClient | null>(null);
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
     rtRef.current = rt;
     const keep = (list: PresenceCity[]) => list.filter((p) => p.id !== address && p.coords);
-    rt.handlers.onSnapshot = (_you, players) => {
+    rt.handlers.onSnapshot = (_you, players, _chat, _dms, _reports, snapMarches) => {
       setRemotePlayers(keep(players));
+      setMarches(snapMarches || []);
       const mine = players.find((p) => p.id === address)?.coords;
       if (mine && Number.isFinite(mine.x) && Number.isFinite(mine.y)) setServerHomeCoord({ x: mine.x, y: mine.y });
     };
@@ -525,9 +527,14 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       setRemotePlayers((cur) => { const i = cur.findIndex((x) => x.id === p.id); if (i < 0) return [...cur, p]; const next = cur.slice(); next[i] = p; return next; });
     };
     rt.handlers.onScoutResult = (_target, name, _coords, snapshot) => { setScoutingId(null); setScoutIntel({ name, snapshot }); };
-    // Live alarm when someone scouts you (also filed to Comms > System).
+    rt.handlers.onMarch = (m) => setMarches((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m]);
+    rt.handlers.onMarchDone = (id) => setMarches((cur) => cur.filter((x) => x.id !== id));
+    rt.handlers.onMarchRejected = (reason) => setResultNotice({ title: "March blocked", detail: reason === "shielded" ? "That city is shielded — it can't be attacked." : reason === "no_troops" ? "You have no troops to send." : "March was rejected.", good: false });
+    // Live alarms (also filed to Comms > System).
     rt.handlers.onReport = (report) => {
       if (report.kind === "scouted") setResultNotice({ title: "You were scouted", detail: `${report.byName || "A commander"} scanned your city.`, good: false });
+      else if (report.kind === "incoming") setResultNotice({ title: "⚔ Incoming attack", detail: `${report.byName || "A commander"} is marching on you — ETA ${Math.round(Number(report.payload?.etaSec) || 0)}s.`, good: false });
+      else if (report.kind === "battle") setResultNotice({ title: "Battle report", detail: String(report.payload?.summary || "A battle resolved."), good: false });
     };
     const g = loadGame(address);
     rt.sendPresence({
@@ -1053,6 +1060,18 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     <div className="world-layout">
       <div className="world-map-shell">
         <div className="world-map-status"><b>{zoomLabel}</b><em>{Math.round(zoom * 100)}%</em></div>
+        {marches.length > 0 && <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 7, display: "flex", flexDirection: "column", gap: 5, maxWidth: 300 }}>
+          {marches.slice(0, 4).map((m) => {
+            const incoming = m.defender === address;
+            const eta = Math.max(0, Math.round((m.arriveAt - now) / 1000));
+            const col = incoming ? "#ff6f85" : "#f3c46b";
+            return <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 11px", borderRadius: 9, border: `1px solid ${col}66`, background: "linear-gradient(160deg,rgba(14,10,16,.94),rgba(9,7,12,.96))", boxShadow: "0 6px 18px rgba(0,0,0,.35)" }}>
+              <span style={{ font: "700 12px var(--hud)", color: col }}>{incoming ? "⚔" : "➤"}</span>
+              <span style={{ font: "600 10px var(--sans)", color: "#dbe2f3", flex: 1 }}>{incoming ? `${m.attackerName || "Enemy"} → YOU` : `You → ${m.defenderName || "Target"}`} · {m.armyTotal.toLocaleString()}</span>
+              <span style={{ font: "700 10px var(--mono)", color: col }}>{eta > 0 ? `${Math.floor(eta / 60)}:${String(eta % 60).padStart(2, "0")}` : "IMPACT"}</span>
+            </div>;
+          })}
+        </div>}
         <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button onClick={() => setCamera(center)}>WORMHOLE</button><button onClick={findNextRogue}>{frontierComplete ? "CORE READY" : `NEXT ROGUE · L${nextRogueLevel}`}</button><button aria-label="Zoom in" onClick={() => setZoom((value) => steppedWorldZoom(value, "in", 1.35))}>＋</button><button aria-label="Zoom out" onClick={() => setZoom((value) => steppedWorldZoom(value, "out", 1.35))}>－</button></div>
         <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>GO</button><button type="button" className="world-warp-locked" onClick={() => setMessage("Relocation requires a Warp Engine consumable. Warp travel is not enabled in this MVP build.")}>WARP 🔒</button></form>
         <div className="world-coordinate world-coordinate-x">X {Math.round(viewX).toString().padStart(3, "0")} — {Math.round(viewX + viewport.width).toString().padStart(3, "0")}</div>
@@ -1131,9 +1150,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button style={btn} disabled={scoutingId === remoteSelected.id} onClick={() => { setScoutingId(remoteSelected.id); setScoutIntel(null); rtRef.current?.sendScout(remoteSelected.id); }}>{scoutingId === remoteSelected.id ? "SCANNING…" : "◎ SCOUT"}</button>
-              <button style={{ ...btn, borderColor: `${col}66`, color: "#eaf4fa" }} onClick={onMessages}>MESSAGE ▸</button>
+              <button style={{ ...btn, borderColor: "rgba(255,111,133,.55)", color: "#ffd0d8" }} onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>⚔ ATTACK</button>
             </div>
-            <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".06em", color: "#5c8296" }}>Scouting alerts the target. Attacks arrive with server-side combat.</div>
+            <button style={{ ...btn, flex: "none", width: "100%", marginTop: 6, borderColor: `${col}66`, color: "#eaf4fa" }} onClick={onMessages}>MESSAGE ▸</button>
+            <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".06em", color: "#5c8296" }}>Scouting &amp; attacks alert the target. Battle casualties/loot arrive next.</div>
           </div>;
         })()}
         {scoutIntel && (() => {

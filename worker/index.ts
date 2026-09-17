@@ -92,6 +92,26 @@ type ServerReport = { id: string; kind: "scouted" | "incoming" | "battle"; ts: n
 
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
+// Server-tracked attack march (Phase 2: telegraph — visible to both sides with an
+// ETA; the defender is warned. Battle resolution/economy changes are Phase 3.)
+type MarchRow = {
+  id: string; attacker: string; attackerName: string; defender: string; defenderName: string;
+  from: WorldCoord; to: WorldCoord; departAt: number; arriveAt: number; armyTotal: number;
+};
+const MARCH_SPEED = 8;        // world units per second
+const MARCH_MIN_MS = 20_000;  // floor so even neighbours take a moment
+
+function armyTotalOf(gameJson: string | null | undefined): number {
+  if (!gameJson) return 0;
+  let game: any = null; try { game = JSON.parse(gameJson); } catch { return 0; }
+  let total = 0;
+  for (const arm of ["army", "navy", "air"]) {
+    const tiers = game?.troops?.[arm];
+    if (tiers && typeof tiers === "object") for (const n of Object.values(tiers)) total += num(n);
+  }
+  return total;
+}
+
 // Build a scout intel snapshot from a target's mirrored game state + presence.
 // Estimates (recon is not exact): troop totals per arm, resources, wall, shield.
 function buildScoutSnapshot(player: PlayerRow, gameJson: string | null | undefined): Record<string, unknown> {
@@ -244,7 +264,9 @@ export class WorldRoom {
       }
     }
     const reports = (await this.state.storage.get<ServerReport[]>(`reports:${pid}`)) || [];
-    ws.send(JSON.stringify({ type: "snapshot", you: pid, players: Object.values(players), chat, dms, reports }));
+    const allMarches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
+    const marches = allMarches.filter((m) => m.arriveAt > Date.now() && (m.attacker === pid || m.defender === pid));
+    ws.send(JSON.stringify({ type: "snapshot", you: pid, players: Object.values(players), chat, dms, reports, marches }));
     this.broadcast({ type: "player", player: players[pid] }, ws);
     // Tell everyone about any ghosts we just cleared (or others revived).
     for (const id of flipped) if (id !== pid) this.broadcast({ type: "player", player: players[id] });
@@ -303,6 +325,36 @@ export class WorldRoom {
       this.sendToPlayer(pid, { type: "scout_result", target: to, name: players[to].name, coords: players[to].coords, snapshot });
       // Alert the target they were scouted (persisted → seen even if offline now).
       await this.pushReport(to, { id: crypto.randomUUID(), kind: "scouted", ts: Date.now(), by: pid, byName: players[pid]?.name || "A commander" });
+    } else if (data.type === "march") {
+      const to = String(data.to || "").slice(0, 64);
+      if (!to || to === pid) return;
+      const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+      const attacker = players[pid], defender = players[to];
+      if (!attacker || !defender || !attacker.coords || !defender.coords) return;
+      // v1 gate: no attacking a shielded city (Keep < 10 estimate). Same-alliance
+      // blocking arrives with the alliance system.
+      const defRow = await this.env.DB.prepare("SELECT game_json FROM player_state WHERE player_id = ?").bind(to).first<{ game_json: string | null }>();
+      const defSnap = buildScoutSnapshot(defender, defRow?.game_json);
+      if (defSnap.shielded) { this.sendToPlayer(pid, { type: "march_rejected", reason: "shielded" }); return; }
+      const atkRow = await this.env.DB.prepare("SELECT game_json FROM player_state WHERE player_id = ?").bind(pid).first<{ game_json: string | null }>();
+      const armyTotal = armyTotalOf(atkRow?.game_json);
+      if (armyTotal <= 0) { this.sendToPlayer(pid, { type: "march_rejected", reason: "no_troops" }); return; }
+      const dist = Math.hypot(defender.coords.x - attacker.coords.x, defender.coords.y - attacker.coords.y);
+      const departAt = Date.now();
+      const arriveAt = departAt + Math.max(MARCH_MIN_MS, Math.round(dist / MARCH_SPEED * 1000));
+      const march: MarchRow = {
+        id: crypto.randomUUID(), attacker: pid, attackerName: attacker.name, defender: to, defenderName: defender.name,
+        from: attacker.coords, to: defender.coords, departAt, arriveAt, armyTotal,
+      };
+      const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
+      marches.push(march);
+      await this.state.storage.put("marches", marches);
+      // Warn the defender (System + live), tell the attacker it launched, show both the march.
+      const etaSec = Math.round((arriveAt - departAt) / 1000);
+      await this.pushReport(to, { id: crypto.randomUUID(), kind: "incoming", ts: departAt, by: pid, byName: attacker.name, payload: { arriveAt, etaSec, armyTotal } });
+      this.sendToPlayer(pid, { type: "march", march });
+      this.sendToPlayer(to, { type: "march", march });
+      await this.scheduleMarchAlarm();
     } else if (data.type === "presence") {
       const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
       const p = players[pid]; if (!p) return;
@@ -371,5 +423,31 @@ export class WorldRoom {
     const pruned = list.filter((r) => r.ts >= cut).slice(-60);
     await this.state.storage.put(key, pruned);
     this.sendToPlayer(pid, { type: "report", report });
+  }
+
+  // Wake at the next march arrival.
+  async scheduleMarchAlarm() {
+    const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
+    if (!marches.length) return;
+    const next = Math.min(...marches.map((m) => m.arriveAt));
+    const current = await this.state.storage.getAlarm();
+    if (current === null || next < current) await this.state.storage.setAlarm(next);
+  }
+
+  // Fired when a march arrives. Phase 2: telegraph only — notify both sides that
+  // the army reached the target; no economy change yet (battle math = Phase 3).
+  async alarm() {
+    const now = Date.now();
+    const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
+    const due = marches.filter((m) => m.arriveAt <= now);
+    const remaining = marches.filter((m) => m.arriveAt > now);
+    for (const m of due) {
+      await this.pushReport(m.defender, { id: crypto.randomUUID(), kind: "battle", ts: now, by: m.attacker, byName: m.attackerName, payload: { summary: `${m.attackerName}'s army reached your city (${m.armyTotal.toLocaleString()} troops). Battle resolution arrives with the next build.` } });
+      await this.pushReport(m.attacker, { id: crypto.randomUUID(), kind: "battle", ts: now, by: m.defender, byName: m.defenderName, payload: { summary: `Your army reached ${m.defenderName}. Battle resolution arrives with the next build; troops return home.` } });
+      this.sendToPlayer(m.attacker, { type: "march_done", id: m.id });
+      this.sendToPlayer(m.defender, { type: "march_done", id: m.id });
+    }
+    if (due.length) await this.state.storage.put("marches", remaining);
+    if (remaining.length) await this.state.storage.setAlarm(Math.min(...remaining.map((m) => m.arriveAt)));
   }
 }
