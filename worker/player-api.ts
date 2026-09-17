@@ -435,6 +435,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (request.method === "POST" && pathname === "/events") return storeEvents(request, env, claims);
   if ((request.method === "GET" || request.method === "PUT") && pathname === "/state") return stateRoute(request, env, claims);
   if (request.method === "GET" && pathname === "/game") return gameRoute(env, claims);
+  if (request.method === "POST" && pathname === "/command") return commandRoute(request, env, claims);
   if (pathname === "/inventory") return inventory(request, env, claims);
   if (pathname === "/inventory/history") return inventoryHistory(request, env, claims);
   if (request.method === "POST" && pathname === "/inventory/consume") return consumeInventory(request, env, claims);
