@@ -13,6 +13,7 @@ import {
   type SessionClaims,
 } from "./auth";
 import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS } from "../src/lib/mvp-items";
+import { projectGameJson } from "./economy";
 
 export interface BackendEnv {
   DB: D1Database;
@@ -385,6 +386,16 @@ async function stateRoute(request: Request, env: BackendEnv, claims: SessionClai
   return response({ revision: revision + 1 });
 }
 
+// Step 1 (docs/ECONOMY-SERVER.md): serve the player's own authoritative state,
+// projected to now with the shared engine. Read-only — the client still writes
+// locally + mirrors for now; this lets us confirm server/client parity.
+async function gameRoute(env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  const row = await env.DB.prepare("SELECT revision, game_json, updated_at FROM player_state WHERE player_id = ?")
+    .bind(claims.sub).first<{ revision: number; game_json: string | null; updated_at: number }>();
+  const game = projectGameJson(row?.game_json, Date.now());
+  return response({ game, revision: row?.revision ?? 0, updatedAt: row?.updated_at ?? 0 });
+}
+
 export async function handlePlayerApi(request: Request, env: BackendEnv): Promise<Response | null> {
   const { pathname } = new URL(request.url);
   if (request.method === "GET" && pathname === "/items") return response({ items: MVP_ITEMS });
@@ -392,7 +403,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (request.method === "POST" && pathname === "/auth/wallet/verify") return walletVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/google") return googleVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/guest") return guestVerify(request, env);
-  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha"].includes(pathname)) return null;
+  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha"].includes(pathname)) return null;
   const claims = await authClaims(request, env);
   if (!claims) return response({ error: "unauthorized" }, 401);
   if (request.method === "GET" && pathname === "/me") return me(request, env, claims);
@@ -400,6 +411,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (pathname === "/feedback") return submitFeedback(request, env, claims);
   if (request.method === "POST" && pathname === "/events") return storeEvents(request, env, claims);
   if ((request.method === "GET" || request.method === "PUT") && pathname === "/state") return stateRoute(request, env, claims);
+  if (request.method === "GET" && pathname === "/game") return gameRoute(env, claims);
   if (pathname === "/inventory") return inventory(request, env, claims);
   if (pathname === "/inventory/history") return inventoryHistory(request, env, claims);
   if (request.method === "POST" && pathname === "/inventory/consume") return consumeInventory(request, env, claims);

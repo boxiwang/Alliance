@@ -186,6 +186,22 @@ export async function restorePlayerState(address: string): Promise<{ profile?: u
 }
 
 /**
+ * Step 1 (docs/ECONOMY-SERVER.md): read the server's authoritative game state,
+ * projected to now with the shared engine. Read-only for now — used to confirm
+ * server/client parity before the write surface moves to commands.
+ */
+export async function fetchServerGame(address: string): Promise<{ game: unknown; revision: number } | null> {
+  const session = loadBackendSession(address);
+  if (!session) return null;
+  try {
+    const res = await get<{ game?: unknown; revision?: number }>("/game", session.token);
+    return { game: res.game ?? null, revision: Number(res.revision) || 0 };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Private-alpha recovery mirror. This is deliberately not called authoritative:
  * the client still produced these values, so combat/economy validation must move
  * to server commands before purchases or tradable inventory depend on them.
