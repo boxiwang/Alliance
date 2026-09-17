@@ -14,6 +14,7 @@ import {
 } from "./auth";
 import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS } from "../src/lib/mvp-items";
 import { projectGameJson } from "./economy";
+import { applyCommand } from "./commands";
 
 export interface BackendEnv {
   DB: D1Database;
@@ -396,6 +397,28 @@ async function gameRoute(env: BackendEnv, claims: SessionClaims): Promise<Respon
   return response({ game, revision: row?.revision ?? 0, updatedAt: row?.updated_at ?? 0 });
 }
 
+// Step 2: apply one authoritative game command. Load → project → shared reducer
+// → save under the revision lock → return the new state. A rejected command is a
+// 200 with the current state + reason so the client can reconcile (not an error).
+async function commandRoute(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  const data = await body(request);
+  const type = String(data?.type || "");
+  const args = (data?.args && typeof data.args === "object") ? data.args as Record<string, unknown> : {};
+  const row = await env.DB.prepare("SELECT revision, game_json FROM player_state WHERE player_id = ?")
+    .bind(claims.sub).first<{ revision: number; game_json: string | null }>();
+  const state = projectGameJson(row?.game_json, Date.now());
+  const revision = row?.revision ?? 0;
+  if (!state) return response({ error: "no_state" }, 409);
+  const result = applyCommand(state, type, args);
+  if (!result.ok) return response({ ok: false, reason: result.reason || "rejected", game: state, revision });
+  const encoded = JSON.stringify(result.state);
+  if (encoded.length > 250_000) return response({ error: "state_too_large" }, 413);
+  const write = await env.DB.prepare("UPDATE player_state SET revision = revision + 1, game_json = ?, updated_at = ? WHERE player_id = ? AND revision = ?")
+    .bind(encoded, Date.now(), claims.sub, revision).run();
+  if (!write.meta.changes) return response({ error: "revision_conflict" }, 409);
+  return response({ ok: true, game: result.state, revision: revision + 1 });
+}
+
 export async function handlePlayerApi(request: Request, env: BackendEnv): Promise<Response | null> {
   const { pathname } = new URL(request.url);
   if (request.method === "GET" && pathname === "/items") return response({ items: MVP_ITEMS });
@@ -403,7 +426,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (request.method === "POST" && pathname === "/auth/wallet/verify") return walletVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/google") return googleVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/guest") return guestVerify(request, env);
-  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha"].includes(pathname)) return null;
+  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha"].includes(pathname)) return null;
   const claims = await authClaims(request, env);
   if (!claims) return response({ error: "unauthorized" }, 401);
   if (request.method === "GET" && pathname === "/me") return me(request, env, claims);

@@ -202,6 +202,23 @@ export async function fetchServerGame(address: string): Promise<{ game: unknown;
 }
 
 /**
+ * Step 2 (docs/ECONOMY-SERVER.md): issue one authoritative game command. The
+ * server runs the shared reducer and returns the new state (ok), or the current
+ * state + a reason (rejected). null on no session / network / revision conflict —
+ * the caller falls back to its local engine so nothing blocks.
+ */
+export async function sendGameCommand(address: string, type: string, args: Record<string, unknown> = {}): Promise<{ ok: boolean; reason?: string; game: unknown; revision: number } | null> {
+  const session = loadBackendSession(address);
+  if (!session) return null;
+  try {
+    const res = await post<{ ok?: boolean; reason?: string; game?: unknown; revision?: number }>("/command", { type, args, idempotencyKey: crypto.randomUUID() }, session.token);
+    return { ok: !!res.ok, reason: res.reason, game: res.game ?? null, revision: Number(res.revision) || 0 };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Private-alpha recovery mirror. This is deliberately not called authoritative:
  * the client still produced these values, so combat/economy validation must move
  * to server commands before purchases or tradable inventory depend on them.
