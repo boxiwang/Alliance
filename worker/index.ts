@@ -7,6 +7,7 @@
 import { verifySession } from "./auth";
 import { handlePlayerApi, type BackendEnv } from "./player-api";
 import { assignOuterRingCoord, type WorldCoord } from "./world-coords";
+import { projectGameJson } from "./economy";
 
 export interface Env extends BackendEnv {
   WORLD_ROOM: DurableObjectNamespace;
@@ -102,8 +103,8 @@ const MARCH_SPEED = 8;        // world units per second
 const MARCH_MIN_MS = 20_000;  // floor so even neighbours take a moment
 
 function armyTotalOf(gameJson: string | null | undefined): number {
-  if (!gameJson) return 0;
-  let game: any = null; try { game = JSON.parse(gameJson); } catch { return 0; }
+  const game: any = projectGameJson(gameJson, Date.now());
+  if (!game) return 0;
   let total = 0;
   for (const arm of ["army", "navy", "air"]) {
     const tiers = game?.troops?.[arm];
@@ -115,8 +116,9 @@ function armyTotalOf(gameJson: string | null | undefined): number {
 // Build a scout intel snapshot from a target's mirrored game state + presence.
 // Estimates (recon is not exact): troop totals per arm, resources, wall, shield.
 function buildScoutSnapshot(player: PlayerRow, gameJson: string | null | undefined): Record<string, unknown> {
-  let game: any = null;
-  if (gameJson) { try { game = JSON.parse(gameJson); } catch { game = null; } }
+  // Project the mirrored state to now with the shared engine, so recon reflects
+  // current resources + any training/builds that have since completed.
+  const game: any = projectGameJson(gameJson, Date.now());
   const armTotal = (arm: string): number => {
     const tiers = game?.troops?.[arm];
     return tiers && typeof tiers === "object" ? Object.values(tiers).reduce((s: number, n) => s + num(n), 0) : 0;
