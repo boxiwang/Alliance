@@ -42,6 +42,8 @@ const MAX_BODY_BYTES = 600_000;
 const SESSION_SECONDS = 24 * 60 * 60;
 const CHALLENGE_MS = 10 * 60 * 1000;
 const FREE_RENAME_MS = 30 * 24 * 60 * 60 * 1000;
+const COMMAND_ARGS_BYTES = 8_000;
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9:_-]{8,128}$/;
 
 function response(data: unknown, status = 200): Response {
   return Response.json(data, { status, headers: { "cache-control": "no-store" } });
@@ -63,6 +65,19 @@ async function body(request: Request): Promise<Record<string, unknown> | null> {
 function listed(value: string | undefined, candidate: string | null): boolean {
   if (!candidate) return false;
   return (value || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean).includes(candidate.toLowerCase());
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
+}
+
+async function commandFingerprint(type: string, args: Record<string, unknown>): Promise<string> {
+  const bytes = new TextEncoder().encode(canonicalJson({ type, args }));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function validPlayerName(value: unknown): { name: string; key: string } | null {
@@ -368,7 +383,7 @@ async function storeEvents(request: Request, env: BackendEnv, claims: SessionCla
 
 async function stateRoute(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
   if (request.method === "GET") {
-    const state = await env.DB.prepare("SELECT revision, profile_json, game_json, world_json, account_json, updated_at FROM player_state WHERE player_id = ?")
+    const state = await env.DB.prepare("SELECT revision, profile_json, game_json, world_json, account_json, economy_authority_version, economy_migrated_at, updated_at FROM player_state WHERE player_id = ?")
       .bind(claims.sub).first();
     return response({ state: state || null });
   }
@@ -379,7 +394,8 @@ async function stateRoute(request: Request, env: BackendEnv, claims: SessionClai
   const encoded = ["profile", "game", "world", "account"].map(encode);
   if (encoded.some((value) => value && value.length > 250_000)) return response({ error: "state_too_large" }, 413);
   const result = await env.DB.prepare(`UPDATE player_state SET revision = revision + 1,
-    profile_json = COALESCE(?, profile_json), game_json = COALESCE(?, game_json),
+    profile_json = COALESCE(?, profile_json),
+    game_json = CASE WHEN economy_authority_version > 0 THEN game_json ELSE COALESCE(?, game_json) END,
     world_json = COALESCE(?, world_json), account_json = COALESCE(?, account_json), updated_at = ?
     WHERE player_id = ? AND revision = ?`)
     .bind(...encoded, Date.now(), claims.sub, revision).run();
@@ -391,10 +407,61 @@ async function stateRoute(request: Request, env: BackendEnv, claims: SessionClai
 // projected to now with the shared engine. Read-only — the client still writes
 // locally + mirrors for now; this lets us confirm server/client parity.
 async function gameRoute(env: BackendEnv, claims: SessionClaims): Promise<Response> {
-  const row = await env.DB.prepare("SELECT revision, game_json, updated_at FROM player_state WHERE player_id = ?")
-    .bind(claims.sub).first<{ revision: number; game_json: string | null; updated_at: number }>();
+  const row = await env.DB.prepare("SELECT revision, game_json, economy_authority_version, updated_at FROM player_state WHERE player_id = ?")
+    .bind(claims.sub).first<{ revision: number; game_json: string | null; economy_authority_version: number; updated_at: number }>();
   const game = projectGameJson(row?.game_json, Date.now());
-  return response({ game, revision: row?.revision ?? 0, updatedAt: row?.updated_at ?? 0 });
+  return response({ game, revision: row?.revision ?? 0, authorityVersion: row?.economy_authority_version ?? 0, updatedAt: row?.updated_at ?? 0 });
+}
+
+async function enableGameAuthority(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (claims.role !== "gm") return response({ error: "forbidden" }, 403);
+  const data = await body(request);
+  const expectedRevision = Math.max(0, Math.floor(Number(data?.revision) || 0));
+  let supplied = "";
+  try { supplied = JSON.stringify(data?.game); } catch {}
+  if (!supplied || supplied.length > 250_000) return response({ error: "invalid_state" }, 400);
+  const now = Date.now();
+  const game = projectGameJson(supplied, now);
+  if (!game) return response({ error: "invalid_state" }, 400);
+  const encoded = JSON.stringify(game);
+  const write = await env.DB.prepare(`UPDATE player_state
+    SET game_json = ?, economy_authority_version = 1, economy_migrated_at = ?, revision = revision + 1, updated_at = ?
+    WHERE player_id = ? AND revision = ? AND economy_authority_version = 0`)
+    .bind(encoded, now, now, claims.sub, expectedRevision).run();
+  if (!write.meta.changes) {
+    const current = await env.DB.prepare("SELECT revision, game_json, economy_authority_version FROM player_state WHERE player_id = ?")
+      .bind(claims.sub).first<{ revision: number; game_json: string | null; economy_authority_version: number }>();
+    if (current?.economy_authority_version) {
+      return response({ game: projectGameJson(current.game_json, now), revision: current.revision, authorityVersion: current.economy_authority_version, replayed: true });
+    }
+    return response({ error: "revision_conflict" }, 409);
+  }
+  return response({ game, revision: expectedRevision + 1, authorityVersion: 1 });
+}
+
+type CommandLedgerRow = {
+  command_type: string;
+  args_hash: string;
+  ok: number;
+  reason: string | null;
+  result_revision: number;
+};
+
+async function replayCommand(env: BackendEnv, claims: SessionClaims, idempotencyKey: string, fingerprint: string): Promise<Response | null> {
+  const prior = await env.DB.prepare(`SELECT command_type, args_hash, ok, reason, result_revision
+    FROM game_commands WHERE player_id = ? AND idempotency_key = ?`)
+    .bind(claims.sub, idempotencyKey).first<CommandLedgerRow>();
+  if (!prior) return null;
+  if (prior.args_hash !== fingerprint) return response({ error: "idempotency_mismatch" }, 409);
+  const current = await env.DB.prepare("SELECT revision, game_json FROM player_state WHERE player_id = ?")
+    .bind(claims.sub).first<{ revision: number; game_json: string | null }>();
+  return response({
+    ok: prior.ok === 1,
+    reason: prior.reason || undefined,
+    game: projectGameJson(current?.game_json, Date.now()),
+    revision: current?.revision ?? prior.result_revision,
+    replayed: true,
+  });
 }
 
 // Step 2: apply one authoritative game command. Load → project → shared reducer
@@ -404,19 +471,35 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
   const data = await body(request);
   const type = String(data?.type || "");
   const args = (data?.args && typeof data.args === "object") ? data.args as Record<string, unknown> : {};
-  const row = await env.DB.prepare("SELECT revision, game_json FROM player_state WHERE player_id = ?")
-    .bind(claims.sub).first<{ revision: number; game_json: string | null }>();
+  const idempotencyKey = String(data?.idempotencyKey || "");
+  const argsJson = canonicalJson(args);
+  if (!IDEMPOTENCY_KEY.test(idempotencyKey) || argsJson.length > COMMAND_ARGS_BYTES) return response({ error: "invalid_command" }, 400);
+  const fingerprint = await commandFingerprint(type, args);
+  const replay = await replayCommand(env, claims, idempotencyKey, fingerprint);
+  if (replay) return replay;
+  const row = await env.DB.prepare("SELECT revision, game_json, economy_authority_version FROM player_state WHERE player_id = ?")
+    .bind(claims.sub).first<{ revision: number; game_json: string | null; economy_authority_version: number }>();
+  if (!row?.economy_authority_version) return response({ error: "authority_disabled" }, 409);
   const state = projectGameJson(row?.game_json, Date.now());
   const revision = row?.revision ?? 0;
   if (!state) return response({ error: "no_state" }, 409);
   const result = applyCommand(state, type, args);
-  if (!result.ok) return response({ ok: false, reason: result.reason || "rejected", game: state, revision });
+  const now = Date.now();
+  const reason = result.ok ? null : result.reason || "rejected";
+  const resultRevision = result.ok ? revision + 1 : revision;
   const encoded = JSON.stringify(result.state);
   if (encoded.length > 250_000) return response({ error: "state_too_large" }, 413);
-  const write = await env.DB.prepare("UPDATE player_state SET revision = revision + 1, game_json = ?, updated_at = ? WHERE player_id = ? AND revision = ?")
-    .bind(encoded, Date.now(), claims.sub, revision).run();
-  if (!write.meta.changes) return response({ error: "revision_conflict" }, 409);
-  return response({ ok: true, game: result.state, revision: revision + 1 });
+  try {
+    await env.DB.prepare(`INSERT INTO game_commands
+      (id, player_id, idempotency_key, command_type, args_hash, args_json, ok, reason, base_revision, result_revision, result_game_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(crypto.randomUUID(), claims.sub, idempotencyKey, type, fingerprint, argsJson, result.ok ? 1 : 0, reason, revision, resultRevision, result.ok ? encoded : null, now).run();
+  } catch {
+    const racedReplay = await replayCommand(env, claims, idempotencyKey, fingerprint);
+    if (racedReplay) return racedReplay;
+    return response({ error: "revision_conflict" }, 409);
+  }
+  return response({ ok: result.ok, reason: reason || undefined, game: result.ok ? result.state : state, revision: resultRevision });
 }
 
 export async function handlePlayerApi(request: Request, env: BackendEnv): Promise<Response | null> {
@@ -426,7 +509,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (request.method === "POST" && pathname === "/auth/wallet/verify") return walletVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/google") return googleVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/guest") return guestVerify(request, env);
-  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha"].includes(pathname)) return null;
+  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/game/authority/enable", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha"].includes(pathname)) return null;
   const claims = await authClaims(request, env);
   if (!claims) return response({ error: "unauthorized" }, 401);
   if (request.method === "GET" && pathname === "/me") return me(request, env, claims);
@@ -435,6 +518,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (request.method === "POST" && pathname === "/events") return storeEvents(request, env, claims);
   if ((request.method === "GET" || request.method === "PUT") && pathname === "/state") return stateRoute(request, env, claims);
   if (request.method === "GET" && pathname === "/game") return gameRoute(env, claims);
+  if (request.method === "POST" && pathname === "/game/authority/enable") return enableGameAuthority(request, env, claims);
   if (request.method === "POST" && pathname === "/command") return commandRoute(request, env, claims);
   if (pathname === "/inventory") return inventory(request, env, claims);
   if (pathname === "/inventory/history") return inventoryHistory(request, env, claims);

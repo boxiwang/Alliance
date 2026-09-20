@@ -36,7 +36,10 @@ import MiniComms from "./MiniComms";
 import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAllianceHelp } from "./lib/alliance";
 import { loadPlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME } from "./lib/sfx";
-import { consumeInventoryItem, grantGmInventory, loadInventory, type InventoryBalance } from "./lib/backend";
+import {
+  consumeInventoryItem, enableGameAuthority, fetchServerGame, grantGmInventory, loadInventory,
+  sendGameCommand, type InventoryBalance,
+} from "./lib/backend";
 import { MVP_ITEM_BY_ID } from "./lib/mvp-items";
 import { activeSpeedupTargets, applySpeedup, speedupCompatible, speedupTargetId, type SpeedupTarget } from "./lib/speedups";
 
@@ -134,6 +137,9 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [inventory, setInventory] = useState<InventoryBalance[]>([]);
   const [speedupTarget, setSpeedupTarget] = useState("");
   const [inventoryBusy, setInventoryBusy] = useState(false);
+  const [authorityVersion, setAuthorityVersion] = useState(0);
+  const [authorityBusy, setAuthorityBusy] = useState(false);
+  const [commandBuilding, setCommandBuilding] = useState<BKey | null>(null);
 
   // Offline progress on entry (once).
   useEffect(() => {
@@ -160,6 +166,15 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   useEffect(() => {
     setGm(hasLocalGm(address));
     void loadInventory(address).then(setInventory).catch(() => {});
+    void fetchServerGame(address).then((server) => {
+      if (!server) return;
+      setAuthorityVersion(server.authorityVersion);
+      if (server.authorityVersion > 0 && server.game) {
+        const authoritative = server.game as GameState;
+        setGame(authoritative);
+        saveGame(authoritative);
+      }
+    });
   }, [address]);
 
   // Heartbeat: re-render every second; commit when something finishes.
@@ -223,9 +238,79 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   }, [address, now, view]);
 
   function act(fn: () => { state: GameState; ok: boolean; reason?: string }) {
+    if (authorityVersion > 0) {
+      setMsg("SERVER TEST MODE · Only building upgrades are enabled in this batch.");
+      return;
+    }
     const r = fn();
     if (r.ok) { setGame(r.state); saveGame(r.state); setMsg(""); }
     else setMsg(r.reason || "Can't do that");
+  }
+
+  async function turnOnServerEconomy() {
+    if (authorityBusy || authorityVersion > 0) return;
+    if (!window.confirm("Move this GM city's economy to the server test lane? Other economy actions will be locked until their command routes are ready.")) return;
+    setAuthorityBusy(true);
+    try {
+      let current = await fetchServerGame(address);
+      if (!current) throw new Error("server_unavailable");
+      if (current.authorityVersion > 0) {
+        setAuthorityVersion(current.authorityVersion);
+        if (current.game) { setGame(current.game as GameState); saveGame(current.game as GameState); }
+        setMsg("GM: server economy test lane is already active.");
+        return;
+      }
+      let enabled;
+      try {
+        enabled = await enableGameAuthority(address, game, current.revision);
+      } catch (error) {
+        if (!(error instanceof Error) || error.message !== "revision_conflict") throw error;
+        current = await fetchServerGame(address);
+        if (!current) throw error;
+        enabled = await enableGameAuthority(address, game, current.revision);
+      }
+      setAuthorityVersion(enabled.authorityVersion);
+      if (enabled.game) { setGame(enabled.game as GameState); saveGame(enabled.game as GameState); }
+      setMsg("GM: server economy test lane active. Building upgrades now run on the server.");
+    } catch {
+      setMsg("Server economy setup failed. Your local city was not changed.");
+    } finally {
+      setAuthorityBusy(false);
+    }
+  }
+
+  async function startServerUpgrade(building: BKey) {
+    if (commandBuilding) return;
+    if (authorityVersion <= 0) { act(() => startAllianceUpgrade(building)); return; }
+    const before = game;
+    const optimistic = startUpgrade(game, building);
+    if (!optimistic.ok) { setMsg(optimistic.reason || "Can't do that"); return; }
+    const idempotencyKey = `build:${crypto.randomUUID()}`;
+    setCommandBuilding(building);
+    setGame(optimistic.state);
+    saveGame(optimistic.state);
+    try {
+      let result;
+      try {
+        result = await sendGameCommand(address, "build.start", { building }, idempotencyKey);
+      } catch {
+        result = await sendGameCommand(address, "build.start", { building }, idempotencyKey);
+      }
+      if (result.game) { setGame(result.game as GameState); saveGame(result.game as GameState); }
+      setMsg(result.ok ? "" : result.reason || "Upgrade rejected by server.");
+    } catch {
+      const current = await fetchServerGame(address);
+      if (current?.authorityVersion && current.game) {
+        setGame(current.game as GameState);
+        saveGame(current.game as GameState);
+      } else {
+        setGame(before);
+        saveGame(before);
+      }
+      setMsg("Server did not confirm that order. City state was reconciled; try again.");
+    } finally {
+      setCommandBuilding(null);
+    }
   }
 
   function startAllianceUpgrade(k: BKey) {
@@ -283,17 +368,18 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
 
       {gm && (
         <div className="gm-panel">
-          <div className="gm-panel-copy"><b>LOCAL GM</b></div>
+          <div className="gm-panel-copy"><b>{authorityVersion > 0 ? "SERVER GM · BATCH 1" : "LOCAL GM"}</b></div>
           <div className="gm-actions">
-            <button onClick={() => gmAct(gmFillResources, "GM: resources filled to Warehouse capacity.")}>Fill resources</button>
-            <button onClick={() => gmAct(gmFillTroops, "GM: every trained arm filled to capacity at its highest unlocked tier.")}>Fill troops</button>
-            <button onClick={() => gmAct(gmFinishQueues, "GM: active build, research, training and healing queues completed.")}>Finish queues</button>
+            {authorityVersion === 0 && <button disabled={authorityBusy} onClick={() => void turnOnServerEconomy()}>{authorityBusy ? "Connecting…" : "Test server economy"}</button>}
+            <button disabled={authorityVersion > 0} onClick={() => gmAct(gmFillResources, "GM: resources filled to Warehouse capacity.")}>Fill resources</button>
+            <button disabled={authorityVersion > 0} onClick={() => gmAct(gmFillTroops, "GM: every trained arm filled to capacity at its highest unlocked tier.")}>Fill troops</button>
+            <button disabled={authorityVersion > 0} onClick={() => gmAct(gmFinishQueues, "GM: active build, research, training and healing queues completed.")}>Finish queues</button>
             <button disabled={inventoryBusy} onClick={() => {
               setInventoryBusy(true);
               void grantGmInventory(address).then((items) => { setInventory(items); setMsg("GM: active MVP items stocked to 99."); }).catch(() => setMsg("GM inventory grant failed.")).finally(() => setInventoryBusy(false));
             }}>Stock MVP items</button>
-            <button onClick={() => gmAct(gmMaxResearch, "GM: all three Research categories maxed. Account bonuses are active.")}>Max research</button>
-            <button onClick={() => {
+            <button disabled={authorityVersion > 0} onClick={() => gmAct(gmMaxResearch, "GM: all three Research categories maxed. Account bonuses are active.")}>Max research</button>
+            <button disabled={authorityVersion > 0} onClick={() => {
               const next = game.buildings.academy.lvl >= 1 ? game : gmRaiseBuilding(game, "academy");
               setGame(next);
               saveGame(next);
@@ -304,10 +390,10 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
               <select aria-label="GM building" value={gmBuilding} onChange={(event) => setGmBuilding(event.target.value as BKey)}>
                 {BUILDING_ORDER.filter(isUpgradable).map((building) => <option value={building} key={building}>{BUILDINGS[building].label} · Lv.{view.buildings[building].lvl}</option>)}
               </select>
-              <button disabled={view.buildings[gmBuilding].lvl >= 30 || !!buildingOperationBlockReason(view, gmBuilding)} onClick={() => gmAct((state) => gmRaiseBuilding(state, gmBuilding), `GM: ${BUILDINGS[gmBuilding].label} raised by one level.`)}>Selected building +1</button>
+              <button disabled={authorityVersion > 0 || view.buildings[gmBuilding].lvl >= 30 || !!buildingOperationBlockReason(view, gmBuilding)} onClick={() => gmAct((state) => gmRaiseBuilding(state, gmBuilding), `GM: ${BUILDINGS[gmBuilding].label} raised by one level.`)}>Selected building +1</button>
             </span>
-            <button disabled={view.buildings.keep.lvl >= 30} onClick={() => gmAct(gmRaiseTownhall, "GM: Townhall raised by one level.")}>Townhall +1</button>
-            <button className="gm-reset" onClick={() => {
+            <button disabled={authorityVersion > 0 || view.buildings.keep.lvl >= 30} onClick={() => gmAct(gmRaiseTownhall, "GM: Townhall raised by one level.")}>Townhall +1</button>
+            <button disabled={authorityVersion > 0} className="gm-reset" onClick={() => {
               if (!window.confirm("Reset this wallet's city? Buildings, resources, troops and queues will be cleared. Townhall returns to Lv.1.")) return;
               const next = gmResetProgress(address);
               clearLocalWorldSession(address);
@@ -372,7 +458,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="speedup-items">
             {usableSpeedups.map((entry) => {
               const item = MVP_ITEM_BY_ID.get(entry.itemId)!;
-              return <button key={entry.itemId} disabled={inventoryBusy} onClick={() => void useSpeedup(entry.itemId)}><b>{item.name}</b><span>×{entry.quantity}</span></button>;
+              return <button key={entry.itemId} disabled={inventoryBusy || authorityVersion > 0} onClick={() => void useSpeedup(entry.itemId)}><b>{item.name}</b><span>×{entry.quantity}</span></button>;
             })}
             {selectedSpeedupTarget && usableSpeedups.length === 0 && <i>NO SPEEDUPS AVAILABLE</i>}
           </div>
@@ -868,7 +954,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         {missingRequirements.map((requirement) => <span key={requirement.key}>🔒 {BUILDINGS[requirement.key].label} LV.{requirement.requiredLevel}</span>)}
       </div>}
       {upgrading ? <><div className="upgrade-inspector-progress"><div className="rmeter"><i style={{ width: upPct(k, building, now) + "%" }} /></div><b className="mono">{fmtMs(building.finishAt - now)}</b></div><button className="alliance-help-request" disabled={!!helpRequest} onClick={() => { const result = requestAllianceHelp(profile, "building", k, `${BUILDINGS[k].label} LV.${target}`); setMsg(result.reason || "Help request sent to your alliance."); setAllianceRevision((value) => value + 1); }}>{helpRequest ? `ALLIANCE HELP · ${helpRequest.helpers.length}/25` : "REQUEST ALLIANCE HELP"}</button></>
-        : <button className={ready ? "ready" : "blocked"} disabled={!ready} onClick={() => act(() => startAllianceUpgrade(k))}><span>{blockLabel}</span>{ready && <b>{building.lvl === 0 ? "BUILD" : "UPGRADE"} →</b>}</button>}
+        : <button className={ready ? "ready" : "blocked"} disabled={!ready || commandBuilding !== null} onClick={() => void startServerUpgrade(k)}><span>{commandBuilding === k ? "SENDING ORDER" : blockLabel}</span>{ready && commandBuilding !== k && <b>{building.lvl === 0 ? "BUILD" : "UPGRADE"} →</b>}</button>}
     </section>;
   }
 
