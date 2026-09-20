@@ -524,13 +524,56 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
   const resultRevision = result.ok ? revision + 1 : revision;
   const encoded = JSON.stringify(result.state);
   if (encoded.length > 250_000) return response({ error: "state_too_large" }, 413);
+  const commandId = crypto.randomUUID();
+  const guardId = crypto.randomUUID();
+  const inventoryTransactionId = inventoryItemId ? crypto.randomUUID() : null;
+  const inventoryBefore = inventoryItemId
+    ? await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
+      .bind(claims.sub, inventoryItemId).first<{ quantity: number }>()
+    : null;
+  if (inventoryItemId && (!inventoryBefore || inventoryBefore.quantity < 1)) return response({ error: "insufficient_inventory" }, 409);
   try {
-    await env.DB.prepare(`INSERT INTO game_commands
+    const insert = env.DB.prepare(`INSERT INTO game_commands
       (id, player_id, idempotency_key, command_type, args_hash, args_json, ok, reason, base_revision, result_revision,
        result_game_json, created_at, inventory_item_id, inventory_quantity, inventory_transaction_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(crypto.randomUUID(), claims.sub, idempotencyKey, type, fingerprint, argsJson, result.ok ? 1 : 0, reason, revision, resultRevision,
-        result.ok ? encoded : null, now, inventoryItemId, inventoryItemId ? 1 : null, inventoryItemId ? crypto.randomUUID() : null).run();
+      .bind(commandId, claims.sub, idempotencyKey, type, fingerprint, argsJson, result.ok ? 1 : 0, reason, revision, resultRevision,
+        result.ok ? encoded : null, now, inventoryItemId, inventoryItemId ? 1 : null, inventoryTransactionId);
+    if (!result.ok) {
+      await insert.run();
+    } else {
+      const statements: D1PreparedStatement[] = [insert];
+      if (inventoryItemId && inventoryBefore && inventoryTransactionId) {
+        const expectedBalance = inventoryBefore.quantity - 1;
+        statements.push(
+          env.DB.prepare("UPDATE inventory_balances SET quantity = quantity - 1, updated_at = ? WHERE player_id = ? AND item_id = ? AND quantity >= 1")
+            .bind(now, claims.sub, inventoryItemId),
+          env.DB.prepare(`INSERT INTO command_transaction_guards (id, ok)
+            VALUES (?, COALESCE((SELECT CASE WHEN quantity = ? THEN 1 ELSE 0 END FROM inventory_balances WHERE player_id = ? AND item_id = ?), 0))`)
+            .bind(`${guardId}:inventory`, expectedBalance, claims.sub, inventoryItemId),
+        );
+      }
+      statements.push(
+        env.DB.prepare(`UPDATE player_state SET game_json = ?, revision = ?, updated_at = ?
+          WHERE player_id = ? AND revision = ? AND economy_authority_version > 0`)
+          .bind(encoded, resultRevision, now, claims.sub, revision),
+        env.DB.prepare(`INSERT INTO command_transaction_guards (id, ok)
+          VALUES (?, COALESCE((SELECT CASE WHEN revision = ? THEN 1 ELSE 0 END FROM player_state WHERE player_id = ?), 0))`)
+          .bind(`${guardId}:state`, resultRevision, claims.sub),
+      );
+      if (inventoryItemId && inventoryTransactionId) {
+        statements.push(env.DB.prepare(`INSERT INTO inventory_transactions
+          (id, player_id, item_id, delta, balance_after, reason, reference_id, idempotency_key, status, metadata_json, created_at, committed_at)
+          VALUES (?, ?, ?, -1, (SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?),
+            'item_used', ?, ?, 'committed', '{}', ?, ?)`)
+          .bind(inventoryTransactionId, claims.sub, inventoryItemId, claims.sub, inventoryItemId, commandId, `command:${idempotencyKey}`, now, now));
+      }
+      statements.push(
+        env.DB.prepare("UPDATE game_commands SET result_game_json = NULL WHERE id = ?").bind(commandId),
+        env.DB.prepare("DELETE FROM command_transaction_guards WHERE id IN (?, ?)").bind(`${guardId}:inventory`, `${guardId}:state`),
+      );
+      await env.DB.batch(statements);
+    }
   } catch (error) {
     const racedReplay = await replayCommand(env, claims, idempotencyKey, fingerprint);
     if (racedReplay) return racedReplay;

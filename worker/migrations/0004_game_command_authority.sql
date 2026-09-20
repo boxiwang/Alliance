@@ -22,23 +22,3 @@ CREATE INDEX game_commands_player_time
 
 CREATE UNIQUE INDEX game_commands_player_revision
   ON game_commands(player_id, result_revision) WHERE ok = 1;
-
--- A successful command and its player-state mutation must commit together.
--- If the revision moved, abort the INSERT as well; the caller then re-pulls.
-CREATE TRIGGER game_commands_apply_state
-AFTER INSERT ON game_commands
-WHEN NEW.ok = 1
-BEGIN
-  UPDATE player_state
-  SET game_json = NEW.result_game_json,
-      revision = NEW.result_revision,
-      updated_at = NEW.created_at
-  WHERE player_id = NEW.player_id
-    AND revision = NEW.base_revision
-    AND economy_authority_version > 0;
-
-  SELECT CASE WHEN changes() != 1 THEN RAISE(ABORT, 'revision_conflict') END;
-
-  -- The command ledger keeps the proof and revisions, not a copy of every save.
-  UPDATE game_commands SET result_game_json = NULL WHERE id = NEW.id;
-END;
