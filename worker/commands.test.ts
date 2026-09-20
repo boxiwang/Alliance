@@ -26,4 +26,20 @@ describe("authoritative game commands", () => {
     const game = initGame("0x0000000000000000000000000000000000000abc");
     expect(applyCommand(game, "admin.credit", {}).ok).toBe(false);
   });
+
+  it("starts training and rejects a second queue order", () => {
+    const game = initGame("0x0000000000000000000000000000000000000abc");
+    game.res = { cash: 50_000, oil: 50_000, power: 50_000 };
+    const first = applyCommand(game, "training.start", { troop: "army", tier: 1, quantity: 5 });
+    expect(first.ok).toBe(true);
+    expect(first.state.training.army.qty).toBe(5);
+    expect(applyCommand(first.state, "training.start", { troop: "army", tier: 1, quantity: 5 }).ok).toBe(false);
+  });
+
+  it("validates promotion, research, and healing through shared reducers", () => {
+    const game = initGame("0x0000000000000000000000000000000000000abc");
+    expect(applyCommand(game, "promotion.start", { troop: "bogus", sourceTier: 1, targetTier: 2, quantity: 1 }).reason).toBe("Unknown troop type");
+    expect(applyCommand(game, "research.start", { tech: "bogus" }).ok).toBe(false);
+    expect(applyCommand(game, "healing.start", { quantity: 10 }).ok).toBe(false);
+  });
 });

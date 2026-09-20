@@ -38,7 +38,7 @@ import { loadPlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME } from "./lib/sfx";
 import {
   consumeInventoryItem, enableGameAuthority, fetchServerGame, grantGmInventory, loadInventory,
-  sendGameCommand, type InventoryBalance,
+  sendGameCommand, type GameCommandResponse, type InventoryBalance,
 } from "./lib/backend";
 import { MVP_ITEM_BY_ID } from "./lib/mvp-items";
 import { activeSpeedupTargets, applySpeedup, speedupCompatible, speedupTargetId, type SpeedupTarget } from "./lib/speedups";
@@ -140,6 +140,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [authorityVersion, setAuthorityVersion] = useState(0);
   const [authorityBusy, setAuthorityBusy] = useState(false);
   const [commandBuilding, setCommandBuilding] = useState<BKey | null>(null);
+  const [commandBusy, setCommandBusy] = useState(false);
 
   // Offline progress on entry (once).
   useEffect(() => {
@@ -249,7 +250,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
 
   async function turnOnServerEconomy() {
     if (authorityBusy || authorityVersion > 0) return;
-    if (!window.confirm("Move this GM city's economy to the server test lane? Other economy actions will be locked until their command routes are ready.")) return;
+    if (!window.confirm("Move this GM city's economy to the server test lane? Local-only GM cheats will be locked.")) return;
     setAuthorityBusy(true);
     try {
       let current = await fetchServerGame(address);
@@ -271,7 +272,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       }
       setAuthorityVersion(enabled.authorityVersion);
       if (enabled.game) { setGame(enabled.game as GameState); saveGame(enabled.game as GameState); }
-      setMsg("GM: server economy test lane active. Building upgrades now run on the server.");
+      setMsg("GM: server economy active. Build, training, research, healing and speedups now run on the server.");
     } catch {
       setMsg("Server economy setup failed. Your local city was not changed.");
     } finally {
@@ -279,25 +280,26 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     }
   }
 
-  async function startServerUpgrade(building: BKey) {
-    if (commandBuilding) return;
-    if (authorityVersion <= 0) { act(() => startAllianceUpgrade(building)); return; }
+  async function runServerAction(type: string, args: Record<string, unknown>, reduce: () => { state: GameState; ok: boolean; reason?: string }): Promise<GameCommandResponse | undefined> {
+    if (commandBusy) return;
+    if (authorityVersion <= 0) { act(reduce); return; }
     const before = game;
-    const optimistic = startUpgrade(game, building);
+    const optimistic = reduce();
     if (!optimistic.ok) { setMsg(optimistic.reason || "Can't do that"); return; }
-    const idempotencyKey = `build:${crypto.randomUUID()}`;
-    setCommandBuilding(building);
+    const idempotencyKey = `${type.replace(/[^a-z0-9_-]/gi, "-")}:${crypto.randomUUID()}`;
+    setCommandBusy(true);
     setGame(optimistic.state);
     saveGame(optimistic.state);
     try {
       let result;
       try {
-        result = await sendGameCommand(address, "build.start", { building }, idempotencyKey);
+        result = await sendGameCommand(address, type, args, idempotencyKey);
       } catch {
-        result = await sendGameCommand(address, "build.start", { building }, idempotencyKey);
+        result = await sendGameCommand(address, type, args, idempotencyKey);
       }
       if (result.game) { setGame(result.game as GameState); saveGame(result.game as GameState); }
-      setMsg(result.ok ? "" : result.reason || "Upgrade rejected by server.");
+      setMsg(result.ok ? "" : result.reason || "Order rejected by server.");
+      return result;
     } catch {
       const current = await fetchServerGame(address);
       if (current?.authorityVersion && current.game) {
@@ -308,6 +310,17 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         saveGame(before);
       }
       setMsg("Server did not confirm that order. City state was reconciled; try again.");
+      return undefined;
+    } finally {
+      setCommandBusy(false);
+    }
+  }
+
+  async function startServerUpgrade(building: BKey) {
+    if (commandBusy) return;
+    setCommandBuilding(building);
+    try {
+      await runServerAction("build.start", { building }, () => authorityVersion > 0 ? startUpgrade(game, building) : startAllianceUpgrade(building));
     } finally {
       setCommandBuilding(null);
     }
@@ -344,6 +357,21 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const result = applySpeedup(game, selectedSpeedupTarget, item.speedupSeconds, Date.now());
     if (!result.secondsApplied) { setMsg("That operation has already finished."); return; }
     setInventoryBusy(true);
+    if (authorityVersion > 0) {
+      try {
+        const command = await runServerAction("speedup.use", { itemId, target: selectedSpeedupTarget }, () => ({ state: result.state, ok: true }));
+        if (command?.inventory) {
+          setInventory((current) => current.map((entry) => entry.itemId === command.inventory!.itemId
+            ? { ...entry, quantity: command.inventory!.quantity, updatedAt: Date.now() }
+            : entry));
+        }
+        if (command?.ok) setMsg(`${item.name} used. ${fmtSec(result.secondsApplied)} removed.`);
+        if (!command) void loadInventory(address).then(setInventory).catch(() => {});
+      } catch {
+        setMsg("Speedup failed. Try again.");
+      } finally { setInventoryBusy(false); }
+      return;
+    }
     const referenceId = `speedup:${speedupTargetId(selectedSpeedupTarget)}:${crypto.randomUUID()}`;
     try {
       const consumed = await consumeInventoryItem(address, itemId, referenceId);
@@ -458,7 +486,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="speedup-items">
             {usableSpeedups.map((entry) => {
               const item = MVP_ITEM_BY_ID.get(entry.itemId)!;
-              return <button key={entry.itemId} disabled={inventoryBusy || authorityVersion > 0} onClick={() => void useSpeedup(entry.itemId)}><b>{item.name}</b><span>×{entry.quantity}</span></button>;
+              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy} onClick={() => void useSpeedup(entry.itemId)}><b>{item.name}</b><span>×{entry.quantity}</span></button>;
             })}
             {selectedSpeedupTarget && usableSpeedups.length === 0 && <i>NO SPEEDUPS AVAILABLE</i>}
           </div>
@@ -657,7 +685,9 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
               </div>
               <div className="troop-stats mono">T{tier} · ATK {stats.attack} · DEF {stats.defense} · MIGHT {stats.power}</div>
               {quantity > 0 && <div className="bcost mono">{RES_ORDER.map((r) => batchCost[r] ? `${compact(displayResource(batchCost[r]!))}${RES[r].emoji} ` : "").join("")}· ◷ {fmtSec(totalSeconds)}</div>}
-              <button className="cta sm" disabled={quantity <= 0} onClick={() => act(() => mode === "promote" ? startPromote(game, type, sourceTier, tier, quantity) : startTrain(game, type, tier, quantity))}>
+              <button className="cta sm" disabled={quantity <= 0 || commandBusy} onClick={() => void (mode === "promote"
+                ? runServerAction("promotion.start", { troop: type, sourceTier, targetTier: tier, quantity }, () => startPromote(game, type, sourceTier, tier, quantity))
+                : runServerAction("training.start", { troop: type, tier, quantity }, () => startTrain(game, type, tier, quantity)))}>
                 {quantity <= 0 ? (mode === "promote" ? "No eligible troops" : "Capacity full") : mode === "promote" ? `Promote ${compact(displayTroops(quantity))} T${sourceTier} → T${tier}` : `Train ${compact(displayTroops(quantity))} T${tier}`}
               </button>
             </div>
@@ -813,7 +843,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           {view.buildings.academy.lvl < row.academyLevel && <span>🔒 Research Institute Lv.{row.academyLevel}</span>}
           {(tech.requirements ?? []).filter((requirement: any) => researchLevel(view, requirement.tech) < requirement.level).map((requirement: any) => <span key={requirement.tech}>🔒 {researchTech(requirement.tech)?.name} Lv.{requirement.level}</span>)}
         </div>}
-        {!complete && <div className="research-detail-action"><div className="research-cost mono">{renderResourceCosts(cost)}<span>◷ {fmtSec(row.timeSec)}</span></div><button className={resourcesMet && !reason ? "ready" : ""} disabled={!!reason} onClick={() => act(() => startResearch(game, tech.key))}>
+        {!complete && <div className="research-detail-action"><div className="research-cost mono">{renderResourceCosts(cost)}<span>◷ {fmtSec(row.timeSec)}</span></div><button className={resourcesMet && !reason ? "ready" : ""} disabled={!!reason || commandBusy} onClick={() => void runServerAction("research.start", { tech: tech.key }, () => startResearch(game, tech.key))}>
           {complete ? "MAXED" : reason ?? `Research Lv.${nextLevel}`}
         </button></div>}
         {complete && <div className="research-detail-maxed">MAXED</div>}
@@ -986,7 +1016,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       {view.wounded > 0 && !upgrading && <>
         <div className="train-slider-row"><span className="mono">{compact(displayTroops(1))}</span><input aria-label="Healing quantity" type="range" min={1} max={view.wounded} step={1} value={quantity} onChange={(event) => setHealQty(Number(event.target.value))} /><span className="mono">{compact(displayTroops(view.wounded))}</span></div>
         <div className="bcost mono">Heal {compact(displayTroops(quantity))}: {RES_ORDER.map((resource) => cost[resource] ? `${compact(displayResource(cost[resource]!))}${RES[resource].emoji} ` : "").join("")}· ◷ {fmtSec(Math.ceil(healingDurationSec(view, quantity) / (1 + allianceBonuses.healingSpeedBonus)))}</div>
-        <button className="academy-open" onClick={() => act(() => startAllianceHealing(quantity))}>Heal wounded</button>
+        <button className="academy-open" disabled={commandBusy} onClick={() => void runServerAction("healing.start", { quantity }, () => authorityVersion > 0 ? startHealing(game, quantity) : startAllianceHealing(quantity))}>Heal wounded</button>
       </>}
     </div>;
   }

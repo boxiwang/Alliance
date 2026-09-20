@@ -15,6 +15,8 @@ import {
 import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS } from "../src/lib/mvp-items";
 import { projectGameJson } from "./economy";
 import { applyCommand } from "./commands";
+import { applySpeedup, speedupCompatible, type SpeedupTarget } from "../src/lib/speedups";
+import { BUILDING_ORDER, TROOP_ORDER, type BKey, type TroopKey } from "../src/lib/game";
 
 export interface BackendEnv {
   DB: D1Database;
@@ -445,22 +447,38 @@ type CommandLedgerRow = {
   ok: number;
   reason: string | null;
   result_revision: number;
+  inventory_item_id: string | null;
 };
 
+function speedupTarget(value: unknown): SpeedupTarget | null {
+  if (!value || typeof value !== "object") return null;
+  const target = value as Record<string, unknown>;
+  if (target.kind === "construction" && BUILDING_ORDER.includes(String(target.key) as BKey)) return { kind: "construction", key: String(target.key) as BKey };
+  if (target.kind === "training" && TROOP_ORDER.includes(String(target.key) as TroopKey)) return { kind: "training", key: String(target.key) as TroopKey };
+  if (target.kind === "research") return { kind: "research" };
+  if (target.kind === "healing") return { kind: "healing" };
+  return null;
+}
+
 async function replayCommand(env: BackendEnv, claims: SessionClaims, idempotencyKey: string, fingerprint: string): Promise<Response | null> {
-  const prior = await env.DB.prepare(`SELECT command_type, args_hash, ok, reason, result_revision
+  const prior = await env.DB.prepare(`SELECT command_type, args_hash, ok, reason, result_revision, inventory_item_id
     FROM game_commands WHERE player_id = ? AND idempotency_key = ?`)
     .bind(claims.sub, idempotencyKey).first<CommandLedgerRow>();
   if (!prior) return null;
   if (prior.args_hash !== fingerprint) return response({ error: "idempotency_mismatch" }, 409);
   const current = await env.DB.prepare("SELECT revision, game_json FROM player_state WHERE player_id = ?")
     .bind(claims.sub).first<{ revision: number; game_json: string | null }>();
+  const inventory = prior.inventory_item_id
+    ? await env.DB.prepare("SELECT item_id AS itemId, quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
+      .bind(claims.sub, prior.inventory_item_id).first<{ itemId: string; quantity: number }>()
+    : null;
   return response({
     ok: prior.ok === 1,
     reason: prior.reason || undefined,
     game: projectGameJson(current?.game_json, Date.now()),
     revision: current?.revision ?? prior.result_revision,
     replayed: true,
+    inventory: inventory || undefined,
   });
 }
 
@@ -480,26 +498,50 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
   const row = await env.DB.prepare("SELECT revision, game_json, economy_authority_version FROM player_state WHERE player_id = ?")
     .bind(claims.sub).first<{ revision: number; game_json: string | null; economy_authority_version: number }>();
   if (!row?.economy_authority_version) return response({ error: "authority_disabled" }, 409);
-  const state = projectGameJson(row?.game_json, Date.now());
+  const now = Date.now();
+  const state = projectGameJson(row?.game_json, now);
   const revision = row?.revision ?? 0;
   if (!state) return response({ error: "no_state" }, 409);
-  const result = applyCommand(state, type, args);
-  const now = Date.now();
+  let inventoryItemId: string | null = null;
+  let result;
+  if (type === "speedup.use") {
+    const itemId = String(args.itemId || "");
+    const item = MVP_ITEM_BY_ID.get(itemId);
+    const target = speedupTarget(args.target);
+    if (!item || item.status !== "active" || item.category !== "speedup" || !item.speedupSeconds || !target || !speedupCompatible(item.speedupQueue, target)) {
+      result = { state, ok: false, reason: "Invalid speedup" };
+    } else {
+      const applied = applySpeedup(state, target, item.speedupSeconds, now);
+      result = applied.secondsApplied > 0
+        ? { state: applied.state, ok: true }
+        : { state, ok: false, reason: "That operation has already finished" };
+      if (result.ok) inventoryItemId = itemId;
+    }
+  } else {
+    result = applyCommand(state, type, args);
+  }
   const reason = result.ok ? null : result.reason || "rejected";
   const resultRevision = result.ok ? revision + 1 : revision;
   const encoded = JSON.stringify(result.state);
   if (encoded.length > 250_000) return response({ error: "state_too_large" }, 413);
   try {
     await env.DB.prepare(`INSERT INTO game_commands
-      (id, player_id, idempotency_key, command_type, args_hash, args_json, ok, reason, base_revision, result_revision, result_game_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(crypto.randomUUID(), claims.sub, idempotencyKey, type, fingerprint, argsJson, result.ok ? 1 : 0, reason, revision, resultRevision, result.ok ? encoded : null, now).run();
-  } catch {
+      (id, player_id, idempotency_key, command_type, args_hash, args_json, ok, reason, base_revision, result_revision,
+       result_game_json, created_at, inventory_item_id, inventory_quantity, inventory_transaction_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(crypto.randomUUID(), claims.sub, idempotencyKey, type, fingerprint, argsJson, result.ok ? 1 : 0, reason, revision, resultRevision,
+        result.ok ? encoded : null, now, inventoryItemId, inventoryItemId ? 1 : null, inventoryItemId ? crypto.randomUUID() : null).run();
+  } catch (error) {
     const racedReplay = await replayCommand(env, claims, idempotencyKey, fingerprint);
     if (racedReplay) return racedReplay;
+    if (error instanceof Error && error.message.includes("insufficient_inventory")) return response({ error: "insufficient_inventory" }, 409);
     return response({ error: "revision_conflict" }, 409);
   }
-  return response({ ok: result.ok, reason: reason || undefined, game: result.ok ? result.state : state, revision: resultRevision });
+  const inventory = inventoryItemId
+    ? await env.DB.prepare("SELECT item_id AS itemId, quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
+      .bind(claims.sub, inventoryItemId).first<{ itemId: string; quantity: number }>()
+    : null;
+  return response({ ok: result.ok, reason: reason || undefined, game: result.ok ? result.state : state, revision: resultRevision, inventory: inventory || undefined });
 }
 
 export async function handlePlayerApi(request: Request, env: BackendEnv): Promise<Response | null> {
