@@ -193,6 +193,13 @@ export class WorldRoom {
   constructor(state: DurableObjectState, env: Env) { this.state = state; this.env = env; }
 
   async fetch(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    if (url.pathname === "/coordinate") {
+      const pid = (url.searchParams.get("player") || "").slice(0, 64);
+      if (!pid) return Response.json({ coord: null }, { status: 400 });
+      const coord = await this.state.storage.get<WorldCoord>(`coord:v${COORD_VERSION}:${pid}`);
+      return Response.json({ coord: coord || null });
+    }
     const pid = (req.headers.get("x-alliance-player") || "").slice(0, 64);
     const name = (req.headers.get("x-alliance-name") || "Commander").slice(0, 24);
     const sessionId = (req.headers.get("x-alliance-session") || "").slice(0, 64);

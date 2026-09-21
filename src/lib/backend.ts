@@ -190,24 +190,24 @@ export async function restorePlayerState(address: string): Promise<{ profile?: u
  * projected to now with the shared engine. Read-only for now — used to confirm
  * server/client parity before the write surface moves to commands.
  */
-export type ServerGame = { game: unknown; revision: number; authorityVersion: number };
+export type ServerGame = { game: unknown; world: unknown; revision: number; authorityVersion: number };
 
 export async function fetchServerGame(address: string): Promise<ServerGame | null> {
   const session = loadBackendSession(address);
   if (!session) return null;
   try {
-    const res = await get<{ game?: unknown; revision?: number; authorityVersion?: number }>("/game", session.token);
-    return { game: res.game ?? null, revision: Number(res.revision) || 0, authorityVersion: Number(res.authorityVersion) || 0 };
+    const res = await get<{ game?: unknown; world?: unknown; revision?: number; authorityVersion?: number }>("/game", session.token);
+    return { game: res.game ?? null, world: res.world ?? null, revision: Number(res.revision) || 0, authorityVersion: Number(res.authorityVersion) || 0 };
   } catch {
     return null;
   }
 }
 
-export async function enableGameAuthority(address: string, game: unknown, revision: number): Promise<ServerGame> {
+export async function enableGameAuthority(address: string, game: unknown, world: unknown, revision: number): Promise<ServerGame> {
   const session = loadBackendSession(address);
   if (!session) throw new Error("session_required");
-  const res = await post<{ game?: unknown; revision?: number; authorityVersion?: number }>("/game/authority/enable", { game, revision }, session.token);
-  return { game: res.game ?? null, revision: Number(res.revision) || 0, authorityVersion: Number(res.authorityVersion) || 0 };
+  const res = await post<{ game?: unknown; world?: unknown; revision?: number; authorityVersion?: number }>("/game/authority/enable", { game, world, revision }, session.token);
+  return { game: res.game ?? null, world: res.world ?? null, revision: Number(res.revision) || 0, authorityVersion: Number(res.authorityVersion) || 0 };
 }
 
 /**
@@ -216,13 +216,13 @@ export async function enableGameAuthority(address: string, game: unknown, revisi
  * state + a reason (rejected). The idempotency key belongs to the caller so the
  * exact same command can be retried after an uncertain network response.
  */
-export type GameCommandResponse = { ok: boolean; reason?: string; game: unknown; revision: number; replayed: boolean; inventory?: { itemId: string; quantity: number } };
+export type GameCommandResponse = { ok: boolean; reason?: string; game: unknown; world: unknown; revision: number; replayed: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean };
 
 export async function sendGameCommand(address: string, type: string, args: Record<string, unknown>, idempotencyKey: string): Promise<GameCommandResponse> {
   const session = loadBackendSession(address);
   if (!session) throw new Error("session_required");
-  const res = await post<{ ok?: boolean; reason?: string; game?: unknown; revision?: number; replayed?: boolean; inventory?: { itemId: string; quantity: number } }>("/command", { type, args, idempotencyKey }, session.token);
-  return { ok: !!res.ok, reason: res.reason, game: res.game ?? null, revision: Number(res.revision) || 0, replayed: !!res.replayed, inventory: res.inventory };
+  const res = await post<{ ok?: boolean; reason?: string; game?: unknown; world?: unknown; revision?: number; replayed?: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean }>("/command", { type, args, idempotencyKey }, session.token);
+  return { ok: !!res.ok, reason: res.reason, game: res.game ?? null, world: res.world ?? null, revision: Number(res.revision) || 0, replayed: !!res.replayed, inventory: res.inventory, targetId: res.targetId, spawned: res.spawned };
 }
 
 /**

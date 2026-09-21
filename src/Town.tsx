@@ -25,8 +25,7 @@ import {
 } from "./lib/gm";
 import { Profile } from "./lib/profile";
 import { compact } from "./lib/format";
-import { clearLocalWorldSession } from "./lib/world-adapter";
-import { loadLocalWorldSession } from "./lib/world-adapter";
+import { clearLocalWorldSession, loadLocalWorldSession, openLocalWorldSession } from "./lib/world-adapter";
 import { energyAt } from "./lib/world-engine";
 import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
@@ -255,20 +254,21 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     try {
       let current = await fetchServerGame(address);
       if (!current) throw new Error("server_unavailable");
-      if (current.authorityVersion > 0) {
+      if (current.authorityVersion > 0 && current.world) {
         setAuthorityVersion(current.authorityVersion);
         if (current.game) { setGame(current.game as GameState); saveGame(current.game as GameState); }
         setMsg("GM: server economy test lane is already active.");
         return;
       }
       let enabled;
+      const worldSeed = loadLocalWorldSession(address) || openLocalWorldSession(address, game, Date.now(), getN()).session;
       try {
-        enabled = await enableGameAuthority(address, game, current.revision);
+        enabled = await enableGameAuthority(address, game, worldSeed, current.revision);
       } catch (error) {
         if (!(error instanceof Error) || error.message !== "revision_conflict") throw error;
         current = await fetchServerGame(address);
         if (!current) throw error;
-        enabled = await enableGameAuthority(address, game, current.revision);
+        enabled = await enableGameAuthority(address, game, worldSeed, current.revision);
       }
       setAuthorityVersion(enabled.authorityVersion);
       if (enabled.game) { setGame(enabled.game as GameState); saveGame(enabled.game as GameState); }

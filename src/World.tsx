@@ -36,6 +36,7 @@ import { RealtimeClient, type PresenceCity, type ScoutSnapshot, type LiveMarch }
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
+import { enableGameAuthority, fetchServerGame, sendGameCommand, type GameCommandResponse } from "./lib/backend";
 
 type SelectableEntity = ResourceEntity | MonsterEntity | CityEntity;
 type WorldLayer = "resource" | "monster" | "city";
@@ -487,6 +488,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [session, setSession] = useState<LocalWorldSession>(() => initial.session);
   const gameRef = useRef(initial.game);
   const sessionRef = useRef(initial.session);
+  const [authorityVersion, setAuthorityVersion] = useState(0);
+  const authorityRef = useRef(0);
+  const advanceBusyRef = useRef(false);
   const [now, setNow] = useState(Date.now());
   const viewerAlliance = useMemo(() => allianceForAddress(address), [address]);
   const cityRelation = (ownerId: string): AllianceRelation => {
@@ -595,6 +599,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { sessionRef.current = session; }, [session]);
+  useEffect(() => { authorityRef.current = authorityVersion; }, [authorityVersion]);
   useEffect(() => {
     const opened = openLocalWorldSession(address, loadGame(address) || initGame(address), Date.now(), N);
     opened.session.world.players[opened.session.playerId].allianceId = profile.faction;
@@ -616,6 +621,27 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     seenReportCount.current = opened.session.world.players[opened.session.playerId].reportIds.length;
     if (opened.session.migratedLegacyAt) setMessage("Old World marches were safely settled and migrated.");
   }, [address, N, profile.faction]);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      let remote = await fetchServerGame(address);
+      if (!remote || cancelled) return;
+      if (remote.authorityVersion > 0 && !remote.world && hasLocalGm(address)) {
+        const local = sessionRef.current;
+        try { remote = await enableGameAuthority(address, gameRef.current, local, remote.revision); } catch { return; }
+      }
+      if (cancelled || remote.authorityVersion <= 0 || !remote.game || !remote.world) return;
+      const nextSession = remote.world as LocalWorldSession;
+      const nextGame = remote.game as GameState;
+      authorityRef.current = remote.authorityVersion;
+      setAuthorityVersion(remote.authorityVersion);
+      sessionRef.current = nextSession; gameRef.current = nextGame;
+      setSession(nextSession); setGame(nextGame);
+      saveLocalWorldSession(nextSession); saveGame(nextGame);
+      seenReportCount.current = nextSession.world.players[nextSession.playerId]?.reportIds.length || 0;
+    })();
+    return () => { cancelled = true; };
+  }, [address]);
   // Shared-map coordinate unification: once the server hands us our spawn coord,
   // move the home city there (PvE targets are placed globally by radius, so only
   // the city moves) and recenter. Runs once per distinct coord.
@@ -633,6 +659,18 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   useEffect(() => {
     const timer = window.setInterval(() => {
       const tick = Date.now(); setNow(tick);
+      if (authorityRef.current > 0) {
+        const due = sessionRef.current.world.scheduledEvents
+          .filter((event) => !event.processedAt && event.at <= tick)
+          .sort((a, b) => a.at - b.at)[0];
+        if (!due || advanceBusyRef.current) return;
+        advanceBusyRef.current = true;
+        const key = `world-advance:${due.id}:${due.at}`;
+        void sendWorldCommandWithRetry("world.advance", {}, key)
+          .then((result) => { if (result.ok && result.world && result.game) commitServer(result); })
+          .finally(() => { advanceBusyRef.current = false; });
+        return;
+      }
       const result = advanceLocalWorldSession(sessionRef.current, loadGame(address) || gameRef.current, tick, N);
       if (!result.changed) return;
       const reports = result.session.world.players[result.session.playerId].reportIds;
@@ -915,6 +953,24 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   function commit(result: ReturnType<typeof advanceLocalWorldSession>) {
     sessionRef.current = result.session; setSession(result.session); setGame(result.game); gameRef.current = result.game; saveLocalWorldSession(result.session); saveGame(result.game);
   }
+  function commitServer(result: GameCommandResponse) {
+    if (!result.world || !result.game) return;
+    const nextSession = result.world as LocalWorldSession;
+    const nextGame = result.game as GameState;
+    const ids = nextSession.world.players[nextSession.playerId]?.reportIds || [];
+    if (ids.length > seenReportCount.current) {
+      const report = nextSession.world.reports[ids[ids.length - 1]];
+      if (report) setResultNotice(reportCopy(report, nextSession.world, Date.now()));
+    }
+    seenReportCount.current = ids.length;
+    sessionRef.current = nextSession; gameRef.current = nextGame;
+    setSession(nextSession); setGame(nextGame);
+    saveLocalWorldSession(nextSession); saveGame(nextGame);
+  }
+  async function sendWorldCommandWithRetry(type: string, args: Record<string, unknown>, idempotencyKey: string): Promise<GameCommandResponse> {
+    try { return await sendGameCommand(address, type, args, idempotencyKey); }
+    catch { return sendGameCommand(address, type, args, idempotencyKey); }
+  }
   function revealLatestReport(next: LocalWorldSession) {
     const ids = next.world.players[next.playerId].reportIds;
     seenReportCount.current = ids.length;
@@ -937,22 +993,35 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     if (!selected || selected.kind !== "resource") return;
     setSelection(recommendedGatherForce(viewGame.troops, selected.amount, forceLimit, N, player.accountModifiers));
   }
-  function run(action: "scout" | "gather" | "attack_monster" | "attack_city") {
+  async function run(action: "scout" | "gather" | "attack_monster" | "attack_city") {
     if (!selected) return;
     // Scouting occupies a march slot but does not quietly reserve whatever force
     // the player happened to have selected for a later attack.
     const force = action === "scout" ? emptySelection() : selection;
-    const result = dispatchLocalWorldMarch(session, viewGame, { targetId: selected.id, action, force, idempotencyKey: `ui:${Date.now()}:${dispatchSeq.current++}` }, Date.now(), N);
+    const dispatchKey = `ui:${Date.now()}:${dispatchSeq.current++}`;
+    if (authorityVersion > 0) {
+      setMessage("Fleet order uplinking…");
+      try {
+        const result = await sendWorldCommandWithRetry("world.dispatch", { targetId: selected.id, action, force, dispatchKey }, `world-dispatch:${crypto.randomUUID()}`);
+        if (!result.ok) { setMessage(ERROR_COPY[result.reason || "dispatch_failed"] || (result.reason || "Order rejected.")); return; }
+        commitServer(result); setSelection(emptySelection());
+        setMessage(`${action === "scout" ? "Survey probe" : action === "gather" ? "Harvest fleet" : "Strike fleet"} launched toward ${localWorldTargetName((result.world as LocalWorldSession).world, selected.id)}.`);
+      } catch { setMessage("Fleet order lost. Try again."); }
+      return;
+    }
+    const result = dispatchLocalWorldMarch(session, viewGame, { targetId: selected.id, action, force, idempotencyKey: dispatchKey }, Date.now(), N);
     if (result.error) { setMessage(ERROR_COPY[result.error] || result.error.split("_").join(" ")); return; }
     commit(result); setSelection(emptySelection());
     setMessage(`${action === "scout" ? "Survey probe" : action === "gather" ? "Harvest fleet" : "Strike fleet"} launched toward ${localWorldTargetName(result.session.world, selected.id)}.`);
   }
   function finishMarches() {
+    if (authorityVersion > 0) { setMessage("GM: server-timed marches cannot be force-finished in the live lane."); return; }
     const result = finishLocalWorldMarches(session, viewGame, Date.now(), N); commit(result);
     revealLatestReport(result.session);
     setMessage("GM: all active marches completed through the headless engine.");
   }
   function fillTroops() {
+    if (authorityVersion > 0) { setMessage("GM: use the City server tools to change live troops."); return; }
     const result = advanceLocalWorldSession(session, gmFillTroops(viewGame), Date.now(), N); commit(result);
     setMessage("GM: standing troops filled to current training-building capacity.");
   }
@@ -984,8 +1053,24 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     }
     onMessages();
   }
-  function findNextRogue() {
+  async function findNextRogue() {
     if (frontierComplete) { setCamera(center); setMessage("Frontier I complete. Hold the Wormhole to enter the next map when it opens."); return; }
+    if (authorityVersion > 0) {
+      try {
+        const result = await sendWorldCommandWithRetry("world.scan", { requestedLevel: nextRogueLevel }, `world-scan:${crypto.randomUUID()}`);
+        const returnedSession = result.world as LocalWorldSession | null;
+        const targetId = result.targetId || returnedSession?.world.players[returnedSession.playerId]?.deepScanTargetIds[String(nextRogueLevel)];
+        if (!result.ok || !targetId) { setMessage(ERROR_COPY[result.reason || "rogue_unavailable"] || "No Rogue signal found."); return; }
+        commitServer(result);
+        const next = returnedSession!;
+        const target = next.world.entities[targetId];
+        if (!target || target.kind !== "monster") return;
+        setSelectedId(target.id); setSelection(emptySelection()); setCamera({ ...target.position });
+        setZoom((value) => Math.max(value, 2.1)); setTileMark(null); playSelectSfx();
+        setMessage(result.spawned ? `Deep Scan discovered an uncharted L${target.level} Rogue signal.` : `Tracking the nearest L${target.level} Rogue signal.`);
+      } catch { setMessage("Deep Scan link failed. Try again."); }
+      return;
+    }
     const result = scanLocalWorldRogue(session, viewGame, nextRogueLevel, Date.now(), N);
     if (result.error || !result.targetId) { setMessage(ERROR_COPY[result.error || "rogue_unavailable"] || "No Rogue signal found."); return; }
     commit(result);
@@ -1011,9 +1096,17 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     if (!isInsidePlayableWorld(point, world.config, 0)) { setMessage("Those coordinates are outside the circular Frontier."); return; }
     setCamera(point); setSelectedId(null); setMessage(`Viewing sector ${Math.round(point.x).toString().padStart(3, "0")}:${Math.round(point.y).toString().padStart(3, "0")}. Your civilization has not moved.`);
   }
-  function recall(marchId: string) {
+  async function recall(marchId: string) {
     // gameRef is updated synchronously by commit; the projected render value can
     // lag one frame behind a dispatch during fast GM/browser interactions.
+    if (authorityVersion > 0) {
+      try {
+        const result = await sendWorldCommandWithRetry("world.recall", { marchId }, `world-recall:${crypto.randomUUID()}`);
+        if (!result.ok) { setMessage("That fleet can no longer be recalled."); return; }
+        commitServer(result); setMessage("Fleet recalled. It is returning along its traveled route.");
+      } catch { setMessage("Recall link failed. Try again."); }
+      return;
+    }
     const result = recallLocalWorldMarch(session, gameRef.current, marchId, Date.now(), N);
     if (result.error) { setMessage("That fleet can no longer be recalled."); return; }
     commit(result); setMessage("Fleet recalled. It is returning along its traveled route.");

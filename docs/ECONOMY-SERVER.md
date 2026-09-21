@@ -63,6 +63,13 @@ once for existing players), then the server is the authority. Client keeps a loc
 the local write path. *This is the point of no return — do it after Step 3 is
 solid on all actions.*
 
+**Private-alpha status:** implemented for city build/train/promotion/research/
+healing/speedups and personal World dispatch/scan/recall/arrival/gather/return.
+The GM migration seeds `game_json` and `world_json` together, after which `/state`
+cannot overwrite either field. World ticking is event-driven: the client calls
+`world.advance` only when a scheduled event is due, and offline progress settles
+on the next command/read cycle.
+
 ### Step 5 — Combat on the authoritative economy (real Phase 3)
 Battle resolution now applies casualties/loot to the authoritative state via the
 shared engine (attacker-disadvantage math from `docs/COMBAT.md` §H). Both players'

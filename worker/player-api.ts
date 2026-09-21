@@ -17,13 +17,31 @@ import { projectGameJson } from "./economy";
 import { applyCommand } from "./commands";
 import { applySpeedup, speedupCompatible, type SpeedupTarget } from "../src/lib/speedups";
 import { BUILDING_ORDER, TROOP_ORDER, type BKey, type TroopKey } from "../src/lib/game";
+import { defaultN } from "../src/lib/numbers";
+import {
+  applyWorldAuthorityCommand, isWorldAuthoritySession,
+  type WorldAuthorityCommand, type WorldAuthoritySession,
+} from "../src/lib/world-authority";
 
 export interface BackendEnv {
   DB: D1Database;
+  WORLD_ROOM?: DurableObjectNamespace;
   AUTH_SECRET: string;
   FIREBASE_PROJECT_ID: string;
   GM_WALLETS?: string;
   GM_EMAILS?: string;
+}
+
+async function sharedWorldCoord(env: BackendEnv, playerId: string): Promise<{ x: number; y: number } | null> {
+  if (!env.WORLD_ROOM) return null;
+  try {
+    const id = env.WORLD_ROOM.idFromName("frontier-1");
+    const res = await env.WORLD_ROOM.get(id).fetch(`https://world.internal/coordinate?player=${encodeURIComponent(playerId)}`);
+    if (!res.ok) return null;
+    const data = await res.json() as { coord?: { x?: number; y?: number } };
+    const x = Number(data.coord?.x); const y = Number(data.coord?.y);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  } catch { return null; }
 }
 
 type PlayerRow = {
@@ -45,6 +63,7 @@ const SESSION_SECONDS = 24 * 60 * 60;
 const CHALLENGE_MS = 10 * 60 * 1000;
 const FREE_RENAME_MS = 30 * 24 * 60 * 60 * 1000;
 const COMMAND_ARGS_BYTES = 8_000;
+const WORLD_STATE_BYTES = 450_000;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9:_-]{8,128}$/;
 
 function response(data: unknown, status = 200): Response {
@@ -398,7 +417,8 @@ async function stateRoute(request: Request, env: BackendEnv, claims: SessionClai
   const result = await env.DB.prepare(`UPDATE player_state SET revision = revision + 1,
     profile_json = COALESCE(?, profile_json),
     game_json = CASE WHEN economy_authority_version > 0 THEN game_json ELSE COALESCE(?, game_json) END,
-    world_json = COALESCE(?, world_json), account_json = COALESCE(?, account_json), updated_at = ?
+    world_json = CASE WHEN economy_authority_version > 0 THEN world_json ELSE COALESCE(?, world_json) END,
+    account_json = COALESCE(?, account_json), updated_at = ?
     WHERE player_id = ? AND revision = ?`)
     .bind(...encoded, Date.now(), claims.sub, revision).run();
   if (!result.meta.changes) return response({ error: "revision_conflict" }, 409);
@@ -409,10 +429,12 @@ async function stateRoute(request: Request, env: BackendEnv, claims: SessionClai
 // projected to now with the shared engine. Read-only — the client still writes
 // locally + mirrors for now; this lets us confirm server/client parity.
 async function gameRoute(env: BackendEnv, claims: SessionClaims): Promise<Response> {
-  const row = await env.DB.prepare("SELECT revision, game_json, economy_authority_version, updated_at FROM player_state WHERE player_id = ?")
-    .bind(claims.sub).first<{ revision: number; game_json: string | null; economy_authority_version: number; updated_at: number }>();
+  const row = await env.DB.prepare("SELECT revision, game_json, world_json, economy_authority_version, updated_at FROM player_state WHERE player_id = ?")
+    .bind(claims.sub).first<{ revision: number; game_json: string | null; world_json: string | null; economy_authority_version: number; updated_at: number }>();
   const game = projectGameJson(row?.game_json, Date.now());
-  return response({ game, revision: row?.revision ?? 0, authorityVersion: row?.economy_authority_version ?? 0, updatedAt: row?.updated_at ?? 0 });
+  let world: unknown = null;
+  try { world = row?.world_json ? JSON.parse(row.world_json) : null; } catch {}
+  return response({ game, world, revision: row?.revision ?? 0, authorityVersion: row?.economy_authority_version ?? 0, updatedAt: row?.updated_at ?? 0 });
 }
 
 async function enableGameAuthority(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
@@ -420,25 +442,41 @@ async function enableGameAuthority(request: Request, env: BackendEnv, claims: Se
   const data = await body(request);
   const expectedRevision = Math.max(0, Math.floor(Number(data?.revision) || 0));
   let supplied = "";
+  let suppliedWorld = "";
   try { supplied = JSON.stringify(data?.game); } catch {}
+  try { suppliedWorld = JSON.stringify(data?.world); } catch {}
   if (!supplied || supplied.length > 250_000) return response({ error: "invalid_state" }, 400);
+  if (!suppliedWorld || suppliedWorld.length > WORLD_STATE_BYTES) return response({ error: "invalid_world_state" }, 400);
   const now = Date.now();
   const game = projectGameJson(supplied, now);
   if (!game) return response({ error: "invalid_state" }, 400);
+  let world: unknown;
+  try { world = JSON.parse(suppliedWorld); } catch { return response({ error: "invalid_world_state" }, 400); }
+  if (!isWorldAuthoritySession(world, claims.sub)) return response({ error: "invalid_world_state" }, 400);
+  const coord = await sharedWorldCoord(env, claims.sub);
+  if (coord) {
+    const player = world.world.players[world.playerId];
+    const city = world.world.entities[player.cityId];
+    if (city?.kind === "city") city.position = coord;
+  }
+  suppliedWorld = JSON.stringify(world);
   const encoded = JSON.stringify(game);
   const write = await env.DB.prepare(`UPDATE player_state
-    SET game_json = ?, economy_authority_version = 1, economy_migrated_at = ?, revision = revision + 1, updated_at = ?
-    WHERE player_id = ? AND revision = ? AND economy_authority_version = 0`)
-    .bind(encoded, now, now, claims.sub, expectedRevision).run();
+    SET game_json = ?, world_json = ?, economy_authority_version = 1,
+      economy_migrated_at = COALESCE(economy_migrated_at, ?), revision = revision + 1, updated_at = ?
+    WHERE player_id = ? AND revision = ? AND (economy_authority_version = 0 OR world_json IS NULL)`)
+    .bind(encoded, suppliedWorld, now, now, claims.sub, expectedRevision).run();
   if (!write.meta.changes) {
-    const current = await env.DB.prepare("SELECT revision, game_json, economy_authority_version FROM player_state WHERE player_id = ?")
-      .bind(claims.sub).first<{ revision: number; game_json: string | null; economy_authority_version: number }>();
+    const current = await env.DB.prepare("SELECT revision, game_json, world_json, economy_authority_version FROM player_state WHERE player_id = ?")
+      .bind(claims.sub).first<{ revision: number; game_json: string | null; world_json: string | null; economy_authority_version: number }>();
     if (current?.economy_authority_version) {
-      return response({ game: projectGameJson(current.game_json, now), revision: current.revision, authorityVersion: current.economy_authority_version, replayed: true });
+      let currentWorld: unknown = null;
+      try { currentWorld = current.world_json ? JSON.parse(current.world_json) : null; } catch {}
+      return response({ game: projectGameJson(current.game_json, now), world: currentWorld, revision: current.revision, authorityVersion: current.economy_authority_version, replayed: true });
     }
     return response({ error: "revision_conflict" }, 409);
   }
-  return response({ game, revision: expectedRevision + 1, authorityVersion: 1 });
+  return response({ game, world, revision: expectedRevision + 1, authorityVersion: 1 });
 }
 
 type CommandLedgerRow = {
@@ -466,8 +504,10 @@ async function replayCommand(env: BackendEnv, claims: SessionClaims, idempotency
     .bind(claims.sub, idempotencyKey).first<CommandLedgerRow>();
   if (!prior) return null;
   if (prior.args_hash !== fingerprint) return response({ error: "idempotency_mismatch" }, 409);
-  const current = await env.DB.prepare("SELECT revision, game_json FROM player_state WHERE player_id = ?")
-    .bind(claims.sub).first<{ revision: number; game_json: string | null }>();
+  const current = await env.DB.prepare("SELECT revision, game_json, world_json FROM player_state WHERE player_id = ?")
+    .bind(claims.sub).first<{ revision: number; game_json: string | null; world_json: string | null }>();
+  let world: unknown = null;
+  try { world = current?.world_json ? JSON.parse(current.world_json) : null; } catch {}
   const inventory = prior.inventory_item_id
     ? await env.DB.prepare("SELECT item_id AS itemId, quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
       .bind(claims.sub, prior.inventory_item_id).first<{ itemId: string; quantity: number }>()
@@ -476,6 +516,7 @@ async function replayCommand(env: BackendEnv, claims: SessionClaims, idempotency
     ok: prior.ok === 1,
     reason: prior.reason || undefined,
     game: projectGameJson(current?.game_json, Date.now()),
+    world,
     revision: current?.revision ?? prior.result_revision,
     replayed: true,
     inventory: inventory || undefined,
@@ -495,16 +536,39 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
   const fingerprint = await commandFingerprint(type, args);
   const replay = await replayCommand(env, claims, idempotencyKey, fingerprint);
   if (replay) return replay;
-  const row = await env.DB.prepare("SELECT revision, game_json, economy_authority_version FROM player_state WHERE player_id = ?")
-    .bind(claims.sub).first<{ revision: number; game_json: string | null; economy_authority_version: number }>();
+  const row = await env.DB.prepare("SELECT revision, game_json, world_json, economy_authority_version FROM player_state WHERE player_id = ?")
+    .bind(claims.sub).first<{ revision: number; game_json: string | null; world_json: string | null; economy_authority_version: number }>();
   if (!row?.economy_authority_version) return response({ error: "authority_disabled" }, 409);
   const now = Date.now();
   const state = projectGameJson(row?.game_json, now);
   const revision = row?.revision ?? 0;
   if (!state) return response({ error: "no_state" }, 409);
+  let world: WorldAuthoritySession | null = null;
+  try {
+    const parsed = row.world_json ? JSON.parse(row.world_json) : null;
+    if (isWorldAuthoritySession(parsed, claims.sub)) world = parsed;
+  } catch {}
   let inventoryItemId: string | null = null;
-  let result;
-  if (type === "speedup.use") {
+  let result: { state: typeof state; ok: boolean; reason?: string; world?: WorldAuthoritySession; extra?: Record<string, unknown> };
+  const isWorldCommand = type === "world.advance" || type === "world.dispatch" || type === "world.recall" || type === "world.scan";
+  if (isWorldCommand) {
+    if (!world) return response({ error: "world_authority_disabled" }, 409);
+    let command: WorldAuthorityCommand;
+    if (type === "world.dispatch") {
+      const action = String(args.action || "");
+      if (!["scout", "gather", "attack_monster", "attack_city"].includes(action)) return response({ error: "invalid_command" }, 400);
+      command = { type, args: { targetId: String(args.targetId || ""), action: action as any, force: args.force as any, dispatchKey: String(args.dispatchKey || idempotencyKey) } };
+    } else if (type === "world.recall") {
+      command = { type, args: { marchId: String(args.marchId || "") } };
+    } else if (type === "world.scan") {
+      command = { type, args: { requestedLevel: Math.max(1, Math.floor(Number(args.requestedLevel) || 1)) } };
+    } else command = { type, args: {} };
+    const applied = applyWorldAuthorityCommand(world, state, command, now, defaultN());
+    result = {
+      state: applied.game, ok: applied.ok, reason: applied.reason, world: applied.session,
+      extra: { targetId: applied.targetId, spawned: applied.spawned },
+    };
+  } else if (type === "speedup.use") {
     const itemId = String(args.itemId || "");
     const item = MVP_ITEM_BY_ID.get(itemId);
     const target = speedupTarget(args.target);
@@ -523,7 +587,9 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
   const reason = result.ok ? null : result.reason || "rejected";
   const resultRevision = result.ok ? revision + 1 : revision;
   const encoded = JSON.stringify(result.state);
+  const encodedWorld = result.world ? JSON.stringify(result.world) : row.world_json;
   if (encoded.length > 250_000) return response({ error: "state_too_large" }, 413);
+  if (encodedWorld && encodedWorld.length > WORLD_STATE_BYTES) return response({ error: "world_state_too_large" }, 413);
   const commandId = crypto.randomUUID();
   const guardId = crypto.randomUUID();
   const inventoryTransactionId = inventoryItemId ? crypto.randomUUID() : null;
@@ -554,9 +620,9 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
         );
       }
       statements.push(
-        env.DB.prepare(`UPDATE player_state SET game_json = ?, revision = ?, updated_at = ?
+        env.DB.prepare(`UPDATE player_state SET game_json = ?, world_json = COALESCE(?, world_json), revision = ?, updated_at = ?
           WHERE player_id = ? AND revision = ? AND economy_authority_version > 0`)
-          .bind(encoded, resultRevision, now, claims.sub, revision),
+          .bind(encoded, encodedWorld, resultRevision, now, claims.sub, revision),
         env.DB.prepare(`INSERT INTO command_transaction_guards (id, ok)
           VALUES (?, COALESCE((SELECT CASE WHEN revision = ? THEN 1 ELSE 0 END FROM player_state WHERE player_id = ?), 0))`)
           .bind(`${guardId}:state`, resultRevision, claims.sub),
@@ -584,7 +650,11 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
     ? await env.DB.prepare("SELECT item_id AS itemId, quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
       .bind(claims.sub, inventoryItemId).first<{ itemId: string; quantity: number }>()
     : null;
-  return response({ ok: result.ok, reason: reason || undefined, game: result.ok ? result.state : state, revision: resultRevision, inventory: inventory || undefined });
+  return response({
+    ok: result.ok, reason: reason || undefined, game: result.ok ? result.state : state,
+    world: result.ok ? result.world || world : world, revision: resultRevision,
+    inventory: inventory || undefined, ...(result.ok ? result.extra : {}),
+  });
 }
 
 export async function handlePlayerApi(request: Request, env: BackendEnv): Promise<Response | null> {
