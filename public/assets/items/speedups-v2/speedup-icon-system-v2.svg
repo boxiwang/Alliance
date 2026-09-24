@@ -1,0 +1,1015 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="1135" viewBox="0 0 1320 1135">
+  <rect width="1320" height="1135" fill="#040813"/>
+  <text x="54" y="44" fill="#dbe2f3" font-size="18" font-family="ui-monospace, monospace" font-weight="600" letter-spacing="2">SPEEDUP ICON SYSTEM</text>
+  <text x="1265" y="44" text-anchor="end" fill="#536d80" font-size="11" font-family="ui-monospace, monospace" letter-spacing="1.4">TIME FIRST · TYPE SECOND</text>
+  <text x="282" y="68" text-anchor="middle" fill="#8edfff" font-size="14" font-family="ui-monospace, monospace" font-weight="600" letter-spacing="1.5">UNIVERSAL</text><text x="496" y="68" text-anchor="middle" fill="#ffb454" font-size="14" font-family="ui-monospace, monospace" font-weight="600" letter-spacing="1.5">CONSTRUCTION</text><text x="710" y="68" text-anchor="middle" fill="#ff7188" font-size="14" font-family="ui-monospace, monospace" font-weight="600" letter-spacing="1.5">TRAINING</text><text x="924" y="68" text-anchor="middle" fill="#aa82ff" font-size="14" font-family="ui-monospace, monospace" font-weight="600" letter-spacing="1.5">RESEARCH</text><text x="1138" y="68" text-anchor="middle" fill="#43f2a1" font-size="14" font-family="ui-monospace, monospace" font-weight="600" letter-spacing="1.5">HEALING</text>
+  <text x="118" y="172" text-anchor="middle" fill="#718697" font-size="20" font-family="ui-monospace, monospace" font-weight="600">1m</text><text x="118" y="342" text-anchor="middle" fill="#38d9ff" font-size="20" font-family="ui-monospace, monospace" font-weight="600">5m</text><text x="118" y="512" text-anchor="middle" fill="#68a6ff" font-size="20" font-family="ui-monospace, monospace" font-weight="600">1h</text><text x="118" y="682" text-anchor="middle" fill="#aa82ff" font-size="20" font-family="ui-monospace, monospace" font-weight="600">3h</text><text x="118" y="852" text-anchor="middle" fill="#e8b24c" font-size="20" font-family="ui-monospace, monospace" font-weight="600">8h</text><text x="118" y="1022" text-anchor="middle" fill="#f5f7ff" font-size="20" font-family="ui-monospace, monospace" font-weight="600">24h</text>
+  <svg x="210" y="94" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-universal-1m" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#718697" stop-opacity="0.08"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-universal-1m" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#718697" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#718697" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-universal-1m" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-universal-1m)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-universal-1m)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#718697" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#718697" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#718697" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#718697" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">1m</text>
+  <g fill="none" stroke="#718697" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-universal-1m)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#718697" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+
+</svg>
+<svg x="210" y="264" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-universal-5m" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#38d9ff" stop-opacity="0.14"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-universal-5m" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#38d9ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#38d9ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-universal-5m" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-universal-5m)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-universal-5m)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#38d9ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#38d9ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#38d9ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#38d9ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">5m</text>
+  <g fill="none" stroke="#38d9ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-universal-5m)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#38d9ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#38d9ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+
+</svg>
+<svg x="210" y="434" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-universal-1h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#68a6ff" stop-opacity="0.18"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-universal-1h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#68a6ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#68a6ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-universal-1h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-universal-1h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-universal-1h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#68a6ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#68a6ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#68a6ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#68a6ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">1h</text>
+  <g fill="none" stroke="#68a6ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-universal-1h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+
+</svg>
+<svg x="210" y="604" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-universal-3h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#aa82ff" stop-opacity="0.22"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-universal-3h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#aa82ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#aa82ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-universal-3h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-universal-3h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-universal-3h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#aa82ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#aa82ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#aa82ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#aa82ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">3h</text>
+  <g fill="none" stroke="#aa82ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-universal-3h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+
+</svg>
+<svg x="210" y="774" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-universal-8h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#e8b24c" stop-opacity="0.25"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-universal-8h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#e8b24c" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#e8b24c" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-universal-8h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-universal-8h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-universal-8h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#e8b24c" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#e8b24c" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#e8b24c" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#e8b24c" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">8h</text>
+  <g fill="none" stroke="#e8b24c" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-universal-8h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+
+</svg>
+<svg x="210" y="944" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-universal-24h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#f5f7ff" stop-opacity="0.32"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-universal-24h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f5f7ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#ff4fd8" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-universal-24h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-universal-24h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-universal-24h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#f5f7ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#f5f7ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#f5f7ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#f5f7ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="52" font-weight="600" letter-spacing="-3">24h</text>
+  <g fill="none" stroke="#ff4fd8" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-universal-24h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#ff4fd8" opacity="0.95"/>
+
+  <path d="M27 82V57l30-30h50" fill="none" stroke="#ff4fd8" stroke-width="3"/><circle cx="42" cy="200" r="6" fill="#050a13" stroke="#ff4fd8"/><path d="M42 188v5M42 207v5M30 200h5M49 200h5" stroke="#ff4fd8" stroke-width="2" filter="url(#softGlow-universal-24h)"/>
+</svg>
+<svg x="424" y="94" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-construction-1m" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#718697" stop-opacity="0.08"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-construction-1m" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#718697" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#718697" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-construction-1m" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-construction-1m)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-construction-1m)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#718697" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#718697" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#718697" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#718697" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">1m</text>
+  <g fill="none" stroke="#718697" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-construction-1m)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#718697" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ffb454" opacity=".055" filter="url(#softGlow-construction-1m)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ffb454" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-construction-1m)"><path d="M74 55h20v8H74zM78 47h12v8H78zM80 63v22M88 63v22M72 85h24"/></g>
+
+</svg>
+<svg x="424" y="264" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-construction-5m" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#38d9ff" stop-opacity="0.14"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-construction-5m" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#38d9ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#38d9ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-construction-5m" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-construction-5m)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-construction-5m)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#38d9ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#38d9ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#38d9ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#38d9ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">5m</text>
+  <g fill="none" stroke="#38d9ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-construction-5m)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#38d9ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#38d9ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ffb454" opacity=".055" filter="url(#softGlow-construction-5m)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ffb454" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-construction-5m)"><path d="M74 55h20v8H74zM78 47h12v8H78zM80 63v22M88 63v22M72 85h24"/></g>
+
+</svg>
+<svg x="424" y="434" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-construction-1h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#68a6ff" stop-opacity="0.18"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-construction-1h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#68a6ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#68a6ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-construction-1h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-construction-1h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-construction-1h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#68a6ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#68a6ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#68a6ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#68a6ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">1h</text>
+  <g fill="none" stroke="#68a6ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-construction-1h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ffb454" opacity=".055" filter="url(#softGlow-construction-1h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ffb454" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-construction-1h)"><path d="M74 55h20v8H74zM78 47h12v8H78zM80 63v22M88 63v22M72 85h24"/></g>
+
+</svg>
+<svg x="424" y="604" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-construction-3h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#aa82ff" stop-opacity="0.22"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-construction-3h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#aa82ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#aa82ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-construction-3h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-construction-3h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-construction-3h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#aa82ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#aa82ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#aa82ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#aa82ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">3h</text>
+  <g fill="none" stroke="#aa82ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-construction-3h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ffb454" opacity=".055" filter="url(#softGlow-construction-3h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ffb454" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-construction-3h)"><path d="M74 55h20v8H74zM78 47h12v8H78zM80 63v22M88 63v22M72 85h24"/></g>
+
+</svg>
+<svg x="424" y="774" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-construction-8h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#e8b24c" stop-opacity="0.25"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-construction-8h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#e8b24c" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#e8b24c" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-construction-8h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-construction-8h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-construction-8h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#e8b24c" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#e8b24c" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#e8b24c" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#e8b24c" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">8h</text>
+  <g fill="none" stroke="#e8b24c" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-construction-8h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ffb454" opacity=".055" filter="url(#softGlow-construction-8h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ffb454" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-construction-8h)"><path d="M74 55h20v8H74zM78 47h12v8H78zM80 63v22M88 63v22M72 85h24"/></g>
+
+</svg>
+<svg x="424" y="944" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-construction-24h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#f5f7ff" stop-opacity="0.32"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-construction-24h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f5f7ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#ff4fd8" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-construction-24h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-construction-24h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-construction-24h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#f5f7ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#f5f7ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#f5f7ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#f5f7ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="52" font-weight="600" letter-spacing="-3">24h</text>
+  <g fill="none" stroke="#ff4fd8" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-construction-24h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#ff4fd8" opacity="0.95"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ffb454" opacity=".055" filter="url(#softGlow-construction-24h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ffb454" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-construction-24h)"><path d="M74 55h20v8H74zM78 47h12v8H78zM80 63v22M88 63v22M72 85h24"/></g>
+  <path d="M27 82V57l30-30h50" fill="none" stroke="#ff4fd8" stroke-width="3"/><circle cx="42" cy="200" r="6" fill="#050a13" stroke="#ff4fd8"/><path d="M42 188v5M42 207v5M30 200h5M49 200h5" stroke="#ff4fd8" stroke-width="2" filter="url(#softGlow-construction-24h)"/>
+</svg>
+<svg x="638" y="94" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-training-1m" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#718697" stop-opacity="0.08"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-training-1m" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#718697" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#718697" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-training-1m" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-training-1m)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-training-1m)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#718697" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#718697" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#718697" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#718697" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">1m</text>
+  <g fill="none" stroke="#718697" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-training-1m)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#718697" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ff7188" opacity=".055" filter="url(#softGlow-training-1m)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ff7188" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-training-1m)"><path d="M70 57v10M75 53v18M91 53v18M96 57v10M75 62h16"/></g>
+
+</svg>
+<svg x="638" y="264" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-training-5m" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#38d9ff" stop-opacity="0.14"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-training-5m" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#38d9ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#38d9ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-training-5m" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-training-5m)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-training-5m)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#38d9ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#38d9ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#38d9ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#38d9ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">5m</text>
+  <g fill="none" stroke="#38d9ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-training-5m)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#38d9ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#38d9ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ff7188" opacity=".055" filter="url(#softGlow-training-5m)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ff7188" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-training-5m)"><path d="M70 57v10M75 53v18M91 53v18M96 57v10M75 62h16"/></g>
+
+</svg>
+<svg x="638" y="434" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-training-1h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#68a6ff" stop-opacity="0.18"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-training-1h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#68a6ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#68a6ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-training-1h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-training-1h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-training-1h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#68a6ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#68a6ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#68a6ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#68a6ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">1h</text>
+  <g fill="none" stroke="#68a6ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-training-1h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ff7188" opacity=".055" filter="url(#softGlow-training-1h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ff7188" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-training-1h)"><path d="M70 57v10M75 53v18M91 53v18M96 57v10M75 62h16"/></g>
+
+</svg>
+<svg x="638" y="604" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-training-3h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#aa82ff" stop-opacity="0.22"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-training-3h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#aa82ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#aa82ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-training-3h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-training-3h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-training-3h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#aa82ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#aa82ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#aa82ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#aa82ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">3h</text>
+  <g fill="none" stroke="#aa82ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-training-3h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ff7188" opacity=".055" filter="url(#softGlow-training-3h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ff7188" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-training-3h)"><path d="M70 57v10M75 53v18M91 53v18M96 57v10M75 62h16"/></g>
+
+</svg>
+<svg x="638" y="774" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-training-8h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#e8b24c" stop-opacity="0.25"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-training-8h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#e8b24c" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#e8b24c" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-training-8h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-training-8h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-training-8h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#e8b24c" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#e8b24c" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#e8b24c" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#e8b24c" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">8h</text>
+  <g fill="none" stroke="#e8b24c" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-training-8h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ff7188" opacity=".055" filter="url(#softGlow-training-8h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ff7188" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-training-8h)"><path d="M70 57v10M75 53v18M91 53v18M96 57v10M75 62h16"/></g>
+
+</svg>
+<svg x="638" y="944" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-training-24h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#f5f7ff" stop-opacity="0.32"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-training-24h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f5f7ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#ff4fd8" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-training-24h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-training-24h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-training-24h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#f5f7ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#f5f7ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#f5f7ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#f5f7ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="52" font-weight="600" letter-spacing="-3">24h</text>
+  <g fill="none" stroke="#ff4fd8" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-training-24h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#ff4fd8" opacity="0.95"/>
+
+    <circle cx="200" cy="54" r="24" fill="#ff7188" opacity=".055" filter="url(#softGlow-training-24h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#ff7188" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-training-24h)"><path d="M70 57v10M75 53v18M91 53v18M96 57v10M75 62h16"/></g>
+  <path d="M27 82V57l30-30h50" fill="none" stroke="#ff4fd8" stroke-width="3"/><circle cx="42" cy="200" r="6" fill="#050a13" stroke="#ff4fd8"/><path d="M42 188v5M42 207v5M30 200h5M49 200h5" stroke="#ff4fd8" stroke-width="2" filter="url(#softGlow-training-24h)"/>
+</svg>
+<svg x="852" y="94" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-research-1m" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#718697" stop-opacity="0.08"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-research-1m" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#718697" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#718697" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-research-1m" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-research-1m)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-research-1m)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#718697" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#718697" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#718697" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#718697" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">1m</text>
+  <g fill="none" stroke="#718697" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-research-1m)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#718697" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#aa82ff" opacity=".055" filter="url(#softGlow-research-1m)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#aa82ff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-research-1m)"><path d="M69 51c5-2 10 0 14 4 4-4 9-6 14-4v21c-5-2-10 0-14 4-4-4-9-6-14-4zM83 55v21"/></g>
+
+</svg>
+<svg x="852" y="264" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-research-5m" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#38d9ff" stop-opacity="0.14"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-research-5m" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#38d9ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#38d9ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-research-5m" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-research-5m)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-research-5m)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#38d9ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#38d9ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#38d9ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#38d9ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">5m</text>
+  <g fill="none" stroke="#38d9ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-research-5m)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#38d9ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#38d9ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#aa82ff" opacity=".055" filter="url(#softGlow-research-5m)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#aa82ff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-research-5m)"><path d="M69 51c5-2 10 0 14 4 4-4 9-6 14-4v21c-5-2-10 0-14 4-4-4-9-6-14-4zM83 55v21"/></g>
+
+</svg>
+<svg x="852" y="434" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-research-1h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#68a6ff" stop-opacity="0.18"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-research-1h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#68a6ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#68a6ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-research-1h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-research-1h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-research-1h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#68a6ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#68a6ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#68a6ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#68a6ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">1h</text>
+  <g fill="none" stroke="#68a6ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-research-1h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#aa82ff" opacity=".055" filter="url(#softGlow-research-1h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#aa82ff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-research-1h)"><path d="M69 51c5-2 10 0 14 4 4-4 9-6 14-4v21c-5-2-10 0-14 4-4-4-9-6-14-4zM83 55v21"/></g>
+
+</svg>
+<svg x="852" y="604" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-research-3h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#aa82ff" stop-opacity="0.22"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-research-3h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#aa82ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#aa82ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-research-3h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-research-3h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-research-3h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#aa82ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#aa82ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#aa82ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#aa82ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">3h</text>
+  <g fill="none" stroke="#aa82ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-research-3h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#aa82ff" opacity=".055" filter="url(#softGlow-research-3h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#aa82ff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-research-3h)"><path d="M69 51c5-2 10 0 14 4 4-4 9-6 14-4v21c-5-2-10 0-14 4-4-4-9-6-14-4zM83 55v21"/></g>
+
+</svg>
+<svg x="852" y="774" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-research-8h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#e8b24c" stop-opacity="0.25"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-research-8h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#e8b24c" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#e8b24c" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-research-8h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-research-8h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-research-8h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#e8b24c" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#e8b24c" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#e8b24c" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#e8b24c" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">8h</text>
+  <g fill="none" stroke="#e8b24c" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-research-8h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#aa82ff" opacity=".055" filter="url(#softGlow-research-8h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#aa82ff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-research-8h)"><path d="M69 51c5-2 10 0 14 4 4-4 9-6 14-4v21c-5-2-10 0-14 4-4-4-9-6-14-4zM83 55v21"/></g>
+
+</svg>
+<svg x="852" y="944" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-research-24h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#f5f7ff" stop-opacity="0.32"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-research-24h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f5f7ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#ff4fd8" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-research-24h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-research-24h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-research-24h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#f5f7ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#f5f7ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#f5f7ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#f5f7ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="52" font-weight="600" letter-spacing="-3">24h</text>
+  <g fill="none" stroke="#ff4fd8" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-research-24h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#ff4fd8" opacity="0.95"/>
+
+    <circle cx="200" cy="54" r="24" fill="#aa82ff" opacity=".055" filter="url(#softGlow-research-24h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#aa82ff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-research-24h)"><path d="M69 51c5-2 10 0 14 4 4-4 9-6 14-4v21c-5-2-10 0-14 4-4-4-9-6-14-4zM83 55v21"/></g>
+  <path d="M27 82V57l30-30h50" fill="none" stroke="#ff4fd8" stroke-width="3"/><circle cx="42" cy="200" r="6" fill="#050a13" stroke="#ff4fd8"/><path d="M42 188v5M42 207v5M30 200h5M49 200h5" stroke="#ff4fd8" stroke-width="2" filter="url(#softGlow-research-24h)"/>
+</svg>
+<svg x="1066" y="94" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-healing-1m" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#718697" stop-opacity="0.08"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-healing-1m" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#718697" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#718697" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-healing-1m" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-healing-1m)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-healing-1m)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#718697" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#718697" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#718697" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#718697" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">1m</text>
+  <g fill="none" stroke="#718697" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-healing-1m)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#718697" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#43f2a1" opacity=".055" filter="url(#softGlow-healing-1m)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#43f2a1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-healing-1m)"><path d="M69 63h8l4-9 5 17 4-8h8"/></g>
+
+</svg>
+<svg x="1066" y="264" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-healing-5m" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#38d9ff" stop-opacity="0.14"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-healing-5m" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#38d9ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#38d9ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-healing-5m" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-healing-5m)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-healing-5m)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#38d9ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#38d9ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#38d9ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#38d9ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">5m</text>
+  <g fill="none" stroke="#38d9ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-healing-5m)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#38d9ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#38d9ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#43f2a1" opacity=".055" filter="url(#softGlow-healing-5m)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#43f2a1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-healing-5m)"><path d="M69 63h8l4-9 5 17 4-8h8"/></g>
+
+</svg>
+<svg x="1066" y="434" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-healing-1h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#68a6ff" stop-opacity="0.18"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-healing-1h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#68a6ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#68a6ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-healing-1h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-healing-1h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-healing-1h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#68a6ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#68a6ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#68a6ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#68a6ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">1h</text>
+  <g fill="none" stroke="#68a6ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-healing-1h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#68a6ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#43f2a1" opacity=".055" filter="url(#softGlow-healing-1h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#43f2a1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-healing-1h)"><path d="M69 63h8l4-9 5 17 4-8h8"/></g>
+
+</svg>
+<svg x="1066" y="604" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-healing-3h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#aa82ff" stop-opacity="0.22"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-healing-3h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#aa82ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#aa82ff" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-healing-3h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-healing-3h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-healing-3h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#aa82ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#aa82ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#aa82ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#aa82ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">3h</text>
+  <g fill="none" stroke="#aa82ff" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-healing-3h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#aa82ff" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#43f2a1" opacity=".055" filter="url(#softGlow-healing-3h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#43f2a1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-healing-3h)"><path d="M69 63h8l4-9 5 17 4-8h8"/></g>
+
+</svg>
+<svg x="1066" y="774" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-healing-8h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#e8b24c" stop-opacity="0.25"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-healing-8h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#e8b24c" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#e8b24c" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-healing-8h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-healing-8h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-healing-8h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#e8b24c" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#e8b24c" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#e8b24c" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#e8b24c" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="64" font-weight="600" letter-spacing="-3">8h</text>
+  <g fill="none" stroke="#e8b24c" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-healing-8h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#e8b24c" opacity="0.95"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#223449" opacity="0.62"/>
+
+    <circle cx="200" cy="54" r="24" fill="#43f2a1" opacity=".055" filter="url(#softGlow-healing-8h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#43f2a1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-healing-8h)"><path d="M69 63h8l4-9 5 17 4-8h8"/></g>
+
+</svg>
+<svg x="1066" y="944" width="144" height="144" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="field-healing-24h" cx="50%" cy="46%" r="65%">
+      <stop offset="0" stop-color="#f5f7ff" stop-opacity="0.32"/>
+      <stop offset=".5" stop-color="#0b1a2e" stop-opacity=".96"/>
+      <stop offset="1" stop-color="#040914"/>
+    </radialGradient>
+    <linearGradient id="edge-healing-24h" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f5f7ff" stop-opacity=".92"/>
+      <stop offset=".48" stop-color="#29435d" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#ff4fd8" stop-opacity=".78"/>
+    </linearGradient>
+    <filter id="softGlow-healing-24h" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M46 14h148l48 48v143l-37 37H51l-37-37V51z" fill="url(#field-healing-24h)" stroke="#1c3046" stroke-width="2"/>
+  <path d="M49 25h137l43 43v130l-31 31H58l-31-31V58z" fill="none" stroke="#b8dcf0" stroke-opacity=".08"/>
+  <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke="url(#edge-healing-24h)" stroke-width="3"/>
+  <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke="#f5f7ff" stroke-width="2" stroke-opacity=".58"/>
+  <circle cx="112" cy="131" r="62" fill="none" stroke="#f5f7ff" stroke-opacity=".09"/>
+  <circle cx="112" cy="131" r="49" fill="none" stroke="#f5f7ff" stroke-width="2" stroke-dasharray="2 9" stroke-opacity=".22"/>
+  <path d="M112 70v13M112 179v13M52 131h13" stroke="#f5f7ff" stroke-width="2" stroke-opacity=".38"/>
+  <text x="105" y="151" text-anchor="middle" fill="#e8f8ff" font-family="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" font-size="52" font-weight="600" letter-spacing="-3">24h</text>
+  <g fill="none" stroke="#ff4fd8" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" opacity=".88" filter="url(#softGlow-healing-24h)">
+    <path d="m153 107 22 24-22 24"/><path d="m176 107 22 24-22 24"/>
+  </g>
+  <rect x="75" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="93" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="111" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="129" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="147" y="208" width="11" height="3" rx="1.5" fill="#f5f7ff" opacity="0.95"/><rect x="165" y="208" width="11" height="3" rx="1.5" fill="#ff4fd8" opacity="0.95"/>
+
+    <circle cx="200" cy="54" r="24" fill="#43f2a1" opacity=".055" filter="url(#softGlow-healing-24h)"/>
+    <g transform="translate(117 -8)" fill="none" stroke="#43f2a1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow-healing-24h)"><path d="M69 63h8l4-9 5 17 4-8h8"/></g>
+  <path d="M27 82V57l30-30h50" fill="none" stroke="#ff4fd8" stroke-width="3"/><circle cx="42" cy="200" r="6" fill="#050a13" stroke="#ff4fd8"/><path d="M42 188v5M42 207v5M30 200h5M49 200h5" stroke="#ff4fd8" stroke-width="2" filter="url(#softGlow-healing-24h)"/>
+</svg>
+</svg>

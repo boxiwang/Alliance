@@ -24,8 +24,9 @@ describe("Town troop training UI", () => {
     );
 
     expect(html).toContain("Army Camp");
-    expect(html).toContain("Resource Network");
-    expect(html).toContain("RESOURCE NETWORK");
+    expect(html).toContain('aria-label="Star Grid"');
+    expect(html).toContain("ECONOMY · 4");
+    expect(html).toContain("MILITARY · 3");
     expect(html).toContain("OPERATIONS QUEUE");
     expect(html).toContain("BUILD 1");
     expect(html).toContain("ARMY TRAIN");
@@ -34,7 +35,7 @@ describe("Town troop training UI", () => {
     expect(html).toContain("FIRST ORDERS");
     expect(html).toContain("Current priorities");
     expect(html).toContain("CREDITS");
-    expect(html).toContain('aria-label="Army Camp details"');
+    expect(html).toContain('aria-label="Army Camp, level 1"');
     expect(html).not.toContain("Army quantity");
     expect(html).not.toContain("Training grounds");
     expect(html).not.toContain("Trains Army units");
@@ -71,6 +72,7 @@ describe("Town troop training UI", () => {
     expect(html).toContain("Finish queues");
     expect(html).toContain("Max research");
     expect(html).toContain("Open Research");
+    expect(html).toContain("Test city attack");
     expect(html).toContain("Townhall +1");
     expect(html).toContain("Selected building +1");
     expect(html).toContain("Reset city");
@@ -98,8 +100,9 @@ describe("Town troop training UI", () => {
     );
 
     expect(html).toContain("Research Institute");
-    expect(html).toContain('aria-label="Research Institute details"');
-    expect(html).toContain("READY");
+    expect(html).toContain('aria-label="Research Institute, level 1"');
+    // The tree is deliberately a second step: selecting the building exposes
+    // OPEN RESEARCH INSTITUTE before the full research workspace is mounted.
     expect(html).not.toContain("Rapid Construction I");
   });
 });

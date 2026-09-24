@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   GameState, BKey, TroopKey, ResKey, BUILDINGS, BUILDING_ORDER, RES, RES_ORDER, TROOPS_META, TROOP_ORDER,
   project, startUpgrade, startTrain, upgradeCost, upgradeTimeSec,
@@ -32,6 +32,7 @@ import GameNav from "./GameNav";
 import BuildingGlyph from "./BuildingGlyph";
 import CosmicBackdrop from "./CosmicBackdrop";
 import MiniComms from "./MiniComms";
+import CityStarGrid, { type CityThreat } from "./CityStarGrid";
 import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAllianceHelp } from "./lib/alliance";
 import { loadPlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME } from "./lib/sfx";
@@ -39,8 +40,10 @@ import {
   consumeInventoryItem, enableGameAuthority, fetchServerGame, grantGmInventory, loadInventory,
   sendGameCommand, type GameCommandResponse, type InventoryBalance,
 } from "./lib/backend";
-import { MVP_ITEM_BY_ID } from "./lib/mvp-items";
+import { MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath } from "./lib/mvp-items";
 import { activeSpeedupTargets, applySpeedup, speedupCompatible, speedupTargetId, type SpeedupTarget } from "./lib/speedups";
+import type { ServerReport } from "./lib/realtime";
+import { useGraphicsQuality } from "./useGraphicsQuality";
 
 const ECONOMY_BUILDINGS: BKey[] = ["bank", "oilwell", "powerplant"];
 const COMMAND_BUILDINGS: BKey[] = ["storage", "wall"];
@@ -120,12 +123,14 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [healQty, setHealQty] = useState(10);
   const [researchBranch, setResearchBranch] = useState<ResearchBranch>("development");
   const [facilityOpen, setFacilityOpen] = useState<BKey | null>(null);
+  const [facilityInterior, setFacilityInterior] = useState(false);
   // Select a building's facility, with a click cue (read the account fresh so a
   // Profile change to sound / SFX volume applies without remounting).
   function openFacility(building: BKey) {
     const acc = loadPlayerAccount(address);
     if (acc.soundEnabled) playSfx(SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME * acc.sfxVolume);
     setFacilityOpen(building);
+    setFacilityInterior(false);
   }
   const [commandTab, setCommandTab] = useState<"today" | "signals">("today");
   const [selectedResearchKey, setSelectedResearchKey] = useState("");
@@ -135,11 +140,38 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [allianceRevision, setAllianceRevision] = useState(0);
   const [inventory, setInventory] = useState<InventoryBalance[]>([]);
   const [speedupTarget, setSpeedupTarget] = useState("");
+  const [warehouseItemId, setWarehouseItemId] = useState("speedup.universal.1m");
   const [inventoryBusy, setInventoryBusy] = useState(false);
   const [authorityVersion, setAuthorityVersion] = useState(0);
   const [authorityBusy, setAuthorityBusy] = useState(false);
   const [commandBuilding, setCommandBuilding] = useState<BKey | null>(null);
   const [commandBusy, setCommandBusy] = useState(false);
+  const [cityThreat, setCityThreat] = useState<CityThreat | null>(null);
+  const seenReports = useRef(new Set<string>());
+  const quality = useGraphicsQuality(address);
+
+  const handleCityReport = useCallback((report: ServerReport) => {
+    if (seenReports.current.has(report.id)) return;
+    seenReports.current.add(report.id);
+    if (seenReports.current.size > 120) {
+      seenReports.current.clear();
+      seenReports.current.add(report.id);
+    }
+    const receivedAt = Date.now();
+    if (report.kind === "incoming") {
+      const arriveAt = Number(report.payload?.arriveAt) || receivedAt + Math.max(1, Number(report.payload?.etaSec) || 1) * 1000;
+      if (arriveAt < receivedAt - 8_000) return;
+      setCityThreat({
+        id: report.id,
+        phase: arriveAt > receivedAt ? "inbound" : "engaged",
+        attacker: report.byName || "HOSTILE FORCE",
+        arriveAt,
+        armyTotal: Math.max(0, Number(report.payload?.armyTotal) || 0),
+      });
+    } else if (report.kind === "battle" && receivedAt - report.ts < 15_000) {
+      setCityThreat({ id: report.id, phase: "engaged", attacker: report.byName || "HOSTILE FORCE", arriveAt: report.ts, armyTotal: Math.max(0, Number(report.payload?.armyTotal) || 0) });
+    }
+  }, []);
 
   // Offline progress on entry (once).
   useEffect(() => {
@@ -197,10 +229,25 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
 
   useEffect(() => {
     if (!facilityOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setFacilityOpen(null); };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (facilityInterior) setFacilityInterior(false);
+      else setFacilityOpen(null);
+    };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [facilityOpen]);
+  }, [facilityInterior, facilityOpen]);
+
+  useEffect(() => {
+    if (!cityThreat) return;
+    if (cityThreat.phase === "inbound") {
+      const delay = Math.max(0, cityThreat.arriveAt - Date.now());
+      const timer = window.setTimeout(() => setCityThreat((current) => current?.id === cityThreat.id ? { ...current, phase: "engaged" } : current), delay);
+      return () => window.clearTimeout(timer);
+    }
+    const timer = window.setTimeout(() => setCityThreat((current) => current?.id === cityThreat.id ? null : current), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [cityThreat]);
 
   const view = useMemo(() => project(game, now), [game, now]);
   const allianceBonuses = useMemo(() => allianceGameplayBonuses(address), [address, allianceRevision]);
@@ -214,6 +261,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const operationQueueSlots = buildQueueSlots + TROOP_ORDER.length + 3;
   const speedupTargets = activeSpeedupTargets(view);
   const selectedSpeedupTarget = speedupTargets.find((target) => speedupTargetId(target) === speedupTarget) || speedupTargets[0];
+  const inventoryById = useMemo(() => new Map(inventory.map((entry) => [entry.itemId, entry.quantity])), [inventory]);
+  const speedupCatalog = useMemo(() => MVP_ITEMS.filter((item) => item.status === "active" && item.category === "speedup"), []);
   const usableSpeedups = selectedSpeedupTarget ? inventory.filter((entry) => {
     const item = MVP_ITEM_BY_ID.get(entry.itemId);
     return entry.quantity > 0 && item?.status === "active" && item.category === "speedup" && speedupCompatible(item.speedupQueue, selectedSpeedupTarget);
@@ -350,16 +399,17 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     setMsg(message);
   }
 
-  async function useSpeedup(itemId: string) {
-    if (!selectedSpeedupTarget || inventoryBusy) return;
+  async function useSpeedup(itemId: string, targetOverride?: SpeedupTarget) {
+    const target = targetOverride || selectedSpeedupTarget;
+    if (!target || inventoryBusy) return;
     const item = MVP_ITEM_BY_ID.get(itemId);
-    if (!item?.speedupSeconds || !speedupCompatible(item.speedupQueue, selectedSpeedupTarget)) return;
-    const result = applySpeedup(game, selectedSpeedupTarget, item.speedupSeconds, Date.now());
+    if (!item?.speedupSeconds || !speedupCompatible(item.speedupQueue, target)) return;
+    const result = applySpeedup(game, target, item.speedupSeconds, Date.now());
     if (!result.secondsApplied) { setMsg("That operation has already finished."); return; }
     setInventoryBusy(true);
     if (authorityVersion > 0) {
       try {
-        const command = await runServerAction("speedup.use", { itemId, target: selectedSpeedupTarget }, () => ({ state: result.state, ok: true }));
+        const command = await runServerAction("speedup.use", { itemId, target }, () => ({ state: result.state, ok: true }));
         if (command?.inventory) {
           setInventory((current) => current.map((entry) => entry.itemId === command.inventory!.itemId
             ? { ...entry, quantity: command.inventory!.quantity, updatedAt: Date.now() }
@@ -372,7 +422,17 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       } finally { setInventoryBusy(false); }
       return;
     }
-    const referenceId = `speedup:${speedupTargetId(selectedSpeedupTarget)}:${crypto.randomUUID()}`;
+    const referenceId = `speedup:${speedupTargetId(target)}:${crypto.randomUUID()}`;
+    if (import.meta.env.DEV && gm) {
+      setGame(result.state);
+      saveGame(result.state);
+      setInventory((current) => current.map((entry) => entry.itemId === itemId
+        ? { ...entry, quantity: Math.max(0, entry.quantity - 1), updatedAt: Date.now() }
+        : entry));
+      setMsg(`${item.name} used. ${fmtSec(result.secondsApplied)} removed.`);
+      setInventoryBusy(false);
+      return;
+    }
     try {
       const consumed = await consumeInventoryItem(address, itemId, referenceId);
       setGame(result.state);
@@ -383,6 +443,62 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       setMsg(error instanceof Error && error.message === "insufficient_inventory" ? "No speedups left." : "Speedup failed. Try again.");
       void loadInventory(address).then(setInventory).catch(() => {});
     } finally { setInventoryBusy(false); }
+  }
+
+  function renderSpeedupTray(target: SpeedupTarget, variant: "compact" | "wide" = "compact") {
+    const compatible = speedupCatalog.filter((item) => speedupCompatible(item.speedupQueue, target));
+    const remainingMs = target.kind === "construction" ? view.buildings[target.key].finishAt - now
+      : target.kind === "training" ? view.training[target.key].finishAt - now
+        : target.kind === "research" ? view.researchQueue.finishAt - now
+          : view.healing.finishAt - now;
+    return <section className={`speedup-tray ${variant}`} aria-label={`Speedups for ${speedupTargetLabel(target)}`}>
+      <header><span>ACCELERATE</span><b className="mono">{fmtMs(remainingMs)}</b></header>
+      <div className="speedup-tray-items">
+        {compatible.map((item) => {
+          const quantity = inventoryById.get(item.id) || 0;
+          return <button key={item.id} type="button" disabled={quantity <= 0 || inventoryBusy || commandBusy} onClick={() => void useSpeedup(item.id, target)} aria-label={`Use ${item.name}, ${quantity} owned`} title={item.name}>
+            <img src={speedupIconPath(item)} alt="" />
+            <span className="mono">×{quantity}</span>
+          </button>;
+        })}
+      </div>
+    </section>;
+  }
+
+  function renderWarehouse() {
+    const selectedItem = MVP_ITEM_BY_ID.get(warehouseItemId);
+    const selectedQuantity = selectedItem ? inventoryById.get(selectedItem.id) || 0 : 0;
+    const compatible = !!selectedItem && !!selectedSpeedupTarget && speedupCompatible(selectedItem.speedupQueue, selectedSpeedupTarget);
+    return <section className="warehouse-inventory">
+      <header className="warehouse-inventory-head">
+        <div><span>WAREHOUSE</span><b>SPEEDUPS</b></div>
+        <button className="city-interior-back" type="button" onClick={() => setFacilityInterior(false)}>← STAR GRID</button>
+        <label><span>ACTIVE QUEUE</span><select aria-label="Warehouse speedup target" value={selectedSpeedupTarget ? speedupTargetId(selectedSpeedupTarget) : ""} disabled={!speedupTargets.length} onChange={(event) => setSpeedupTarget(event.target.value)}>
+          {!speedupTargets.length && <option value="">NO ACTIVE QUEUES</option>}
+          {speedupTargets.map((target) => <option key={speedupTargetId(target)} value={speedupTargetId(target)}>{speedupTargetLabel(target)}</option>)}
+        </select></label>
+      </header>
+      <div className="warehouse-speedup-groups">
+        {SPEEDUP_QUEUES.map((queue) => <section className={`warehouse-speedup-group ${queue}`} key={queue}>
+          <header><b>{queue.toUpperCase()}</b><span>{speedupCatalog.filter((item) => item.speedupQueue === queue).reduce((sum, item) => sum + (inventoryById.get(item.id) || 0), 0)}</span></header>
+          <div>{speedupCatalog.filter((item) => item.speedupQueue === queue).map((item) => {
+            const quantity = inventoryById.get(item.id) || 0;
+            return <button key={item.id} type="button" className={`${warehouseItemId === item.id ? "selected " : ""}${quantity <= 0 ? "empty" : ""}`} onClick={() => setWarehouseItemId(item.id)} aria-pressed={warehouseItemId === item.id}>
+              <img src={speedupIconPath(item)} alt="" />
+              <span className="mono">×{quantity}</span>
+            </button>;
+          })}</div>
+        </section>)}
+      </div>
+      <footer className="warehouse-usebar">
+        <span>{selectedItem?.name || "SELECT AN ITEM"}</span>
+        <b className="mono">×{selectedQuantity}</b>
+        <button type="button" disabled={!selectedItem || selectedQuantity <= 0 || !compatible || inventoryBusy || commandBusy} onClick={() => selectedItem && selectedSpeedupTarget && void useSpeedup(selectedItem.id, selectedSpeedupTarget)}>
+          {!speedupTargets.length ? "NO ACTIVE QUEUE" : !compatible ? "INCOMPATIBLE" : "USE"}
+        </button>
+      </footer>
+      <details className="warehouse-upgrade"><summary>WAREHOUSE UPGRADE</summary>{renderBuildingUpgrade("storage")}</details>
+    </section>;
   }
 
   return (
@@ -404,7 +520,15 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
             <button disabled={authorityVersion > 0} onClick={() => gmAct(gmFinishQueues, "GM: active build, research, training and healing queues completed.")}>Finish queues</button>
             <button disabled={inventoryBusy} onClick={() => {
               setInventoryBusy(true);
-              void grantGmInventory(address).then((items) => { setInventory(items); setMsg("GM: active MVP items stocked to 99."); }).catch(() => setMsg("GM inventory grant failed.")).finally(() => setInventoryBusy(false));
+              void grantGmInventory(address).then((items) => { setInventory(items); setMsg("GM: active MVP items stocked to 99."); }).catch(() => {
+                if (import.meta.env.DEV) {
+                  const updatedAt = Date.now();
+                  setInventory(MVP_ITEMS.filter((item) => item.status === "active").map((item) => ({ itemId: item.id, quantity: 99, updatedAt })));
+                  setMsg("GM: local MVP items stocked to 99.");
+                  return;
+                }
+                setMsg("GM inventory grant failed.");
+              }).finally(() => setInventoryBusy(false));
             }}>Stock MVP items</button>
             <button disabled={authorityVersion > 0} onClick={() => gmAct(gmMaxResearch, "GM: all three Research categories maxed. Account bonuses are active.")}>Max research</button>
             <button disabled={authorityVersion > 0} onClick={() => {
@@ -412,8 +536,16 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
               setGame(next);
               saveGame(next);
               setFacilityOpen("academy");
+              setFacilityInterior(false);
               setMsg(game.buildings.academy.lvl >= 1 ? "" : "GM: Research Institute built at Lv.1.");
             }}>Open Research</button>
+            <button onClick={() => setCityThreat({
+              id: `gm-raid-${Date.now()}`,
+              phase: "inbound",
+              attacker: "UNKNOWN FLEET",
+              arriveAt: Date.now() + 12_000,
+              armyTotal: 120_000,
+            })}>Test city attack</button>
             <span className="gm-building-stepper">
               <select aria-label="GM building" value={gmBuilding} onChange={(event) => setGmBuilding(event.target.value as BKey)}>
                 {BUILDING_ORDER.filter(isUpgradable).map((building) => <option value={building} key={building}>{BUILDINGS[building].label} · Lv.{view.buildings[building].lvl}</option>)}
@@ -441,6 +573,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       )}
       {msg && <div className={"gmsg" + (msg.startsWith("GM:") ? " gmmsg" : "")}>{msg}</div>}
 
+      <div className="city-command-layout">
       <section className="operations-queue" aria-label="Operations queue">
         <header><span>OPERATIONS QUEUE</span><b className="mono">{activeOperationQueues}/{operationQueueSlots} ACTIVE</b></header>
         <div className="operation-slots">
@@ -486,54 +619,35 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="speedup-items">
             {usableSpeedups.map((entry) => {
               const item = MVP_ITEM_BY_ID.get(entry.itemId)!;
-              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy} onClick={() => void useSpeedup(entry.itemId)}><b>{item.name}</b><span>×{entry.quantity}</span></button>;
+              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy} onClick={() => void useSpeedup(entry.itemId)} title={item.name} aria-label={`Use ${item.name}, ${entry.quantity} owned`}><img src={speedupIconPath(item)} alt="" /><span>×{entry.quantity}</span></button>;
             })}
             {selectedSpeedupTarget && usableSpeedups.length === 0 && <i>NO SPEEDUPS AVAILABLE</i>}
           </div>
         </div>
       </section>
 
-      <section className="economy-strip" aria-label="Resource Network">
-        <header><span>RESOURCE NETWORK</span><i>PRODUCTION</i></header>
-        <div className="economy-nodes">
-          {ECONOMY_BUILDINGS.map(renderEconomyBuilding)}
-        </div>
-      </section>
+      {facilityInterior && facilityOpen === "academy" && view.buildings.academy.lvl >= 1
+        ? renderResearchCenter()
+        : facilityInterior && facilityOpen === "storage"
+          ? renderWarehouse()
+          : <CityStarGrid address={address} name={profile.name} view={view} now={now} selected={facilityOpen} quality={quality} threat={cityThreat} onSelect={openFacility} />}
 
-      {/* buildings */}
-      <div className={`city-workspace${facilityOpen === "academy" && view.buildings.academy.lvl >= 1 ? " research-focus" : ""}`}>
-        <div className="city-directory">
-          <button type="button" className={`civilization-core${facilityOpen === "keep" ? " selected" : ""}`} onClick={() => openFacility("keep")}>
-            <span className="civilization-core-glyph"><BuildingGlyph building="keep" /></span>
-            <span className="civilization-core-copy"><small>CIVILIZATION CORE</small><b>{profile.name}</b><em>ONLINE</em></span>
-            <span className="civilization-core-metrics"><span><small>CORE LEVEL</small><b className="mono">{view.buildings.keep.lvl}</b></span><span><small>SHIELD</small><b className="mono">{view.buildings.keep.lvl < 10 ? "ACTIVE" : "OFFLINE"}</b></span><i>›</i></span>
-          </button>
-          <section className="building-group command-group">
-            <header><span>COMMAND</span></header>
-            <div className="bgrid command-grid">{COMMAND_BUILDINGS.map(renderBuilding)}</div>
-          </section>
-          <section className="building-group military-group">
-            <header><span>MILITARY</span></header>
-            <div className="bgrid facility-grid">{MILITARY_BUILDINGS.map(renderBuilding)}</div>
-          </section>
-          <section className="building-group infrastructure-group">
-            <header><span>INFRASTRUCTURE</span></header>
-            <div className="bgrid facility-grid">{INFRASTRUCTURE_BUILDINGS.map(renderBuilding)}</div>
-          </section>
-        </div>
         {facilityOpen ? (() => {
           const trainingType = TROOP_ORDER.find((type) => TRAINING_BUILDING[type] === facilityOpen);
           const research = facilityOpen === "academy" && view.buildings.academy.lvl >= 1;
           const hospital = facilityOpen === "hospital";
+          const warehouse = facilityOpen === "storage";
           return (
-            <aside className={`facility-inspector${research ? " research" : ""}`} aria-label={BUILDINGS[facilityOpen].label}>
+            <aside className={`facility-inspector city-facility-panel${research ? " research" : ""}${warehouse ? " warehouse" : ""}`} aria-label={BUILDINGS[facilityOpen].label}>
               <header className="facility-inspector-head">
                 <div><span className="facility-head-glyph"><BuildingGlyph building={facilityOpen} /></span><b>{BUILDINGS[facilityOpen].label}</b><small>LV.{view.buildings[facilityOpen].lvl}</small></div>
-                <button aria-label="Close facility" onClick={() => { setFacilityOpen(null); setCommandTab("today"); }}>×</button>
+                <button aria-label="Close facility" onClick={() => { setFacilityInterior(false); setFacilityOpen(null); setCommandTab("today"); }}>×</button>
               </header>
               <div className="facility-inspector-body">
-                {research ? renderResearchCenter() : <>
-                  {renderBuildingUpgrade(facilityOpen)}
+                {(research || warehouse) && !facilityInterior && <button className="city-open-interior" type="button" onClick={() => setFacilityInterior(true)}>{research ? "OPEN RESEARCH INSTITUTE" : "OPEN WAREHOUSE"}</button>}
+                {renderBuildingUpgrade(facilityOpen)}
+                {research && view.researchQueue.finishAt > 0 && renderSpeedupTray({ kind: "research" })}
+                {!research && !warehouse && <>
                   {view.buildings[facilityOpen].lvl >= 1 && (trainingType ? renderTrainer(trainingType) : hospital ? <div className="facility-hospital">{renderHospitalControls(view.buildings.hospital.finishAt > 0)}</div> : null)}
                 </>}
               </div>
@@ -543,7 +657,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <aside className="facility-inspector command-feed" aria-label="Command feed">{renderCommandFeed()}</aside>
         )}
       </div>
-      <MiniComms address={address} profile={profile} onOpenMessages={onMessages} />
+      <MiniComms address={address} profile={profile} onOpenMessages={onMessages} onReport={handleCityReport} />
     </section>
   );
 
@@ -626,6 +740,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="training">
             <div className="tr-row"><span>{queue.mode === "promote" ? `Promoting ${compact(displayTroops(queue.qty))} T${queue.sourceTier} → T${queue.tier}` : `Training ${compact(displayTroops(queue.qty))} T${queue.tier} ${TROOPS_META[type].label}`}</span><span className="mono">{fmtMs(queue.finishAt - now)}</span></div>
             <div className="rmeter"><i style={{ width: trainPct(view, type, now) + "%" }} /></div>
+            {renderSpeedupTray({ kind: "training", key: type })}
           </div>
         ) : building.finishAt > 0 ? (
           <div className="training unavailable"><div className="tr-row"><span>UPGRADING</span><span className="mono">{fmtMs(building.finishAt - now)}</span></div></div>
@@ -739,6 +854,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     return (
       <section className="research-center">
         <div className="research-titlebar">
+          <button className="city-interior-back" type="button" onClick={() => setFacilityInterior(false)}>← STAR GRID</button>
           <span>PROGRESS</span>
           <div className="research-summary mono"><b>{researchedLevels}/{branch.totals.levels}</b></div>
         </div>
@@ -748,6 +864,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
             <div><span>RESEARCHING</span><b>{queueTech.name} → Lv.{queue.targetLevel}</b></div>
             <div className="research-queue-time mono">{fmtMs(queue.finishAt - now)}</div>
             <div className="rmeter"><i style={{ width: Math.min(100, Math.max(0, ((queue.durationSec * 1000 - (queue.finishAt - now)) / (queue.durationSec * 1000)) * 100)) + "%" }} /></div>
+            {renderSpeedupTray({ kind: "research" }, "wide")}
           </div>
         ) : <div className="research-queue"><div><span>QUEUE</span><b>IDLE</b></div></div>}
 
@@ -983,7 +1100,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       {!!missingRequirements.length && <div className="upgrade-requirements">
         {missingRequirements.map((requirement) => <span key={requirement.key}>🔒 {BUILDINGS[requirement.key].label} LV.{requirement.requiredLevel}</span>)}
       </div>}
-      {upgrading ? <><div className="upgrade-inspector-progress"><div className="rmeter"><i style={{ width: upPct(k, building, now) + "%" }} /></div><b className="mono">{fmtMs(building.finishAt - now)}</b></div><button className="alliance-help-request" disabled={!!helpRequest} onClick={() => { const result = requestAllianceHelp(profile, "building", k, `${BUILDINGS[k].label} LV.${target}`); setMsg(result.reason || "Help request sent to your alliance."); setAllianceRevision((value) => value + 1); }}>{helpRequest ? `ALLIANCE HELP · ${helpRequest.helpers.length}/25` : "REQUEST ALLIANCE HELP"}</button></>
+      {upgrading ? <><div className="upgrade-inspector-progress"><div className="rmeter"><i style={{ width: upPct(k, building, now) + "%" }} /></div><b className="mono">{fmtMs(building.finishAt - now)}</b></div><button className="alliance-help-request" disabled={!!helpRequest} onClick={() => { const result = requestAllianceHelp(profile, "building", k, `${BUILDINGS[k].label} LV.${target}`); setMsg(result.reason || "Help request sent to your alliance."); setAllianceRevision((value) => value + 1); }}>{helpRequest ? `ALLIANCE HELP · ${helpRequest.helpers.length}/25` : "REQUEST ALLIANCE HELP"}</button>{renderSpeedupTray({ kind: "construction", key: k })}</>
         : <button className={ready ? "ready" : "blocked"} disabled={!ready || commandBuilding !== null} onClick={() => void startServerUpgrade(k)}><span>{commandBuilding === k ? "SENDING ORDER" : blockLabel}</span>{ready && commandBuilding !== k && <b>{building.lvl === 0 ? "BUILD" : "UPGRADE"} →</b>}</button>}
     </section>;
   }
@@ -1009,7 +1126,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       const progress = Math.min(100, Math.max(0, ((total - (view.healing.finishAt - now)) / total) * 100));
       const helpRequest = openHelpFor(profile, "healing", "hospital");
       void allianceRevision;
-      return <div className="hospital-queue"><div className="tr-row"><span>Healing {compact(displayTroops(view.healing.qty))}</span><span className="mono">{fmtMs(view.healing.finishAt - now)}</span></div><div className="rmeter"><i style={{ width: progress + "%" }} /></div><button className="alliance-help-request" disabled={!!helpRequest} onClick={() => { const result = requestAllianceHelp(profile, "healing", "hospital", `Heal ${compact(displayTroops(view.healing.qty))} wounded`); setMsg(result.reason || "Help request sent to your alliance."); setAllianceRevision((value) => value + 1); }}>{helpRequest ? `ALLIANCE HELP · ${helpRequest.helpers.length}/25` : "REQUEST ALLIANCE HELP"}</button></div>;
+      return <div className="hospital-queue"><div className="tr-row"><span>Healing {compact(displayTroops(view.healing.qty))}</span><span className="mono">{fmtMs(view.healing.finishAt - now)}</span></div><div className="rmeter"><i style={{ width: progress + "%" }} /></div><button className="alliance-help-request" disabled={!!helpRequest} onClick={() => { const result = requestAllianceHelp(profile, "healing", "hospital", `Heal ${compact(displayTroops(view.healing.qty))} wounded`); setMsg(result.reason || "Help request sent to your alliance."); setAllianceRevision((value) => value + 1); }}>{helpRequest ? `ALLIANCE HELP · ${helpRequest.helpers.length}/25` : "REQUEST ALLIANCE HELP"}</button>{renderSpeedupTray({ kind: "healing" })}</div>;
     }
     return <div className="hospital-controls">
       <div className="hospital-stats mono"><span>Wounded {compact(displayTroops(view.wounded))}/{compact(displayTroops(hospitalCap))}</span><span>Healing speed ×{(healingSpeedMult(view) * (1 + allianceBonuses.healingSpeedBonus)).toFixed(2)}</span></div>
