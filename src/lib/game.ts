@@ -435,6 +435,9 @@ export function startUpgrade(s: GameState, k: BKey): { state: GameState; ok: boo
   if (!isUpgradable(k)) return { state: ns, ok: false, reason: "Not upgradable" };
   const cur = ns.buildings[k].lvl;
   const target = cur + 1;
+  // Keep the global ceiling distinct from the Townhall progression gate. This
+  // also protects old/GM saves that are already sitting at the ceiling.
+  if (cur >= maxLevel(k)) return { state: ns, ok: false, reason: "Max level" };
   if (!isUnlocked(ns, k)) return { state: ns, ok: false, reason: `Unlocks at Townhall Lv.${unlockAtKeep(k)}` };
   if (ns.buildings[k].finishAt > 0) return { state: ns, ok: false, reason: "Already upgrading" };
   const operationBlock = buildingOperationBlockReason(ns, k);

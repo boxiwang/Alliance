@@ -95,7 +95,6 @@ export default function GameNav({
 
 function AnimatedResource({ resource, value, rate, cap, quiet }: { resource: ResKey; value: number; rate: number; cap: number; quiet: boolean }) {
   const previous = useRef(value);
-  const accumulated = useRef(0);
   const frame = useRef(0);
   const [displayed, setDisplayed] = useState(value);
   const [gain, setGain] = useState<{ amount: number; id: number; full: boolean } | null>(null);
@@ -105,7 +104,6 @@ function AnimatedResource({ resource, value, rate, cap, quiet }: { resource: Res
     const from = previous.current;
     const delta = value - from;
     previous.current = value;
-    if (delta > 0) accumulated.current += delta;
 
     cancelAnimationFrame(frame.current);
     if (quiet || value <= from) {
@@ -126,16 +124,15 @@ function AnimatedResource({ resource, value, rate, cap, quiet }: { resource: Res
 
   useEffect(() => {
     if (quiet) {
-      accumulated.current = 0;
       setGain(null);
       return;
     }
     let interval = 0;
     const release = () => {
-      const amount = accumulated.current;
-      if (amount <= 0 && rate <= 0 && !full) return;
-      accumulated.current = 0;
-      setGain({ amount: amount > 0 ? amount : full ? 0 : rate * 8 / 3600, id: Date.now(), full });
+      if (rate <= 0 && !full) return;
+      // The burst represents eight seconds of facility output. It must never
+      // echo GM grants, gathers, purchases, or a server snapshot correction.
+      setGain({ amount: full ? 0 : rate * 8 / 3600, id: Date.now(), full });
     };
     const timer = window.setTimeout(() => {
       release();

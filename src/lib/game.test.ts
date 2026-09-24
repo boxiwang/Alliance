@@ -53,6 +53,18 @@ describe("solo game progression", () => {
     }
   });
 
+  it("hard-stops every building at level 30", () => {
+    const game = richGame();
+    game.buildings.keep.lvl = 30;
+    for (const key of BUILDING_ORDER) {
+      if (key === "milestone" || !game.buildings[key]) continue;
+      game.buildings[key].lvl = 30;
+      const result = startUpgrade(game, key);
+      expect(result.ok, `${key} must not start level 31`).toBe(false);
+      expect(result.reason).toBe("Max level");
+    }
+  });
+
   it("projects a prerequisite finishing on the command boundary before checking the Core gate", () => {
     const game = richGame();
     game.buildings.keep.lvl = 3;

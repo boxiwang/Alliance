@@ -3,7 +3,7 @@ import {
   GameState, BKey, TroopKey, ResKey, BUILDINGS, BUILDING_ORDER, RES, RES_ORDER, TROOPS_META, TROOP_ORDER,
   project, startUpgrade, startTrain, upgradeCost, upgradeTimeSec,
   buildingOperationBlockReason,
-  isUnlocked, isUpgradable, unlockAtKeep, capForLevel, capacity, prodPerHour, totalTroops,
+  isUnlocked, isUpgradable, unlockAtKeep, maxLevel, capForLevel, capacity, prodPerHour, totalTroops,
   mightBreakdown, troopStats, troopBatchCost, troopCountByType, maxTroopsForType, trainQueueSize, TRAINING_BUILDING,
   activeUpgrades, buildQueueSlots,
   trainSpeedMult, unlockedTroopTiers,
@@ -772,11 +772,23 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       ? promotionTimePerTroop(view, type, sourceTier, tier)
       : stats.trainTimeSec / trainSpeedMult(view, type);
     const totalSeconds = secondsPerTroop * quantity;
+    const promotionAvailable = promotionUnlocked(view, type);
+    const setMode = (nextMode: "train" | "promote") => {
+      if (nextMode === "promote" && !promotionAvailable) return;
+      setTrainingMode((current) => ({ ...current, [type]: nextMode }));
+      if (nextMode === "promote") {
+        const nextSource = sourceOptions[0] ?? 1;
+        const nextTarget = [...unlockedTiers].reverse().find((candidate) => candidate > nextSource) ?? trainTier[type];
+        setPromoteFrom((current) => ({ ...current, [type]: nextSource }));
+        setTrainTier((current) => ({ ...current, [type]: nextTarget }));
+      }
+    };
 
     return (
       <div className="card trainer" key={type}>
         <div className="trainer-head">
-          <span className="trainer-cap mono">TROOPS {compact(displayTroops(armCount))}/{compact(displayTroops(armCapacity))} · BATCH {compact(displayTroops(queueCapacity))}</span>
+          <div className={`trainer-arm trainer-arm-${type}`}><span>{TROOPS_META[type].emoji}</span><div><small>{type.toUpperCase()} COMMAND</small><b>{TROOPS_META[type].label}</b></div></div>
+          <div className="trainer-readiness"><span><small>STANDING</small><b className="mono">{compact(displayTroops(armCount))} / {compact(displayTroops(armCapacity))}</b></span><span><small>BATCH</small><b className="mono">{compact(displayTroops(queueCapacity))}</b></span></div>
         </div>
         {queue.finishAt > 0 ? (
           <div className="training">
@@ -788,39 +800,27 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="training unavailable"><div className="tr-row"><span>UPGRADING</span><span className="mono">{fmtMs(building.finishAt - now)}</span></div></div>
         ) : (
           <div className="trainctl">
-            <div className="train-mode-row">
-              <select id={`${type}-training-mode`} value={mode} onChange={(event) => {
-                const nextMode = event.target.value as "train" | "promote";
-                setTrainingMode((current) => ({ ...current, [type]: nextMode }));
-                if (nextMode === "promote") {
-                  const nextSource = sourceOptions[0] ?? 1;
-                  const nextTarget = [...unlockedTiers].reverse().find((candidate) => candidate > nextSource) ?? trainTier[type];
-                  setPromoteFrom((current) => ({ ...current, [type]: nextSource }));
-                  setTrainTier((current) => ({ ...current, [type]: nextTarget }));
-                }
-              }}>
-                <option value="train">Train</option>
-                <option value="promote" disabled={!promotionUnlocked(view, type)}>Promote · Lv.{promotionUnlockLevel(type)}</option>
-              </select>
+            <div className="train-mode-row" role="tablist" aria-label={`${TROOPS_META[type].label} orders`}>
+              <button className={mode === "train" ? "active" : ""} role="tab" aria-selected={mode === "train"} onClick={() => setMode("train")}><span>＋</span><b>TRAIN</b></button>
+              <button className={mode === "promote" ? "active" : ""} role="tab" aria-selected={mode === "promote"} disabled={!promotionAvailable} onClick={() => setMode("promote")}><span>↑</span><b>PROMOTE</b>{!promotionAvailable && <small>{BUILDINGS[buildingKey].label.toUpperCase()} LV.{promotionUnlockLevel(type)}</small>}</button>
             </div>
             {mode === "promote" && (
               <div className="promote-source">
-                <label htmlFor={`${type}-promotion-source`}>PROMOTE FROM</label>
-                <select id={`${type}-promotion-source`} value={sourceTier} disabled={sourceOptions.length === 0} onChange={(event) => {
-                  const nextSource = Number(event.target.value);
-                  setPromoteFrom((current) => ({ ...current, [type]: nextSource }));
-                  if (trainTier[type] <= nextSource) {
-                    const nextTarget = [...unlockedTiers].reverse().find((candidate) => candidate > nextSource) ?? trainTier[type];
-                    setTrainTier((current) => ({ ...current, [type]: nextTarget }));
-                  }
-                }}>
-                  {sourceOptions.length === 0 && <option value={1}>No promotable troops</option>}
-                  {sourceOptions.map((candidate) => <option key={candidate} value={candidate}>T{candidate} · {compact(displayTroops(view.troops[type][String(candidate)] ?? 0))} owned</option>)}
-                </select>
+                <span className="train-label">FROM</span>
+                <div className="promote-source-grid">
+                  {sourceOptions.length === 0 && <span className="promotion-empty">NO ELIGIBLE UNITS</span>}
+                  {sourceOptions.map((candidate) => <button className={sourceTier === candidate ? "active" : ""} key={candidate} onClick={() => {
+                    setPromoteFrom((current) => ({ ...current, [type]: candidate }));
+                    if (trainTier[type] <= candidate) {
+                      const nextTarget = [...unlockedTiers].reverse().find((next) => next > candidate) ?? trainTier[type];
+                      setTrainTier((current) => ({ ...current, [type]: nextTarget }));
+                    }
+                  }}><b>T{candidate}</b><small>{compact(displayTroops(view.troops[type][String(candidate)] ?? 0))}</small></button>)}
+                </div>
               </div>
             )}
             <div className="train-section">
-              <span className="train-label">{mode === "promote" ? "TARGET TIER" : "TIER"}</span>
+              <span className="train-label">{mode === "promote" ? "TO" : "TIER"}</span>
               <div className="qty tier-row">
                 {Array.from({ length: 10 }, (_, i) => i + 1).map((candidate) => {
                   const candidateStats = troopStats(type, candidate)!;
@@ -840,8 +840,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
                 <input aria-label={`${TROOPS_META[type].label} quantity`} type="range" min={maxQuantity > 0 ? 1 : 0} max={maxQuantity} step={1} value={quantity} disabled={maxQuantity <= 0} onChange={(event) => setTrainQty((current) => ({ ...current, [type]: Number(event.target.value) }))} />
                 <span className="mono">{compact(displayTroops(maxQuantity))}</span>
               </div>
-              <div className="troop-stats mono">T{tier} · ATK {stats.attack} · DEF {stats.defense} · MIGHT {stats.power}</div>
-              {quantity > 0 && <div className="bcost mono">{RES_ORDER.map((r) => batchCost[r] ? `${compact(displayResource(batchCost[r]!))}${RES[r].emoji} ` : "").join("")}· ◷ {fmtSec(totalSeconds)}</div>}
+              <div className="troop-order-summary"><div><small>LOADOUT</small><b className="mono">T{tier} · ATK {stats.attack} · DEF {stats.defense} · MIGHT {stats.power}</b></div>{quantity > 0 && <div><small>ORDER</small><b className="mono">{RES_ORDER.map((r) => batchCost[r] ? `${compact(displayResource(batchCost[r]!))}${RES[r].emoji} ` : "").join("")}· ◷ {fmtSec(totalSeconds)}</b></div>}</div>
               <button className="cta sm" disabled={quantity <= 0 || commandBusy} onClick={() => void (mode === "promote"
                 ? runServerAction("promotion.start", { troop: type, sourceTier, targetTier: tier, quantity }, () => startPromote(game, type, sourceTier, tier, quantity))
                 : runServerAction("training.start", { troop: type, tier, quantity }, () => startTrain(game, type, tier, quantity)))}>
@@ -1017,6 +1016,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const upgradable = isUpgradable(k);
     const upgrading = b.finishAt > 0;
     const target = b.lvl + 1;
+    const atMaximum = b.lvl >= maxLevel(k);
     const atCap = !locked && b.lvl >= capForLevel(view, k);
     const cost = upgradable ? upgradeCost(k, target) : {};
     const missingRequirements = k === "keep" ? missingTownhallPrerequisites(view, target) : [];
@@ -1055,8 +1055,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
               <div className="rmeter"><i style={{ width: upPct(k, b, now) + "%" }} /></div>
               <span className="mono">{fmtMs(b.finishAt - now)}</span>
             </div>
-          ) : atCap && k === "keep" ? (
-            <div className="bgate">Max level</div>
+          ) : atMaximum ? (
+            <div className="bgate maxed">MAX LEVEL</div>
           ) : atCap ? (
             <div className="bgate" title="Upgrade Townhall first">🔒 TH {b.lvl + 1}</div>
           ) : (
@@ -1074,6 +1074,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const locked = !isUnlocked(view, k);
     const upgrading = building.finishAt > 0;
     const target = building.lvl + 1;
+    const atMaximum = building.lvl >= maxLevel(k);
     const atCap = !locked && building.lvl >= capForLevel(view, k);
     const cost = upgradeCost(k, target);
     const resourcesMet = hasResources(cost);
@@ -1092,7 +1093,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         <div className="economy-output"><span className="mono">+{compact(displayResource(rate[resource]))}/HR</span><i /></div>
         {locked ? <div className="economy-gate mono">🔒 TH {unlockAtKeep(k)}</div>
           : upgrading ? <div className="economy-progress"><div className="rmeter"><i style={{ width: upPct(k, building, now) + "%" }} /></div><span className="mono">{fmtMs(building.finishAt - now)}</span></div>
-            : atCap ? <div className="economy-gate mono">🔒 TH {building.lvl + 1}</div>
+            : atMaximum ? <div className="economy-gate maxed mono">MAX LEVEL</div>
+              : atCap ? <div className="economy-gate mono">🔒 TH {building.lvl + 1}</div>
               : <div className={`economy-state ${upgradeReady ? "ready" : "blocked"}`}><b>{buildersBusy ? "BUILDERS BUSY" : resourcesMet ? "READY" : "NEEDS RESOURCES"}</b><i>→</i></div>}
       </article>
     );
@@ -1103,6 +1105,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const upgradable = isUpgradable(k);
     const locked = !isUnlocked(view, k);
     const target = building.lvl + 1;
+    const atMaximum = building.lvl >= maxLevel(k);
     const atCap = !locked && building.lvl >= capForLevel(view, k);
     const upgrading = building.finishAt > 0;
     const cost = upgradable ? upgradeCost(k, target) : {};
@@ -1113,7 +1116,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const ready = upgradable && !locked && !atCap && !upgrading && !operationBlock && !buildersBusy && resourcesMet && missingRequirements.length === 0;
     const blockLabel = locked ? `TH ${unlockAtKeep(k)} REQUIRED`
       : !upgradable ? "COMING SOON"
-        : atCap ? (k === "keep" ? "MAX LEVEL" : `TH ${building.lvl + 1} REQUIRED`)
+        : atMaximum ? "MAX LEVEL"
+          : atCap ? `TH ${building.lvl + 1} REQUIRED`
           : operationBlock ? operationBlock.toUpperCase()
             : buildersBusy ? "BUILDERS BUSY"
               : missingRequirements.length ? "REQUIREMENTS NOT MET"
@@ -1124,8 +1128,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     void allianceRevision;
     return <section className={`upgrade-inspector${ready ? " ready" : " blocked"}`}>
       <div className="upgrade-inspector-level">
-        <span>NEXT</span>
-        <b>{building.lvl === 0 ? "BUILD" : `LV.${building.lvl} → LV.${target}`}</b>
+        <span>{atMaximum ? "STATUS" : "NEXT"}</span>
+        <b>{atMaximum ? `LV.${building.lvl} · MAX` : building.lvl === 0 ? "BUILD" : `LV.${building.lvl} → LV.${target}`}</b>
         {upgradable && !atCap && <time className="mono">◷ {fmtSec(Math.ceil(upgradeTimeSec(k, target) / (1 + allianceBonuses.constructionSpeedBonus)))}</time>}
       </div>
       {upgradable && !atCap && <div className="upgrade-resource-grid">
