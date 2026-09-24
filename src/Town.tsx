@@ -141,6 +141,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [inventory, setInventory] = useState<InventoryBalance[]>([]);
   const [speedupTarget, setSpeedupTarget] = useState("");
   const [warehouseItemId, setWarehouseItemId] = useState("speedup.universal.1m");
+  const [pendingSpeedup, setPendingSpeedup] = useState<{ itemId: string; target: SpeedupTarget } | null>(null);
   const [inventoryBusy, setInventoryBusy] = useState(false);
   const [authorityVersion, setAuthorityVersion] = useState(0);
   const [authorityBusy, setAuthorityBusy] = useState(false);
@@ -228,15 +229,16 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   }, []);
 
   useEffect(() => {
-    if (!facilityOpen) return;
+    if (!facilityOpen && !pendingSpeedup) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (facilityInterior) setFacilityInterior(false);
+      if (pendingSpeedup) setPendingSpeedup(null);
+      else if (facilityInterior) setFacilityInterior(false);
       else setFacilityOpen(null);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [facilityInterior, facilityOpen]);
+  }, [facilityInterior, facilityOpen, pendingSpeedup]);
 
   useEffect(() => {
     if (!cityThreat) return;
@@ -250,6 +252,17 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   }, [cityThreat]);
 
   const view = useMemo(() => project(game, now), [game, now]);
+
+  // A failed order can leave a useful blocker message on screen. Retire it as
+  // soon as the named prerequisite genuinely completes so the UI never claims
+  // a finished building is still below the gate.
+  useEffect(() => {
+    const match = msg.match(/^(.+) Lv\.(\d+) required$/i);
+    if (!match) return;
+    const required = Number(match[2]);
+    const key = BUILDING_ORDER.find((building) => BUILDINGS[building].label.toLowerCase() === match[1].toLowerCase());
+    if (key && view.buildings[key].lvl >= required) setMsg("");
+  }, [msg, view]);
   const allianceBonuses = useMemo(() => allianceGameplayBonuses(address), [address, allianceRevision]);
   const rate = prodPerHour(view);
   const troopsTotal = totalTroops(view);
@@ -445,6 +458,19 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     } finally { setInventoryBusy(false); }
   }
 
+  function requestSpeedupUse(itemId: string, target: SpeedupTarget) {
+    const item = MVP_ITEM_BY_ID.get(itemId);
+    if (!item || (inventoryById.get(itemId) || 0) <= 0 || !speedupCompatible(item.speedupQueue, target)) return;
+    setPendingSpeedup({ itemId, target });
+  }
+
+  function speedupRemainingMs(target: SpeedupTarget): number {
+    if (target.kind === "construction") return Math.max(0, view.buildings[target.key].finishAt - now);
+    if (target.kind === "training") return Math.max(0, view.training[target.key].finishAt - now);
+    if (target.kind === "research") return Math.max(0, view.researchQueue.finishAt - now);
+    return Math.max(0, view.healing.finishAt - now);
+  }
+
   function renderSpeedupTray(target: SpeedupTarget, variant: "compact" | "wide" = "compact") {
     const compatible = speedupCatalog.filter((item) => speedupCompatible(item.speedupQueue, target));
     const remainingMs = target.kind === "construction" ? view.buildings[target.key].finishAt - now
@@ -456,7 +482,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       <div className="speedup-tray-items">
         {compatible.map((item) => {
           const quantity = inventoryById.get(item.id) || 0;
-          return <button key={item.id} type="button" disabled={quantity <= 0 || inventoryBusy || commandBusy} onClick={() => void useSpeedup(item.id, target)} aria-label={`Use ${item.name}, ${quantity} owned`} title={item.name}>
+          return <button key={item.id} type="button" disabled={quantity <= 0 || inventoryBusy || commandBusy} onClick={() => requestSpeedupUse(item.id, target)} aria-label={`Use ${item.name}, ${quantity} owned`} title={item.name}>
             <img src={speedupIconPath(item)} alt="" />
             <span className="mono">×{quantity}</span>
           </button>;
@@ -493,7 +519,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       <footer className="warehouse-usebar">
         <span>{selectedItem?.name || "SELECT AN ITEM"}</span>
         <b className="mono">×{selectedQuantity}</b>
-        <button type="button" disabled={!selectedItem || selectedQuantity <= 0 || !compatible || inventoryBusy || commandBusy} onClick={() => selectedItem && selectedSpeedupTarget && void useSpeedup(selectedItem.id, selectedSpeedupTarget)}>
+        <button type="button" disabled={!selectedItem || selectedQuantity <= 0 || !compatible || inventoryBusy || commandBusy} onClick={() => selectedItem && selectedSpeedupTarget && requestSpeedupUse(selectedItem.id, selectedSpeedupTarget)}>
           {!speedupTargets.length ? "NO ACTIVE QUEUE" : !compatible ? "INCOMPATIBLE" : "USE"}
         </button>
       </footer>
@@ -619,7 +645,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="speedup-items">
             {usableSpeedups.map((entry) => {
               const item = MVP_ITEM_BY_ID.get(entry.itemId)!;
-              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy} onClick={() => void useSpeedup(entry.itemId)} title={item.name} aria-label={`Use ${item.name}, ${entry.quantity} owned`}><img src={speedupIconPath(item)} alt="" /><span>×{entry.quantity}</span></button>;
+              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy || !selectedSpeedupTarget} onClick={() => selectedSpeedupTarget && requestSpeedupUse(entry.itemId, selectedSpeedupTarget)} title={item.name} aria-label={`Use ${item.name}, ${entry.quantity} owned`}><img src={speedupIconPath(item)} alt="" /><span>×{entry.quantity}</span></button>;
             })}
             {selectedSpeedupTarget && usableSpeedups.length === 0 && <i>NO SPEEDUPS AVAILABLE</i>}
           </div>
@@ -658,6 +684,22 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         )}
       </div>
       <MiniComms address={address} profile={profile} onOpenMessages={onMessages} onReport={handleCityReport} />
+      {pendingSpeedup && (() => {
+        const item = MVP_ITEM_BY_ID.get(pendingSpeedup.itemId);
+        if (!item?.speedupSeconds) return null;
+        const remainingMs = speedupRemainingMs(pendingSpeedup.target);
+        const appliedSeconds = Math.ceil(Math.min(item.speedupSeconds * 1000, remainingMs) / 1000);
+        const quantity = inventoryById.get(item.id) || 0;
+        return <div className="speedup-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingSpeedup(null); }}>
+          <section className="speedup-confirm" role="dialog" aria-modal="true" aria-labelledby="speedup-confirm-title">
+            <header><span>ACCELERATION ORDER</span><button type="button" aria-label="Cancel speedup" onClick={() => setPendingSpeedup(null)}>×</button></header>
+            <div className="speedup-confirm-item"><img src={speedupIconPath(item)} alt="" /><div><b id="speedup-confirm-title">{item.name}</b><small>{speedupTargetLabel(pendingSpeedup.target)}</small></div><em className="mono">×{quantity}</em></div>
+            <div className="speedup-confirm-impact"><span><small>QUEUE</small><b className="mono">{fmtMs(remainingMs)}</b></span><i>→</i><span><small>AFTER</small><b className="mono">{fmtMs(Math.max(0, remainingMs - item.speedupSeconds * 1000))}</b></span></div>
+            <p>Consume 1 item and remove <b>{fmtSec(appliedSeconds)}</b> from this queue?</p>
+            <footer><button type="button" onClick={() => setPendingSpeedup(null)}>CANCEL</button><button className="confirm" type="button" disabled={quantity <= 0 || appliedSeconds <= 0 || inventoryBusy || commandBusy} onClick={() => { const pending = pendingSpeedup; setPendingSpeedup(null); void useSpeedup(pending.itemId, pending.target); }}>CONFIRM USE</button></footer>
+          </section>
+        </div>;
+      })()}
     </section>
   );
 

@@ -39,6 +39,32 @@ describe("solo game progression", () => {
     expect(startUpgrade(game, "keep").ok).toBe(true);
   });
 
+  it("accepts every Core prerequisite at the exact displayed level from 2 through 30", () => {
+    for (let targetLevel = 2; targetLevel <= 30; targetLevel += 1) {
+      const game = richGame();
+      game.buildings.keep.lvl = targetLevel - 1;
+      game.res = { cash: 1_000_000_000_000, oil: 1_000_000_000_000, power: 1_000_000_000_000 };
+      const requirements = missingTownhallPrerequisites(game, targetLevel);
+      const requiredLevel = targetLevel - 1;
+      requirements.forEach(({ key }) => { game.buildings[key].lvl = requiredLevel; });
+
+      expect(missingTownhallPrerequisites(game, targetLevel), `Core ${targetLevel} should have no stale blockers`).toEqual([]);
+      expect(startUpgrade(game, "keep").ok, `Core ${targetLevel} should start at exact prerequisite levels`).toBe(true);
+    }
+  });
+
+  it("projects a prerequisite finishing on the command boundary before checking the Core gate", () => {
+    const game = richGame();
+    game.buildings.keep.lvl = 3;
+    game.buildings.storage = { lvl: 2, finishAt: Date.now(), durationSec: 10 };
+    game.buildings.oilwell.lvl = 3;
+
+    const result = startUpgrade(game, "keep");
+    expect(result.ok).toBe(true);
+    expect(result.state.buildings.storage.lvl).toBe(3);
+    expect(result.state.buildings.storage.finishAt).toBe(0);
+  });
+
   it("unlocks troop tiers from the matching training building, not Townhall", () => {
     const game = richGame();
     game.buildings.keep.lvl = 30;

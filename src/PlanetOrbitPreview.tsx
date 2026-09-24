@@ -48,6 +48,7 @@ uniform float uMotion;
 uniform float uIntensity;
 uniform float uAssemblyScale;
 uniform float uAssemblyOffsetY;
+uniform float uTransparent;
 
 #define PI 3.14159265359
 float hash21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
@@ -216,8 +217,8 @@ void main(){
   // Fit mode scales only the cosmetic assembly. The star field remains full
   // bleed while the widest Orbit and tallest Crown stay inside the viewport.
   vec2 assemblyP=(p+vec2(0.,uAssemblyOffsetY))/max(.01,uAssemblyScale);
-  vec4 col=vec4(base,1.); drawHalo(col,assemblyP,0.); drawOrbit(col,assemblyP,0.); drawCore(col,assemblyP); drawOrbit(col,assemblyP,1.); drawHalo(col,assemblyP,1.);
-  float vignette=1.-smoothstep(.55,1.38,length(p)); col.rgb*=.46+.54*vignette; col.rgb=1.-exp(-col.rgb*(1.08*uIntensity)); col.rgb=pow(col.rgb,vec3(.88)); gl_FragColor=vec4(col.rgb,1.);
+  vec4 col=uTransparent>.5?vec4(0.):vec4(base,1.); drawHalo(col,assemblyP,0.); drawOrbit(col,assemblyP,0.); drawCore(col,assemblyP); drawOrbit(col,assemblyP,1.); drawHalo(col,assemblyP,1.);
+  float vignette=1.-smoothstep(.55,1.38,length(p)); col.rgb*=uTransparent>.5?1.:(.46+.54*vignette); col.rgb=1.-exp(-col.rgb*(1.08*uIntensity)); col.rgb=pow(col.rgb,vec3(.88)); gl_FragColor=vec4(col.rgb,uTransparent>.5?col.a:1.);
 }
 `;
 
@@ -231,11 +232,13 @@ type Props = {
   staticPreview?: boolean;
   /** Leave enough safe area for every equipped Halo and Orbit to be visible. */
   fitAssembly?: boolean;
+  /** Composite only the equipped assembly over the parent scene. */
+  transparent?: boolean;
   className?: string;
 };
 
 /** High-fidelity Core + Halo + Orbit assembly used by Dossier and Relic Vault. */
-export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = true, staticPreview = false, fitAssembly = false, className = "" }: Props) {
+export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = true, staticPreview = false, fitAssembly = false, transparent = false, className = "" }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const core = PLANET_SKINS.find((item) => item.id === skin) || PLANET_SKINS[0];
   const definition = orbit ? PLANET_ORBITS.find((item) => item.id === orbit) || PLANET_ORBITS[0] : null;
@@ -244,7 +247,7 @@ export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const gl = canvas.getContext("webgl", { antialias: true, alpha: false, powerPreference: staticPreview ? "low-power" : "high-performance" });
+    const gl = canvas.getContext("webgl", { antialias: true, alpha: transparent, premultipliedAlpha: true, powerPreference: staticPreview ? "low-power" : "high-performance" });
     if (!gl) return;
 
     const compile = (type: number, source: string) => {
@@ -285,6 +288,7 @@ export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = 
     const intensity = gl.getUniformLocation(program, "uIntensity");
     const assemblyScale = gl.getUniformLocation(program, "uAssemblyScale");
     const assemblyOffsetY = gl.getUniformLocation(program, "uAssemblyOffsetY");
+    const transparentUniform = gl.getUniformLocation(program, "uTransparent");
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const dpr = Math.min(staticPreview ? 1.25 : 2, window.devicePixelRatio || 1);
     const start = performance.now() - 2600;
@@ -307,6 +311,7 @@ export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = 
       gl.uniform1f(intensity, 1.08);
       gl.uniform1f(assemblyScale, fitAssembly ? .80 : 1);
       gl.uniform1f(assemblyOffsetY, fitAssembly ? .04 : 0);
+      gl.uniform1f(transparentUniform, transparent ? 1 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
     const loop = (now: number) => { draw(now); if (!staticPreview && !reduce && !document.hidden) raf = requestAnimationFrame(loop); };
@@ -323,7 +328,7 @@ export default function PlanetOrbitPreview({ skin, orbit, halo = null, chrome = 
       gl.deleteBuffer(buffer);
       gl.deleteProgram(program);
     };
-  }, [fitAssembly, halo, orbit, skin, staticPreview]);
+  }, [fitAssembly, halo, orbit, skin, staticPreview, transparent]);
 
   const label = [core.name, haloDefinition?.name, definition?.name].filter(Boolean).join(" with ");
   return <div className={`planet-orbit-preview ${orbit ? `planet-orbit-${orbit}` : "planet-core-only"} ${halo ? `planet-halo-${halo}` : "planet-halo-none"} ${className}`.trim()}>

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import BuildingGlyph from "./BuildingGlyph";
 import PlanetOrbitPreview from "./PlanetOrbitPreview";
 import {
-  BUILDINGS, BUILDING_ORDER, GameState, BKey, isUnlocked, unlockAtKeep,
+  BUILDINGS, BUILDING_ORDER, GameState, BKey, displayResource, isUnlocked, prodPerHour, unlockAtKeep,
 } from "./lib/game";
+import { compact } from "./lib/format";
 import {
   COSMETIC_VAULT_CHANGED_EVENT, loadCosmeticVault, type CosmeticLoadout,
 } from "./lib/player-account";
@@ -33,10 +34,10 @@ const DISTRICTS: District[] = [
   { id: "science", label: "INTEL · SCIENCE", color: "#aa82ff", center: -135, step: 24, buildings: ["milestone", "watchtower", "academy"] },
 ];
 
-const RESOURCE_NODES: Array<{ building: BKey; color: string; delay: number }> = [
-  { building: "bank", color: "#43f2a1", delay: 0 },
-  { building: "oilwell", color: "#ffb454", delay: 2.7 },
-  { building: "powerplant", color: "#38d9ff", delay: 5.4 },
+const RESOURCE_NODES: Array<{ building: BKey; resource: "cash" | "oil" | "power"; color: string; delay: number }> = [
+  { building: "bank", resource: "cash", color: "#43f2a1", delay: 0 },
+  { building: "oilwell", resource: "oil", color: "#ffb454", delay: 2.7 },
+  { building: "powerplant", resource: "power", color: "#38d9ff", delay: 5.4 },
 ];
 
 const CX = 500;
@@ -106,6 +107,7 @@ export default function CityStarGrid({
     }));
     return map;
   }, []);
+  const production = useMemo(() => prodPerHour(view), [view]);
 
   const activeFinish = (building: BKey): { finishAt: number; durationSec?: number } => {
     if (building === "academy" && view.researchQueue.finishAt > 0) return { finishAt: view.researchQueue.finishAt, durationSec: view.researchQueue.durationSec };
@@ -132,8 +134,21 @@ export default function CityStarGrid({
     <div className="city-star-grid-map">
       <div className="city-grid-floor" aria-hidden="true" />
       <svg className="city-grid-lines" viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">
+        <g className="city-quadrant-dividers">
+          {[0, 90, 180, 270].map((degrees) => {
+            const edge = point(degrees);
+            return <line key={degrees} x1={CX} y1={CY} x2={edge.x} y2={edge.y} />;
+          })}
+        </g>
         <ellipse className="city-orbit outer" cx={CX} cy={CY} rx={A} ry={B} transform={`rotate(-7 ${CX} ${CY})`} />
         <ellipse className="city-orbit inner" cx={CX} cy={CY} rx="260" ry="142" transform={`rotate(-7 ${CX} ${CY})`} />
+        <g className="city-orbit-ticks">
+          {Array.from({ length: 48 }, (_, index) => {
+            const outer = point(index * 7.5);
+            const inset = index % 4 === 0 ? .945 : .965;
+            return <line key={index} x1={CX + (outer.x - CX) * inset} y1={CY + (outer.y - CY) * inset} x2={outer.x} y2={outer.y} />;
+          })}
+        </g>
         {DISTRICTS.map((district) => {
           const label = point(district.center);
           const dx = (label.x - CX) * .70;
@@ -142,22 +157,41 @@ export default function CityStarGrid({
             <text x={CX + dx} y={CY + dy}>{district.label} · {district.buildings.length}</text>
           </g>;
         })}
-        {RESOURCE_NODES.map(({ building, color, delay }) => {
+        {RESOURCE_NODES.map(({ building, resource, color, delay }) => {
           const start = positions.get(building)!;
           const pathId = `city-resource-${building}`;
+          const flightPath = curve(start);
+          const packetGain = Math.max(1, Math.floor(production[resource] * 8 / 3600));
           return <g key={building} style={{ color }}>
-            <path id={pathId} className="city-resource-route" d={curve(start)} />
-            {moving && <circle className="city-resource-packet" r={quality.tier === "ultra" ? 3.2 : 2.6}>
-              <animateMotion dur="8s" begin={`${delay}s`} repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;.2375;1" calcMode="linear"><mpath href={`#${pathId}`} /></animateMotion>
-              <animate attributeName="opacity" dur="8s" begin={`${delay}s`} repeatCount="indefinite" values="0;1;1;0;0" keyTimes="0;.025;.19;.2375;1" />
-            </circle>}
+            <path id={pathId} className="city-resource-route" d={flightPath} />
+            {moving && <>
+              <path className="city-resource-route-live" d={flightPath}>
+                <animate attributeName="opacity" dur="8s" begin={`${delay}s`} repeatCount="indefinite" values="0;.8;.22;0;0" keyTimes="0;.035;.19;.2375;1" />
+              </path>
+              {[0, 1, 2].map((trail) => <circle key={trail} className={`city-resource-packet trail-${trail}`} r={(quality.tier === "ultra" ? 3.7 : 3.1) - trail * .75}>
+                <animateMotion dur="8s" begin={`${delay + trail * .055}s`} repeatCount="indefinite" path={flightPath} keyPoints="0;1;1" keyTimes="0;.2375;1" calcMode="linear" />
+                <animate attributeName="opacity" dur="8s" begin={`${delay + trail * .055}s`} repeatCount="indefinite" values="0;1;.82;0;0" keyTimes="0;.025;.19;.2375;1" />
+              </circle>)}
+              <circle className="city-resource-launch" cx={start.x} cy={start.y} r="5">
+                <animate attributeName="r" dur="8s" begin={`${delay}s`} repeatCount="indefinite" values="5;21;21" keyTimes="0;.08;1" />
+                <animate attributeName="opacity" dur="8s" begin={`${delay}s`} repeatCount="indefinite" values=".85;0;0" keyTimes="0;.08;1" />
+              </circle>
+              <circle className="city-resource-arrival" cx={CX} cy={CY} r="7">
+                <animate attributeName="r" dur="8s" begin={`${delay}s`} repeatCount="indefinite" values="7;7;34;46;46" keyTimes="0;.20;.2375;.31;1" />
+                <animate attributeName="opacity" dur="8s" begin={`${delay}s`} repeatCount="indefinite" values="0;0;.9;0;0" keyTimes="0;.20;.2375;.31;1" />
+              </circle>
+              <text className="city-resource-gain" x={CX + 34} y={CY - 24}>+{compact(displayResource(packetGain))}
+                <animate attributeName="y" dur="8s" begin={`${delay}s`} repeatCount="indefinite" values={`${CY - 18};${CY - 18};${CY - 48};${CY - 48}`} keyTimes="0;.22;.34;1" />
+                <animate attributeName="opacity" dur="8s" begin={`${delay}s`} repeatCount="indefinite" values="0;0;1;0;0" keyTimes="0;.22;.245;.36;1" />
+              </text>
+            </>}
           </g>;
         })}
         {threat?.phase === "inbound" && <path className="city-threat-route" d={`M -20 76 Q 140 14 260 184`} />}
       </svg>
 
       <button className={`city-grid-core${selected === "keep" ? " selected" : ""}`} type="button" onClick={() => onSelect("keep")} aria-label={`Civilization Core level ${view.buildings.keep.lvl}`}>
-        <PlanetOrbitPreview skin={equipped.planetBody} halo={equipped.halo} orbit={equipped.orbit} chrome={false} fitAssembly className="city-grid-core-planet" staticPreview={staticPlanet} />
+        <PlanetOrbitPreview skin={equipped.planetBody} halo={equipped.halo} orbit={equipped.orbit} chrome={false} fitAssembly transparent className="city-grid-core-planet" staticPreview={staticPlanet} />
         <span><small>CIVILIZATION</small><b>{name}</b><em>{view.buildings.keep.lvl}</em></span>
       </button>
 
