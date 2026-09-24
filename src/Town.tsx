@@ -3,7 +3,7 @@ import {
   GameState, BKey, TroopKey, ResKey, BUILDINGS, BUILDING_ORDER, RES, RES_ORDER, TROOPS_META, TROOP_ORDER,
   project, startUpgrade, startTrain, upgradeCost, upgradeTimeSec,
   buildingOperationBlockReason,
-  isUnlocked, isUpgradable, unlockAtKeep, capForLevel, prodPerHour, totalTroops,
+  isUnlocked, isUpgradable, unlockAtKeep, capForLevel, capacity, prodPerHour, totalTroops,
   mightBreakdown, troopStats, troopBatchCost, troopCountByType, maxTroopsForType, trainQueueSize, TRAINING_BUILDING,
   activeUpgrades, buildQueueSlots,
   trainSpeedMult, unlockedTroopTiers,
@@ -531,7 +531,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     <section className="town">
       <CosmicBackdrop address={address} />
       <GameNav view="city" profile={profile} townhallLevel={view.buildings.keep.lvl} location={worldStatus.location}
-        resources={view.res} energy={worldStatus.energy} energyCap={worldStatus.energyCap}
+        resources={view.res} incomePerHour={rate} resourceCap={capacity(view)} energy={worldStatus.energy} energyCap={worldStatus.energyCap}
         activeFleets={worldStatus.activeFleets} fleetCap={worldStatus.fleetCap} standing={troopsTotal} wounded={view.wounded}
         might={mightScore.total} onAlliance={onAlliance} onCity={() => {}} onWorld={onWorld} onMessages={onMessages} onProfile={onProfile} />
 

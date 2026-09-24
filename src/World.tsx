@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { Profile } from "./lib/profile";
 import {
   GameState, RES, RES_ORDER, TROOP_ORDER, TROOPS_META, TroopKey,
-  displayResource, displayTroops, mightBreakdown, project, totalTroops,
+  capacity, displayResource, displayTroops, mightBreakdown, prodPerHour, project, totalTroops,
 } from "./lib/game";
 import { loadGame, saveGame, initGame } from "./lib/gamestore";
 import { getN } from "./lib/numbers";
@@ -1145,6 +1145,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     <GameNav view="world" profile={profile} townhallLevel={viewGame.buildings.keep.lvl}
       location={`SECTOR ${world.stateId.slice(-6).toUpperCase()} · HOME ${Math.round(playerCity.position.x).toString().padStart(3, "0")}:${Math.round(playerCity.position.y).toString().padStart(3, "0")}`}
       resources={viewGame.res}
+      incomePerHour={prodPerHour(viewGame)} resourceCap={capacity(viewGame)}
       energy={energy} energyCap={world.config.energyCap} activeFleets={activeMarches.length} fleetCap={player.marchSlots}
       standing={totalTroops(viewGame)} wounded={viewGame.wounded} might={mightBreakdown(viewGame).total}
       onAlliance={onAlliance} onCity={onBack} onWorld={() => {}} onMessages={onMessages} onProfile={onProfile} />

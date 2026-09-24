@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { TokenHolding } from "./lib/blockscout";
 import type { Profile } from "./lib/profile";
 import { saveProfile } from "./lib/profile";
-import { mightBreakdown, project, totalTroops, worldMarchSlots } from "./lib/game";
+import { capacity, mightBreakdown, prodPerHour, project, totalTroops, worldMarchSlots } from "./lib/game";
 import { initGame, loadGame } from "./lib/gamestore";
 import { energyAt } from "./lib/world-engine";
 import { loadLocalWorldSession } from "./lib/world-adapter";
@@ -89,7 +89,7 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
   function assist() { const result = helpAll(profile); refresh(result.helped ? `Helped ${result.helped} members · +${result.rewarded} contribution.` : result.reason || "No members need help right now."); }
 
   const nav = <GameNav view="alliance" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
-    resources={game.res} energy={energy} energyCap={energyCap} activeFleets={activeFleets} fleetCap={worldPlayer?.marchSlots ?? worldMarchSlots(game)}
+    resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} energy={energy} energyCap={energyCap} activeFleets={activeFleets} fleetCap={worldPlayer?.marchSlots ?? worldMarchSlots(game)}
     standing={totalTroops(game)} wounded={game.wounded} might={mightBreakdown(game).total}
     onAlliance={() => setView("home")} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onProfile={onProfile} />;
 

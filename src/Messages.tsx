@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RealtimeClient, type LiveChat, type PresenceCity, type ServerReport } from "./lib/realtime";
 import type { Profile } from "./lib/profile";
-import { displayResource, displayTroops, mightBreakdown, project, totalTroops, worldMarchSlots } from "./lib/game";
+import { capacity, displayResource, displayTroops, mightBreakdown, prodPerHour, project, totalTroops, worldMarchSlots } from "./lib/game";
 import { compact } from "./lib/format";
 import { initGame, loadGame, saveGame } from "./lib/gamestore";
 import { loadLocalWorldSession, openLocalWorldSession, saveLocalWorldSession } from "./lib/world-adapter";
@@ -287,7 +287,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     <CosmicBackdrop address={address} />
     <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="messages" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
-      resources={game.res} energy={energy} energyCap={energyCap} activeFleets={activeFleets} fleetCap={fleetCap}
+      resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} energy={energy} energyCap={energyCap} activeFleets={activeFleets} fleetCap={fleetCap}
       standing={totalTroops(game)} wounded={game.wounded} might={mightBreakdown(game).total}
       onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={() => {}} onProfile={onProfile} />
 

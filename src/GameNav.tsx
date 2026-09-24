@@ -15,6 +15,7 @@ const RESOURCE_GAIN_DELAY: Record<ResKey, number> = { cash: 1000, oil: 2700, pow
 
 export default function GameNav({
   view, profile, townhallLevel, location, resources,
+  incomePerHour, resourceCap,
   energy, energyCap, activeFleets, fleetCap, standing, wounded, might, credits, unread = 0, onAlliance, onCity, onWorld, onMessages, onProfile,
 }: {
   view: "alliance" | "city" | "world" | "messages" | "profile";
@@ -22,6 +23,8 @@ export default function GameNav({
   townhallLevel: number;
   location: string;
   resources: Record<ResKey, number>;
+  incomePerHour?: Record<ResKey, number>;
+  resourceCap?: number;
   energy: number;
   energyCap: number;
   activeFleets: number;
@@ -76,7 +79,7 @@ export default function GameNav({
           return (
             <div className="command-resource" key={resource} style={{ "--resource": RESOURCE_COLOR[resource] } as CSSProperties}>
               <span className="command-resource-icon"><BuildingGlyph building={RESOURCE_BUILDING[resource]} /></span>
-              <AnimatedResource resource={resource} value={resources[resource]} quiet={quietResources} />
+              <AnimatedResource resource={resource} value={resources[resource]} rate={incomePerHour?.[resource] ?? 0} cap={resourceCap ?? Number.POSITIVE_INFINITY} quiet={quietResources} />
             </div>
           );
         })}
@@ -90,12 +93,13 @@ export default function GameNav({
   );
 }
 
-function AnimatedResource({ resource, value, quiet }: { resource: ResKey; value: number; quiet: boolean }) {
+function AnimatedResource({ resource, value, rate, cap, quiet }: { resource: ResKey; value: number; rate: number; cap: number; quiet: boolean }) {
   const previous = useRef(value);
   const accumulated = useRef(0);
   const frame = useRef(0);
   const [displayed, setDisplayed] = useState(value);
-  const [gain, setGain] = useState<{ amount: number; id: number } | null>(null);
+  const [gain, setGain] = useState<{ amount: number; id: number; full: boolean } | null>(null);
+  const full = Number.isFinite(cap) && value >= cap;
 
   useEffect(() => {
     const from = previous.current;
@@ -129,9 +133,9 @@ function AnimatedResource({ resource, value, quiet }: { resource: ResKey; value:
     let interval = 0;
     const release = () => {
       const amount = accumulated.current;
-      if (amount <= 0) return;
+      if (amount <= 0 && rate <= 0 && !full) return;
       accumulated.current = 0;
-      setGain({ amount, id: Date.now() });
+      setGain({ amount: amount > 0 ? amount : full ? 0 : rate * 8 / 3600, id: Date.now(), full });
     };
     const timer = window.setTimeout(() => {
       release();
@@ -141,12 +145,13 @@ function AnimatedResource({ resource, value, quiet }: { resource: ResKey; value:
       window.clearTimeout(timer);
       if (interval) window.clearInterval(interval);
     };
-  }, [quiet, resource]);
+  }, [full, quiet, rate, resource]);
 
-  return <div className={`command-resource-value${gain ? " is-gaining" : ""}`}>
+  return <div className={`command-resource-value${gain ? " is-gaining" : ""}${full ? " is-full" : ""}`}>
     <small>{RES[resource].label}</small>
     <b>{compact(displayResource(displayed))}</b>
-    {gain && <em key={gain.id} className="command-resource-gain" onAnimationEnd={() => setGain(null)}>+{compact(displayResource(gain.amount))}</em>}
+    <span className="command-resource-rate">{full ? "FULL" : rate > 0 ? `+${compact(displayResource(rate))}/H` : "OFFLINE"}</span>
+    {gain && <em key={gain.id} className={`command-resource-gain${gain.full ? " full" : ""}`} onAnimationEnd={() => setGain(null)}>{gain.full ? "CAPACITY" : `+${compact(displayResource(gain.amount))}`}</em>}
   </div>;
 }
 

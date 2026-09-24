@@ -12,7 +12,7 @@ import { detectAutoTier, GRAPHICS_TIER_HINT, GRAPHICS_TIER_LABEL, type GraphicsT
 import { canRenameForFree, nextFreeRenameAt, normalizeUsername, usernameLength, type Profile } from "./lib/profile";
 import { updatePlayerName } from "./lib/backend";
 import { hasLocalGm } from "./lib/gm";
-import { mightBreakdown, project, totalTroops, worldMarchSlots } from "./lib/game";
+import { capacity, mightBreakdown, prodPerHour, project, totalTroops, worldMarchSlots } from "./lib/game";
 import { initGame, loadGame } from "./lib/gamestore";
 import { loadLocalWorldSession } from "./lib/world-adapter";
 import { energyAt } from "./lib/world-engine";
@@ -417,7 +417,7 @@ export default function ProfileScreen({
     <CosmicBackdrop address={address} />
     <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="profile" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
-      resources={game.res} energy={player ? energyAt(player, now, world!.world.config) : 100} energyCap={world?.world.config.energyCap ?? 100}
+      resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} energy={player ? energyAt(player, now, world!.world.config) : 100} energyCap={world?.world.config.energyCap ?? 100}
       activeFleets={activeFleets} fleetCap={player?.marchSlots ?? worldMarchSlots(game)} standing={totalTroops(game)} wounded={game.wounded}
       might={mightBreakdown(game).total} credits={account.credits} onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onProfile={() => {}} />
 
