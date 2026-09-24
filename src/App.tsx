@@ -22,15 +22,24 @@ import { hasLocalGm, localGmRequested, registerOwnerGm } from "./lib/gm";
 import { loadGame, saveGame } from "./lib/gamestore";
 import { verifyAllianceHolding } from "./lib/alliance";
 import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
-import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
 import { loadPlayerAccount, savePlayerAccount } from "./lib/player-account";
 import { playSfx, preloadSfx, SFX_LOGIN_HOVER, SFX_LOGIN_HOVER_VOLUME, SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME } from "./lib/sfx";
 import { setErrorReportingAddress } from "./lib/error-reporting";
-import { authenticateGoogle, authenticateGuest, authenticateWallet, loadBackendSession, mirrorPlayerState, restorePlayerState, trackEvents, updatePlayerName } from "./lib/backend";
+import { authenticateGoogle, authenticateGuest, authenticateWallet, clearBackendSession, loadBackendSession, loadLastBackendSession, mirrorPlayerState, restorePlayerState, resumeBackendSession, trackEvents, updatePlayerName } from "./lib/backend";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
 const MAIN_STAGES: MainStage[] = ["alliance", "town", "world", "messages", "profile"];
+const lastGameStageKey = (address: string) => `alliance:last-game-stage:${address.toLowerCase()}`;
+
+function loadLastGameStage(address: string): MainStage {
+  try {
+    const saved = localStorage.getItem(lastGameStageKey(address));
+    if (MAIN_STAGES.includes(saved as MainStage)) return saved as MainStage;
+  } catch {}
+  return "town";
+}
 
 function AllianceWordmark({ hero = false }: { hero?: boolean }) {
   return <div className={`alliance-wordmark${hero ? " hero" : ""}`} aria-label="ALLIANCE">
@@ -187,6 +196,7 @@ function DesktopApp() {
   const [selectedCA, setSelectedCA] = useState<string | null>(null);
   const [busy, setBusy] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [sessionRestorePending, setSessionRestorePending] = useState(true);
   const loginAttemptRef = useRef(0);
   useTabSwitchSfx(address, stage);
 
@@ -199,6 +209,7 @@ function DesktopApp() {
 
   useEffect(() => {
     if (!address || !MAIN_STAGES.includes(stage as MainStage)) return;
+    try { localStorage.setItem(lastGameStageKey(address), stage); } catch {}
     void trackEvents(address, [{ name: "session.page_viewed", page: stage }]).catch(() => {});
     void mirrorPlayerState(address, {
       profile,
@@ -209,9 +220,36 @@ function DesktopApp() {
 
   useEffect(() => subscribeProviders(setDetected), []);
 
+  // Wallet signatures establish a backend session; they are not a per-page
+  // navigation requirement. On refresh, validate the saved token with /me and
+  // resume the last game view without asking the wallet to sign again.
+  useEffect(() => {
+    const stored = loadLastBackendSession();
+    if (!stored) { setSessionRestorePending(false); return; }
+    const timeout = new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 4000));
+    void Promise.race([resumeBackendSession(), timeout]).then(async (session) => {
+      if (!session) return;
+      if (session.player.role === "gm") registerOwnerGm(session.player.id);
+      await beginLocalSession(session.player.id, session.player.displayName, session.player.authMethod === "wallet" ? "Wallet" : session.player.authMethod === "google" ? "Google" : "Guest", true);
+      if (session.player.authMethod === "wallet") {
+        void readWallet(session.player.id).then((recs) => {
+          setRecords(recs);
+          const existing = loadProfile(session.player.id);
+          if (!existing) return;
+          const holdingCheck = verifyAllianceHolding(existing, memeHoldings(recs));
+          if (holdingCheck.status === "removed") {
+            const updated = { ...existing, faction: null, factionSymbol: null };
+            saveProfile(updated); setProfile(updated);
+          }
+        }).catch(() => {});
+      }
+    }).finally(() => setSessionRestorePending(false));
+  }, []);
+
   // Restore a Firebase session through the backend so roles are never inferred
   // from user-controlled browser storage.
   useEffect(() => {
+    if (sessionRestorePending) return;
     const auth = firebaseAuth();
     if (!auth) return;
     return onAuthStateChanged(auth, (u) => {
@@ -224,7 +262,7 @@ function DesktopApp() {
         void beginLocalSession(session.player.id, session.player.displayName || u.displayName || "", "Google");
       }).catch(() => {});
     });
-  }, [address]);
+  }, [address, sessionRestorePending]);
   const wallets = useMemo(() => resolveWallets(detected), [detected]);
 
   // Google sign-in via Firebase Auth (reuses the Blockwick Firebase project).
@@ -391,7 +429,7 @@ function DesktopApp() {
     try { const p = restored.profile as Profile; if (p && p.address) saveProfile(p); } catch {}
   }
 
-  async function beginLocalSession(addr: string, displayName: string, sourceLabel: string) {
+  async function beginLocalSession(addr: string, displayName: string, sourceLabel: string, resumeDirect = false) {
     setError("");
     setProvider(null);
     setAddress(addr);
@@ -416,7 +454,8 @@ function DesktopApp() {
         });
       }
       setProfile(existing);
-      setStage(hasLocalGm(addr) ? "town" : "resume");
+      const savedStage = loadLastGameStage(addr);
+      setStage(resumeDirect ? savedStage : hasLocalGm(addr) ? "town" : "resume");
       return;
     }
     const p: Profile = {
@@ -477,7 +516,10 @@ function DesktopApp() {
     setStage("start");
   }
 
-  function disconnect() {
+  async function disconnect() {
+    if (address) clearBackendSession(address);
+    const auth = firebaseAuth();
+    if (auth?.currentUser) await signOut(auth).catch(() => {});
     setProvider(null); setAddress(""); setChainOk(false);
     setRecords(null); setProfile(null); setStage("connect"); setError("");
   }
@@ -505,6 +547,13 @@ function DesktopApp() {
       fetch("/__report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }).catch(() => {});
     } catch {}
   }
+
+  if (sessionRestorePending) return <div className="page session-resume-page">
+    <CosmicBackdrop />
+    <GameMusic address="" active />
+    <header className="topbar connect-topbar"><AllianceWordmark /><span className="chip lock">RESTORING COMMAND LINK</span></header>
+    <main className="session-resume"><i /><b>RECONNECTING</b><span>VERIFYING SESSION</span></main>
+  </div>;
 
   return (
     <div className="page">

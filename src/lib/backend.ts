@@ -18,6 +18,7 @@ export type BackendSession = {
 };
 
 const sessionKey = (address: string) => `alliance:backend-session:${address.toLowerCase()}`;
+const LAST_SESSION_KEY = "alliance:backend-session:last-player";
 const guestSecretKey = (guestId: string) => `alliance:guest-proof:${guestId}`;
 
 async function post<T>(path: string, payload: unknown, token?: string): Promise<T> {
@@ -41,7 +42,10 @@ async function get<T>(path: string, token?: string): Promise<T> {
 }
 
 export function saveBackendSession(session: BackendSession): void {
-  try { localStorage.setItem(sessionKey(session.player.id), JSON.stringify(session)); } catch {}
+  try {
+    localStorage.setItem(sessionKey(session.player.id), JSON.stringify(session));
+    localStorage.setItem(LAST_SESSION_KEY, session.player.id.toLowerCase());
+  } catch {}
 }
 
 export function loadBackendSession(address: string): BackendSession | null {
@@ -52,6 +56,52 @@ export function loadBackendSession(address: string): BackendSession | null {
   } catch {
     return null;
   }
+}
+
+/** Find the last usable session without trusting it. Call resumeBackendSession
+ * before entering the game so the backend remains the authority for role and
+ * account status. The prefix scan lets sessions created before the pointer was
+ * introduced resume on their first refresh after this release. */
+export function loadLastBackendSession(): BackendSession | null {
+  try {
+    const lastPlayer = localStorage.getItem(LAST_SESSION_KEY);
+    if (lastPlayer) {
+      const pointed = loadBackendSession(lastPlayer);
+      if (pointed) return pointed;
+    }
+    let newest: BackendSession | null = null;
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith("alliance:backend-session:") || key === LAST_SESSION_KEY) continue;
+      const candidate = loadBackendSession(key.slice("alliance:backend-session:".length));
+      if (candidate && (!newest || candidate.expiresAt > newest.expiresAt)) newest = candidate;
+    }
+    if (newest) localStorage.setItem(LAST_SESSION_KEY, newest.player.id.toLowerCase());
+    return newest;
+  } catch {
+    return null;
+  }
+}
+
+export async function resumeBackendSession(): Promise<BackendSession | null> {
+  const stored = loadLastBackendSession();
+  if (!stored) return null;
+  try {
+    const verified = await get<{ player: BackendPlayer }>("/me", stored.token);
+    const session = { ...stored, player: verified.player };
+    saveBackendSession(session);
+    return session;
+  } catch {
+    clearBackendSession(stored.player.id);
+    return null;
+  }
+}
+
+export function clearBackendSession(address: string): void {
+  try {
+    localStorage.removeItem(sessionKey(address));
+    if (localStorage.getItem(LAST_SESSION_KEY)?.toLowerCase() === address.toLowerCase()) localStorage.removeItem(LAST_SESSION_KEY);
+  } catch {}
 }
 
 export async function authenticateWallet(provider: Eip1193Provider, address: string): Promise<BackendSession> {
