@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Profile } from "./lib/profile";
 import { RES, RES_ORDER, ResKey, BKey, displayResource, displayTroops } from "./lib/game";
 import { compact } from "./lib/format";
@@ -11,6 +11,7 @@ const RESOURCE_COLOR: Record<ResKey, string> = {
   power: "#38d9ff",
 };
 const RESOURCE_BUILDING: Record<ResKey, BKey> = { cash: "bank", oil: "oilwell", power: "powerplant" };
+const RESOURCE_GAIN_DELAY: Record<ResKey, number> = { cash: 1000, oil: 2700, power: 5400 };
 
 export default function GameNav({
   view, profile, townhallLevel, location, resources,
@@ -37,7 +38,10 @@ export default function GameNav({
   onMessages: () => void;
   onProfile: () => void;
 }) {
-  const visibleCredits = credits ?? loadPlayerAccount(profile.address).credits;
+  const account = loadPlayerAccount(profile.address);
+  const visibleCredits = credits ?? account.credits;
+  const systemReducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const quietResources = account.reducedMotion || systemReducedMotion || account.graphicsTier === "low";
   return (
     <nav className="command-nav" aria-label="Game view and account status">
       <div className="command-nav-head">
@@ -72,7 +76,7 @@ export default function GameNav({
           return (
             <div className="command-resource" key={resource} style={{ "--resource": RESOURCE_COLOR[resource] } as CSSProperties}>
               <span className="command-resource-icon"><BuildingGlyph building={RESOURCE_BUILDING[resource]} /></span>
-              <div><small>{RES[resource].label}</small><b>{compact(displayResource(resources[resource]))}</b></div>
+              <AnimatedResource resource={resource} value={resources[resource]} quiet={quietResources} />
             </div>
           );
         })}
@@ -84,6 +88,66 @@ export default function GameNav({
       </div>
     </nav>
   );
+}
+
+function AnimatedResource({ resource, value, quiet }: { resource: ResKey; value: number; quiet: boolean }) {
+  const previous = useRef(value);
+  const accumulated = useRef(0);
+  const frame = useRef(0);
+  const [displayed, setDisplayed] = useState(value);
+  const [gain, setGain] = useState<{ amount: number; id: number } | null>(null);
+
+  useEffect(() => {
+    const from = previous.current;
+    const delta = value - from;
+    previous.current = value;
+    if (delta > 0) accumulated.current += delta;
+
+    cancelAnimationFrame(frame.current);
+    if (quiet || value <= from) {
+      setDisplayed(value);
+      return;
+    }
+    const started = performance.now();
+    const duration = 440;
+    const draw = (time: number) => {
+      const progress = Math.min(1, (time - started) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayed(from + delta * eased);
+      if (progress < 1) frame.current = requestAnimationFrame(draw);
+    };
+    frame.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frame.current);
+  }, [quiet, value]);
+
+  useEffect(() => {
+    if (quiet) {
+      accumulated.current = 0;
+      setGain(null);
+      return;
+    }
+    let interval = 0;
+    const release = () => {
+      const amount = accumulated.current;
+      if (amount <= 0) return;
+      accumulated.current = 0;
+      setGain({ amount, id: Date.now() });
+    };
+    const timer = window.setTimeout(() => {
+      release();
+      interval = window.setInterval(release, 8000);
+    }, RESOURCE_GAIN_DELAY[resource]);
+    return () => {
+      window.clearTimeout(timer);
+      if (interval) window.clearInterval(interval);
+    };
+  }, [quiet, resource]);
+
+  return <div className={`command-resource-value${gain ? " is-gaining" : ""}`}>
+    <small>{RES[resource].label}</small>
+    <b>{compact(displayResource(displayed))}</b>
+    {gain && <em key={gain.id} className="command-resource-gain" onAnimationEnd={() => setGain(null)}>+{compact(displayResource(gain.amount))}</em>}
+  </div>;
 }
 
 function CommandMetric({ label, value, tone }: { label: string; value: string; tone: string }) {
