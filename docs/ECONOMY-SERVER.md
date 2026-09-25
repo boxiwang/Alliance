@@ -65,8 +65,10 @@ solid on all actions.*
 
 **Private-alpha status:** implemented for city build/train/promotion/research/
 healing/speedups and personal World dispatch/scan/recall/arrival/gather/return.
-The GM migration seeds `game_json` and `world_json` together, after which `/state`
-cannot overwrite either field. World ticking is event-driven: the client calls
+Every authenticated player now migrates automatically on first entry to City or
+Star Map. The one-time migration binds both snapshots to the authenticated player,
+seeds `game_json` and `world_json` together, and records an account audit event;
+afterward `/state` cannot overwrite either field. World ticking is event-driven: the client calls
 `world.advance` only when a scheduled event is due, and offline progress settles
 on the next command/read cycle.
 

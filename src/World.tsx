@@ -36,7 +36,7 @@ import { RealtimeClient, type PresenceCity, type ScoutSnapshot, type LiveMarch }
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
-import { enableGameAuthority, fetchServerGame, sendGameCommand, type GameCommandResponse } from "./lib/backend";
+import { ensureGameAuthority, sendGameCommand, type GameCommandResponse } from "./lib/backend";
 
 type SelectableEntity = ResourceEntity | MonsterEntity | CityEntity;
 type WorldLayer = "resource" | "monster" | "city";
@@ -632,12 +632,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      let remote = await fetchServerGame(address);
+      const localGame = project(loadGame(address) || gameRef.current, Date.now());
+      const opened = openLocalWorldSession(address, localGame, Date.now(), N);
+      const remote = await ensureGameAuthority(address, opened.game, opened.session);
       if (!remote || cancelled) return;
-      if (remote.authorityVersion > 0 && !remote.world && hasLocalGm(address)) {
-        const local = sessionRef.current;
-        try { remote = await enableGameAuthority(address, gameRef.current, local, remote.revision); } catch { return; }
-      }
       if (cancelled || remote.authorityVersion <= 0 || !remote.game || !remote.world) return;
       const nextSession = remote.world as LocalWorldSession;
       const nextGame = remote.game as GameState;
@@ -647,7 +645,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       setSession(nextSession); setGame(nextGame);
       saveLocalWorldSession(nextSession); saveGame(nextGame);
       seenReportCount.current = nextSession.world.players[nextSession.playerId]?.reportIds.length || 0;
-    })();
+    })().catch(() => {
+      if (!cancelled) setMessage("Command link unavailable. Progress remains safe on this device; reconnect to continue server play.");
+    });
     return () => { cancelled = true; };
   }, [address]);
   // Shared-map coordinate unification: once the server hands us our spawn coord,

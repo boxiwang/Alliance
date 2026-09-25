@@ -37,7 +37,7 @@ import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAl
 import { loadPlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME } from "./lib/sfx";
 import {
-  consumeInventoryItem, enableGameAuthority, fetchServerGame, grantGmInventory, loadInventory,
+  consumeInventoryItem, enableGameAuthority, ensureGameAuthority, fetchServerGame, grantGmInventory, loadInventory,
   sendGameCommand, type GameCommandResponse, type InventoryBalance,
 } from "./lib/backend";
 import { MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath } from "./lib/mvp-items";
@@ -209,15 +209,22 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   useEffect(() => {
     setGm(hasLocalGm(address));
     void loadInventory(address).then(setInventory).catch(() => {});
-    void fetchServerGame(address).then((server) => {
-      if (!server) return;
+    let cancelled = false;
+    setAuthorityBusy(true);
+    const localGame = project(loadGame(address) || initGame(address), Date.now());
+    const opened = openLocalWorldSession(address, localGame, Date.now(), getN());
+    void ensureGameAuthority(address, opened.game, opened.session).then((server) => {
+      if (!server || cancelled) return;
       setAuthorityVersion(server.authorityVersion);
       if (server.authorityVersion > 0 && server.game) {
         const authoritative = server.game as GameState;
         setGame(authoritative);
         saveGame(authoritative);
       }
-    });
+    }).catch(() => {
+      if (!cancelled) setMsg("Command link unavailable. Progress remains safe on this device; reconnect to continue server play.");
+    }).finally(() => { if (!cancelled) setAuthorityBusy(false); });
+    return () => { cancelled = true; };
   }, [address]);
 
   // Heartbeat: re-render every second; commit when something finishes.

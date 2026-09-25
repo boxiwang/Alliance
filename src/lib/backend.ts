@@ -261,6 +261,27 @@ export async function enableGameAuthority(address: string, game: unknown, world:
 }
 
 /**
+ * Move an authenticated player's existing local alpha save onto the authoritative
+ * command lane exactly once. A concurrent mirror/page load can advance the
+ * revision between GET and POST, so retry once with the fresh revision. Once the
+ * server reports an authority version, the supplied local snapshot is ignored.
+ */
+export async function ensureGameAuthority(address: string, game: unknown, world: unknown): Promise<ServerGame | null> {
+  let current = await fetchServerGame(address);
+  if (!current || current.authorityVersion > 0) return current;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await enableGameAuthority(address, game, world, current.revision);
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "revision_conflict") throw error;
+      current = await fetchServerGame(address);
+      if (!current || current.authorityVersion > 0) return current;
+    }
+  }
+  throw new Error("revision_conflict");
+}
+
+/**
  * Step 2 (docs/ECONOMY-SERVER.md): issue one authoritative game command. The
  * server runs the shared reducer and returns the new state (ok), or the current
  * state + a reason (rejected). The idempotency key belongs to the caller so the

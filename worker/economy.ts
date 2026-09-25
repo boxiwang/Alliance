@@ -6,6 +6,10 @@
 
 import { project, type GameState } from "../src/lib/game";
 
+export function gameStateBelongsToPlayer(game: Pick<GameState, "address"> | null, playerId: string): boolean {
+  return typeof game?.address === "string" && game.address.toLowerCase() === playerId.toLowerCase();
+}
+
 /** Advance a mirrored game_json string to `now` with the shared engine. */
 export function projectGameJson(gameJson: string | null | undefined, now = Date.now()): GameState | null {
   if (!gameJson) return null;

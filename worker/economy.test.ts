@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { initGame } from "../src/lib/gamestore";
 import { project } from "../src/lib/game";
-import { projectGameJson } from "./economy";
+import { gameStateBelongsToPlayer, projectGameJson } from "./economy";
 
 // Step 0: prove the shared economy engine runs in a DOM-free (worker/node)
 // environment — getN() must fall back to the bundled docs/numbers.json with no
@@ -34,5 +34,12 @@ describe("shared economy engine runs headless", () => {
     expect(Number.isFinite(projected!.res.cash)).toBe(true);
     expect(projectGameJson(null)).toBeNull();
     expect(projectGameJson("not json")).toBeNull();
+  });
+
+  it("binds a one-time authority seed to the authenticated player", () => {
+    const game = initGame("0x0000000000000000000000000000000000000abc");
+    expect(gameStateBelongsToPlayer(game, game.address.toUpperCase())).toBe(true);
+    expect(gameStateBelongsToPlayer(game, "0x0000000000000000000000000000000000000def")).toBe(false);
+    expect(gameStateBelongsToPlayer(null, game.address)).toBe(false);
   });
 });

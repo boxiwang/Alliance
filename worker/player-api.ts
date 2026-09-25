@@ -13,7 +13,7 @@ import {
   type SessionClaims,
 } from "./auth";
 import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS } from "../src/lib/mvp-items";
-import { projectGameJson } from "./economy";
+import { gameStateBelongsToPlayer, projectGameJson } from "./economy";
 import { applyCommand } from "./commands";
 import { applySpeedup, speedupCompatible, type SpeedupTarget } from "../src/lib/speedups";
 import { BUILDING_ORDER, TROOP_ORDER, type BKey, type TroopKey } from "../src/lib/game";
@@ -438,7 +438,6 @@ async function gameRoute(env: BackendEnv, claims: SessionClaims): Promise<Respon
 }
 
 async function enableGameAuthority(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
-  if (claims.role !== "gm") return response({ error: "forbidden" }, 403);
   const data = await body(request);
   const expectedRevision = Math.max(0, Math.floor(Number(data?.revision) || 0));
   let supplied = "";
@@ -450,6 +449,7 @@ async function enableGameAuthority(request: Request, env: BackendEnv, claims: Se
   const now = Date.now();
   const game = projectGameJson(supplied, now);
   if (!game) return response({ error: "invalid_state" }, 400);
+  if (!gameStateBelongsToPlayer(game, claims.sub)) return response({ error: "state_owner_mismatch" }, 403);
   let world: unknown;
   try { world = JSON.parse(suppliedWorld); } catch { return response({ error: "invalid_world_state" }, 400); }
   if (!isWorldAuthoritySession(world, claims.sub)) return response({ error: "invalid_world_state" }, 400);
@@ -476,6 +476,12 @@ async function enableGameAuthority(request: Request, env: BackendEnv, claims: Se
     }
     return response({ error: "revision_conflict" }, 409);
   }
+  await env.DB.prepare(`INSERT INTO account_audit_log
+    (id, player_id, action, actor_player_id, metadata_json, created_at)
+    VALUES (?, ?, 'economy.authority_enabled', ?, ?, ?)`).bind(
+    crypto.randomUUID(), claims.sub, claims.sub,
+    JSON.stringify({ authorityVersion: 1, source: "local_alpha_save" }), now,
+  ).run();
   return response({ game, world, revision: expectedRevision + 1, authorityVersion: 1 });
 }
 
