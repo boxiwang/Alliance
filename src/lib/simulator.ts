@@ -39,8 +39,8 @@ function prerequisites(numbers: any, targetLevel: number): string[] {
 }
 
 function capacity(numbers: any, levels: Record<string, number>): number {
-  const level = Math.max(1, levels["building.storage"] ?? 0);
-  return row(numbers, "building.storage", level)?.capacityPerResource ?? 5000;
+  void numbers; void levels;
+  return Number.POSITIVE_INFINITY;
 }
 
 function rates(numbers: any, levels: Record<string, number>, collectionEfficiency: number): Record<string, number> {

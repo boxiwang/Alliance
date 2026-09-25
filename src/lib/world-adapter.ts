@@ -2,7 +2,7 @@
 // Temporary by design: a server adapter can replace persistence without changing World.tsx actions.
 import type { GameState, TroopKey } from "./game";
 import {
-  RES_ORDER, TROOP_ORDER, accountResearchModifiers, capacity, maxTroops, might, project, worldMarchSlots,
+  RES_ORDER, TROOP_ORDER, accountResearchModifiers, maxTroops, might, project, worldMarchSlots,
   emptyTroopRoster, troopRosterCount,
 } from "./game";
 import type { DispatchMarchInput, HeadlessWorld, PublicCosmeticLoadout, ResourceWallet, SpawnPlayerInput, TroopManifest } from "./world-engine";
@@ -142,7 +142,6 @@ function npcInput(index: number, world: HeadlessWorld, numbers: any): SpawnPlaye
     might: npcTroopMight(troops, numbers),
     troops,
     resources: { cash: storage * .6, oil: storage * .45, power: storage * .45 },
-    protectedFraction: Number(numbers.buildings?.["building.storage"]?.protectedFraction) || .25,
     shieldDurationSec: 0,
     hasAttacked: true,
   };
@@ -203,7 +202,6 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
     hospitalLevel: Math.max(1, game.buildings.hospital.lvl),
     storageLevel: Math.max(1, game.buildings.storage.lvl),
     might: might(game), troops: game.troops, woundedTroops: game.woundedTroops, resources: game.res,
-    protectedFraction: Number(numbers.buildings?.["building.storage"]?.protectedFraction) || .25,
   }], now);
   const configuredNpcCount = Number(numbers.world?.population?.localNpcCities);
   const npcCount = Math.max(0, Math.min(world.config.maxPlayers - 1,
@@ -288,8 +286,7 @@ export function applyWorldPlayerToGame(session: LocalWorldSession, sourceGame: G
   const player = session.world.players[session.playerId];
   game.troops = manifest(player.troops);
   game.woundedTroops = manifest(player.woundedTroops);
-  const cap = capacity(game);
-  RES_ORDER.forEach((resource) => { game.res[resource] = Math.min(cap, Math.max(0, Math.floor(player.resources[resource]))); });
+  RES_ORDER.forEach((resource) => { game.res[resource] = Math.max(0, Math.floor(player.resources[resource])); });
   game.wounded = troopRosterCount(game.woundedTroops);
   return game;
 }

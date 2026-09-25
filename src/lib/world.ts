@@ -2,7 +2,7 @@
 // Coordinates and NPCs are deterministic per wallet; marches reserve real GameState troops.
 import { getN } from "./numbers";
 import {
-  GameState, RES_ORDER, TROOP_ORDER, TroopKey, capacity, maxTroops, project,
+  GameState, RES_ORDER, TROOP_ORDER, TroopKey, maxTroops, project,
 } from "./game";
 import {
   CombatResult, Force, GatherResult, MonsterTarget, NodeTarget, ResKey, RivalTarget,
@@ -291,7 +291,7 @@ export function projectWorld(sourceWorld: WorldState, sourceGame: GameState, now
     march.resolved = true;
     if (march.action === "gather") {
       returnSurvivors(game, march.force, 0);
-      RES_ORDER.forEach((key) => { game.res[key] = Math.min(capacity(game), game.res[key] + (march.reward[key] ?? 0)); });
+      RES_ORDER.forEach((key) => { game.res[key] += march.reward[key] ?? 0; });
       const gathered = march.result as GatherResult;
       world.reports.unshift({ id: march.id, at: now, title: `Gatherers returned from ${march.targetName}`, detail: `${Math.round(gathered.hauled).toLocaleString()} supplies delivered.`, good: true });
     } else if (march.action === "raid") {
@@ -299,7 +299,7 @@ export function projectWorld(sourceWorld: WorldState, sourceGame: GameState, now
       const casualties = combat.attackerLosses.wounded + combat.attackerLosses.dead;
       returnSurvivors(game, march.force, casualties);
       game.wounded += combat.attackerLosses.wounded;
-      RES_ORDER.forEach((key) => { game.res[key] = Math.min(capacity(game), game.res[key] + (march.reward[key] ?? 0)); });
+      RES_ORDER.forEach((key) => { game.res[key] += march.reward[key] ?? 0; });
       world.reports.unshift({ id: march.id, at: now, title: `${combat.win ? "Victory" : "Defeat"} at ${march.targetName}`, detail: `${casualties.toLocaleString()} casualties · ${Math.round(combat.loot).toLocaleString()} loot.`, good: combat.win });
     } else {
       const scout = march.result as ScoutReport;

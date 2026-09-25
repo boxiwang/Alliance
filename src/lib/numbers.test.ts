@@ -21,13 +21,13 @@ describe("numbers configuration", () => {
     expect(issues.some((issue) => issue.path === "townhallPrerequisites.perLevel.8")).toBe(true);
   });
 
-  it("detects Warehouse capacity deadlocks", () => {
+  it("allows upgrade costs above Warehouse safety because balances are uncapped", () => {
     const numbers: any = clone(defaults);
     const priorCapacity = numbers.buildings["building.storage"].levels["4"].capacityPerResource;
     numbers.buildings["building.storage"].levels["5"].cost["res.cash"] = priorCapacity + 1;
 
     const issues = validateNumbers(numbers);
-    expect(issues.some((issue) => issue.path === "buildings.building.storage.levels.5.cost.res.cash")).toBe(true);
+    expect(issues.some((issue) => issue.path === "buildings.building.storage.levels.5.cost.res.cash")).toBe(false);
   });
 
   it("keeps the default F2P profile inside both pacing targets", () => {

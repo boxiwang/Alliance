@@ -2,7 +2,7 @@
 // World engine. This file must stay free of DOM, localStorage and network APIs.
 import type { GameState } from "./game";
 import {
-  RES_ORDER, TROOP_ORDER, accountResearchModifiers, capacity, maxTroops, might,
+  RES_ORDER, TROOP_ORDER, accountResearchModifiers, maxTroops, might,
   project, troopRosterCount, worldMarchSlots,
 } from "./game";
 import type {
@@ -101,9 +101,8 @@ function applyWorldPlayerToGame(session: WorldAuthoritySession, source: GameStat
   const player = session.world.players[session.playerId];
   game.troops = manifest(player.troops);
   game.woundedTroops = manifest(player.woundedTroops);
-  const resourceCap = capacity(game);
   RES_ORDER.forEach((resource) => {
-    game.res[resource] = Math.min(resourceCap, Math.max(0, Math.floor(player.resources[resource])));
+    game.res[resource] = Math.max(0, Math.floor(player.resources[resource]));
   });
   game.wounded = troopRosterCount(game.woundedTroops);
   return game;

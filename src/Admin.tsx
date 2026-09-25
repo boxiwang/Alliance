@@ -68,7 +68,7 @@ interface Column {
 const BUILDING_FIELD_INFO: Record<string, { label: string; group: string }> = {
   timeSec: { label: "Build time (sec)", group: "Timing" },
   productionPerHour: { label: "Production / hour", group: "Output" },
-  capacityPerResource: { label: "Storage / resource", group: "Output" },
+  capacityPerResource: { label: "Safe / resource", group: "Output" },
   troopCapacity: { label: "Troop capacity", group: "Output" },
   trainQueueSize: { label: "Training queue", group: "Output" },
   trainSpeedMult: { label: "Training speed ×", group: "Output" },

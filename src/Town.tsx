@@ -124,6 +124,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [researchBranch, setResearchBranch] = useState<ResearchBranch>("development");
   const [facilityOpen, setFacilityOpen] = useState<BKey | null>(null);
   const [facilityInterior, setFacilityInterior] = useState(false);
+  const [facilityPanelTab, setFacilityPanelTab] = useState<"operate" | "upgrade">("operate");
   // Select a building's facility, with a click cue (read the account fresh so a
   // Profile change to sound / SFX volume applies without remounting).
   function openFacility(building: BKey) {
@@ -131,6 +132,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     if (acc.soundEnabled) playSfx(SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME * acc.sfxVolume);
     setFacilityOpen(building);
     setFacilityInterior(false);
+    setFacilityPanelTab(game.buildings[building].lvl >= 1 ? "operate" : "upgrade");
   }
   const [commandTab, setCommandTab] = useState<"today" | "signals">("today");
   const [selectedResearchKey, setSelectedResearchKey] = useState("");
@@ -138,6 +140,14 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [gmBuilding, setGmBuilding] = useState<BKey>("keep");
   const savedOnce = useRef(false);
   const [allianceRevision, setAllianceRevision] = useState(0);
+  useEffect(() => {
+    const syncActivity = (event: Event) => {
+      const detail = (event as CustomEvent<{ address: string; game: GameState }>).detail;
+      if (detail?.address === address.toLowerCase()) setGame(detail.game);
+    };
+    window.addEventListener("alliance:game-activity", syncActivity);
+    return () => window.removeEventListener("alliance:game-activity", syncActivity);
+  }, [address]);
   const [inventory, setInventory] = useState<InventoryBalance[]>([]);
   const [speedupTarget, setSpeedupTarget] = useState("");
   const [warehouseItemId, setWarehouseItemId] = useState("speedup.universal.1m");
@@ -599,7 +609,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       )}
       {msg && <div className={"gmsg" + (msg.startsWith("GM:") ? " gmmsg" : "")}>{msg}</div>}
 
-      <div className="city-command-layout">
+      <div className={`city-command-layout${facilityInterior && facilityOpen === "academy" ? " research-interior" : facilityInterior && facilityOpen === "storage" ? " warehouse-interior" : ""}`}>
       <section className="operations-queue" aria-label="Operations queue">
         <header><span>OPERATIONS QUEUE</span><b className="mono">{activeOperationQueues}/{operationQueueSlots} ACTIVE</b></header>
         <div className="operation-slots">
@@ -663,6 +673,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           const research = facilityOpen === "academy" && view.buildings.academy.lvl >= 1;
           const hospital = facilityOpen === "hospital";
           const warehouse = facilityOpen === "storage";
+          const hasOperation = !!trainingType || research || hospital || warehouse;
+          const operationLabel = trainingType ? "TRAIN" : hospital ? "MEDICAL" : research ? "RESEARCH" : "INVENTORY";
           return (
             <aside className={`facility-inspector city-facility-panel${research ? " research" : ""}${warehouse ? " warehouse" : ""}`} aria-label={BUILDINGS[facilityOpen].label}>
               <header className="facility-inspector-head">
@@ -670,11 +682,15 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
                 <button aria-label="Close facility" onClick={() => { setFacilityInterior(false); setFacilityOpen(null); setCommandTab("today"); }}>×</button>
               </header>
               <div className="facility-inspector-body">
-                {(research || warehouse) && !facilityInterior && <button className="city-open-interior" type="button" onClick={() => setFacilityInterior(true)}>{research ? "OPEN RESEARCH INSTITUTE" : "OPEN WAREHOUSE"}</button>}
-                {renderBuildingUpgrade(facilityOpen)}
-                {research && view.researchQueue.finishAt > 0 && renderSpeedupTray({ kind: "research" })}
-                {!research && !warehouse && <>
-                  {view.buildings[facilityOpen].lvl >= 1 && (trainingType ? renderTrainer(trainingType) : hospital ? <div className="facility-hospital">{renderHospitalControls(view.buildings.hospital.finishAt > 0)}</div> : null)}
+                {hasOperation && <div className="facility-panel-tabs" role="tablist" aria-label={`${BUILDINGS[facilityOpen].label} view`}>
+                  <button role="tab" aria-selected={facilityPanelTab === "operate"} className={facilityPanelTab === "operate" ? "active" : ""} onClick={() => setFacilityPanelTab("operate")}>{operationLabel}</button>
+                  <button role="tab" aria-selected={facilityPanelTab === "upgrade"} className={facilityPanelTab === "upgrade" ? "active" : ""} onClick={() => setFacilityPanelTab("upgrade")}>UPGRADE</button>
+                </div>}
+                {(!hasOperation || facilityPanelTab === "upgrade") && renderBuildingUpgrade(facilityOpen)}
+                {hasOperation && facilityPanelTab === "operate" && <>
+                  {(research || warehouse) && !facilityInterior && <button className="city-open-interior" type="button" onClick={() => setFacilityInterior(true)}>{research ? "OPEN RESEARCH INSTITUTE" : "OPEN WAREHOUSE"}</button>}
+                  {research && view.researchQueue.finishAt > 0 && renderSpeedupTray({ kind: "research" })}
+                  {!research && !warehouse && (trainingType ? renderTrainer(trainingType) : hospital ? <div className="facility-hospital">{renderHospitalControls(view.buildings.hospital.finishAt > 0)}</div> : null)}
                 </>}
               </div>
             </aside>
@@ -915,20 +931,6 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
             return <button key={key} className={researchBranch === key ? "on" : ""} onClick={() => { setResearchBranch(key); setSelectedResearchKey(""); }}><b>{meta.label}</b></button>;
           })}
         </div>
-        {activeEffects.length > 0 && <div className="research-account-effects">
-          <div className="research-account-title"><b>ACTIVE BONUSES</b></div>
-          <div className="research-account-grid">{activeEffects.map(([key]) => {
-            const value = accountModifiers[key];
-            const flat = key === "trainingCapacityBonus" || key === "hospitalCapacityBonus" || key === "marchQueueBonus";
-            const detail = key === "marchQueueBonus"
-              ? `${worldMarchSlots(view)} total World queues`
-              : key === "marchCapacityBonus"
-                ? `${compact(displayTroops(accountMarchCapacity(view)))} current march cap`
-                : flat ? `+${compact(displayTroops(value))}` : `+${(value * 100).toFixed(value * 100 < 10 ? 1 : 0)}%`;
-            return <div key={key}><span><strong>{researchEffectName(key)}</strong><small>{researchEffectTarget(key)}</small></span><b className="mono">{detail}</b></div>;
-          })}</div>
-        </div>}
-
         {selectedTech && renderResearchDetail(selectedTech)}
 
         <div className="research-tree-head">
@@ -977,6 +979,19 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
             })}
           </div>
         </div>
+        {activeEffects.length > 0 && <div className="research-account-effects">
+          <div className="research-account-title"><b>ACTIVE BONUSES</b></div>
+          <div className="research-account-grid">{activeEffects.map(([key]) => {
+            const value = accountModifiers[key];
+            const flat = key === "trainingCapacityBonus" || key === "hospitalCapacityBonus" || key === "marchQueueBonus";
+            const detail = key === "marchQueueBonus"
+              ? `${worldMarchSlots(view)} total World queues`
+              : key === "marchCapacityBonus"
+                ? `${compact(displayTroops(accountMarchCapacity(view)))} current march cap`
+                : flat ? `+${compact(displayTroops(value))}` : `+${(value * 100).toFixed(value * 100 < 10 ? 1 : 0)}%`;
+            return <div key={key}><span><strong>{researchEffectName(key)}</strong><small>{researchEffectTarget(key)}</small></span><b className="mono">{detail}</b></div>;
+          })}</div>
+        </div>}
       </section>
     );
   }

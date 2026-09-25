@@ -485,6 +485,14 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [homeSelected, setHomeSelected] = useState(false);
   const initial = useMemo(() => openLocalWorldSession(address, loadGame(address) || initGame(address), Date.now(), N), [address, N]);
   const [game, setGame] = useState<GameState>(() => initial.game);
+  useEffect(() => {
+    const syncActivity = (event: Event) => {
+      const detail = (event as CustomEvent<{ address: string; game: GameState }>).detail;
+      if (detail?.address === address.toLowerCase()) setGame(detail.game);
+    };
+    window.addEventListener("alliance:game-activity", syncActivity);
+    return () => window.removeEventListener("alliance:game-activity", syncActivity);
+  }, [address]);
   const [session, setSession] = useState<LocalWorldSession>(() => initial.session);
   const gameRef = useRef(initial.game);
   const sessionRef = useRef(initial.session);
@@ -1265,10 +1273,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
               <Tile k="CORE" v={`Lv.${s.keepLevel}`} /><Tile k="WALL" v={`Lv.${s.wallLevel}`} />
               <Tile k="MIGHT" v={compact(s.might)} /><Tile k="WOUNDED" v={compact(s.wounded)} />
             </div>
+            <div style={{ margin: "7px 0 4px", font: "700 6px var(--mono)", letterSpacing: ".13em", color: "#5f8974" }}>UNSAFE RESOURCES</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
               <Tile k="CASH" v={compact(s.resources.cash)} tone="#7fe6b6" /><Tile k="OIL" v={compact(s.resources.oil)} tone="#ffcf8f" /><Tile k="POWER" v={compact(s.resources.power)} tone="#9ad7ff" />
             </div>
-            <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".05em", color: "#4f7a68" }}>Estimate · recon decays. The target was alerted.</div>
+            <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".05em", color: "#4f7a68" }}>Warehouse reserves excluded · recon decays.</div>
           </div>;
         })()}
         <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")} title={detailZoom ? "Civilization signatures resolved" : "Civilization signatures resolve inside Tactical range"}><i className="city" />{detailZoom ? "CIVILIZATIONS" : "CIV SIGNALS · TAC LOCK"}</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>

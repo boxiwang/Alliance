@@ -10,6 +10,7 @@ import {
   NodeTarget,
   resolveCombat,
   resolveGather,
+  resolveScout,
   RivalTarget,
 } from "./expedition";
 
@@ -129,10 +130,19 @@ describe("expedition — combat", () => {
     };
   }
 
+  it("scouting reports only resources above Warehouse safety", () => {
+    const storageLevel = 10;
+    const safe = N.buildings["building.storage"].levels[String(storageLevel)].capacityPerResource;
+    const report = resolveScout(rival({
+      storageLevel,
+      resources: { cash: safe + 500, oil: safe - 1, power: safe + 250 },
+    }), N);
+    expect(report.estimatedLoot).toBe(750);
+  });
+
   it("loot is capped by BOTH attacker carry and unprotected x lootRate", () => {
     const bigStorageLevel = 10;
     const storageCap = N.buildings["building.storage"].levels[String(bigStorageLevel)].capacityPerResource;
-    const protectedFraction = N.buildings["building.storage"].protectedFraction;
     const target = rival({
       keepLevel: 0,
       wallLevel: 0,
@@ -148,7 +158,7 @@ describe("expedition — combat", () => {
 
     // Huge attacker: unprotected x lootRate becomes the binding constraint.
     const hugeAttacker = force({ army: { "10": 100000 } });
-    const unprotected = Math.max(0, storageCap * 5 - storageCap * protectedFraction);
+    const unprotected = Math.max(0, storageCap * 5 - storageCap);
     const hugeResult = resolveCombat(hugeAttacker, target, N);
     expect(hugeResult.loot).toBeCloseTo(unprotected * N.global.combat.lootRate);
     expect(hugeResult.loot).toBeLessThan(carryCapacity(hugeAttacker, N));

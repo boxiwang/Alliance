@@ -13,6 +13,10 @@ export type CommandResult = { state: GameState; ok: boolean; reason?: string };
 
 export function applyCommand(state: GameState, type: string, args: Record<string, unknown>): CommandResult {
   switch (type) {
+    case "session.activity":
+      // player-api projected the state to this command's timestamp; committing
+      // it checkpoints active production without granting any other effect.
+      return { state, ok: true };
     case "build.start": {
       const building = String(args?.building || "");
       if (!BUILDING_ORDER.includes(building as BKey)) return { state, ok: false, reason: "Unknown building" };

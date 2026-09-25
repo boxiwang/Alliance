@@ -21,7 +21,6 @@ export interface RivalTarget {
   troops: Record<TroopKey, Record<string, number>>; // arm -> tier -> count, mirrors GameState.troops
   resources?: Partial<Record<ResKey, number>>;
   storageLevel?: number; // building.storage level backing resources' protection
-  protectedFraction?: number; // override for building.storage.protectedFraction, if provided
   hasAttacked?: boolean; // this rival has made an offensive move already (their own shield is down)
   troopDefenseBonus?: number; // resolved defender-side account/hero snapshot; default 0
   accountModifiers?: Record<string, number>; // completed Academy research snapshot
@@ -155,12 +154,10 @@ export function resolveGather(
 
 function defenderUnprotectedTotal(defender: RivalTarget, numbers: any): number {
   if (!defender.resources) return 0;
-  const protectedFraction = defender.protectedFraction ?? numbers.buildings?.["building.storage"]?.protectedFraction ?? 0;
   const storageCap = defender.storageLevel != null
     ? (buildingRow("storage", defender.storageLevel, numbers)?.capacityPerResource ?? 0)
     : 0;
-  const protectedPerResource = storageCap * protectedFraction;
-  return Object.values(defender.resources).reduce((sum, amount) => sum + Math.max(0, (amount ?? 0) - protectedPerResource), 0);
+  return Object.values(defender.resources).reduce((sum, amount) => sum + Math.max(0, (amount ?? 0) - storageCap), 0);
 }
 
 export function resolveScout(target: ScoutableTarget, numbers: any = getN()): ScoutReport {
@@ -170,7 +167,7 @@ export function resolveScout(target: ScoutableTarget, numbers: any = getN()): Sc
       kind: "rival",
       level: target.keepLevel,
       garrison: sumTroopCounts(target.troops),
-      estimatedLoot: unprotected * (numbers.global.combat.lootRate ?? 0),
+      estimatedLoot: unprotected,
     };
   }
   const rewardTotal = Object.values(target.reward).reduce((sum, amount) => sum + (amount ?? 0), 0);

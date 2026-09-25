@@ -8,6 +8,7 @@ import { verifySession } from "./auth";
 import { handlePlayerApi, type BackendEnv } from "./player-api";
 import { assignOuterRingCoord, type WorldCoord } from "./world-coords";
 import { projectGameJson } from "./economy";
+import { capacity } from "../src/lib/game";
 
 export interface Env extends BackendEnv {
   WORLD_ROOM: DurableObjectNamespace;
@@ -124,6 +125,7 @@ function buildScoutSnapshot(player: PlayerRow, gameJson: string | null | undefin
     return tiers && typeof tiers === "object" ? Object.values(tiers).reduce((s: number, n) => s + num(n), 0) : 0;
   };
   const res = game?.res || {};
+  const safe = game ? capacity(game) : 0;
   const keepLevel = num(game?.buildings?.keep?.lvl) || player.keepLevel || 1;
   return {
     keepLevel,
@@ -131,7 +133,12 @@ function buildScoutSnapshot(player: PlayerRow, gameJson: string | null | undefin
     faction: player.faction || null,
     troops: { army: armTotal("army"), navy: armTotal("navy"), air: armTotal("air") },
     wounded: num(game?.wounded),
-    resources: { cash: num(res.cash), oil: num(res.oil), power: num(res.power) },
+    resources: {
+      cash: Math.max(0, num(res.cash) - safe),
+      oil: Math.max(0, num(res.oil) - safe),
+      power: Math.max(0, num(res.power) - safe),
+    },
+    safePerResource: safe,
     wallLevel: num(game?.buildings?.wall?.lvl),
     // v1 shield estimate: cities under Keep 10 are protected (attack-drops-it is a
     // later refinement). Presence has no PvP-active flag yet.

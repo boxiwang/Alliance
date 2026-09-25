@@ -53,7 +53,7 @@ export const BUILDINGS: Record<BKey, { label: string; emoji: string; produces?: 
   bank:       { label: "Bank",                emoji: "🏦", produces: "cash",  blurb: "Produces Cash over time.", upgradable: true },
   oilwell:    { label: "Oil Well",            emoji: "🛢️", produces: "oil",   blurb: "Produces Oil over time.", upgradable: true },
   powerplant: { label: "Power Plant",         emoji: "⚡", produces: "power", blurb: "Produces Power over time.", upgradable: true },
-  storage:    { label: "Warehouse",           emoji: "📦", blurb: "Raises resource capacity + raid protection.", upgradable: true },
+  storage:    { label: "Warehouse",           emoji: "📦", blurb: "Keeps resources safe from raids.", upgradable: true },
   armyCamp:   { label: "Army Camp",           emoji: "🪖", trains: "army", blurb: "Trains Army units. Its level unlocks higher Army tiers.", upgradable: true },
   navalBase:  { label: "Naval Base",          emoji: "⚓", trains: "navy", blurb: "Trains Navy units. Its level unlocks higher Navy tiers.", upgradable: true },
   airfield:   { label: "Airfield",            emoji: "✈️", trains: "air", blurb: "Trains Air units. Its level unlocks higher Air tiers.", upgradable: true },
@@ -162,6 +162,7 @@ export interface TroopStats {
 
 export const buildQueueSlots = (N as any).global.buildQueueSlots as number;
 export const collectorCapHours = (N as any).global.offline.collectorCapHours as number;
+export const inactivityGraceMinutes = 30;
 export const resourceDisplayMultiplier = (N as any).global.display?.resourceMultiplier ?? 1;
 export const troopDisplayMultiplier = (N as any).global.display?.troopMultiplier ?? 1;
 export function displayResource(value: number): number { return value * resourceDisplayMultiplier; }
@@ -225,7 +226,15 @@ export function effectiveUpgradeTimeSec(s: GameState, k: BKey, targetLvl: number
 export function capacity(s: GameState): number {
   const st = s.buildings.storage;
   const configured = buildingLevelRow("storage", Math.max(1, st.lvl))?.capacityPerResource;
-  return configured ?? 5000; // L1-equivalent cap even before a Warehouse exists
+  return configured ?? 5000; // Safe amount per resource; total balances are uncapped.
+}
+export function unsafeResources(s: GameState): Record<ResKey, number> {
+  const safePerResource = capacity(s);
+  return {
+    cash: Math.max(0, s.res.cash - safePerResource),
+    oil: Math.max(0, s.res.oil - safePerResource),
+    power: Math.max(0, s.res.power - safePerResource),
+  };
 }
 export function prodPerHour(s: GameState): Record<ResKey, number> {
   const out: Record<ResKey, number> = { cash: 0, oil: 0, power: 0 };
@@ -391,12 +400,13 @@ export function canAfford(s: GameState, cost: Partial<Record<ResKey, number>>): 
 // THE tick: advance state to `now` (production, completed upgrades, finished training). Pure.
 export function project(s: GameState, now: number): GameState {
   const ns: GameState = JSON.parse(JSON.stringify(s));
-  // production since lastTick (capped by storage). collectorCap limits offline overflow.
-  const elapsedH = Math.max(0, Math.min((now - ns.lastTick) / 3_600_000, collectorCapHours));
+  // Active play regularly checkpoints lastTick. Once activity stops, the first
+  // 30 minutes are the idle grace period and the following 12 hours are the
+  // offline production window.
+  const elapsedH = Math.max(0, Math.min((now - ns.lastTick) / 3_600_000, collectorCapHours + inactivityGraceMinutes / 60));
   const rate = prodPerHour(ns);
-  const cap = capacity(ns);
   RES_ORDER.forEach((r) => {
-    ns.res[r] = Math.min(cap, Math.floor(ns.res[r] + rate[r] * elapsedH));
+    ns.res[r] = Math.floor(ns.res[r] + rate[r] * elapsedH);
   });
   // completed building upgrades
   BUILDING_ORDER.forEach((k) => {

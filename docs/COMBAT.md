@@ -43,8 +43,8 @@ the "shielded until keep 10 unless you attack" protection model.
   capacity** (now used — attacker gets *some* wounded, §H).
 - **Defender**: garrison → defense power, **plus the defender edge** (wall
   integrity / home-ground multiplier → attacker needs more power to win; wall can
-  be `burning` = reduced); might; resources with **protectedFraction 0.25** (75%
-  lootable); defender hospital capacity.
+  be `burning` = reduced); might; resources above the Warehouse's
+  **capacityPerResource** safety line; defender hospital capacity.
 
 ## D. Possible OUTCOMES (results)
 ### Attacker

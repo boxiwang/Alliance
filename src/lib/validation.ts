@@ -213,27 +213,6 @@ export function validateNumbers(numbers: any): ValidationIssue[] {
     }
   }
 
-  for (let level = 2; level <= maxLevel; level += 1) {
-    const previousStorage = Math.max(1, level - 1);
-    const previousCapacity = levelRow(numbers, "building.storage", previousStorage)?.capacityPerResource ?? 0;
-    const storageCost = levelRow(numbers, "building.storage", level)?.cost ?? {};
-    for (const resource of RESOURCE_KEYS) {
-      if ((storageCost[resource] ?? 0) > previousCapacity) {
-        push("error", `buildings.building.storage.levels.${level}.cost.${resource}`, `Exceeds the previous Warehouse capacity (${previousCapacity}).`);
-      }
-    }
-  }
-
-  for (let target = 2; target <= maxLevel; target += 1) {
-    const availableCapacity = levelRow(numbers, "building.storage", Math.max(1, target - 1))?.capacityPerResource ?? 0;
-    const keepCost = levelRow(numbers, "building.keep", target)?.cost ?? {};
-    for (const resource of RESOURCE_KEYS) {
-      if ((keepCost[resource] ?? 0) > availableCapacity) {
-        push("error", `buildings.building.keep.levels.${target}.cost.${resource}`, `Exceeds the required Warehouse capacity (${availableCapacity}).`);
-      }
-    }
-  }
-
   const options = { sessionsPerDay: 3, queueUptime: 0.85 };
   const level10 = simulateProgression(numbers, { ...options, targetLevel: 10 });
   const level30 = simulateProgression(numbers, { ...options, targetLevel: 30 });

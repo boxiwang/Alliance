@@ -20,13 +20,14 @@ import AlphaFeedback from "./AlphaFeedback";
 import CosmicBackdrop from "./CosmicBackdrop";
 import { hasLocalGm, localGmRequested, registerOwnerGm } from "./lib/gm";
 import { loadGame, saveGame } from "./lib/gamestore";
+import { project } from "./lib/game";
 import { verifyAllianceHolding } from "./lib/alliance";
 import { firebaseAuth, firebaseConfigured } from "./lib/firebase-client";
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
 import { loadPlayerAccount, savePlayerAccount } from "./lib/player-account";
 import { playSfx, preloadSfx, SFX_LOGIN_HOVER, SFX_LOGIN_HOVER_VOLUME, SFX_TAB_SWITCH, SFX_TAB_SWITCH_VOLUME } from "./lib/sfx";
 import { setErrorReportingAddress } from "./lib/error-reporting";
-import { authenticateGoogle, authenticateGuest, authenticateWallet, clearBackendSession, loadBackendSession, loadLastBackendSession, mirrorPlayerState, restorePlayerState, resumeBackendSession, trackEvents, updatePlayerName } from "./lib/backend";
+import { authenticateGoogle, authenticateGuest, authenticateWallet, clearBackendSession, loadBackendSession, loadLastBackendSession, mirrorPlayerState, restorePlayerState, resumeBackendSession, sendGameCommand, trackEvents, updatePlayerName } from "./lib/backend";
 
 type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
 type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
@@ -118,6 +119,34 @@ function useTabSwitchSfx(address: string, view: string) {
   }, [view, address]);
 }
 
+function useResourceActivity(address: string, active: boolean) {
+  useEffect(() => {
+    if (!address || !active) return;
+    let lastCheckpoint = 0;
+    const checkpoint = () => {
+      const now = Date.now();
+      if (now - lastCheckpoint < 60_000) return;
+      lastCheckpoint = now;
+      const current = loadGame(address);
+      if (current) {
+        const next = project(current, now);
+        saveGame(next);
+        window.dispatchEvent(new CustomEvent("alliance:game-activity", { detail: { address: address.toLowerCase(), game: next } }));
+      }
+      void sendGameCommand(address, "session.activity", {}, `activity:${crypto.randomUUID()}`).catch(() => {});
+    };
+    checkpoint();
+    window.addEventListener("pointerdown", checkpoint, { passive: true });
+    window.addEventListener("pointermove", checkpoint, { passive: true });
+    window.addEventListener("keydown", checkpoint);
+    return () => {
+      window.removeEventListener("pointerdown", checkpoint);
+      window.removeEventListener("pointermove", checkpoint);
+      window.removeEventListener("keydown", checkpoint);
+    };
+  }, [active, address]);
+}
+
 // Guest / Google players have no wallet, but the whole app is keyed on a 0x
 // address, so derive a stable synthetic one from their id. FNV-1a expanded to 40 hex.
 function synthAddress(seed: string): string {
@@ -139,6 +168,7 @@ function DevGameShell({ initialView, slot, gm }: { initialView: MainStage; slot:
   };
   const [view, setView] = useState<MainStage>(initialView);
   useTabSwitchSfx(address, view);
+  useResourceActivity(address, true);
   const [profile, setProfile] = useState<Profile>(() => loadProfile(address) || fallback);
   const gmHoldings = gm ? [{ address: `0x${slot.padStart(40, "a").slice(-40)}`, name: "ORBT", symbol: "ORBT", decimals: 18, raw: "1000000000000000000", type: "ERC-20", exchangeRate: null, marketCap: null, iconUrl: null, reputation: null }] : [];
 
@@ -199,6 +229,7 @@ function DesktopApp() {
   const [sessionRestorePending, setSessionRestorePending] = useState(true);
   const loginAttemptRef = useRef(0);
   useTabSwitchSfx(address, stage);
+  useResourceActivity(address, MAIN_STAGES.includes(stage as MainStage));
 
   useEffect(() => {
     preloadSfx([SFX_LOGIN_HOVER, SFX_TAB_SWITCH]);

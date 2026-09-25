@@ -98,7 +98,10 @@ function AnimatedResource({ resource, value, rate, cap, quiet }: { resource: Res
   const frame = useRef(0);
   const [displayed, setDisplayed] = useState(value);
   const [gain, setGain] = useState<{ amount: number; id: number; full: boolean } | null>(null);
-  const full = Number.isFinite(cap) && value >= cap;
+  // Warehouse capacity is protection, not a wallet ceiling. Balances above it
+  // remain valid and continue producing; the excess is simply raidable.
+  const full = false;
+  void cap;
 
   useEffect(() => {
     const from = previous.current;

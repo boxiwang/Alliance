@@ -23,7 +23,7 @@ Building-specific per-level fields:
 |---|---|---|
 | `building.keep` (Townhall) | start | — (gates all; L10 lifts shield; → L30) |
 | `building.bank` / `oilwell` / `powerplant` | 1 | **productionPerHour** |
-| `building.storage` (Warehouse) | 2 | **capacityPerResource**, **protectedFraction** (raid protection) |
+| `building.storage` (Warehouse) | 2 | **capacityPerResource** (safe amount of each resource; excess remains spendable but can be raided) |
 | `building.armyCamp` | 1 | Army **troopCapacity**, **trainSpeedMult**, **trainQueueSize**; its level unlocks Army tiers |
 | `building.navalBase` | 2 | Navy **troopCapacity**, **trainSpeedMult**, **trainQueueSize**; its level unlocks Navy tiers |
 | `building.airfield` | 4 | Air **troopCapacity**, **trainSpeedMult**, **trainQueueSize**; its level unlocks Air tiers |

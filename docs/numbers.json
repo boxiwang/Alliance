@@ -1287,7 +1287,6 @@
     "building.storage": {
       "unlockAtKeep": 2,
       "maxLevel": 30,
-      "protectedFraction": 0.35,
       "levels": {
         "1": {
           "cost": {

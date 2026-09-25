@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BUILDING_ORDER,
+  capacity,
   GameState,
   missingTownhallPrerequisites,
   might,
   mightBreakdown,
   maxTroopsForType,
   project,
+  prodPerHour,
   promotionBatchCost,
   promotionQueueSize,
   startPromote,
@@ -16,6 +18,7 @@ import {
   totalTroops,
   trainQueueSize,
   troopStats,
+  unsafeResources,
 } from "./game";
 import { initGame, migrateGame } from "./gamestore";
 
@@ -75,6 +78,22 @@ describe("solo game progression", () => {
     expect(result.ok).toBe(true);
     expect(result.state.buildings.storage.lvl).toBe(3);
     expect(result.state.buildings.storage.finishAt).toBe(0);
+  });
+
+  it("keeps producing above Warehouse safety and caps an inactive stretch at 12.5 hours", () => {
+    const game = richGame();
+    game.buildings.bank.lvl = 1;
+    game.buildings.storage.lvl = 1;
+    game.res.cash = capacity(game) * 2;
+    const startingCash = game.res.cash;
+    const hourly = prodPerHour(game).cash;
+
+    const oneHour = project(game, game.lastTick + 3_600_000);
+    expect(oneHour.res.cash).toBe(startingCash + hourly);
+    expect(unsafeResources(oneHour).cash).toBe(oneHour.res.cash - capacity(oneHour));
+
+    const longAbsence = project(game, game.lastTick + 100 * 3_600_000);
+    expect(longAbsence.res.cash).toBe(startingCash + Math.floor(hourly * 12.5));
   });
 
   it("unlocks troop tiers from the matching training building, not Townhall", () => {

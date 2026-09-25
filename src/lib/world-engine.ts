@@ -168,7 +168,6 @@ export interface CityEntity extends EntityBase {
   wall: { value: number; max: number; burningUntil: number; relocateAt: number };
   garrison: TroopManifest;
   resources: ResourceWallet;
-  protectedFraction: number;
 }
 
 export interface ResourceEntity extends EntityBase {
@@ -350,7 +349,6 @@ export interface SpawnPlayerInput {
   troops?: Partial<TroopManifest>;
   woundedTroops?: Partial<TroopManifest>;
   resources?: Partial<ResourceWallet>;
-  protectedFraction?: number;
   shieldDurationSec?: number;
   wallLevel?: number;
   hospitalLevel?: number;
@@ -542,7 +540,7 @@ function spawnPlayerMutable(world: HeadlessWorld, input: SpawnPlayerInput, now: 
     hasAttacked: input.hasAttacked ?? false, wall: {
       value: world.config.baseWallIntegrity, max: world.config.baseWallIntegrity, burningUntil: 0, relocateAt: 0,
     },
-    garrison: clone(troops), resources: clone(resources), protectedFraction: input.protectedFraction ?? .25,
+    garrison: clone(troops), resources: clone(resources),
   };
   world.entities[cityId] = city;
   world.players[input.id] = {
@@ -1317,11 +1315,17 @@ export function dispatchMarch(
   return { ok: true, world, march: clone(march), duplicate: false };
 }
 
-function allocateLoot(city: CityEntity, total: number): Partial<ResourceWallet> {
+function warehouseSafePerResource(city: CityEntity, numbers: any): number {
+  const level = Math.max(1, city.storageLevel || 1);
+  return Math.max(0, Number(numbers.buildings?.["building.storage"]?.levels?.[String(level)]?.capacityPerResource) || 0);
+}
+
+function allocateLoot(city: CityEntity, total: number, numbers: any): Partial<ResourceWallet> {
+  const safe = warehouseSafePerResource(city, numbers);
   const available: ResourceWallet = {
-    cash: Math.floor(city.resources.cash * (1 - city.protectedFraction)),
-    oil: Math.floor(city.resources.oil * (1 - city.protectedFraction)),
-    power: Math.floor(city.resources.power * (1 - city.protectedFraction)),
+    cash: Math.max(0, Math.floor(city.resources.cash - safe)),
+    oil: Math.max(0, Math.floor(city.resources.oil - safe)),
+    power: Math.max(0, Math.floor(city.resources.power - safe)),
   };
   const availableTotal = available.cash + available.oil + available.power;
   const wanted = Math.min(Math.max(0, Math.floor(total)), availableTotal);
@@ -1343,7 +1347,7 @@ function arriveScout(world: HeadlessWorld, march: HeadlessMarch, target: CityEnt
     ? resolveScout({
       kind: "rival", keepLevel: target.townhallLevel, wallLevel: target.wallLevel,
       hospitalLevel: target.hospitalLevel, storageLevel: target.storageLevel,
-      troops: target.garrison, resources: target.resources, protectedFraction: target.protectedFraction,
+      troops: target.garrison, resources: target.resources,
       hasAttacked: target.hasAttacked,
     }, numbers)
     : resolveScout({ kind: "monster", level: target.level, power: target.power, reward: target.reward }, numbers);
@@ -1351,14 +1355,13 @@ function arriveScout(world: HeadlessWorld, march: HeadlessMarch, target: CityEnt
   // Rich recon for a rival city: standing garrison stays in the city (troops away gathering or
   // attacking are already removed from `garrison`), its Might, a per-tier breakdown, and the
   // lootable amount of EACH resource so the attacker can judge composition and payoff.
-  const lootRate = Number(numbers.global?.combat?.lootRate) || 0;
   const snapshot = target.kind === "city"
     ? {
       ...payload, might: target.might, manifest: clone(target.garrison),
       loot: {
-        cash: Math.floor(target.resources.cash * (1 - target.protectedFraction) * lootRate),
-        oil: Math.floor(target.resources.oil * (1 - target.protectedFraction) * lootRate),
-        power: Math.floor(target.resources.power * (1 - target.protectedFraction) * lootRate),
+        cash: Math.max(0, Math.floor(target.resources.cash - warehouseSafePerResource(target, numbers))),
+        oil: Math.max(0, Math.floor(target.resources.oil - warehouseSafePerResource(target, numbers))),
+        power: Math.max(0, Math.floor(target.resources.power - warehouseSafePerResource(target, numbers))),
       },
     }
     : payload;
@@ -1453,7 +1456,7 @@ function arriveCity(world: HeadlessWorld, march: HeadlessMarch, target: CityEnti
   const combat = resolveCombat({ troops: march.force }, {
     kind: "rival", keepLevel: target.townhallLevel, wallLevel: target.wallLevel,
     hospitalLevel: target.hospitalLevel, storageLevel: target.storageLevel, troops: target.garrison,
-    resources: target.resources, protectedFraction: target.protectedFraction, hasAttacked: target.hasAttacked,
+    resources: target.resources, hasAttacked: target.hasAttacked,
     troopDefenseBonus: 0,
     accountModifiers: defender?.accountModifiers,
     currentWounded: defender?.wounded,
@@ -1471,7 +1474,7 @@ function arriveCity(world: HeadlessWorld, march: HeadlessMarch, target: CityEnti
   }
   march.outcome = combat.win ? "victory" : "defeat";
   if (combat.win) {
-    march.cargo = allocateLoot(target, combat.loot);
+    march.cargo = allocateLoot(target, combat.loot, numbers);
     if (defender) (Object.keys(march.cargo) as ResKey[]).forEach((resource) => {
       defender.resources[resource] = target.resources[resource];
     });
