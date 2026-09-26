@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import type { Point } from "./lib/world-engine";
 import type { PlanetHaloId, PlanetOrbitId, PlanetSkinId } from "./lib/player-account";
 import { PLANET_CORE_GLSL } from "./planet-core-shared";
@@ -16,6 +16,8 @@ export interface WorldVisualCity {
   /** Synthetic GM-only population; real civilizations always win a detail slot. */
   probe?: boolean;
 }
+
+export type WorldViewport = { x: number; y: number; width: number; height: number };
 
 export const WORLD_VISUAL_BUDGET = {
   strategic: 800,
@@ -172,6 +174,7 @@ attribute float aSeed;
 attribute float aFlags;
 attribute float aLod;
 uniform vec2 uResolution;
+uniform vec2 uPan;
 varying vec2 vP;
 varying float vRadius;
 varying float vKind;
@@ -181,7 +184,7 @@ varying float vSeed;
 varying float vFlags;
 varying float vLod;
 void main(){
-  vec2 pixel = aCenter + aCorner * aRadius * 3.6;
+  vec2 pixel = aCenter + uPan + aCorner * aRadius * 3.6;
   vec2 clip = vec2(pixel.x / uResolution.x * 2.0 - 1.0, 1.0 - pixel.y / uResolution.y * 2.0);
   gl_Position = vec4(clip, 0.0, 1.0);
   vP = aCorner * 3.6;
@@ -485,9 +488,9 @@ function compile(gl: WebGLRenderingContext, type: number, source: string): WebGL
 }
 
 export default function WorldVisualLayer({
-  svgRef, cities, wormhole, zoom, onReadyChange,
+  viewportRef, cities, wormhole, zoom, onReadyChange,
 }: {
-  svgRef: React.RefObject<SVGSVGElement>;
+  viewportRef: RefObject<WorldViewport>;
   cities: WorldVisualCity[];
   wormhole: Point;
   zoom: number;
@@ -495,7 +498,7 @@ export default function WorldVisualLayer({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const latest = useRef({ cities, wormhole, zoom });
-  latest.current = { cities, wormhole, zoom };
+  useLayoutEffect(() => { latest.current = { cities, wormhole, zoom }; }, [cities, wormhole, zoom]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -535,6 +538,7 @@ export default function WorldVisualLayer({
       gl.vertexAttribPointer(location, size, gl.FLOAT, false, STRIDE * 4, offset * 4);
     }
     const uResolution = gl.getUniformLocation(program, "uResolution");
+    const uPan = gl.getUniformLocation(program, "uPan");
     const uTime = gl.getUniformLocation(program, "uTime");
     const uMotion = gl.getUniformLocation(program, "uMotion");
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -550,7 +554,7 @@ export default function WorldVisualLayer({
     let statsStartedAt = lastFrame;
     let cachedSource: WorldVisualCity[] | null = null;
     let cachedZoom = -1;
-    let cachedTransform = [NaN, NaN, NaN, NaN, NaN, NaN];
+    let cachedViewport = [NaN, NaN, NaN, NaN];
     let cachedWidth = -1;
     let cachedHeight = -1;
     let vertexCount = 0;
@@ -575,10 +579,9 @@ export default function WorldVisualLayer({
     const draw = (time: number) => {
       raf = requestAnimationFrame(draw);
       if (document.hidden) return;
-      const svg = svgRef.current;
       const rect = canvas.getBoundingClientRect();
-      const matrix = svg?.getScreenCTM();
-      if (!svg || !matrix || rect.width < 2 || rect.height < 2) return;
+      const liveViewport = viewportRef.current;
+      if (!liveViewport || rect.width < 2 || rect.height < 2) return;
 
       const { cities: source, wormhole: hole, zoom: currentZoom } = latest.current;
       const frameGap = Math.min(100, time - lastFrame); lastFrame = time;
@@ -601,29 +604,34 @@ export default function WorldVisualLayer({
       const deviceHeight = Math.max(2, Math.round(rect.height * dpr));
       if (canvas.width !== deviceWidth || canvas.height !== deviceHeight) { canvas.width = deviceWidth; canvas.height = deviceHeight; }
 
-      const transform = [matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f];
+      const viewportSnapshot = [liveViewport.x, liveViewport.y, liveViewport.width, liveViewport.height];
+      const scale = Math.min(rect.width / liveViewport.width, rect.height / liveViewport.height);
+      const panX = Number.isFinite(cachedViewport[0]) ? (cachedViewport[0] - liveViewport.x) * scale : 0;
+      const panY = Number.isFinite(cachedViewport[1]) ? (cachedViewport[1] - liveViewport.y) * scale : 0;
       const geometryChanged = source !== cachedSource || currentZoom !== cachedZoom || rect.width !== cachedWidth || rect.height !== cachedHeight
-        || transform.some((value, index) => Math.abs(value - cachedTransform[index]) > .01);
+        || !Number.isFinite(cachedViewport[0])
+        || Math.abs(liveViewport.width - cachedViewport[2]) > .001 || Math.abs(liveViewport.height - cachedViewport[3]) > .001
+        // Keep enough overscan for a full ordinary gesture. Re-plan only after
+        // crossing half a screen; ordinary pan frames become one cheap uniform
+        // update instead of a buffer upload that stalls the GPU pipeline.
+        || Math.abs(panX) > rect.width * .5 || Math.abs(panY) > rect.height * .5;
       if (geometryChanged) {
-        cachedSource = source; cachedZoom = currentZoom; cachedWidth = rect.width; cachedHeight = rect.height; cachedTransform = transform;
-        // Convert the canvas viewport back into world coordinates for the pure
-        // population planner. SVG can be letterboxed, so all four corners matter.
-        const inverse = matrix.inverse();
-        const screenCorners = [
-          [rect.left, rect.top], [rect.right, rect.top], [rect.left, rect.bottom], [rect.right, rect.bottom],
-        ];
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        screenCorners.forEach(([x, y]) => {
-          const wx = inverse.a * x + inverse.c * y + inverse.e;
-          const wy = inverse.b * x + inverse.d * y + inverse.f;
-          minX = Math.min(minX, wx); maxX = Math.max(maxX, wx); minY = Math.min(minY, wy); maxY = Math.max(maxY, wy);
-        });
+        cachedSource = source; cachedZoom = currentZoom; cachedWidth = rect.width; cachedHeight = rect.height; cachedViewport = viewportSnapshot;
+        // Match SVG's default xMidYMid/meet projection directly. Reading a
+        // second layer's CTM let the GPU renderer trail the SVG compositor by
+        // one frame during a fast trackpad pan.
+        const offsetX = (rect.width - liveViewport.width * scale) / 2;
+        const offsetY = (rect.height - liveViewport.height * scale) / 2;
+        const minX = liveViewport.x, minY = liveViewport.y;
+        const maxX = liveViewport.x + liveViewport.width, maxY = liveViewport.y + liveViewport.height;
         // The 3.6x shader quad includes crowns, rings and orbital particles.
         // Expand the planner band with the largest inspectable body so those
         // effects do not pop or clip while a large planet enters the viewport.
         const visualExtent = Math.max(36, worldVisualBodyRadius(currentZoom, true) * 3.6);
-        const margin = visualExtent / Math.max(.001, Math.hypot(matrix.a, matrix.b));
-        const planned = planWorldVisualTiers(source, { minX: minX - margin, minY: minY - margin, maxX: maxX + margin, maxY: maxY + margin }, currentZoom);
+        const margin = visualExtent / Math.max(.001, scale);
+        const overscanX = liveViewport.width * .55 + margin;
+        const overscanY = liveViewport.height * .55 + margin;
+        const planned = planWorldVisualTiers(source, { minX: minX - overscanX, minY: minY - overscanY, maxX: maxX + overscanX, maxY: maxY + overscanY }, currentZoom);
         const required = (planned.detailed.length + planned.beacons.length + 1) * STRIDE * 6;
         if (data.length < required) data = new Float32Array(2 ** Math.ceil(Math.log2(required)));
         const lod = currentZoom < 1.45 ? 0 : currentZoom < 3 ? 1 : 2;
@@ -634,12 +642,13 @@ export default function WorldVisualLayer({
         visibleCount = planned.visibleCount;
         landmarkDrawn = 0;
         const mapPoint = (point: Point) => ({
-          x: matrix.a * point.x + matrix.c * point.y + matrix.e - rect.left,
-          y: matrix.b * point.x + matrix.d * point.y + matrix.f - rect.top,
+          x: offsetX + (point.x - liveViewport.x) * scale,
+          y: offsetY + (point.y - liveViewport.y) * scale,
         });
+        const bufferPadX = rect.width * .55, bufferPadY = rect.height * .55;
         const holeScreen = mapPoint(hole);
         const holeRadius = worldWormholeRadius(currentZoom);
-        if (holeScreen.x + holeRadius * 3.6 > 0 && holeScreen.x - holeRadius * 3.6 < rect.width && holeScreen.y + holeRadius * 3.6 > 0 && holeScreen.y - holeRadius * 3.6 < rect.height) {
+        if (holeScreen.x + holeRadius * 3.6 > -bufferPadX && holeScreen.x - holeRadius * 3.6 < rect.width + bufferPadX && holeScreen.y + holeRadius * 3.6 > -bufferPadY && holeScreen.y - holeRadius * 3.6 < rect.height + bufferPadY) {
           offset = writeQuad(offset, holeScreen.x, holeScreen.y, holeRadius, 6, 0, 0, .731, 0, lod);
           landmarkDrawn = 1;
         }
@@ -648,14 +657,14 @@ export default function WorldVisualLayer({
         for (const city of planned.beacons) {
           const screen = mapPoint(city.position);
           const radius = city.selected ? 3.2 : 2.7;
-          if (screen.x + radius * 3.6 < 0 || screen.x - radius * 3.6 > rect.width || screen.y + radius * 3.6 < 0 || screen.y - radius * 3.6 > rect.height) continue;
+          if (screen.x + radius * 3.6 < -bufferPadX || screen.x - radius * 3.6 > rect.width + bufferPadX || screen.y + radius * 3.6 < -bufferPadY || screen.y - radius * 3.6 > rect.height + bufferPadY) continue;
           offset = writeQuad(offset, screen.x, screen.y, radius, SKIN_INDEX[city.skin] ?? 0, city.orbit ? ORBIT_INDEX[city.orbit] : -1, city.halo ? HALO_INDEX[city.halo] : -1, stableSeed(city.id), 0, -1);
           beaconDrawn += 1;
         }
         for (const city of planned.detailed) {
           const screen = mapPoint(city.position);
           const radius = worldVisualBodyRadius(currentZoom, city.own, city.selected);
-          if (screen.x + radius * 3.6 < 0 || screen.x - radius * 3.6 > rect.width || screen.y + radius * 3.6 < 0 || screen.y - radius * 3.6 > rect.height) continue;
+          if (screen.x + radius * 3.6 < -bufferPadX || screen.x - radius * 3.6 > rect.width + bufferPadX || screen.y + radius * 3.6 < -bufferPadY || screen.y - radius * 3.6 > rect.height + bufferPadY) continue;
           const flags = (city.own ? 1 : 0) + (city.selected ? 2 : 0) + (city.burning ? 4 : 0);
           offset = writeQuad(offset, screen.x, screen.y, radius, SKIN_INDEX[city.skin] ?? 0, city.orbit ? ORBIT_INDEX[city.orbit] : -1, city.halo ? HALO_INDEX[city.halo] : -1, stableSeed(city.id), flags, lod);
           detailedDrawn += 1;
@@ -671,6 +680,10 @@ export default function WorldVisualLayer({
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.useProgram(program);
       gl.uniform2f(uResolution, rect.width, rect.height);
+      gl.uniform2f(uPan,
+        (cachedViewport[0] - liveViewport.x) * scale,
+        (cachedViewport[1] - liveViewport.y) * scale,
+      );
       gl.uniform1f(uTime, time / 1000);
       gl.uniform1f(uMotion, reducedMotion ? 0 : 1);
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -706,7 +719,7 @@ export default function WorldVisualLayer({
       gl.deleteBuffer(buffer);
       gl.deleteProgram(program);
     };
-  }, [svgRef, onReadyChange]);
+  }, [viewportRef, onReadyChange]);
 
   return <canvas ref={canvasRef} className="world-visual-layer" aria-label="High fidelity civilization and Wormhole renderer" />;
 }

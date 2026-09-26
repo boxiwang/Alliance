@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Profile } from "./lib/profile";
 import {
   GameState, RES, RES_ORDER, TROOP_ORDER, TROOPS_META, TroopKey,
@@ -22,7 +22,7 @@ import GameNav from "./GameNav";
 import MiniComms from "./MiniComms";
 import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
-import WorldVisualLayer, { createWorldVisualStress, worldVisualBodyRadius, worldWormholeRadius, type WorldVisualCity } from "./WorldVisualLayer";
+import WorldVisualLayer, { createWorldVisualStress, worldVisualBodyRadius, worldWormholeRadius, type WorldViewport, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
 import WorldMarchLayer from "./WorldMarchLayer";
 import { useGraphicsQuality } from "./useGraphicsQuality";
@@ -61,6 +61,7 @@ type SignalCluster = { id: string; kind: "resource" | "monster"; position: Point
 export const WORLD_MIN_ZOOM = 1;
 export const WORLD_MAX_ZOOM = 16;
 export const WORLD_TACTICAL_ZOOM = 3;
+const WORLD_PAN_OVERSCAN = 1.65;
 
 /** Rival civilizations only resolve inside the Tactical sensor envelope. */
 export function worldTargetObservable(kind: "resource" | "monster" | "city", zoom: number): boolean {
@@ -581,11 +582,12 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const playerCity = session.world.entities[session.world.players[session.playerId].cityId] as CityEntity;
   const [camera, setCamera] = useState<Point>(() => ({ ...playerCity.position }));
   const svgRef = useRef<SVGSVGElement>(null);
+  const overlayRef = useRef<SVGSVGElement>(null);
   const [mapPx, setMapPx] = useState({ w: 1, h: 1 });
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
-    const measure = () => { const r = el.getBoundingClientRect(); if (r.width && r.height) setMapPx({ w: r.width, h: r.height }); };
+    const measure = () => { if (el.clientWidth && el.clientHeight) setMapPx({ w: el.clientWidth, h: el.clientHeight }); };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -596,10 +598,6 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // when so, we hide the SVG skin underneath to avoid a doubled halo.
   const [voidShaderActive, setVoidShaderActive] = useState(false);
   const drag = useRef<{ x: number; y: number; camera: Point; moved: boolean } | null>(null);
-  // Drag coalescing: a trackpad fires pointermove far faster than the screen
-  // refreshes. We stash the latest target camera and apply at most once per
-  // animation frame, so a drag re-renders ~60x/s instead of 120–200x/s.
-  const dragRaf = useRef<number | null>(null);
   const pendingCamera = useRef<Point | null>(null);
   const dispatchSeq = useRef(0);
   const seenReportCount = useRef(initial.session.world.players[initial.session.playerId].reportIds.length);
@@ -695,8 +693,6 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   useEffect(() => {
     try { localStorage.setItem(`ruglands:world-bookmarks:${address.toLowerCase()}`, JSON.stringify(bookmarks)); } catch {}
   }, [address, bookmarks]);
-  useEffect(() => () => { if (dragRaf.current != null) cancelAnimationFrame(dragRaf.current); }, []);
-
   const world = session.world;
   const viewGame = useMemo(() => project(game, now), [game, now]);
   const targets = useMemo(() => Object.values(world.entities).filter((entity): entity is SelectableEntity => entity.kind === "resource" || entity.kind === "monster" || (entity.kind === "city" && entity.ownerId !== session.playerId)), [world.entities, session.playerId]);
@@ -721,7 +717,18 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // the rim must still be able to occupy the true visual center of the screen.
   const viewX = camera.x - viewport.width / 2;
   const viewY = camera.y - viewport.height / 2;
-  const viewBox = `${viewX} ${viewY} ${viewport.width} ${viewport.height}`;
+  const renderViewBox = `${camera.x - viewport.width * WORLD_PAN_OVERSCAN / 2} ${camera.y - viewport.height * WORLD_PAN_OVERSCAN / 2} ${viewport.width * WORLD_PAN_OVERSCAN} ${viewport.height * WORLD_PAN_OVERSCAN}`;
+  // All visual engines consume one live camera snapshot. During a pan the SVG
+  // planes use a composited transform while WebGL/Canvas read this snapshot;
+  // React state and SVG viewBoxes commit once on release. This avoids rebuilding
+  // the full map 60–200 times/second and keeps every layer on the same camera.
+  const liveViewportRef = useRef<WorldViewport>({ x: viewX, y: viewY, width: viewport.width, height: viewport.height });
+  useLayoutEffect(() => {
+    liveViewportRef.current = { x: viewX, y: viewY, width: viewport.width, height: viewport.height };
+    const restingTransform = `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})`;
+    if (svgRef.current) svgRef.current.style.transform = restingTransform;
+    if (overlayRef.current) overlayRef.current.style.transform = restingTransform;
+  }, [viewX, viewY, viewport.width, viewport.height]);
   const center = worldCenter(world.config);
   const worldRadius = worldPlayableRadius(world.config);
   const player = world.players[session.playerId];
@@ -899,8 +906,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const mapTargets = useMemo(() => {
     if (strategicZoom) return null;
     const cx = cullQX * cullCell, cy = cullQY * cullCell;
-    const minX = cx - viewport.width * 1.5, maxX = cx + viewport.width * 1.5;
-    const minY = cy - viewport.height * 1.5, maxY = cy + viewport.height * 1.5;
+    // One visible screen plus a measured gesture margin. The old 3x band put
+    // 200–300 richly styled SVG nodesets in Safari's viewBox repaint path even
+    // though most were two screens away; that was the main Tactical pan stall.
+    const minX = cx - viewport.width * .82, maxX = cx + viewport.width * .82;
+    const minY = cy - viewport.height * .82, maxY = cy + viewport.height * .82;
     return filteredTargets.filter((entity) => entity.position.x >= minX && entity.position.x <= maxX && entity.position.y >= minY && entity.position.y <= maxY)
       .map((entity) => {
         const color = entityColor(entity); const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id; const verified = entity.kind === "resource" || scoutedTargetIds.has(entity.id);
@@ -1119,24 +1129,39 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     if (result.error) { setMessage("That fleet can no longer be recalled."); return; }
     commit(result); setMessage("Fleet recalled. It is returning along its traveled route.");
   }
-  function flushCamera() {
-    dragRaf.current = null;
-    if (pendingCamera.current) { setCamera(pendingCamera.current); pendingCamera.current = null; }
-  }
   function pointerDown(event: React.PointerEvent<SVGSVGElement>) { drag.current = { x: event.clientX, y: event.clientY, camera, moved: false }; event.currentTarget.setPointerCapture(event.pointerId); }
   function pointerMove(event: React.PointerEvent<SVGSVGElement>) {
     if (!drag.current) return;
     if (!drag.current.moved && Math.hypot(event.clientX - drag.current.x, event.clientY - drag.current.y) > 3) drag.current.moved = true;
+    if (!drag.current.moved) return;
     const scale = viewport.width / Math.max(1, event.currentTarget.clientWidth);
-    pendingCamera.current = {
+    const nextCamera = {
       x: Math.max(0, Math.min(world.config.width, drag.current.camera.x - (event.clientX - drag.current.x) * scale)),
       y: Math.max(0, Math.min(world.config.height, drag.current.camera.y - (event.clientY - drag.current.y) * scale)),
     };
-    if (dragRaf.current == null) dragRaf.current = requestAnimationFrame(flushCamera);
+    pendingCamera.current = nextCamera;
+    const nextViewport = {
+      x: nextCamera.x - viewport.width / 2,
+      y: nextCamera.y - viewport.height / 2,
+      width: viewport.width,
+      height: viewport.height,
+    };
+    liveViewportRef.current = nextViewport;
+    // Composite an already-rasterized, overscanned SVG during the gesture.
+    // Updating viewBox here forces Safari to repaint thousands of SVG nodes and
+    // is the direct source of the black flash. WebGL/Canvas still use the live
+    // camera above, so planets, fleets and strikes stay locked to the grid.
+    const panX = event.clientX - drag.current.x;
+    const panY = event.clientY - drag.current.y;
+    const liveTransform = `translate3d(${panX}px,${panY}px,0) scale(${WORLD_PAN_OVERSCAN})`;
+    if (svgRef.current) svgRef.current.style.transform = liveTransform;
+    if (overlayRef.current) overlayRef.current.style.transform = liveTransform;
   }
   function pointerUp(event: React.PointerEvent<SVGSVGElement>) {
     const state = drag.current; drag.current = null;
-    if (dragRaf.current != null) { cancelAnimationFrame(dragRaf.current); flushCamera(); }
+    const committedCamera = pendingCamera.current;
+    pendingCamera.current = null;
+    if (state?.moved && committedCamera) setCamera(committedCamera);
     // A press with no drag on empty space = inspect that tile's coordinate (Kingshot-style).
     if (!state || state.moved) return;
     const svg = event.currentTarget; const ctm = svg.getScreenCTM(); if (!ctm) return;
@@ -1145,6 +1170,12 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const tx = Math.max(0, Math.min(world.config.width - 1, Math.floor(local.x)));
     const ty = Math.max(0, Math.min(world.config.height - 1, Math.floor(local.y)));
     setTileMark({ x: tx, y: ty }); setSelectedId(null);
+  }
+  function pointerCancel() {
+    const committedCamera = pendingCamera.current;
+    drag.current = null;
+    pendingCamera.current = null;
+    if (committedCamera) setCamera(committedCamera);
   }
 
   return <section className="world world-crypto world-cosmos">
@@ -1178,7 +1209,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>GO</button><button type="button" className="world-warp-locked" onClick={() => setMessage("Relocation requires a Warp Engine consumable. Warp travel is not enabled in this MVP build.")}>WARP 🔒</button></form>
         <div className="world-coordinate world-coordinate-x">X {Math.round(viewX).toString().padStart(3, "0")} — {Math.round(viewX + viewport.width).toString().padStart(3, "0")}</div>
         <div className="world-coordinate world-coordinate-y">Y {Math.round(viewY).toString().padStart(3, "0")} — {Math.round(viewY + viewport.height).toString().padStart(3, "0")}</div>
-        <svg ref={svgRef} className="world-map world-map-v2" viewBox={viewBox} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { drag.current = null; }} onWheel={(event) => { event.preventDefault(); setZoom((value) => steppedWorldZoom(value, event.deltaY < 0 ? "in" : "out", 1.14)); }}>
+        <svg ref={svgRef} className="world-map world-map-v2 world-map-pan-plane" viewBox={renderViewBox} style={{ transform: `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})` }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerCancel} onWheel={(event) => { event.preventDefault(); setZoom((value) => steppedWorldZoom(value, event.deltaY < 0 ? "in" : "out", 1.14)); }}>
           {mapScaffold}
           {!gpuVisualsReady && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {mapClusters}
@@ -1211,10 +1242,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             </g>
           </g>}
         </svg>
-        <WorldVisualLayer svgRef={svgRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} />
-        <WorldStrikeLayer world={world} viewport={{ x: viewX, y: viewY, width: viewport.width, height: viewport.height }} zoom={zoom} gm={gm} stressCount={strikeStressCount} burstNonce={strikeBurstNonce} dprCap={quality.dprCap} />
-        <WorldMarchLayer world={world} viewport={{ x: viewX, y: viewY, width: viewport.width, height: viewport.height }} zoom={zoom} viewerId={session.playerId} quality={quality} />
-        {gpuVisualsReady && <svg className="world-map world-map-overlay" viewBox={viewBox} aria-hidden="true">
+        <WorldVisualLayer viewportRef={liveViewportRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} />
+        <WorldStrikeLayer world={world} viewportRef={liveViewportRef} zoom={zoom} gm={gm} stressCount={strikeStressCount} burstNonce={strikeBurstNonce} dprCap={quality.dprCap} />
+        <WorldMarchLayer world={world} viewportRef={liveViewportRef} zoom={zoom} viewerId={session.playerId} quality={quality} />
+        {gpuVisualsReady && <svg ref={overlayRef} className="world-map world-map-overlay world-map-pan-plane" viewBox={renderViewBox} style={{ transform: `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})` }} aria-hidden="true">
           {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {/* Selection ring for cities: a full circle in screen-space with a
               constant thin stroke, wrapping outside the planet's cosmetics at

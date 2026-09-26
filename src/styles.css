@@ -635,6 +635,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
    controls (z3-4); never intercepts pointer events so the map still drags. */
 .world-void-canvas{position:absolute;z-index:2;pointer-events:none}
 .world-visual-layer{position:absolute;z-index:2;inset:0;width:100%;height:100%;pointer-events:none;contain:strict}
+.world-map-pan-plane{transform-origin:50% 50%;backface-visibility:hidden;will-change:transform}
 .world-city-hit{fill:transparent!important;stroke:transparent!important;pointer-events:all}
 .world-core-hit{fill:transparent!important;stroke:transparent!important;pointer-events:all}
 .world-crypto .world-map-overlay{position:absolute;z-index:3;inset:0;width:100%;height:100%;pointer-events:none;cursor:default}

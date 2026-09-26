@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import type { HeadlessWorld, HeadlessMarch } from "./lib/world-engine";
 import type { MarchSignatureId } from "./lib/player-account";
 import type { GraphicsQuality } from "./lib/graphics-tier";
@@ -120,17 +120,17 @@ function drawComet(ctx: CanvasRenderingContext2D, tail: TailPoint[], hx: number,
 type Viewport = { x: number; y: number; width: number; height: number };
 
 export default function WorldMarchLayer({
-  world, viewport, zoom, viewerId, quality,
+  world, viewportRef, zoom, viewerId, quality,
 }: {
   world: HeadlessWorld;
-  viewport: Viewport;
+  viewportRef: RefObject<Viewport>;
   zoom: number;
   viewerId: string;
   quality: GraphicsQuality;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const latestRef = useRef({ world, viewport, zoom, viewerId, quality });
-  latestRef.current = { world, viewport, zoom, viewerId, quality };
+  const latestRef = useRef({ world, zoom, viewerId, quality });
+  useLayoutEffect(() => { latestRef.current = { world, zoom, viewerId, quality }; }, [world, zoom, viewerId, quality]);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -153,7 +153,9 @@ export default function WorldMarchLayer({
       // Fleet PROGRESS must use epoch time, since march.dispatchedAt/arriveAt are
       // Date.now() values; mixing the two pins every fleet to its origin.
       const nowMs = Date.now();
-      const { world: w, viewport: vp, zoom: z, viewerId: vid, quality: q } = latestRef.current;
+      const { world: w, zoom: z, viewerId: vid, quality: q } = latestRef.current;
+      const vp = viewportRef.current;
+      if (!vp) { rafRef.current = requestAnimationFrame(render); return; }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
       if (q.marchFx === "kite") { rafRef.current = requestAnimationFrame(render); return; }
       // viewBox "meet" mapping — uniform scale + centering — so fleets land on

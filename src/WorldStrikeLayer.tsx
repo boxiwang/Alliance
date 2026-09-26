@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { HeadlessWorld, Point, WorldReport } from "./lib/world-engine";
 import type { StrikeSignatureId } from "./lib/player-account";
 import {
@@ -56,10 +56,10 @@ export function strikeVisibleAtZoom(targetKind: ActiveStrike["targetKind"], zoom
 }
 
 export default function WorldStrikeLayer({
-  world, viewport, zoom, gm, stressCount, burstNonce, dprCap = 2,
+  world, viewportRef, zoom, gm, stressCount, burstNonce, dprCap = 2,
 }: {
   world: HeadlessWorld;
-  viewport: Viewport;
+  viewportRef: RefObject<Viewport>;
   zoom: number;
   gm: boolean;
   stressCount: number;
@@ -74,9 +74,9 @@ export default function WorldStrikeLayer({
   const initializedReports = useRef(false);
   const rafRef = useRef<number | null>(null);
   const ensureLoopRef = useRef<() => void>(() => {});
-  const latestRef = useRef({ world, viewport, zoom, stressCount });
+  const latestRef = useRef({ world, zoom, stressCount });
   const [metrics, setMetrics] = useState<StrikePerformanceMetrics | null>(null);
-  latestRef.current = { world, viewport, zoom, stressCount };
+  useLayoutEffect(() => { latestRef.current = { world, zoom, stressCount }; }, [world, zoom, stressCount]);
 
   useEffect(() => {
     const reports = Object.values(world.reports);
@@ -136,6 +136,8 @@ export default function WorldStrikeLayer({
       const frameDelta = lastFrame ? time - lastFrame : 16.7; lastFrame = time;
       frameSamples.push(frameDelta); if (frameSamples.length > 240) frameSamples.shift(); if (frameDelta > 33.4) longFrames += 1;
       const drawStarted = performance.now(), latest = latestRef.current;
+      const viewport = viewportRef.current;
+      if (!viewport) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, width, height);
       beginStrikeFrameCacheBudget(2);
 
@@ -146,8 +148,8 @@ export default function WorldStrikeLayer({
         const elapsed = time - strike.startedAt;
         if (elapsed < 0) return;
         if (!strikeVisibleAtZoom(strike.targetKind, latest.zoom)) return;
-        const x = strike.normalized ? strike.normalized.x * width : ((strike.position!.x - latest.viewport.x) / latest.viewport.width) * width;
-        const y = strike.normalized ? strike.normalized.y * height : ((strike.position!.y - latest.viewport.y) / latest.viewport.height) * height;
+        const x = strike.normalized ? strike.normalized.x * width : ((strike.position!.x - viewport.x) / viewport.width) * width;
+        const y = strike.normalized ? strike.normalized.y * height : ((strike.position!.y - viewport.y) / viewport.height) * height;
         const margin = STRIKE_EFFECT_WORLD_SIZE[strike.signature] * screenScale * .55;
         if (x < -margin || x > width + margin || y < -margin || y > height + margin) return;
         drawCachedStrikeEffect(ctx, strike.signature, elapsed / STRIKE_EFFECT_DURATION_MS[strike.signature], x, y, screenScale); drawn += 1;
