@@ -46,6 +46,10 @@ export default function GameNav({
 }) {
   const account = loadPlayerAccount(profile.address);
   const [authoritativeCredits, setAuthoritativeCredits] = useState(credits ?? account.credits);
+  const [displayedCredits, setDisplayedCredits] = useState(credits ?? account.credits);
+  const [creditPulse, setCreditPulse] = useState(false);
+  const creditFrame = useRef(0);
+  const creditPulseTimer = useRef(0);
   useEffect(() => {
     if (credits != null) { setAuthoritativeCredits(credits); return; }
     let live = true;
@@ -55,6 +59,30 @@ export default function GameNav({
   const visibleCredits = credits ?? authoritativeCredits;
   const systemReducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const quietResources = account.reducedMotion || systemReducedMotion || account.graphicsTier === "low";
+  useEffect(() => {
+    cancelAnimationFrame(creditFrame.current);
+    window.clearTimeout(creditPulseTimer.current);
+    const from = displayedCredits;
+    if (visibleCredits <= from || account.reducedMotion || systemReducedMotion) {
+      setDisplayedCredits(visibleCredits);
+      return;
+    }
+    const started = performance.now();
+    const duration = 760;
+    setCreditPulse(true);
+    const draw = (time: number) => {
+      const progress = Math.min(1, (time - started) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayedCredits(Math.round(from + (visibleCredits - from) * eased));
+      if (progress < 1) creditFrame.current = requestAnimationFrame(draw);
+    };
+    creditFrame.current = requestAnimationFrame(draw);
+    creditPulseTimer.current = window.setTimeout(() => setCreditPulse(false), 920);
+    return () => {
+      cancelAnimationFrame(creditFrame.current);
+      window.clearTimeout(creditPulseTimer.current);
+    };
+  }, [visibleCredits]);
   return (
     <nav className="command-nav" aria-label="Game view and account status">
       <div className="command-nav-head">
@@ -100,7 +128,7 @@ export default function GameNav({
         <CommandMetric label="Fleets" value={`${activeFleets}/${fleetCap}`} tone="#38d9ff" />
         <CommandMetric label="Standing" value={compact(displayTroops(standing))} tone="#43f2a1" />
         <CommandMetric label="Wounded" value={compact(displayTroops(wounded))} tone="#ff7188" />
-        <button type="button" className={`command-credits${view === "shop" ? " shop-active" : ""}`} aria-label="Open Credits exchange" onClick={onCredits || onShop}><span>◇</span><div><small>CREDITS</small><b>{compact(visibleCredits)}</b></div><strong>{view === "shop" ? "+ TOP UP" : "＋"}</strong></button>
+        <button type="button" className={`command-credits${view === "shop" ? " shop-active" : ""}${creditPulse ? " bump" : ""}`} aria-label="Open Credits exchange" onClick={onCredits || onShop}><span>◇</span><div><small>CREDITS</small><b>{compact(displayedCredits)}</b></div><strong>{view === "shop" ? "+ TOP UP" : "＋"}</strong></button>
       </div>
     </nav>
   );
