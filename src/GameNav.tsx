@@ -128,7 +128,7 @@ export default function GameNav({
         <CommandMetric label="Fleets" value={`${activeFleets}/${fleetCap}`} tone="#38d9ff" />
         <CommandMetric label="Standing" value={compact(displayTroops(standing))} tone="#43f2a1" />
         <CommandMetric label="Wounded" value={compact(displayTroops(wounded))} tone="#ff7188" />
-        <button type="button" className={`command-credits${view === "shop" ? " shop-active" : ""}${creditPulse ? " bump" : ""}`} aria-label="Open Credits exchange" onClick={onCredits || onShop}><span>◇</span><div><small>CREDITS</small><b>{compact(displayedCredits)}</b></div><strong>{view === "shop" ? "+ TOP UP" : "＋"}</strong></button>
+        <button type="button" className={`command-credits${view === "shop" ? " shop-active" : ""}${creditPulse ? " bump" : ""}`} aria-label="Open Credits exchange" onClick={onCredits || onShop}><span>◇</span><div><small>{view === "shop" ? "CREDITS // AVAILABLE" : "CREDITS"}</small><b>{compact(displayedCredits)}</b></div><strong>{view === "shop" ? "+ TOP UP" : "＋"}</strong></button>
       </div>
     </nav>
   );
