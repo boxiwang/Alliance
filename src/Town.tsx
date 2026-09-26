@@ -32,7 +32,7 @@ import GameNav from "./GameNav";
 import BuildingGlyph from "./BuildingGlyph";
 import CosmicBackdrop from "./CosmicBackdrop";
 import MiniComms from "./MiniComms";
-import CityStarGrid, { type CityThreat } from "./CityStarGrid";
+import CityStarGrid from "./CityStarGrid";
 import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAllianceHelp } from "./lib/alliance";
 import { loadPlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME } from "./lib/sfx";
@@ -42,7 +42,8 @@ import {
 } from "./lib/backend";
 import { MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath } from "./lib/mvp-items";
 import { activeSpeedupTargets, applySpeedup, speedupCompatible, speedupTargetId, type SpeedupTarget } from "./lib/speedups";
-import type { ServerReport } from "./lib/realtime";
+import type { ServerReport, LiveMarch } from "./lib/realtime";
+import { incomingCityMarches, recentCityScan } from "./lib/city-alerts";
 import { useGraphicsQuality } from "./useGraphicsQuality";
 
 const ECONOMY_BUILDINGS: BKey[] = ["bank", "oilwell", "powerplant"];
@@ -157,32 +158,43 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [authorityBusy, setAuthorityBusy] = useState(false);
   const [commandBuilding, setCommandBuilding] = useState<BKey | null>(null);
   const [commandBusy, setCommandBusy] = useState(false);
-  const [cityThreat, setCityThreat] = useState<CityThreat | null>(null);
+  const [cityMarches, setCityMarches] = useState<LiveMarch[]>([]);
+  const cityMarchesRef = useRef<LiveMarch[]>([]);
+  const cityPlayerId = useRef(address);
+  const [cityScouted, setCityScouted] = useState<ServerReport | null>(null);
+  const [cityArrivedUntil, setCityArrivedUntil] = useState(0);
   const seenReports = useRef(new Set<string>());
   const quality = useGraphicsQuality(address);
-
+  const replaceMarches = useCallback((marches: LiveMarch[]) => {
+    cityMarchesRef.current = marches;
+    setCityMarches(marches);
+  }, []);
+  useEffect(() => {
+    cityPlayerId.current = address;
+    replaceMarches([]);
+    setCityScouted(null);
+    setCityArrivedUntil(0);
+    seenReports.current.clear();
+  }, [address, replaceMarches]);
   const handleCityReport = useCallback((report: ServerReport) => {
     if (seenReports.current.has(report.id)) return;
     seenReports.current.add(report.id);
-    if (seenReports.current.size > 120) {
-      seenReports.current.clear();
-      seenReports.current.add(report.id);
-    }
-    const receivedAt = Date.now();
-    if (report.kind === "incoming") {
-      const arriveAt = Number(report.payload?.arriveAt) || receivedAt + Math.max(1, Number(report.payload?.etaSec) || 1) * 1000;
-      if (arriveAt < receivedAt - 8_000) return;
-      setCityThreat({
-        id: report.id,
-        phase: arriveAt > receivedAt ? "inbound" : "engaged",
-        attacker: report.byName || "HOSTILE FORCE",
-        arriveAt,
-        armyTotal: Math.max(0, Number(report.payload?.armyTotal) || 0),
-      });
-    } else if (report.kind === "battle" && receivedAt - report.ts < 15_000) {
-      setCityThreat({ id: report.id, phase: "engaged", attacker: report.byName || "HOSTILE FORCE", arriveAt: report.ts, armyTotal: Math.max(0, Number(report.payload?.armyTotal) || 0) });
-    }
+    if (seenReports.current.size > 200) seenReports.current.delete(seenReports.current.values().next().value);
+    // Historical reports never replay a new alert on every page switch.
+    if (recentCityScan(report, Date.now())) setCityScouted(report);
   }, []);
+  const handleCityMarch = useCallback((march: LiveMarch) => {
+    replaceMarches(incomingCityMarches(cityPlayerId.current, [...cityMarchesRef.current, march], Date.now()));
+  }, [replaceMarches]);
+  const handleCityMarchDone = useCallback((id: string) => {
+    if (!cityMarchesRef.current.some(m => m.id === id)) return;
+    replaceMarches(cityMarchesRef.current.filter(m => m.id !== id));
+    setCityArrivedUntil(Date.now() + 4500);
+  }, [replaceMarches]);
+  const handleCityMarchSnapshot = useCallback((you: string, marches: LiveMarch[]) => {
+    cityPlayerId.current = you;
+    replaceMarches(incomingCityMarches(you, marches, Date.now()));
+  }, [replaceMarches]);
 
   // Offline progress on entry (once).
   useEffect(() => {
@@ -258,15 +270,17 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   }, [facilityInterior, facilityOpen, pendingSpeedup]);
 
   useEffect(() => {
-    if (!cityThreat) return;
-    if (cityThreat.phase === "inbound") {
-      const delay = Math.max(0, cityThreat.arriveAt - Date.now());
-      const timer = window.setTimeout(() => setCityThreat((current) => current?.id === cityThreat.id ? { ...current, phase: "engaged" } : current), delay);
-      return () => window.clearTimeout(timer);
-    }
-    const timer = window.setTimeout(() => setCityThreat((current) => current?.id === cityThreat.id ? null : current), 8_000);
+    const first = cityMarches.reduce((time, march) => Math.min(time, march.arriveAt), Infinity);
+    if (!Number.isFinite(first)) return;
+    const timer = window.setTimeout(() => {
+      const expired = cityMarchesRef.current.filter(m => m.arriveAt <= Date.now());
+      if (expired.length) {
+        replaceMarches(cityMarchesRef.current.filter(m => m.arriveAt > Date.now()));
+        setCityArrivedUntil(Date.now() + 4500);
+      }
+    }, Math.max(0, first - Date.now()) + 10);
     return () => window.clearTimeout(timer);
-  }, [cityThreat]);
+  }, [cityMarches, replaceMarches]);
 
   const view = useMemo(() => project(game, now), [game, now]);
 
@@ -582,13 +596,12 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
               setFacilityInterior(false);
               setMsg(game.buildings.academy.lvl >= 1 ? "" : "GM: Research Institute built at Lv.1.");
             }}>Open Research</button>
-            <button onClick={() => setCityThreat({
-              id: `gm-raid-${Date.now()}`,
-              phase: "inbound",
-              attacker: "UNKNOWN FLEET",
-              arriveAt: Date.now() + 12_000,
-              armyTotal: 120_000,
-            })}>Test city attack</button>
+            <button onClick={() => {
+              const start = Date.now();
+              handleCityMarch({ id: "gm-raid-" + start, attacker: "gm-hostile", attackerName: "TEST FLEET", defender: cityPlayerId.current, defenderName: profile.name,
+                from: {x:0,y:0}, to: {x:0,y:0}, departAt: start, arriveAt: start + 15_000, armyTotal: 4200 });
+            }}>Test city attack</button>
+            <button onClick={() => handleCityReport({ id: "gm-scan-" + Date.now(), kind: "scouted", ts: Date.now(), byName: "TEST SCOUT" })}>Test city scan</button>
             <span className="gm-building-stepper">
               <select aria-label="GM building" value={gmBuilding} onChange={(event) => setGmBuilding(event.target.value as BKey)}>
                 {BUILDING_ORDER.filter(isUpgradable).map((building) => <option value={building} key={building}>{BUILDINGS[building].label} · Lv.{view.buildings[building].lvl}</option>)}
@@ -673,7 +686,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         ? renderResearchCenter()
         : facilityInterior && facilityOpen === "storage"
           ? renderWarehouse()
-          : <CityStarGrid address={address} name={profile.name} view={view} now={now} selected={facilityOpen} quality={quality} threat={cityThreat} onSelect={openFacility} />}
+          : <CityStarGrid address={address} name={profile.name} view={view} now={now} selected={facilityOpen} quality={quality} marches={cityMarches} scouted={cityScouted} arrived={cityArrivedUntil > now} onSelect={openFacility} />}
 
         {facilityOpen ? (() => {
           const trainingType = TROOP_ORDER.find((type) => TRAINING_BUILDING[type] === facilityOpen);
@@ -706,7 +719,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <aside className="facility-inspector command-feed" aria-label="Command feed">{renderCommandFeed()}</aside>
         )}
       </div>
-      <MiniComms address={address} profile={profile} onOpenMessages={onMessages} onReport={handleCityReport} />
+      <MiniComms address={address} profile={profile} onOpenMessages={onMessages} onReport={handleCityReport} onMarch={handleCityMarch} onMarchDone={handleCityMarchDone} onMarchSnapshot={handleCityMarchSnapshot} />
       {pendingSpeedup && (() => {
         const item = MVP_ITEM_BY_ID.get(pendingSpeedup.itemId);
         if (!item?.speedupSeconds) return null;

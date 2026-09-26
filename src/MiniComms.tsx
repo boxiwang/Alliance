@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Profile } from "./lib/profile";
 import { loadCosmeticVault, loadPlayerAccount, type ChatSignalId } from "./lib/player-account";
 import NameSignal from "./NameSignal";
-import { RealtimeClient, type LiveChat, type PresenceCity, type ServerReport } from "./lib/realtime";
+import { RealtimeClient, type LiveChat, type PresenceCity, type ServerReport, type LiveMarch } from "./lib/realtime";
 import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME } from "./lib/sfx";
 import { trackEvents } from "./lib/backend";
 import { shouldSubmitTextEntry } from "./lib/ime";
@@ -27,7 +27,13 @@ function cacheComms(address: string, patch: Partial<{ live: LiveChat[]; roster: 
 
 // Quick live peek at the shared Cosmos channel (same backend as the Comms page).
 // No seeded/placeholder messages; DMs + other channels live in full Comms.
-export default function MiniComms({ address, profile, onOpenMessages, onReport }: { address: string; profile: Profile; onOpenMessages: () => void; onReport?: (report: ServerReport) => void }) {
+export default function MiniComms({ address, profile, onOpenMessages, onReport, onMarch, onMarchDone, onMarchSnapshot }: {
+  address: string; profile: Profile; onOpenMessages: () => void;
+  onReport?: (report: ServerReport) => void;
+  onMarch?: (march: LiveMarch) => void;
+  onMarchDone?: (id: string) => void;
+  onMarchSnapshot?: (you: string, marches: LiveMarch[]) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState("");
   const [live, setLive] = useState<LiveChat[]>(() => cachedComms(address).live);
@@ -38,6 +44,8 @@ export default function MiniComms({ address, profile, onOpenMessages, onReport }
   const composingRef = useRef(false);
   const expandedRef = useRef(expanded);
   const reportRef = useRef(onReport);
+  const marchEvents = useRef({ onMarch, onMarchDone, onMarchSnapshot });
+  marchEvents.current = { onMarch, onMarchDone, onMarchSnapshot };
   // Clear unread whenever the widget is opened; the ref lets the socket handler
   // (bound once) read the current open/closed state without re-subscribing.
   useEffect(() => { expandedRef.current = expanded; if (expanded) setUnread(0); }, [expanded]);
@@ -48,10 +56,11 @@ export default function MiniComms({ address, profile, onOpenMessages, onReport }
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
     rtRef.current = rt;
-    rt.handlers.onSnapshot = (_you, players, chat, _dms, reports) => {
+    rt.handlers.onSnapshot = (you, players, chat, _dms, reports, marches) => {
       cacheComms(address, { live: chat, roster: players });
       setLive(chat); setRoster(players);
       reports.forEach((report) => reportRef.current?.(report));
+      marchEvents.current.onMarchSnapshot?.(you, marches);
     };
     rt.handlers.onChat = (m) => {
       setLive((cur) => {
@@ -70,6 +79,8 @@ export default function MiniComms({ address, profile, onOpenMessages, onReport }
     });
     rt.handlers.onStatus = setConnected;
     rt.handlers.onReport = (report) => reportRef.current?.(report);
+    rt.handlers.onMarch = (march) => marchEvents.current.onMarch?.(march);
+    rt.handlers.onMarchDone = (id) => marchEvents.current.onMarchDone?.(id);
     rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, cosmetics: loadCosmeticVault(address).equipped });
     return () => rt.close();
   }, [address, profile.name, profile.factionSymbol]);
