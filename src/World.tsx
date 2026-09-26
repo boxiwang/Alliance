@@ -472,7 +472,7 @@ function reportCopy(report: WorldReport, world: LocalWorldSession["world"], now:
   return { title: `${report.outcome === "victory" ? "Victory" : report.outcome === "defeat" ? "Defeat" : "Battle result"} at ${target}`, detail: `${compact(displayTroops(wounded))} wounded · ${compact(displayTroops(dead))} dead.`, good };
 }
 
-export default function World({ address, profile, onAlliance = () => {}, onBack, onMessages = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onAlliance?: () => void; onBack: () => void; onMessages?: () => void; onProfile?: () => void }) {
+export default function World({ address, profile, onAlliance = () => {}, onBack, onMessages = () => {}, onShop = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onAlliance?: () => void; onBack: () => void; onMessages?: () => void; onShop?: () => void; onProfile?: () => void }) {
   const N = useMemo(() => getN(), []);
   const quality = useGraphicsQuality(address);
   const equippedCosmetics = useMemo(() => loadCosmeticVault(address).equipped, [address]);
@@ -1156,7 +1156,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       incomePerHour={prodPerHour(viewGame)} resourceCap={capacity(viewGame)}
       energy={energy} energyCap={world.config.energyCap} activeFleets={activeMarches.length} fleetCap={player.marchSlots}
       standing={totalTroops(viewGame)} wounded={viewGame.wounded} might={mightBreakdown(viewGame).total}
-      onAlliance={onAlliance} onCity={onBack} onWorld={() => {}} onMessages={onMessages} onProfile={onProfile} />
+      onAlliance={onAlliance} onCity={onBack} onWorld={() => {}} onMessages={onMessages} onShop={onShop} onProfile={onProfile} />
     {gm && <div className="world-gm-strip"><span>LOCAL GM</span><button onClick={fillTroops}>FILL TROOPS</button><button onClick={finishMarches} disabled={!activeMarches.length}>RESOLVE FLEETS</button><button onClick={() => setStrikeBurstNonce((value) => value + 1)}>CAST STRIKE SUITE</button></div>}
     {message && <div className="world-message">{message}</div>}
     <div className="world-layout">

@@ -13,6 +13,7 @@ import {
   type SessionClaims,
 } from "./auth";
 import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS } from "../src/lib/mvp-items";
+import { DAILY_SUPPLY, SHOP_OFFER_BY_ID, SHOP_OFFERS, TOPUP_PACKS } from "../src/lib/shop-catalog";
 import { gameStateBelongsToPlayer, projectGameJson } from "./economy";
 import { applyCommand } from "./commands";
 import { applySpeedup, speedupCompatible, type SpeedupTarget } from "../src/lib/speedups";
@@ -30,6 +31,7 @@ export interface BackendEnv {
   FIREBASE_PROJECT_ID: string;
   GM_WALLETS?: string;
   GM_EMAILS?: string;
+  PAYMENT_RAILS_JSON?: string;
 }
 
 async function sharedWorldCoord(env: BackendEnv, playerId: string): Promise<{ x: number; y: number } | null> {
@@ -147,6 +149,8 @@ async function savePlayer(env: BackendEnv, input: {
       .bind(input.provider, input.subject, input.id, input.secretHash || null, now, now),
     env.DB.prepare("INSERT INTO player_state (player_id, revision, updated_at) VALUES (?, 0, ?) ON CONFLICT(player_id) DO NOTHING")
       .bind(input.id, now),
+    env.DB.prepare("INSERT INTO credit_accounts (player_id, balance, purchased_total, updated_at) VALUES (?, 0, 0, ?) ON CONFLICT(player_id) DO NOTHING")
+      .bind(input.id, now),
     ...Object.entries(ALPHA_STARTER_ITEMS).flatMap(([itemId, quantity]) => [
       env.DB.prepare(`INSERT INTO inventory_balances (player_id, item_id, quantity, updated_at)
         VALUES (?, ?, ?, ?) ON CONFLICT(player_id, item_id) DO NOTHING`).bind(input.id, itemId, quantity, now),
@@ -165,6 +169,169 @@ async function savePlayer(env: BackendEnv, input: {
 function inventoryRows(env: BackendEnv, playerId: string) {
   return env.DB.prepare(`SELECT item_id AS itemId, quantity, updated_at AS updatedAt
     FROM inventory_balances WHERE player_id = ? ORDER BY item_id`).bind(playerId).all<{ itemId: string; quantity: number; updatedAt: number }>();
+}
+
+function utcDay(now = Date.now()): string {
+  return new Date(now).toISOString().slice(0, 10);
+}
+
+async function creditBalance(env: BackendEnv, playerId: string): Promise<number> {
+  const row = await env.DB.prepare("SELECT balance FROM credit_accounts WHERE player_id = ?")
+    .bind(playerId).first<{ balance: number }>();
+  return Math.max(0, Number(row?.balance) || 0);
+}
+
+function publicPaymentRails(env: BackendEnv): Array<Record<string, unknown>> {
+  if (!env.PAYMENT_RAILS_JSON) return [];
+  try {
+    const rows = JSON.parse(env.PAYMENT_RAILS_JSON) as Array<Record<string, unknown>>;
+    if (!Array.isArray(rows)) return [];
+    return rows.flatMap((rail) => {
+      const id = String(rail.id || "").slice(0, 48);
+      const chainId = Math.floor(Number(rail.chainId));
+      const tokenAddress = normalizedWallet(rail.tokenAddress);
+      const treasuryAddress = normalizedWallet(rail.treasuryAddress);
+      const decimals = Math.floor(Number(rail.decimals));
+      if (!id || !Number.isFinite(chainId) || !tokenAddress || !treasuryAddress || decimals < 0 || decimals > 36) return [];
+      return [{
+        id, chainId, chainName: String(rail.chainName || `Chain ${chainId}`).slice(0, 48),
+        tokenAddress, tokenSymbol: String(rail.tokenSymbol || "TOKEN").slice(0, 12),
+        decimals, treasuryAddress, confirmations: Math.max(1, Math.min(64, Math.floor(Number(rail.confirmations) || 2))),
+        explorerTxUrl: String(rail.explorerTxUrl || "").slice(0, 240),
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function shopAccount(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (request.method !== "GET") return response({ error: "method_not_allowed" }, 405);
+  const today = utcDay();
+  const claim = await env.DB.prepare("SELECT 1 AS claimed FROM shop_daily_claims WHERE player_id = ? AND claim_day = ?")
+    .bind(claims.sub, today).first<{ claimed: number }>();
+  return response({
+    balance: await creditBalance(env, claims.sub),
+    offers: SHOP_OFFERS,
+    packs: TOPUP_PACKS,
+    dailyClaimed: !!claim,
+    resetAt: Date.parse(`${new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)}T00:00:00.000Z`),
+    paymentRails: publicPaymentRails(env),
+  });
+}
+
+async function shopPurchase(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
+  const data = await body(request);
+  const offerId = String(data?.offerId || "").slice(0, 128);
+  const idempotencyKey = String(data?.idempotencyKey || "").slice(0, 128);
+  const offer = SHOP_OFFER_BY_ID.get(offerId);
+  if (!offer || offer.status !== "active" || !offer.itemId || !IDEMPOTENCY_KEY.test(idempotencyKey)) return response({ error: "invalid_offer" }, 400);
+  const item = MVP_ITEM_BY_ID.get(offer.itemId);
+  if (!item || item.status !== "active") return response({ error: "item_unavailable" }, 409);
+
+  const replay = await env.DB.prepare(`SELECT id, balance_after AS balanceAfter FROM shop_purchases
+    WHERE player_id = ? AND idempotency_key = ?`).bind(claims.sub, idempotencyKey)
+    .first<{ id: string; balanceAfter: number }>();
+  if (replay) {
+    const owned = await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
+      .bind(claims.sub, offer.itemId).first<{ quantity: number }>();
+    return response({ purchaseId: replay.id, balance: replay.balanceAfter, itemId: offer.itemId, quantity: owned?.quantity || 0, replayed: true });
+  }
+
+  const now = Date.now();
+  const purchaseId = crypto.randomUUID();
+  const priorInventory = await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
+    .bind(claims.sub, offer.itemId).first<{ quantity: number }>();
+  const inventoryAfter = (priorInventory?.quantity || 0) + offer.quantity;
+  await env.DB.batch([
+    // The purchase row is the transaction guard. If the account cannot afford
+    // the offer no row is inserted, and every following statement is a no-op.
+    env.DB.prepare(`INSERT INTO shop_purchases
+      (id, player_id, offer_id, item_id, quantity, credits_spent, balance_after, idempotency_key, created_at)
+      SELECT ?, player_id, ?, ?, ?, ?, balance - ?, ?, ? FROM credit_accounts
+      WHERE player_id = ? AND balance >= ?`)
+      .bind(purchaseId, offer.id, offer.itemId, offer.quantity, offer.price, offer.price, idempotencyKey, now, claims.sub, offer.price),
+    env.DB.prepare(`UPDATE credit_accounts SET balance = balance - ?, updated_at = ?
+      WHERE player_id = ? AND EXISTS (SELECT 1 FROM shop_purchases WHERE id = ?)`)
+      .bind(offer.price, now, claims.sub, purchaseId),
+    env.DB.prepare(`INSERT INTO inventory_balances (player_id, item_id, quantity, updated_at)
+      SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM shop_purchases WHERE id = ?)
+      ON CONFLICT(player_id, item_id) DO UPDATE SET quantity = inventory_balances.quantity + excluded.quantity, updated_at = excluded.updated_at`)
+      .bind(claims.sub, offer.itemId, offer.quantity, now, purchaseId),
+    env.DB.prepare(`INSERT INTO inventory_transactions
+      (id, player_id, item_id, delta, balance_after, reason, reference_id, idempotency_key, status, created_at, committed_at)
+      SELECT ?, ?, ?, ?, ?, 'shop_purchase', ?, ?, 'committed', ?, ?
+      WHERE EXISTS (SELECT 1 FROM shop_purchases WHERE id = ?)`)
+      .bind(crypto.randomUUID(), claims.sub, offer.itemId, offer.quantity, inventoryAfter, purchaseId, `shop-inventory:${idempotencyKey}`, now, now, purchaseId),
+    env.DB.prepare(`INSERT INTO credit_ledger
+      (id, player_id, delta, balance_after, reason, reference_id, idempotency_key, metadata_json, created_at)
+      SELECT ?, ?, ?, balance_after, 'shop_purchase', ?, ?, ?, ? FROM shop_purchases WHERE id = ?`)
+      .bind(crypto.randomUUID(), claims.sub, -offer.price, purchaseId, `shop-credit:${idempotencyKey}`, JSON.stringify({ offerId, itemId: offer.itemId, quantity: offer.quantity }), now, purchaseId),
+  ]);
+  const purchase = await env.DB.prepare("SELECT balance_after AS balanceAfter FROM shop_purchases WHERE id = ?")
+    .bind(purchaseId).first<{ balanceAfter: number }>();
+  if (!purchase) {
+    const balance = await creditBalance(env, claims.sub);
+    return response({ error: "insufficient_credits", balance, shortfall: Math.max(0, offer.price - balance) }, 409);
+  }
+  return response({ purchaseId, balance: purchase.balanceAfter, itemId: offer.itemId, quantity: inventoryAfter });
+}
+
+async function shopDailyClaim(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
+  const data = await body(request);
+  const idempotencyKey = String(data?.idempotencyKey || "").slice(0, 128);
+  if (!IDEMPOTENCY_KEY.test(idempotencyKey)) return response({ error: "idempotency_required" }, 400);
+  const day = utcDay();
+  const prior = await env.DB.prepare("SELECT claimed_at AS claimedAt FROM shop_daily_claims WHERE player_id = ? AND claim_day = ?")
+    .bind(claims.sub, day).first<{ claimedAt: number }>();
+  if (prior) return response({ error: "already_claimed", claimedAt: prior.claimedAt }, 409);
+  const now = Date.now();
+  const statements: D1PreparedStatement[] = [
+    env.DB.prepare("INSERT INTO shop_daily_claims (player_id, claim_day, claimed_at) VALUES (?, ?, ?)").bind(claims.sub, day, now),
+  ];
+  const inventory: Array<{ itemId: string; quantity: number }> = [];
+  for (const [itemId, delta] of Object.entries(DAILY_SUPPLY)) {
+    const current = await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
+      .bind(claims.sub, itemId).first<{ quantity: number }>();
+    const next = (current?.quantity || 0) + delta;
+    inventory.push({ itemId, quantity: next });
+    statements.push(
+      env.DB.prepare(`INSERT INTO inventory_balances (player_id, item_id, quantity, updated_at) VALUES (?, ?, ?, ?)
+        ON CONFLICT(player_id, item_id) DO UPDATE SET quantity = inventory_balances.quantity + excluded.quantity, updated_at = excluded.updated_at`)
+        .bind(claims.sub, itemId, delta, now),
+      env.DB.prepare(`INSERT INTO inventory_transactions
+        (id, player_id, item_id, delta, balance_after, reason, reference_id, idempotency_key, status, created_at, committed_at)
+        VALUES (?, ?, ?, ?, ?, 'daily_supply', ?, ?, 'committed', ?, ?)`)
+        .bind(crypto.randomUUID(), claims.sub, itemId, delta, next, day, `daily:${day}:${itemId}`, now, now),
+    );
+  }
+  await env.DB.batch(statements);
+  return response({ claimedAt: now, inventory });
+}
+
+async function grantAlphaCredits(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
+  if (claims.role !== "gm") return response({ error: "gm_required" }, 403);
+  const data = await body(request);
+  const idempotencyKey = String(data?.idempotencyKey || "").slice(0, 128);
+  if (!IDEMPOTENCY_KEY.test(idempotencyKey)) return response({ error: "idempotency_required" }, 400);
+  const prior = await env.DB.prepare("SELECT balance_after AS balanceAfter FROM credit_ledger WHERE player_id = ? AND idempotency_key = ?")
+    .bind(claims.sub, idempotencyKey).first<{ balanceAfter: number }>();
+  if (prior) return response({ balance: prior.balanceAfter, replayed: true });
+  const before = await creditBalance(env, claims.sub);
+  const delta = 25_000;
+  const after = before + delta;
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE credit_accounts SET balance = ?, updated_at = ? WHERE player_id = ? AND balance = ?").bind(after, now, claims.sub, before),
+    env.DB.prepare(`INSERT INTO credit_ledger
+      (id, player_id, delta, balance_after, reason, idempotency_key, created_at)
+      VALUES (?, ?, ?, ?, 'gm_alpha_test', ?, ?)`)
+      .bind(crypto.randomUUID(), claims.sub, delta, after, idempotencyKey, now),
+  ]);
+  return response({ balance: after });
 }
 
 async function inventory(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
@@ -670,7 +837,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (request.method === "POST" && pathname === "/auth/wallet/verify") return walletVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/google") return googleVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/guest") return guestVerify(request, env);
-  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/game/authority/enable", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha"].includes(pathname)) return null;
+  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/game/authority/enable", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha", "/shop/account", "/shop/purchase", "/shop/daily-claim", "/shop/grant-alpha"].includes(pathname)) return null;
   const claims = await authClaims(request, env);
   if (!claims) return response({ error: "unauthorized" }, 401);
   if (request.method === "GET" && pathname === "/me") return me(request, env, claims);
@@ -685,5 +852,9 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (pathname === "/inventory/history") return inventoryHistory(request, env, claims);
   if (request.method === "POST" && pathname === "/inventory/consume") return consumeInventory(request, env, claims);
   if (request.method === "POST" && pathname === "/inventory/grant-alpha") return grantAlphaInventory(request, env, claims);
+  if (pathname === "/shop/account") return shopAccount(request, env, claims);
+  if (pathname === "/shop/purchase") return shopPurchase(request, env, claims);
+  if (pathname === "/shop/daily-claim") return shopDailyClaim(request, env, claims);
+  if (pathname === "/shop/grant-alpha") return grantAlphaCredits(request, env, claims);
   return response({ error: "method_not_allowed" }, 405);
 }

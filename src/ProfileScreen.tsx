@@ -109,7 +109,7 @@ function CursorPreview({ cursor }: { cursor: GameCursorId }) {
 }
 
 export default function ProfileScreen({
-  address, profile, onProfileChange, onAlliance = () => {}, onCity, onWorld, onMessages,
+  address, profile, onProfileChange, onAlliance = () => {}, onCity, onWorld, onMessages, onShop = () => {},
 }: {
   address: string;
   profile: Profile;
@@ -118,6 +118,7 @@ export default function ProfileScreen({
   onCity: () => void;
   onWorld: () => void;
   onMessages: () => void;
+  onShop?: () => void;
 }) {
   const [section, setSection] = useState<ArchiveSection>(initialArchiveSection);
   const [account, setAccount] = useState(() => loadPlayerAccount(address));
@@ -419,7 +420,7 @@ export default function ProfileScreen({
     <GameNav view="profile" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
       resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} energy={player ? energyAt(player, now, world!.world.config) : 100} energyCap={world?.world.config.energyCap ?? 100}
       activeFleets={activeFleets} fleetCap={player?.marchSlots ?? worldMarchSlots(game)} standing={totalTroops(game)} wounded={game.wounded}
-      might={mightBreakdown(game).total} credits={account.credits} onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onProfile={() => {}} />
+      might={mightBreakdown(game).total} credits={account.credits} onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onShop={onShop} onProfile={() => {}} />
 
     {signal && <div className="profile-signal" role="status">{signal}</div>}
 

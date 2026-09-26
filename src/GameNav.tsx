@@ -4,6 +4,7 @@ import { RES, RES_ORDER, ResKey, BKey, displayResource, displayTroops } from "./
 import { compact } from "./lib/format";
 import BuildingGlyph from "./BuildingGlyph";
 import { loadPlayerAccount } from "./lib/player-account";
+import { loadShopAccount } from "./lib/backend";
 
 const RESOURCE_COLOR: Record<ResKey, string> = {
   cash: "#43f2a1",
@@ -16,9 +17,9 @@ const RESOURCE_GAIN_DELAY: Record<ResKey, number> = { cash: 1000, oil: 2700, pow
 export default function GameNav({
   view, profile, townhallLevel, location, resources,
   incomePerHour, resourceCap,
-  energy, energyCap, activeFleets, fleetCap, standing, wounded, might, credits, unread = 0, onAlliance, onCity, onWorld, onMessages, onProfile,
+  energy, energyCap, activeFleets, fleetCap, standing, wounded, might, credits, unread = 0, onAlliance, onCity, onWorld, onMessages, onShop = () => {}, onCredits, onProfile,
 }: {
-  view: "alliance" | "city" | "world" | "messages" | "profile";
+  view: "alliance" | "city" | "world" | "messages" | "shop" | "profile";
   profile: Profile;
   townhallLevel: number;
   location: string;
@@ -39,10 +40,19 @@ export default function GameNav({
   onCity: () => void;
   onWorld: () => void;
   onMessages: () => void;
+  onShop?: () => void;
+  onCredits?: () => void;
   onProfile: () => void;
 }) {
   const account = loadPlayerAccount(profile.address);
-  const visibleCredits = credits ?? account.credits;
+  const [authoritativeCredits, setAuthoritativeCredits] = useState(credits ?? account.credits);
+  useEffect(() => {
+    if (credits != null) { setAuthoritativeCredits(credits); return; }
+    let live = true;
+    void loadShopAccount(profile.address).then((result) => { if (live) setAuthoritativeCredits(result.balance); }).catch(() => {});
+    return () => { live = false; };
+  }, [credits, profile.address]);
+  const visibleCredits = credits ?? authoritativeCredits;
   const systemReducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const quietResources = account.reducedMotion || systemReducedMotion || account.graphicsTier === "low";
   return (
@@ -71,6 +81,9 @@ export default function GameNav({
             <button className={view === "messages" ? "active" : ""} aria-current={view === "messages" ? "page" : undefined} onClick={onMessages}>
               <span>✉</span><b>MESSAGES</b>{unread > 0 ? <i className="command-unread">{unread > 99 ? "99+" : unread}</i> : null}
             </button>
+            <button className={view === "shop" ? "active" : ""} aria-current={view === "shop" ? "page" : undefined} onClick={onShop}>
+              <span>◈</span><b>SHOP</b>
+            </button>
           </div>
         </div>
       </div>
@@ -87,7 +100,7 @@ export default function GameNav({
         <CommandMetric label="Fleets" value={`${activeFleets}/${fleetCap}`} tone="#38d9ff" />
         <CommandMetric label="Standing" value={compact(displayTroops(standing))} tone="#43f2a1" />
         <CommandMetric label="Wounded" value={compact(displayTroops(wounded))} tone="#ff7188" />
-        <button type="button" className="command-credits" aria-label="Open Credits exchange"><span>◇</span><div><small>CREDITS</small><b>{compact(visibleCredits)}</b></div><strong>＋</strong></button>
+        <button type="button" className={`command-credits${view === "shop" ? " shop-active" : ""}`} aria-label="Open Credits exchange" onClick={onCredits || onShop}><span>◇</span><div><small>CREDITS</small><b>{compact(visibleCredits)}</b></div><strong>{view === "shop" ? "+ TOP UP" : "＋"}</strong></button>
       </div>
     </nav>
   );

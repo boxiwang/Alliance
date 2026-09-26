@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>ALLIANCE City FX</title>
+<title>ALLIANCE Shop Flow</title>
 <style>:root {
   color-scheme: light dark;
   background-color: var(
@@ -1084,7 +1084,7 @@ html>body{padding:0}</style>
     @media(max-width:820px){#alliance-city-v3{height:auto;min-height:100vh;overflow:auto}#alliance-city-v3 .ac2-shell{height:auto;min-height:100vh}#alliance-city-v3 .ac2-navhead{grid-template-columns:1fr}.ac2-mainnav{overflow:auto}.ac2-network{grid-template-columns:repeat(4,1fr);padding:0}.ac2-grid{height:auto;grid-template-columns:1fr}.ac2-stage{min-height:600px}.ac2-left{order:2;border:0;border-top:1px solid var(--ac2-line)}.ac2-right{order:3;border:0;border-top:1px solid var(--ac2-line)}.ac2-wh-grid{grid-template-columns:repeat(2,1fr)}.ac2-mini{right:14px}}
     @media(max-width:699px),(max-height:559px){#alliance-city-v3 .ac2-shell{display:none}#alliance-city-v3 .ac2-viewport-warning{display:grid}}
     @media(prefers-reduced-motion:reduce){#alliance-city-v3 *{transition:none!important}}
-
+  
     /* ===== Claude FX layer (all effects scoped to .fx-on, toggleable) ===== */
     #alliance-city-v3:not(.fx-on) .fx-only{display:none!important}
     #alliance-city-v3 .fx-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none}
@@ -1138,6 +1138,146 @@ html>body{padding:0}</style>
     #alliance-city-v3.fx-on .ac2-orbit.outer{width:88%;height:70%}
     #alliance-city-v3.fx-on .ac2-orbit.inner{width:56%;height:45%}
     @media (prefers-reduced-motion:reduce){#alliance-city-v3 .fx-floor,#alliance-city-v3 .fx-radar,#alliance-city-v3 .fx-ripple,#alliance-city-v3 .fx-vignette{animation:none!important}#alliance-city-v3.fx-alert .fx-ripple{opacity:.6}}
+
+    /* ===== Claude Shop + Top-up layer ===== */
+    #alliance-city-v3 .ac2-mainnav{grid-template-columns:repeat(5,1fr)}
+    #alliance-city-v3 .ac2-mainnav button[data-nav="shop"] span{color:#c3c8ff}
+    #alliance-city-v3.is-shop .ac2-grid{display:none}
+    #alliance-city-v3 .sh-page{position:relative;z-index:2;display:grid;grid-template-columns:210px minmax(0,1fr);height:calc(100vh - 116px);min-height:0}
+    #alliance-city-v3 .sh-page[hidden]{display:none}
+    #alliance-city-v3 .sh-rail{display:flex;flex-direction:column;gap:12px;padding:14px 12px;border-right:1px solid var(--ac2-line);background:rgba(4,8,15,.78)}
+    #alliance-city-v3 .sh-railhead{display:flex;align-items:center;gap:9px;color:var(--ac2-text);font:600 13px var(--ac2-hud);letter-spacing:.14em}
+    #alliance-city-v3 .sh-railhead span{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:1px solid rgba(142,151,255,.3);background:rgba(142,151,255,.1);color:#c3c8ff}
+    #alliance-city-v3 .sh-railhead svg{width:15px;height:15px}
+    #alliance-city-v3 .sh-tabs{display:flex;flex-direction:column;gap:3px}
+    #alliance-city-v3 .sh-tabs button{display:flex;align-items:center;justify-content:space-between;padding:10px 11px;border:1px solid transparent;border-radius:8px;background:transparent;color:#6f879a;font:500 9px var(--ac2-hud);letter-spacing:.13em;text-align:left;cursor:pointer}
+    #alliance-city-v3 .sh-tabs button:hover{color:var(--ac2-text);background:rgba(56,217,255,.04)}
+    #alliance-city-v3 .sh-tabs button.is-active{color:#e9fbff;border-color:rgba(56,217,255,.26);background:linear-gradient(100deg,rgba(56,217,255,.14),rgba(95,78,198,.08));box-shadow:inset 2px 0 #38d9ff}
+    #alliance-city-v3 .sh-tabs em{min-width:18px;height:16px;padding:0 5px;display:grid;place-items:center;border-radius:8px;background:#f04f64;color:#fff;font:600 8px var(--ac2-mono);font-style:normal}
+    #alliance-city-v3 .sh-wallet{margin-top:auto;padding:12px;border:1px solid rgba(142,151,255,.22);border-radius:10px;background:linear-gradient(145deg,rgba(142,151,255,.1),rgba(65,50,126,.06))}
+    #alliance-city-v3 .sh-wallet small{display:block;color:#71889a;font:500 8px var(--ac2-mono);letter-spacing:.12em}
+    #alliance-city-v3 .sh-wallet b{display:block;margin:4px 0 10px;color:#eef0ff;font:500 22px var(--ac2-hud)}
+    #alliance-city-v3 .sh-wallet b i{color:#c3c8ff;font-style:normal;font-size:15px;margin-right:4px}
+    #alliance-city-v3 .sh-note{color:#4f6377;font:400 8.5px/1.5 var(--ac2-mono)}
+    #alliance-city-v3 .sh-main{min-width:0;overflow:auto;padding:18px 22px 110px}
+    #alliance-city-v3 .sh-mainhead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px}
+    #alliance-city-v3 .sh-mainhead h2{margin:0;color:var(--ac2-text);font:600 17px var(--ac2-hud);letter-spacing:.12em}
+    #alliance-city-v3 .sh-mainhead p{margin:4px 0 0;color:#6a8195;font:400 10px var(--ac2-mono)}
+    #alliance-city-v3 .sh-mainhead time{color:#8cecff;font:500 10px var(--ac2-mono);white-space:nowrap}
+    #alliance-city-v3 .sh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:12px}
+    #alliance-city-v3 .sh-card{position:relative;display:flex;flex-direction:column;gap:10px;min-height:208px;padding:14px;border:1px solid rgba(126,157,198,.16);border-radius:12px;background:linear-gradient(160deg,rgba(17,27,45,.92),rgba(7,13,26,.96));transition:border-color .2s,transform .2s}
+    #alliance-city-v3 .sh-card:hover{border-color:rgba(56,217,255,.34);transform:translateY(-2px)}
+    #alliance-city-v3 .sh-card.is-wide{grid-column:span 2}
+    #alliance-city-v3 .sh-card.is-planned{opacity:.55}
+    #alliance-city-v3 .sh-art{height:74px;display:grid;place-items:center;border-radius:9px;background:radial-gradient(circle at 50% 60%,color-mix(in srgb,var(--c,#38d9ff) 22%,transparent),transparent 70%),rgba(3,7,16,.6);border:1px solid rgba(126,157,198,.08);color:var(--c,#38d9ff)}
+    #alliance-city-v3 .sh-art svg{width:28px;height:28px;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--c,#38d9ff) 60%,transparent))}
+    #alliance-city-v3 .sh-swatch{width:46px;height:46px;border-radius:50%;background:var(--sw);box-shadow:0 0 22px color-mix(in srgb,var(--c) 45%,transparent)}
+    #alliance-city-v3 .sh-card h3{margin:0;color:var(--ac2-text);font:600 11px var(--ac2-hud);letter-spacing:.08em}
+    #alliance-city-v3 .sh-card p{margin:0;color:#71889a;font:400 9.5px/1.5 var(--ac2-mono);flex:1}
+    #alliance-city-v3 .sh-chips{display:flex;flex-wrap:wrap;gap:4px}
+    #alliance-city-v3 .sh-chip{padding:2px 6px;border-radius:5px;border:1px solid rgba(126,157,198,.2);color:#8aa0b4;font:500 7.5px var(--ac2-mono);letter-spacing:.08em}
+    #alliance-city-v3 .sh-chip.gold{border-color:rgba(232,178,76,.4);color:#f2c96e}
+    #alliance-city-v3 .sh-chip.red{border-color:rgba(255,113,136,.4);color:#ff9aab}
+    #alliance-city-v3 .sh-chip.green{border-color:rgba(67,242,161,.35);color:#7df5bd}
+    #alliance-city-v3 .sh-buy{display:flex;align-items:center;justify-content:center;gap:7px;padding:9px;border:1px solid rgba(142,151,255,.4);border-radius:8px;background:linear-gradient(100deg,rgba(142,151,255,.2),rgba(95,78,198,.12));color:#eef0ff;font:600 10px var(--ac2-hud);letter-spacing:.1em;cursor:pointer}
+    #alliance-city-v3 .sh-buy:hover{border-color:rgba(142,151,255,.75)}
+    #alliance-city-v3 .sh-buy s{color:#6f7ba0;font-weight:400}
+    #alliance-city-v3 .sh-buy.free{border-color:rgba(67,242,161,.45);background:rgba(67,242,161,.1);color:#bff5dc}
+    #alliance-city-v3 .sh-buy:disabled{opacity:.5;cursor:not-allowed}
+    #alliance-city-v3 .sh-ribbon{position:absolute;top:10px;right:10px;padding:2px 7px;border-radius:5px;background:#f04f64;color:#fff;font:600 8px var(--ac2-mono);letter-spacing:.06em}
+    #alliance-city-v3 .sh-ribbon.gold{background:#e8b24c;color:#1a1204}
+
+    /* in the Shop, the header balance becomes the wallet: bigger, lit, with an explicit TOP UP */
+    #alliance-city-v3.is-shop .ac2-network{grid-template-columns:repeat(3,minmax(125px,1.15fr)) repeat(4,minmax(70px,.68fr)) 200px}
+    #alliance-city-v3.is-shop .ac2-credits{position:relative;overflow:hidden;grid-template-columns:30px 1fr auto;padding:8px 12px;background:linear-gradient(135deg,rgba(142,151,255,.32),rgba(108,99,230,.18));box-shadow:inset 0 0 0 1px rgba(160,168,255,.6),0 0 26px rgba(142,151,255,.28)}
+    #alliance-city-v3.is-shop .ac2-credits::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.18) 50%,transparent 65%);transform:translateX(-100%);animation:sh-sheen 3.2s ease-in-out 0s 2;pointer-events:none}
+    @keyframes sh-sheen{to{transform:translateX(100%)}}
+    #alliance-city-v3.is-shop .ac2-credits>span{width:30px;height:30px;font-size:17px;background:rgba(195,200,255,.2);color:#eef0ff;box-shadow:0 0 12px rgba(142,151,255,.5)}
+    #alliance-city-v3.is-shop .ac2-credits small{color:#c3c8ff}
+    #alliance-city-v3.is-shop .ac2-credits b{font-size:19px;color:#fff}
+    #alliance-city-v3.is-shop .ac2-credits strong{width:auto;height:26px;padding:0 10px;border-radius:7px;font:700 9px var(--ac2-hud);letter-spacing:.1em;white-space:nowrap;box-shadow:0 0 14px rgba(142,151,255,.55)}
+    #alliance-city-v3.is-shop .ac2-credits:hover strong{filter:brightness(1.12)}
+
+    /* overlay + dialogs */
+    #alliance-city-v3 .sh-overlay{position:absolute;inset:0;z-index:60;display:grid;place-items:center;padding:20px;background:rgba(2,5,12,.72);backdrop-filter:blur(6px);animation:sh-fade .18s ease-out}
+    #alliance-city-v3 .sh-overlay[hidden]{display:none}
+    @keyframes sh-fade{from{opacity:0}}
+    #alliance-city-v3 .sh-dialog{position:relative;width:min(720px,100%);max-height:calc(100vh - 60px);overflow:auto;border:1px solid rgba(56,217,255,.26);border-radius:14px;background:linear-gradient(170deg,#0a1426,#050b17);box-shadow:0 30px 90px rgba(0,0,0,.6),0 0 40px rgba(56,217,255,.06);animation:sh-rise .22s ease-out}
+    #alliance-city-v3 .sh-dialog.small{width:min(400px,100%)}
+    @keyframes sh-rise{from{transform:translateY(10px);opacity:0}}
+    #alliance-city-v3 .sh-dhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--ac2-line)}
+    #alliance-city-v3 .sh-dhead b{color:var(--ac2-text);font:600 13px var(--ac2-hud);letter-spacing:.14em}
+    #alliance-city-v3 .sh-x{width:28px;height:28px;border:1px solid rgba(126,157,198,.2);border-radius:7px;background:transparent;color:#8aa0b4;cursor:pointer;font-size:14px}
+    #alliance-city-v3 .sh-x:hover{color:#fff;border-color:rgba(56,217,255,.4)}
+    #alliance-city-v3 .sh-steps{display:flex;gap:4px;padding:12px 20px 0}
+    #alliance-city-v3 .sh-steps span{flex:1;padding-top:7px;border-top:2px solid rgba(126,157,198,.14);color:#4f6377;font:500 8px var(--ac2-mono);letter-spacing:.12em}
+    #alliance-city-v3 .sh-steps span.done{border-color:rgba(56,217,255,.5);color:#7fb3c7}
+    #alliance-city-v3 .sh-steps span.now{border-color:#38d9ff;color:#e9fbff}
+    #alliance-city-v3 .sh-dbody{padding:16px 20px 18px}
+    #alliance-city-v3 .sh-dfoot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px 16px;border-top:1px solid var(--ac2-line);color:#4f6377;font:400 8.5px/1.5 var(--ac2-mono)}
+    #alliance-city-v3 .sh-dfoot a,#alliance-city-v3 .sh-link{color:#7fcfe6;text-decoration:none;cursor:pointer;background:none;border:0;padding:0;font:inherit}
+    #alliance-city-v3 .sh-dfoot a:hover,#alliance-city-v3 .sh-link:hover{text-decoration:underline}
+    #alliance-city-v3 .sh-promo{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:9px 12px;border:1px solid rgba(232,178,76,.3);border-radius:9px;background:rgba(232,178,76,.07);color:#f2d9a4;font:500 9.5px var(--ac2-mono)}
+    #alliance-city-v3 .sh-promo b{color:#ffd48a;font-family:var(--ac2-hud);letter-spacing:.1em}
+    #alliance-city-v3 .sh-packs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    #alliance-city-v3 .sh-pack{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:16px 10px 12px;border:1px solid rgba(126,157,198,.18);border-radius:11px;background:rgba(10,18,34,.8);color:var(--ac2-text);cursor:pointer;transition:border-color .15s,background .15s}
+    #alliance-city-v3 .sh-pack:hover{border-color:rgba(142,151,255,.5)}
+    #alliance-city-v3 .sh-pack.is-selected{border-color:#8e97ff;background:linear-gradient(160deg,rgba(142,151,255,.18),rgba(10,18,34,.9));box-shadow:0 0 0 3px rgba(142,151,255,.12)}
+    #alliance-city-v3 .sh-gem{width:34px;height:34px;display:grid;place-items:center;border-radius:50%;background:radial-gradient(circle at 40% 35%,#dfe2ff,#8e97ff 45%,#3c3f93);color:#0b0e20;font-size:15px;box-shadow:0 0 18px rgba(142,151,255,.45)}
+    #alliance-city-v3 .sh-pack strong{font:600 17px var(--ac2-hud);letter-spacing:.04em}
+    #alliance-city-v3 .sh-pack small{min-height:12px;color:#7df5bd;font:500 8.5px var(--ac2-mono)}
+    #alliance-city-v3 .sh-pack .usd{margin-top:4px;padding:5px 12px;border-radius:6px;background:rgba(56,217,255,.08);color:#bff0ff;font:500 11px var(--ac2-mono)}
+    #alliance-city-v3 .sh-pack .x2{position:absolute;top:-7px;left:50%;transform:translateX(-50%);padding:2px 7px;border-radius:5px;background:#e8b24c;color:#1a1204;font:700 8px var(--ac2-mono);white-space:nowrap}
+    #alliance-city-v3 .sh-pack .tag{position:absolute;top:7px;right:7px;color:#ff9aab;font:600 7px var(--ac2-mono);letter-spacing:.06em}
+    #alliance-city-v3 .sh-rails{display:flex;flex-direction:column;gap:6px}
+    #alliance-city-v3 .sh-rail-opt{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:11px;padding:10px 12px;border:1px solid rgba(126,157,198,.18);border-radius:10px;background:rgba(10,18,34,.8);color:var(--ac2-text);text-align:left;cursor:pointer}
+    #alliance-city-v3 .sh-rail-opt:hover:not(:disabled){border-color:rgba(56,217,255,.45)}
+    #alliance-city-v3 .sh-rail-opt.is-selected{border-color:#38d9ff;box-shadow:0 0 0 3px rgba(56,217,255,.1)}
+    #alliance-city-v3 .sh-rail-opt:disabled{opacity:.45;cursor:not-allowed}
+    #alliance-city-v3 .sh-coin{width:30px;height:30px;display:grid;place-items:center;border-radius:50%;font:700 9px var(--ac2-mono);color:#06101c;background:var(--coin)}
+    #alliance-city-v3 .sh-rail-opt b{display:block;font:600 11px var(--ac2-hud);letter-spacing:.06em}
+    #alliance-city-v3 .sh-rail-opt span{display:block;margin-top:2px;color:#71889a;font:400 9px var(--ac2-mono)}
+    #alliance-city-v3 .sh-rail-opt em{font-style:normal;color:#9fb3c9;font:500 9.5px var(--ac2-mono);text-align:right}
+    #alliance-city-v3 .sh-rail-opt em.low{color:#ff9aab}
+    #alliance-city-v3 .sh-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:12px;border:1px solid var(--ac2-line);border-radius:10px;overflow:hidden;background:var(--ac2-line)}
+    #alliance-city-v3 .sh-summary div{padding:9px 12px;background:#07101f}
+    #alliance-city-v3 .sh-summary small{display:block;color:#5d7387;font:500 8px var(--ac2-mono);letter-spacing:.1em}
+    #alliance-city-v3 .sh-summary b{display:block;margin-top:3px;color:#e4f2ff;font:500 11px var(--ac2-mono);word-break:break-all}
+    #alliance-city-v3 .sh-summary b.ok{color:#7df5bd}
+    #alliance-city-v3 .sh-cta{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+    #alliance-city-v3 .sh-btn{padding:11px 18px;border:1px solid rgba(126,157,198,.25);border-radius:9px;background:transparent;color:#9fb3c9;font:600 10px var(--ac2-hud);letter-spacing:.12em;cursor:pointer}
+    #alliance-city-v3 .sh-btn:hover{color:#fff;border-color:rgba(56,217,255,.4)}
+    #alliance-city-v3 .sh-btn.primary{border-color:#8e97ff;background:linear-gradient(100deg,#8e97ff,#6c63e6);color:#0a0c1c}
+    #alliance-city-v3 .sh-btn.primary:hover{filter:brightness(1.1)}
+    #alliance-city-v3 .sh-btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+    #alliance-city-v3 .sh-demo{padding:9px 14px;border:1px dashed rgba(232,178,76,.5);border-radius:9px;background:rgba(232,178,76,.06);color:#f2c96e;font:600 9px var(--ac2-hud);letter-spacing:.1em;cursor:pointer}
+    #alliance-city-v3 .sh-demo.bad{border-color:rgba(255,113,136,.5);background:rgba(255,113,136,.06);color:#ff9aab}
+    #alliance-city-v3 .sh-center{display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px 0 6px;text-align:center}
+    #alliance-city-v3 .sh-center h3{margin:0;color:var(--ac2-text);font:600 15px var(--ac2-hud);letter-spacing:.1em}
+    #alliance-city-v3 .sh-center p{max-width:440px;margin:0;color:#7890a4;font:400 10px/1.6 var(--ac2-mono)}
+    #alliance-city-v3 .sh-spinner{width:54px;height:54px;border-radius:50%;border:2px solid rgba(56,217,255,.12);border-top-color:#38d9ff;animation:fx-spin 1s linear infinite}
+    #alliance-city-v3 .sh-walletcard{width:min(380px,100%);padding:12px 14px;border:1px solid rgba(126,157,198,.2);border-radius:11px;background:#070f1d;text-align:left}
+    #alliance-city-v3 .sh-walletcard header{display:flex;justify-content:space-between;color:#8aa0b4;font:500 8.5px var(--ac2-mono);letter-spacing:.1em;margin-bottom:8px}
+    #alliance-city-v3 .sh-walletcard div{display:flex;justify-content:space-between;gap:10px;padding:4px 0;color:#6f879a;font:400 9.5px var(--ac2-mono)}
+    #alliance-city-v3 .sh-walletcard div b{color:#e4f2ff;font-weight:500}
+    #alliance-city-v3 .sh-checks{width:min(420px,100%);display:flex;flex-direction:column;gap:6px;text-align:left}
+    #alliance-city-v3 .sh-checks div{display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:9px;color:#5d7387;font:400 10px var(--ac2-mono)}
+    #alliance-city-v3 .sh-checks div i{width:14px;height:14px;border-radius:50%;border:1.5px solid #34465a;font-style:normal}
+    #alliance-city-v3 .sh-checks div.run{color:#bfe9f7}
+    #alliance-city-v3 .sh-checks div.run i{border-color:#38d9ff;border-top-color:transparent;animation:fx-spin .8s linear infinite}
+    #alliance-city-v3 .sh-checks div.ok{color:#cfe9dd}
+    #alliance-city-v3 .sh-checks div.ok i{border-color:#43f2a1;background:#43f2a1;box-shadow:0 0 8px rgba(67,242,161,.5)}
+    #alliance-city-v3 .sh-checks div em{font-style:normal;color:#7fb3c7;font-size:9px}
+    #alliance-city-v3 .sh-big{color:#eef0ff;font:600 40px var(--ac2-hud);letter-spacing:.02em;text-shadow:0 0 30px rgba(142,151,255,.5);animation:sh-pop .5s cubic-bezier(.2,1.6,.4,1)}
+    #alliance-city-v3 .sh-big i{color:#c3c8ff;font-style:normal;font-size:28px;margin-right:6px}
+    @keyframes sh-pop{from{transform:scale(.6);opacity:0}}
+    #alliance-city-v3 .sh-errorbox{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid rgba(255,113,136,.35);border-radius:10px;background:rgba(255,113,136,.07);color:#ffc2cc;font:400 10px/1.5 var(--ac2-mono);text-align:left}
+    #alliance-city-v3 .sh-recover{display:flex;gap:6px;margin-top:10px}
+    #alliance-city-v3 .sh-recover input{flex:1;min-width:0;padding:8px 10px;border:1px solid rgba(126,157,198,.25);border-radius:7px;background:#050b16;color:#e4f2ff;font:400 10px var(--ac2-mono)}
+    #alliance-city-v3 .sh-recover input:focus{outline:none;border-color:#38d9ff}
+    #alliance-city-v3 .sh-toast{position:absolute;z-index:70;left:50%;bottom:26px;transform:translateX(-50%);padding:10px 16px;border:1px solid rgba(67,242,161,.4);border-radius:10px;background:rgba(6,26,20,.95);color:#bff5dc;font:600 10px var(--ac2-hud);letter-spacing:.1em;box-shadow:0 10px 30px rgba(0,0,0,.4);animation:sh-rise .2s ease-out}
+    #alliance-city-v3 .ac2-credits.bump b{animation:sh-pop .5s ease-out;color:#fff;text-shadow:0 0 12px #8e97ff}
+    @media (prefers-reduced-motion:reduce){#alliance-city-v3.is-shop .ac2-credits::after{animation:none;display:none}#alliance-city-v3 .sh-overlay,#alliance-city-v3 .sh-dialog,#alliance-city-v3 .sh-big,#alliance-city-v3 .sh-toast{animation:none}#alliance-city-v3 .sh-spinner,#alliance-city-v3 .sh-checks div.run i{animation-duration:3s}}
 </style>
 
   <section class="ac2-viewport-warning" aria-label="Window size notice"><div><span><i data-lucide="maximize-2" aria-hidden="true"></i></span><b>EXPAND YOUR VIEWPORT</b><p>ALLIANCE requires a larger desktop window. Widen the browser to return to your city.</p></div></section>
@@ -1853,6 +1993,218 @@ html>body{padding:0}</style>
   new ResizeObserver(measure).observe(map);
   document.fonts?.ready.then(measure);
   measure();start();
+})();
+</script>
+
+<script id="claude-shop">
+(()=>{
+  const root=document.getElementById('alliance-city-v3');if(!root)return;
+  const shell=root.querySelector('.ac2-shell'),grid=root.querySelector('.ac2-grid'),nav=root.querySelector('.ac2-mainnav');
+  const creditBtn=root.querySelector('.ac2-credits'),creditVal=creditBtn.querySelector('b'),creditPlus=creditBtn.querySelector('strong');
+  const icons=()=>globalThis.lucide?.createIcons({attrs:{width:16,height:16}});
+  const fmt=n=>Math.round(n).toLocaleString('en-US');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ---------- state (mock) ---------- */
+  let credits=120,claimed=false;const firstDone=new Set(),owned=new Set();
+
+  /* ---------- catalog: all placeholders ---------- */
+  const PACKS=[
+    {id:'c100',credits:100,bonus:0,usd:.99},
+    {id:'c500',credits:500,bonus:25,usd:4.99},
+    {id:'c1000',credits:1000,bonus:100,usd:9.99,tag:'POPULAR'},
+    {id:'c2000',credits:2000,bonus:300,usd:19.99},
+    {id:'c5000',credits:5000,bonus:1000,usd:49.99},
+    {id:'c10000',credits:10000,bonus:2500,usd:99.99,tag:'BEST VALUE'}
+  ];
+  const HOME_CHAIN='Robinhood Chain';
+  const RAILS=[
+    {id:'rhc-usdg',chain:'Robinhood Chain',token:'USDG',coin:'linear-gradient(135deg,#d7ff5c,#43f2a1)',bal:84.2,fee:'< $0.01',note:'HOME CHAIN · NATIVE STABLECOIN'},
+    {id:'rhc-usdc',chain:'Robinhood Chain',token:'USDC',coin:'linear-gradient(135deg,#9cc8ff,#2775ca)',bal:12,fee:'< $0.01',note:'NATIVE USDC VIA CCTP'},
+    {id:'base-usdc',chain:'Base',token:'USDC',coin:'linear-gradient(135deg,#9cc8ff,#2775ca)',bal:230.55,fee:'< $0.01'},
+    {id:'bnb-usdt',chain:'BNB Chain',token:'USDT',coin:'linear-gradient(135deg,#7ff0c8,#26a17b)',bal:0,fee:'≈ $0.02'},
+    {id:'router',chain:'Any chain · ETH / SOL / TRX',token:'ANY',coin:'linear-gradient(135deg,#c3c8ff,#6c63e6)',bal:null,fee:'—',note:'PAY WITH ANY TOKEN VIA ROUTER · COMING SOON',disabled:true}
+  ];
+  const TREASURY='0x7A11…C0DE';const WALLET='0xbb1d…1c1c';
+  const TABS={
+    daily:{title:'DAILY',sub:'Free supplies and one rotating deal. Resets 00:00 UTC.',items:[
+      {id:'daily-crate',name:'Daily Supply Crate',icon:'gift',c:'#43f2a1',desc:'2× 5m Universal Speedup and 1 Energy Cell. Fixed contents — no random rolls.',free:true,chips:[['FREE','green']]},
+      {id:'deal-speed',name:'3× 1h Universal Speedup',icon:'timer',c:'#38d9ff',desc:"Today's deal. Refreshes daily.",price:90,was:180,ribbon:'-50%',chips:[['LIMIT 1 / DAY','']]},
+      {id:'deal-energy',name:'2× Energy Cell',icon:'battery-charging',c:'#e8b24c',desc:'Restores 20 Star Map energy in total.',price:20,was:30,chips:[['LIMIT 3 / DAY','']]}]},
+    packs:{title:'PACKS',sub:'Bundles with better value than single items.',items:[
+      {id:'starter',name:'Starter Pack',icon:'package',c:'#e8b24c',desc:'5× 1h Speedup, 3 Resource Reserves, 1 Drift Jump and a founder frame.',price:499,ribbon:'5× VALUE',ribbonCls:'gold',chips:[['ONE-TIME','gold']],once:true},
+      {id:'monthly',name:'Monthly Card',icon:'calendar-check',c:'#8e97ff',desc:'◇ 100 every day for 30 days (◇ 3,000 total) plus +1 daily scout.',price:499,chips:[['30 DAYS',''],['BEST VALUE','gold']],once:true,ownedLabel:'ACTIVE · 30 DAYS LEFT'},
+      {id:'alliance-gift',name:'Alliance Gift Pack',icon:'users',c:'#38d9ff',desc:'You get the pack, and every member of your alliance gets a gift crate.',price:999,chips:[['SOCIAL','']]},
+      {id:'season',name:'Season Pass',icon:'ticket',c:'#aa82ff',desc:'Free and premium reward tracks for the Wormhole season.',planned:true,chips:[['PLANNED','red']]}]},
+    items:{title:'ITEMS',sub:'Time and convenience. Never troops, Might or combat results.',items:[
+      {id:'sp-1h',name:'1h Universal Speedup',icon:'timer',c:'#38d9ff',desc:'Reduces any active timer by 1 hour.',price:60},
+      {id:'sp-8h',name:'8h Universal Speedup',icon:'timer',c:'#e8b24c',desc:'Reduces any active timer by 8 hours.',price:420},
+      {id:'boost',name:'Production Boost',icon:'trending-up',c:'#43f2a1',desc:'+25% Cash, Oil and Power production for 24 hours.',price:150},
+      {id:'queue2',name:'Second Build Queue',icon:'hammer',c:'#ffb454',desc:'Build two things at once for 7 days.',price:300},
+      {id:'reserve',name:'Resource Reserve',icon:'landmark',c:'#43f2a1',desc:'Adds a protected bundle of Cash, Oil or Power.',price:50},
+      {id:'energy',name:'Energy Cell',icon:'battery-charging',c:'#e8b24c',desc:'Restores 10 Star Map energy.',price:10},
+      {id:'shield-8h',name:'Peace Shield 8h',icon:'shield',c:'#9db4ff',desc:'Stops hostile attacks for 8 hours. Attacking breaks it.',price:200,chips:[['KEEP 10+','']]},
+      {id:'jump',name:'Drift Jump',icon:'shuffle',c:'#aa82ff',desc:'Relocate your city to a random valid sector.',price:300},
+      {id:'rename',name:'Rename Signal',icon:'pen-line',c:'#8aa0b4',desc:'Change your commander name now.',price:200}]},
+    cosmetics:{title:'COSMETICS',sub:'Identity only — zero effect on combat or economy.',items:[
+      {id:'core-nebula',name:'Nebula Core',swatch:'radial-gradient(circle at 35% 35%,#f3d9ff,#aa82ff 40%,#2b1450)',c:'#aa82ff',desc:'Planet core skin shown on the Star Map and your profile.',price:800,chips:[['CORE','']]},
+      {id:'halo-solar',name:'Solar Halo',swatch:'radial-gradient(circle,transparent 42%,#ffd48a 46%,#e8b24c 52%,transparent 60%),radial-gradient(circle,#1b2338 40%,transparent 41%)',c:'#e8b24c',desc:'Animated halo around your planet.',price:600,chips:[['HALO','']]},
+      {id:'orbit-twin',name:'Twin Ring Orbit',swatch:'radial-gradient(ellipse 60% 22%,transparent 80%,#38d9ff 84%,transparent 90%),radial-gradient(circle,#16324a 38%,transparent 40%)',c:'#38d9ff',desc:'Double orbital ring.',price:500,chips:[['ORBIT','']]},
+      {id:'name-neon',name:'Neon Glitch Name',swatch:'linear-gradient(135deg,#ff4fd8,#38d9ff)',c:'#ff4fd8',desc:'Name signature in chat, reports and the map.',price:400,chips:[['NAME','']]},
+      {id:'march-comet',name:'Comet Trail',swatch:'linear-gradient(90deg,transparent,#43f2a1 70%,#fff)',c:'#43f2a1',desc:'March signature for your fleets.',price:700,chips:[['MARCH','']]}]}
+  };
+  const ITEM=Object.fromEntries(Object.values(TABS).flatMap(t=>t.items).map(i=>[i.id,i]));
+
+  /* ---------- nav: SHOP tab ---------- */
+  const cityBtn=nav.querySelector('.is-current');cityBtn.dataset.nav='city';
+  nav.insertAdjacentHTML('beforeend','<button type="button" data-nav="shop"><span>◈</span><b>SHOP</b></button>');
+  const shopBtn=nav.querySelector('[data-nav="shop"]');
+
+  /* ---------- shop page ---------- */
+  const page=document.createElement('section');page.className='sh-page';page.hidden=true;page.setAttribute('aria-label','Shop');
+  page.innerHTML=`<aside class="sh-rail"><div class="sh-railhead"><span><i data-lucide="store"></i></span>SHOP</div>
+    <nav class="sh-tabs" role="tablist">${Object.entries(TABS).map(([k,t])=>`<button type="button" role="tab" data-shop-tab="${k}">${t.title}${k==='daily'?'<em data-daily-badge>1</em>':''}</button>`).join('')}</nav>
+    <p class="sh-note" style="margin-top:auto">MOCKUP · every item and price here is a placeholder.</p></aside>
+    <div class="sh-main"><header class="sh-mainhead"><div><h2 data-shop-title></h2><p data-shop-sub></p></div><time data-shop-reset></time></header><div class="sh-grid" data-shop-grid></div></div>`;
+  grid.after(page);
+  let tab='daily';
+  function card(i){
+    const art=i.swatch?`<div class="sh-art" style="--c:${i.c}"><span class="sh-swatch" style="--sw:${i.swatch};--c:${i.c}"></span></div>`:`<div class="sh-art" style="--c:${i.c}"><i data-lucide="${i.icon}"></i></div>`;
+    let btn;
+    if(i.planned)btn=`<button class="sh-buy" type="button" disabled>PLANNED</button>`;
+    else if(i.free)btn=claimed?`<button class="sh-buy free" type="button" disabled>CLAIMED · <span data-reset-short></span></button>`:`<button class="sh-buy free" type="button" data-claim="${i.id}">CLAIM FREE</button>`;
+    else if(i.once&&owned.has(i.id))btn=`<button class="sh-buy" type="button" disabled>${i.ownedLabel||'PURCHASED'}</button>`;
+    else btn=`<button class="sh-buy" type="button" data-buy="${i.id}">${i.was?`<s>◇ ${fmt(i.was)}</s>`:''}◇ ${fmt(i.price)}</button>`;
+    return `<article class="sh-card${i.planned?' is-planned':''}">${i.ribbon?`<span class="sh-ribbon ${i.ribbonCls||''}">${i.ribbon}</span>`:''}${art}<h3>${i.name}</h3><p>${i.desc}</p>${i.chips?`<div class="sh-chips">${i.chips.map(([t,c])=>`<span class="sh-chip ${c}">${t}</span>`).join('')}</div>`:''}${btn}</article>`;
+  }
+  function renderShop(){
+    const t=TABS[tab];page.querySelectorAll('[data-shop-tab]').forEach(b=>{const on=b.dataset.shopTab===tab;b.classList.toggle('is-active',on);b.setAttribute('aria-selected',String(on))});
+    page.querySelector('[data-shop-title]').textContent=t.title;page.querySelector('[data-shop-sub]').textContent=t.sub;
+    page.querySelector('[data-shop-grid]').innerHTML=t.items.map(card).join('');
+    const badge=page.querySelector('[data-daily-badge]');if(badge)badge.hidden=claimed;
+    tickReset();icons();
+  }
+  function untilReset(){const n=new Date(),r=Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate()+1),s=Math.floor((r-n)/1000);return[Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(v=>String(v).padStart(2,'0')).join(':')}
+  function tickReset(){const r=untilReset();page.querySelector('[data-shop-reset]').textContent=tab==='daily'?`RESETS IN ${r}`:'';page.querySelectorAll('[data-reset-short]').forEach(e=>e.textContent=r)}
+  setInterval(tickReset,1000);
+  page.addEventListener('click',e=>{
+    const t=e.target.closest('[data-shop-tab]');if(t){tab=t.dataset.shopTab;renderShop();return}
+    const c=e.target.closest('[data-claim]');if(c){claimed=true;renderShop();toast('✓ DAILY CRATE → WAREHOUSE: 2× 5m SPEEDUP, 1 ENERGY CELL');return}
+    const b=e.target.closest('[data-buy]');if(b){openBuy(ITEM[b.dataset.buy]);return}
+    if(e.target.closest('[data-open-topup]'))openTopup();
+  });
+  function showView(v){const shop=v==='shop';creditPlus.textContent=shop?'＋ TOP UP':'＋';page.hidden=!shop;root.classList.toggle('is-shop',shop);shopBtn.classList.toggle('is-current',shop);cityBtn.classList.toggle('is-current',!shop);if(shop)renderShop()}
+  shopBtn.addEventListener('click',()=>showView('shop'));cityBtn.addEventListener('click',()=>showView('city'));
+
+  /* ---------- balance ---------- */
+  function paintBalance(n){creditVal.textContent=fmt(n);const sb=page.querySelector('[data-shop-balance]');if(sb)sb.textContent=fmt(n)}
+  function setCredits(n,animate){const from=credits;credits=n;if(!animate||reduce.matches){paintBalance(n);return}
+    const t0=performance.now(),D=900;creditBtn.classList.remove('bump');void creditBtn.offsetWidth;creditBtn.classList.add('bump');
+    (function step(now){const k=Math.min(1,(now-t0)/D),e=1-Math.pow(1-k,3);paintBalance(from+(n-from)*e);if(k<1)requestAnimationFrame(step)})(t0)}
+  paintBalance(credits);
+
+  /* ---------- overlay ---------- */
+  const overlay=document.createElement('div');overlay.className='sh-overlay';overlay.hidden=true;overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');shell.appendChild(overlay);
+    function openDialog(html,small){overlay.innerHTML=`<div class="sh-dialog${small?' small':''}">${html}</div>`;overlay.hidden=false;icons()}
+  function closeDialog(){overlay.hidden=true;overlay.innerHTML=''}
+  overlay.addEventListener('click',e=>{if(e.target===overlay||e.target.closest('[data-close]'))onClose()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!overlay.hidden)onClose()});
+  let onClose=closeDialog;
+  function toast(text){shell.querySelector('.sh-toast')?.remove();shell.insertAdjacentHTML('beforeend',`<div class="sh-toast" role="status">${text}</div>`);const el=shell.querySelector('.sh-toast');setTimeout(()=>el?.remove(),2800)}
+
+  /* ---------- buy with Credits ---------- */
+  function openBuy(i){onClose=closeDialog;const short=i.price-credits;
+    const body=short>0
+      ?`<div class="sh-summary"><div><small>PRICE</small><b>◇ ${fmt(i.price)}</b></div><div><small>BALANCE</small><b>◇ ${fmt(credits)}</b></div></div><div class="sh-errorbox" style="margin-top:12px">Not enough Credits — you need ◇ ${fmt(short)} more.</div><div class="sh-cta"><button class="sh-btn" type="button" data-close>CANCEL</button><button class="sh-btn primary" type="button" data-topup-for="${i.id}">TOP UP ◇</button></div>`
+      :`<div class="sh-summary"><div><small>PRICE</small><b>◇ ${fmt(i.price)}</b></div><div><small>BALANCE AFTER</small><b>◇ ${fmt(credits)} → ◇ ${fmt(credits-i.price)}</b></div></div><div class="sh-cta"><button class="sh-btn" type="button" data-close>CANCEL</button><button class="sh-btn primary" type="button" data-confirm-buy="${i.id}">CONFIRM PURCHASE</button></div>`;
+    openDialog(`<div class="sh-dhead"><b>${i.name.toUpperCase()}</b><button class="sh-x" type="button" data-close aria-label="Close">✕</button></div><div class="sh-dbody"><p class="sh-note" style="margin:0 0 10px;font-size:10px;color:#7890a4">${i.desc}</p>${body}</div>`,true);
+  }
+  overlay.addEventListener('click',e=>{
+    const cb=e.target.closest('[data-confirm-buy]');if(cb){const i=ITEM[cb.dataset.confirmBuy];setCredits(credits-i.price,true);if(i.once)owned.add(i.id);closeDialog();renderShop();toast(`✓ ${i.name.toUpperCase()} → ${i.id.startsWith('core')||i.id.startsWith('halo')||i.id.startsWith('orbit')||i.id.startsWith('name')||i.id.startsWith('march')?'COSMETIC VAULT':'WAREHOUSE'}`);return}
+    const tf=e.target.closest('[data-topup-for]');if(tf){const i=ITEM[tf.dataset.topupFor];openTopup(i)}
+  });
+
+  /* ---------- top-up flow ---------- */
+  const STEPS=['PACK','PAY WITH','WALLET','ON-CHAIN CHECK','DONE'];
+  let T=null;
+  const totalOf=p=>(firstDone.has(p.id)?p.credits:p.credits*2)+p.bonus;
+  function openTopup(forItem){
+    let pack=PACKS[2];
+    if(forItem){const need=forItem.price-credits;pack=PACKS.find(p=>totalOf(p)>=need)||PACKS[PACKS.length-1]}
+    T={step:1,pack,rail:RAILS[0],after:forItem||null,error:null,recover:false,switched:false,tx:null,bg:false};
+    onClose=()=>{if(T&&T.step===4&&!T.bg){T.bg=true;closeDialog();toast('CHECKING IN BACKGROUND — CREDITS ARRIVE AUTOMATICALLY');return}if(T&&T.step<4)T.cancel=true;closeDialog()};
+    renderTopup();
+  }
+  function stepsBar(){return `<div class="sh-steps">${STEPS.map((s,i)=>`<span class="${i+1<T.step?'done':i+1===T.step?'now':''}">${i+1} · ${s}</span>`).join('')}</div>`}
+  function head(){return `<div class="sh-dhead"><b>TOP UP CREDITS</b><button class="sh-x" type="button" data-close aria-label="Close">✕</button></div>${stepsBar()}`}
+  const legal=`<span>Credits are for in-game use only · non-refundable · non-transferable · cannot be withdrawn. <a href="#" onclick="return false">Terms</a></span>`;
+  function renderTopup(){
+    if(!T||T.bg)return;const p=T.pack,r=T.rail,got=totalOf(p),first=!firstDone.has(p.id);let body='',foot=legal;
+    if(T.step===1){
+      body=`<div class="sh-promo"><b>FIRST TOP-UP ×2</b><span>The first purchase of each tier doubles its base Credits.</span></div>
+        <div class="sh-packs">${PACKS.map(k=>`<button type="button" class="sh-pack${k.id===p.id?' is-selected':''}" data-pack="${k.id}">${!firstDone.has(k.id)?'<span class="x2">1ST ×2</span>':''}${k.tag?`<span class="tag">${k.tag}</span>`:''}<span class="sh-gem">◇</span><strong>${fmt(firstDone.has(k.id)?k.credits:k.credits*2)}</strong><small>${k.bonus?`+${fmt(k.bonus)} BONUS`:''}</small><span class="usd">$${k.usd.toFixed(2)}</span></button>`).join('')}</div>
+        ${T.after?`<p class="sh-note" style="margin:10px 0 0">Selected the smallest pack that covers <b style="color:#c3c8ff">${T.after.name}</b>.</p>`:''}
+        <div class="sh-cta"><button class="sh-btn primary" type="button" data-tu-next>CONTINUE · $${p.usd.toFixed(2)}</button></div>
+        ${T.recover?`<div class="sh-recover"><input type="text" placeholder="Paste transaction hash 0x…" aria-label="Transaction hash" data-recover-input><button class="sh-btn" type="button" data-recover-check>CHECK</button></div><p class="sh-note" data-recover-out style="margin-top:6px"></p>`:''}`;
+      foot=`${legal}<button class="sh-link" type="button" data-recover>Paid but no Credits? →</button>`;
+    }else if(T.step===2){
+      const usable=k=>!k.disabled&&(k.bal===null||k.bal>=p.usd);if(!usable(r)){T.rail=RAILS.find(usable)||r;return renderTopup()}
+      body=`<div class="sh-summary" style="margin:0 0 12px"><div><small>PACK</small><b>◇ ${fmt(got)}${first?' · incl. 1ST ×2':''}</b></div><div><small>WALLET</small><b>${WALLET} · smart wallet · ${HOME_CHAIN}</b></div></div>
+        <div class="sh-rails">${RAILS.map(k=>{const low=k.bal!==null&&k.bal<p.usd;return `<button type="button" class="sh-rail-opt${k.id===r.id?' is-selected':''}" data-rail="${k.id}" ${k.disabled||low?'disabled':''}><span class="sh-coin" style="--coin:${k.coin}">${k.token.slice(0,4)}</span><span><b>${k.token} · ${k.chain}</b><span>${k.note||'Network fee '+k.fee+' · paid by you'}</span></span><em class="${low?'low':''}">${k.bal===null?'':low?'INSUFFICIENT · '+k.bal.toFixed(2):'BAL '+k.bal.toFixed(2)}</em></button>`}).join('')}</div>
+        <div class="sh-summary"><div><small>YOU PAY</small><b>${p.usd.toFixed(2)} ${r.token}</b></div><div><small>NETWORK FEE</small><b>${r.fee} · paid by you</b></div><div><small>TO</small><b class="ok">Alliance Treasury (Safe) ${TREASURY} ✓</b></div><div><small>YOU GET</small><b>◇ ${fmt(got)}</b></div></div>
+        <div class="sh-cta"><button class="sh-btn" type="button" data-tu-back>BACK</button><button class="sh-btn primary" type="button" data-tu-next>PAY ${p.usd.toFixed(2)} ${r.token}</button></div>`;
+    }else if(T.step===3){
+      const needSwitch=r.chain!==HOME_CHAIN&&!T.switched;
+      if(T.error)body=`<div class="sh-center"><div class="sh-errorbox" style="width:min(440px,100%)"><span>✕</span><span>${T.error}</span></div><div class="sh-cta" style="justify-content:center"><button class="sh-btn" type="button" data-tu-back>CHANGE PAYMENT</button><button class="sh-btn primary" type="button" data-retry>TRY AGAIN</button></div></div>`;
+      else if(needSwitch)body=`<div class="sh-center"><div class="sh-spinner"></div><h3>SWITCH NETWORK IN YOUR WALLET</h3><p>Your wallet is on ${HOME_CHAIN}. Approve switching to <b style="color:#e4f2ff">${r.chain}</b> to pay with ${r.token}.</p><div class="sh-cta" style="justify-content:center"><button class="sh-demo" type="button" data-sim-switch>DEMO · APPROVE SWITCH</button><button class="sh-demo bad" type="button" data-sim-reject>DEMO · REJECT</button></div></div>`;
+      else body=`<div class="sh-center"><div class="sh-spinner"></div><h3>CONFIRM IN YOUR WALLET</h3><p>Check that the request below matches exactly. Alliance never asks for a signature to "approve unlimited" spending.</p>
+        <div class="sh-walletcard"><header><span>WALLET REQUEST</span><span>${WALLET}</span></header><div><span>Action</span><b>Transfer</b></div><div><span>Token</span><b>${r.token}</b></div><div><span>Amount</span><b>${p.usd.toFixed(2)}</b></div><div><span>To</span><b>${TREASURY} · Alliance Treasury</b></div><div><span>Network</span><b>${r.chain}</b></div><div><span>Fee</span><b>${r.fee}</b></div></div>
+        <div class="sh-cta" style="justify-content:center"><button class="sh-demo" type="button" data-sim-approve>DEMO · APPROVE</button><button class="sh-demo bad" type="button" data-sim-reject>DEMO · REJECT</button></div></div>`;
+    }else if(T.step===4){
+      body=`<div class="sh-center"><h3>CHECKING THE PAYMENT ON-CHAIN</h3><p>Safe to close this window — once confirmed, Credits are added to your account automatically.</p><div class="sh-checks" data-checks></div></div>`;
+      foot=`<span>Order ${T.order} · each transaction can be credited only once.</span><button class="sh-link" type="button" data-close>Close & keep checking</button>`;
+    }else{
+      body=`<div class="sh-center"><div class="sh-big"><i>◇</i>+${fmt(T.got)}</div><h3>CREDITS ADDED</h3>
+        <div class="sh-summary" style="width:min(460px,100%)"><div><small>ORDER</small><b>${T.order}</b></div><div><small>PAID</small><b>${p.usd.toFixed(2)} ${r.token} · ${r.chain}</b></div><div><small>TRANSACTION</small><b><a class="sh-link" href="#" onclick="return false">${T.tx.slice(0,10)}…${T.tx.slice(-6)} ↗</a></b></div><div><small>NEW BALANCE</small><b class="ok">◇ ${fmt(credits)}</b></div></div>
+        <div class="sh-cta" style="justify-content:center">${T.after?`<button class="sh-btn primary" type="button" data-resume>CONTINUE: ${T.after.name.toUpperCase()}</button>`:`<button class="sh-btn" type="button" data-goshop>GO TO SHOP</button><button class="sh-btn primary" type="button" data-close>DONE</button>`}</div></div>`;
+      foot=legal;
+    }
+    openDialog(`${head()}<div class="sh-dbody">${body}</div><div class="sh-dfoot">${foot}</div>`);
+    if(T.step===4)runChecks();
+  }
+  function hex(n){let s='0x';for(let i=0;i<n;i++)s+='0123456789abcdef'[Math.floor(Math.random()*16)];return s}
+  function runChecks(){
+    const t=T,p=t.pack,r=t.rail,box=()=>T===t&&!t.bg?overlay.querySelector('[data-checks]'):null;
+    const rows=[['Transaction found',t.tx.slice(0,10)+'…'+t.tx.slice(-4)],[`Token contract = official ${r.token} on ${r.chain}`,''],['Recipient = Alliance Treasury',TREASURY],[`Amount ≥ ${p.usd.toFixed(2)} ${r.token} · sent from your wallet`,''],['Confirmations','0 / 2'],['Credits added','']];
+    let i=0;const paint=()=>{const b=box();if(!b)return;b.innerHTML=rows.map((x,k)=>`<div class="${k<i?'ok':k===i?'run':''}"><i></i><span>${x[0]}</span><em>${x[1]}</em></div>`).join('')};
+    const advance=()=>{if(t.cancel)return;i++;
+      if(i===5)rows[4][1]='2 / 2';
+      if(i===4){rows[4][1]='1 / 2'}
+      paint();
+      if(i>=rows.length){finish(t);return}
+      setTimeout(advance,i===4?1100:650)};
+    paint();setTimeout(advance,700);
+  }
+  function finish(t){t.got=totalOf(t.pack);firstDone.add(t.pack.id);setCredits(credits+t.got,true);renderShop();
+    if(t.bg||T!==t){toast(`✓ ◇ ${fmt(t.got)} CREDITS ADDED · ORDER ${t.order}`);return}
+    t.step=5;renderTopup()}
+  overlay.addEventListener('click',e=>{
+    if(!T)return;const g=s=>e.target.closest(s);
+    if(g('[data-pack]')){T.pack=PACKS.find(p=>p.id===g('[data-pack]').dataset.pack);renderTopup()}
+    else if(g('[data-rail]')){T.rail=RAILS.find(r=>r.id===g('[data-rail]').dataset.rail);T.switched=false;renderTopup()}
+    else if(g('[data-tu-next]')){T.step++;T.error=null;renderTopup()}
+    else if(g('[data-tu-back]')){T.step=2;T.error=null;T.switched=false;renderTopup()}
+    else if(g('[data-sim-switch]')){T.switched=true;renderTopup()}
+    else if(g('[data-sim-reject]')){T.error='You rejected the request in your wallet. Nothing was charged.';renderTopup()}
+    else if(g('[data-retry]')){T.error=null;renderTopup()}
+    else if(g('[data-sim-approve]')){T.tx=hex(64);T.order='ALC-'+hex(6).slice(2).toUpperCase();T.step=4;renderTopup()}
+    else if(g('[data-recover]')){T.recover=!T.recover;renderTopup()}
+    else if(g('[data-recover-check]')){const out=overlay.querySelector('[data-recover-out]'),v=overlay.querySelector('[data-recover-input]').value.trim();out.textContent=/^0x[0-9a-fA-F]{64}$/.test(v)?'✓ Found · 9.99 USDG from your wallet · already credited on 2026-09-25 14:02 UTC — nothing to do.':'Enter a full transaction hash (0x + 64 hex characters).'}
+    else if(g('[data-goshop]')){closeDialog();T=null;showView('shop')}
+    else if(g('[data-resume]')){const i=T.after;T=null;showView('shop');openBuy(i)}
+  });
+  creditBtn.addEventListener('click',()=>openTopup());
+  creditBtn.setAttribute('aria-label','Top up Credits');
 })();
 </script>
 </body>

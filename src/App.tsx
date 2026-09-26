@@ -14,6 +14,7 @@ import World from "./World";
 import Messages from "./Messages";
 import ProfileScreen from "./ProfileScreen";
 import Alliance from "./Alliance";
+import Shop from "./Shop";
 import GameMusic, { requestGameMusicStart } from "./GameMusic";
 import GameCursor from "./GameCursor";
 import AlphaFeedback from "./AlphaFeedback";
@@ -29,9 +30,9 @@ import { playSfx, preloadSfx, SFX_LOGIN_HOVER, SFX_LOGIN_HOVER_VOLUME, SFX_TAB_S
 import { setErrorReportingAddress } from "./lib/error-reporting";
 import { authenticateGoogle, authenticateGuest, authenticateWallet, clearBackendSession, loadBackendSession, loadLastBackendSession, mirrorPlayerState, restorePlayerState, resumeBackendSession, sendGameCommand, trackEvents, updatePlayerName } from "./lib/backend";
 
-type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "profile";
-type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "profile">;
-const MAIN_STAGES: MainStage[] = ["alliance", "town", "world", "messages", "profile"];
+type Stage = "connect" | "start" | "resume" | "founded" | "alliance" | "town" | "world" | "messages" | "shop" | "profile";
+type MainStage = Extract<Stage, "alliance" | "town" | "world" | "messages" | "shop" | "profile">;
+const MAIN_STAGES: MainStage[] = ["alliance", "town", "world", "messages", "shop", "profile"];
 const lastGameStageKey = (address: string) => `alliance:last-game-stage:${address.toLowerCase()}`;
 
 function loadLastGameStage(address: string): MainStage {
@@ -181,7 +182,7 @@ function DevGameShell({ initialView, slot, gm }: { initialView: MainStage; slot:
   useEffect(() => {
     const syncFromHistory = () => {
       const search = new URLSearchParams(window.location.search);
-      const next = (["alliance", "town", "world", "messages", "profile"] as MainStage[]).find((candidate) => search.has(candidate));
+      const next = (["alliance", "town", "world", "messages", "shop", "profile"] as MainStage[]).find((candidate) => search.has(candidate));
       if (next) setView(next);
     };
     window.addEventListener("popstate", syncFromHistory);
@@ -191,11 +192,12 @@ function DevGameShell({ initialView, slot, gm }: { initialView: MainStage; slot:
   return <div className="page">
     <GameMusic address={address} active />
     <GameCursor address={address} active />
-    {view === "alliance" && <Alliance address={address} profile={profile} holdings={gmHoldings} onProfileChange={(next) => { saveProfile(next); setProfile(next); }} onCity={() => navigate("town")} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} onProfile={() => navigate("profile")} />}
-    {view === "town" && <Town address={address} profile={profile} onAlliance={() => navigate("alliance")} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} onProfile={() => navigate("profile")} />}
-    {view === "world" && <World address={address} profile={profile} onAlliance={() => navigate("alliance")} onBack={() => navigate("town")} onMessages={() => navigate("messages")} onProfile={() => navigate("profile")} />}
-    {view === "messages" && <Messages address={address} profile={profile} onAlliance={() => navigate("alliance")} onCity={() => navigate("town")} onWorld={() => navigate("world")} onProfile={() => navigate("profile")} />}
-    {view === "profile" && <ProfileScreen address={address} profile={profile} onProfileChange={(next) => { saveProfile(next); setProfile(next); }} onAlliance={() => navigate("alliance")} onCity={() => navigate("town")} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} />}
+    {view === "alliance" && <Alliance address={address} profile={profile} holdings={gmHoldings} onProfileChange={(next) => { saveProfile(next); setProfile(next); }} onCity={() => navigate("town")} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} onShop={() => navigate("shop")} onProfile={() => navigate("profile")} />}
+    {view === "town" && <Town address={address} profile={profile} onAlliance={() => navigate("alliance")} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} onShop={() => navigate("shop")} onProfile={() => navigate("profile")} />}
+    {view === "world" && <World address={address} profile={profile} onAlliance={() => navigate("alliance")} onBack={() => navigate("town")} onMessages={() => navigate("messages")} onShop={() => navigate("shop")} onProfile={() => navigate("profile")} />}
+    {view === "messages" && <Messages address={address} profile={profile} onAlliance={() => navigate("alliance")} onCity={() => navigate("town")} onWorld={() => navigate("world")} onShop={() => navigate("shop")} onProfile={() => navigate("profile")} />}
+    {view === "shop" && <Shop address={address} profile={profile} onAlliance={() => navigate("alliance")} onCity={() => navigate("town")} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} onProfile={() => navigate("profile")} />}
+    {view === "profile" && <ProfileScreen address={address} profile={profile} onProfileChange={(next) => { saveProfile(next); setProfile(next); }} onAlliance={() => navigate("alliance")} onCity={() => navigate("town")} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} onShop={() => navigate("shop")} />}
   </div>;
 }
 
@@ -208,7 +210,7 @@ function DesktopApp() {
     return <ExpeditionLab />;
   }
   if (import.meta.env.DEV) {
-    const devView = (["alliance", "town", "world", "messages", "profile"] as MainStage[]).find((candidate) => params.has(candidate));
+    const devView = (["alliance", "town", "world", "messages", "shop", "profile"] as MainStage[]).find((candidate) => params.has(candidate));
     if (devView) {
       const slot = (params.get("slot") || "1").replace(/[^a-z0-9-]/gi, "").slice(0, 12) || "1";
       return <DevGameShell initialView={devView} slot={slot} gm={params.has("gm")} />;
@@ -590,7 +592,7 @@ function DesktopApp() {
     <div className="page">
       {!MAIN_STAGES.includes(stage as MainStage) && <CosmicBackdrop />}
       <GameMusic address={address} active />
-      <GameCursor address={address} active={!!address && (stage === "alliance" || stage === "town" || stage === "world" || stage === "messages" || stage === "profile")} />
+      <GameCursor address={address} active={!!address && MAIN_STAGES.includes(stage as MainStage)} />
       <header className={`topbar${stage === "connect" ? " connect-topbar" : ""}`}>
         <AllianceWordmark />
         {address ? (
@@ -752,11 +754,12 @@ function DesktopApp() {
         </section>
       )}
 
-      {stage === "alliance" && profile && <Alliance address={address} profile={profile} holdings={memes} onProfileChange={updateProfile} onCity={() => setStage("town")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} onProfile={() => setStage("profile")} />}
-      {stage === "town" && profile && <Town address={address} profile={profile} onAlliance={() => setStage("alliance")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} onProfile={() => setStage("profile")} />}
-      {stage === "world" && profile && <World address={address} profile={profile} onAlliance={() => setStage("alliance")} onBack={() => setStage("town")} onMessages={() => setStage("messages")} onProfile={() => setStage("profile")} />}
-      {stage === "messages" && profile && <Messages address={address} profile={profile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onProfile={() => setStage("profile")} />}
-      {stage === "profile" && profile && <ProfileScreen address={address} profile={profile} onProfileChange={updateProfile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} />}
+      {stage === "alliance" && profile && <Alliance address={address} profile={profile} holdings={memes} onProfileChange={updateProfile} onCity={() => setStage("town")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} onShop={() => setStage("shop")} onProfile={() => setStage("profile")} />}
+      {stage === "town" && profile && <Town address={address} profile={profile} onAlliance={() => setStage("alliance")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} onShop={() => setStage("shop")} onProfile={() => setStage("profile")} />}
+      {stage === "world" && profile && <World address={address} profile={profile} onAlliance={() => setStage("alliance")} onBack={() => setStage("town")} onMessages={() => setStage("messages")} onShop={() => setStage("shop")} onProfile={() => setStage("profile")} />}
+      {stage === "messages" && profile && <Messages address={address} profile={profile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onShop={() => setStage("shop")} onProfile={() => setStage("profile")} />}
+      {stage === "shop" && profile && <Shop address={address} profile={profile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} onProfile={() => setStage("profile")} />}
+      {stage === "profile" && profile && <ProfileScreen address={address} profile={profile} onProfileChange={updateProfile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} onShop={() => setStage("shop")} />}
       {address && MAIN_STAGES.includes(stage as MainStage) && <AlphaFeedback address={address} page={stage} />}
 
       {stage === "founded" && profile && (

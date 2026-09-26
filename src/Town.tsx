@@ -111,7 +111,7 @@ function queuePct(durationSec: number, finishAt: number, now: number): number {
   return Math.min(100, Math.max(0, ((total - (finishAt - now)) / total) * 100));
 }
 
-export default function Town({ address, profile, onAlliance = () => {}, onWorld, onMessages = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onAlliance?: () => void; onWorld: () => void; onMessages?: () => void; onProfile?: () => void }) {
+export default function Town({ address, profile, onAlliance = () => {}, onWorld, onMessages = () => {}, onShop = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onAlliance?: () => void; onWorld: () => void; onMessages?: () => void; onShop?: () => void; onProfile?: () => void }) {
   const [game, setGame] = useState<GameState>(() => loadGame(address) || initGame(address));
   const [now, setNow] = useState(Date.now());
   const [msg, setMsg] = useState<string>("");
@@ -550,7 +550,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       <GameNav view="city" profile={profile} townhallLevel={view.buildings.keep.lvl} location={worldStatus.location}
         resources={view.res} incomePerHour={rate} resourceCap={capacity(view)} energy={worldStatus.energy} energyCap={worldStatus.energyCap}
         activeFleets={worldStatus.activeFleets} fleetCap={worldStatus.fleetCap} standing={troopsTotal} wounded={view.wounded}
-        might={mightScore.total} onAlliance={onAlliance} onCity={() => {}} onWorld={onWorld} onMessages={onMessages} onProfile={onProfile} />
+        might={mightScore.total} onAlliance={onAlliance} onCity={() => {}} onWorld={onWorld} onMessages={onMessages} onShop={onShop} onProfile={onProfile} />
 
 
       {gm && (

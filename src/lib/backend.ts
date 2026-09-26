@@ -168,6 +168,51 @@ export function queuePlayerEvent(address: string, event: PlayerEvent): void {
 
 export type InventoryBalance = { itemId: string; quantity: number; updatedAt: number };
 
+export type ShopPaymentRail = {
+  id: string;
+  chainId: number;
+  chainName: string;
+  tokenAddress: string;
+  tokenSymbol: string;
+  decimals: number;
+  treasuryAddress: string;
+  confirmations: number;
+  explorerTxUrl?: string;
+};
+
+export type ShopAccount = {
+  balance: number;
+  offers: Array<Record<string, unknown>>;
+  packs: Array<{ id: string; usdCents: number; credits: number }>;
+  dailyClaimed: boolean;
+  resetAt: number;
+  paymentRails: ShopPaymentRail[];
+};
+
+export async function loadShopAccount(address: string): Promise<ShopAccount> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  return get<ShopAccount>("/shop/account", session.token);
+}
+
+export async function purchaseShopOffer(address: string, offerId: string, idempotencyKey: string): Promise<{ purchaseId: string; balance: number; itemId: string; quantity: number; replayed?: boolean }> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  return post("/shop/purchase", { offerId, idempotencyKey }, session.token);
+}
+
+export async function claimDailySupply(address: string): Promise<{ claimedAt: number; inventory: InventoryBalance[] }> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  return post("/shop/daily-claim", { idempotencyKey: `daily:${crypto.randomUUID()}` }, session.token);
+}
+
+export async function grantGmCredits(address: string): Promise<{ balance: number; replayed?: boolean }> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  return post("/shop/grant-alpha", { idempotencyKey: `gmcredits:${crypto.randomUUID()}` }, session.token);
+}
+
 export async function loadInventory(address: string): Promise<InventoryBalance[]> {
   const session = loadBackendSession(address);
   if (!session) return [];

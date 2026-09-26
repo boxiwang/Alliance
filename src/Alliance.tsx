@@ -28,7 +28,7 @@ function countdown(ms: number): string {
   return `${hours}H ${remainder}M`;
 }
 
-export default function Alliance({ address, profile, holdings = [], onProfileChange, onCity, onWorld, onMessages, onProfile }: {
+export default function Alliance({ address, profile, holdings = [], onProfileChange, onCity, onWorld, onMessages, onShop = () => {}, onProfile }: {
   address: string;
   profile: Profile;
   holdings?: TokenHolding[];
@@ -36,6 +36,7 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
   onCity: () => void;
   onWorld: () => void;
   onMessages: () => void;
+  onShop?: () => void;
   onProfile: () => void;
 }) {
   const [revision, setRevision] = useState(0);
@@ -91,7 +92,7 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
   const nav = <GameNav view="alliance" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
     resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} energy={energy} energyCap={energyCap} activeFleets={activeFleets} fleetCap={worldPlayer?.marchSlots ?? worldMarchSlots(game)}
     standing={totalTroops(game)} wounded={game.wounded} might={mightBreakdown(game).total}
-    onAlliance={() => setView("home")} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onProfile={onProfile} />;
+    onAlliance={() => setView("home")} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onShop={onShop} onProfile={onProfile} />;
 
   if (!alliance) {
     const eligible = availableAlliances(holdings, directory, gm);

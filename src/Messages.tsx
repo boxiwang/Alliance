@@ -46,7 +46,7 @@ function initialChannel(): ChannelId {
   return requested && ["cosmos", "system"].includes(requested) ? requested : "cosmos";
 }
 
-export default function Messages({ address, profile, onAlliance = () => {}, onCity, onWorld, onProfile = () => {} }: { address: string; profile: Profile; onAlliance?: () => void; onCity: () => void; onWorld: () => void; onProfile?: () => void }) {
+export default function Messages({ address, profile, onAlliance = () => {}, onCity, onWorld, onShop = () => {}, onProfile = () => {} }: { address: string; profile: Profile; onAlliance?: () => void; onCity: () => void; onWorld: () => void; onShop?: () => void; onProfile?: () => void }) {
   const [active, setActive] = useState<ChannelId>(initialChannel);
   const [allianceTab, setAllianceTab] = useState<AllianceTab>("general");
   const [sysFilter, setSysFilter] = useState<"all" | "mil" | "eco" | "sec">("all");
@@ -289,7 +289,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     <GameNav view="messages" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
       resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} energy={energy} energyCap={energyCap} activeFleets={activeFleets} fleetCap={fleetCap}
       standing={totalTroops(game)} wounded={game.wounded} might={mightBreakdown(game).total}
-      onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={() => {}} onProfile={onProfile} />
+      onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={() => {}} onShop={onShop} onProfile={onProfile} />
 
     <div className="comms">
       {/* LEFT — channels */}
