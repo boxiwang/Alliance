@@ -48,7 +48,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .mobile-gate-url{display:block;max-width:100%;margin:11px auto 22px;overflow:hidden;text-overflow:ellipsis;color:#647693;font:9px var(--mono);white-space:nowrap;user-select:all}
 .mobile-gate footer{display:flex;align-items:center;justify-content:center;gap:7px;padding-top:14px;border-top:1px solid rgba(80,105,145,.22);color:#667994;font:600 8px var(--mono);letter-spacing:.17em}.mobile-gate footer i{width:5px;height:5px;border-radius:50%;background:#d1934f;box-shadow:0 0 8px rgba(220,148,68,.65)}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.page{max-width:1180px;margin:0 auto;padding:0 20px 60px}
+.page{--game-shell-width:1480px;--game-shell-gutter:20px;max-width:1180px;margin:0 auto;padding:0 20px 60px}
 
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 4px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:11px}
@@ -204,8 +204,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .soon b{color:var(--gold)}
 
 /* ---- Townhall (solo) ---- */
-.page:has(.town){max-width:1904px;padding-right:12px;padding-left:12px}
-.town{width:100%;max-width:1880px;margin:16px auto 0;display:flex;flex-direction:column;gap:12px}
+.town{width:100%;max-width:var(--game-shell-width);margin:16px auto 0;display:flex;flex-direction:column;gap:12px}
 .play-switcher{position:sticky;top:10px;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:18px;overflow:hidden;padding:7px 8px 7px 14px;border:1px solid rgba(56,217,255,.2);border-radius:12px;background:rgba(6,13,28,.92);box-shadow:0 14px 42px rgba(0,0,0,.34),inset 0 1px rgba(255,255,255,.025);backdrop-filter:blur(14px)}
 .play-switcher-id{display:flex;flex-direction:column;gap:2px;min-width:0}.play-switcher-id span{font:700 8px var(--mono);letter-spacing:.16em;color:#4e8297}.play-switcher-id b{overflow:hidden;color:#dff8ff;font:650 12px var(--hud);text-overflow:ellipsis;white-space:nowrap}
 .play-switcher-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px}.play-switcher-tabs button{min-width:185px;display:grid;grid-template-columns:24px 1fr;grid-template-rows:auto auto;column-gap:7px;padding:7px 11px;border:1px solid transparent;border-radius:7px;background:transparent;color:#607b8e;text-align:left;cursor:pointer}.play-switcher-tabs button>span{grid-row:1/3;align-self:center;font-size:16px}.play-switcher-tabs button>b{font:700 9px var(--hud);letter-spacing:.1em}.play-switcher-tabs button>small{font:7.5px var(--mono);letter-spacing:.02em;color:#4c6678}.play-switcher-tabs button:hover{border-color:rgba(56,217,255,.18);color:#a9eaff}.play-switcher-tabs button.active{border-color:rgba(56,217,255,.3);background:linear-gradient(100deg,rgba(56,217,255,.14),rgba(95,78,198,.08));color:#dffaff;box-shadow:inset 2px 0 #38d9ff}.play-switcher-tabs button.active small{color:#6fa5b9}
@@ -1412,3 +1411,15 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .city-threat-banner.scout{border-color:rgba(232,178,76,.5);background:rgba(40,28,6,.92);color:#ffe2a8;box-shadow:0 0 24px rgba(232,178,76,.18)}
 .city-threat-banner.done{border-color:rgba(67,242,161,.45);background:rgba(6,30,22,.92);color:#bff5dc;box-shadow:none}
 @media(prefers-reduced-motion:reduce){.city-watch-radar,.city-watch-ripple,.city-star-grid.threat-inbound:after{animation:none!important}}
+
+/* Unified desktop command frame. City keeps its denser internal grid, but all
+   signed-in pages align to the same outer width and retain a calm screen edge. */
+.page:has(.town),
+.page:has(.world),
+.page:has(.alliance-page),
+.page:has(.messages-page),
+.page:has(.shop-page),
+.page:has(.profile-screen){width:100%;max-width:calc(var(--game-shell-width) + var(--game-shell-gutter) * 2);padding-right:var(--game-shell-gutter);padding-left:var(--game-shell-gutter)}
+.world,.alliance-page,.messages-page,.shop-page,.profile-screen{width:100%;max-width:var(--game-shell-width);margin-right:auto;margin-left:auto}
+.alliance-command,.alliance-entry,.alliance-forming,.shop-shell{width:100%;max-width:var(--game-shell-width)}
+@media(max-width:760px){.page:has(.town),.page:has(.world),.page:has(.alliance-page),.page:has(.messages-page),.page:has(.shop-page),.page:has(.profile-screen){--game-shell-gutter:8px}}
