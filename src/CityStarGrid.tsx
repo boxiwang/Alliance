@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import BuildingGlyph from "./BuildingGlyph";
 import PlanetOrbitPreview from "./PlanetOrbitPreview";
 import {
@@ -77,6 +77,121 @@ function timeLeft(finishAt: number, now: number) {
 
 function loadout(address: string): CosmeticLoadout {
   return loadCosmeticVault(address).equipped;
+}
+
+function CoreShieldLattice({ moving, quality }: { moving: boolean; quality: GraphicsQuality }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    let animationFrame = 0;
+    let visible = !document.hidden;
+    let lastDraw = 0;
+    const maxDpr = quality.tier === "ultra" ? 2 : quality.tier === "high" ? 1.6 : 1.25;
+
+    const draw = (timestamp: number) => {
+      if (!visible) return;
+      if (moving && timestamp - lastDraw < 32) {
+        animationFrame = requestAnimationFrame(draw);
+        return;
+      }
+      lastDraw = timestamp;
+      const bounds = canvas.getBoundingClientRect();
+      const width = Math.max(1, bounds.width);
+      const height = Math.max(1, bounds.height);
+      const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+      const pixelWidth = Math.round(width * dpr);
+      const pixelHeight = Math.round(height * dpr);
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.clearRect(0, 0, width, height);
+
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const radius = Math.min(width, height) * .47;
+      const innerRadius = radius - Math.min(width, height) * .1;
+      const hexSize = Math.max(7.2, Math.min(9.4, Math.min(width, height) / 34));
+      const hexWidth = hexSize * Math.sqrt(3);
+      const band = moving ? ((timestamp / 7600) % 2) - .5 : .12;
+
+      context.save();
+      context.beginPath();
+      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      context.clip();
+      context.globalCompositeOperation = "lighter";
+      context.strokeStyle = "#8fb0ff";
+      context.lineWidth = quality.tier === "low" ? .55 : .8;
+      const rows = Math.ceil(radius / (hexSize * 1.5)) + 2;
+      const columns = Math.ceil(radius / hexWidth) + 2;
+      for (let row = -rows; row <= rows; row += 1) {
+        for (let column = -columns; column <= columns; column += 1) {
+          const hexX = centerX + column * hexWidth + (Math.abs(row) % 2 ? hexWidth / 2 : 0);
+          const hexY = centerY + row * hexSize * 1.5;
+          const distance = Math.hypot(hexX - centerX, hexY - centerY);
+          const normalized = distance / radius;
+          if (normalized > 1.05 || distance < innerRadius) continue;
+          const sweep = moving
+            ? Math.max(0, 1 - Math.abs((hexY - centerY) / radius - band * 1.4) * 3)
+            : 0;
+          context.globalAlpha = (.045 + .24 * Math.pow(normalized, 3)) * (1 + sweep * 2.15);
+          context.beginPath();
+          for (let pointIndex = 0; pointIndex < 6; pointIndex += 1) {
+            const angle = Math.PI / 6 + pointIndex * Math.PI / 3;
+            const pointX = hexX + Math.cos(angle) * hexSize * .92;
+            const pointY = hexY + Math.sin(angle) * hexSize * .92;
+            if (pointIndex === 0) context.moveTo(pointX, pointY);
+            else context.lineTo(pointX, pointY);
+          }
+          context.closePath();
+          context.stroke();
+        }
+      }
+      context.restore();
+
+      const rim = context.createLinearGradient(centerX - radius, centerY, centerX + radius, centerY);
+      rim.addColorStop(0, "rgba(82,126,222,.16)");
+      rim.addColorStop(.5, "rgba(167,215,255,.56)");
+      rim.addColorStop(1, "rgba(82,126,222,.16)");
+      context.strokeStyle = rim;
+      context.lineWidth = 1;
+      context.beginPath();
+      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      context.stroke();
+      context.strokeStyle = "rgba(123,178,255,.12)";
+      context.beginPath();
+      context.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
+      context.stroke();
+
+      if (moving) animationFrame = requestAnimationFrame(draw);
+    };
+
+    const handleVisibility = () => {
+      visible = !document.hidden;
+      cancelAnimationFrame(animationFrame);
+      if (visible) animationFrame = requestAnimationFrame(draw);
+    };
+    const resizeObserver = new ResizeObserver(() => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(draw);
+    });
+    resizeObserver.observe(canvas);
+    document.addEventListener("visibilitychange", handleVisibility);
+    animationFrame = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [moving, quality.tier]);
+
+  return <canvas ref={canvasRef} className="city-core-shield-canvas" aria-hidden="true" />;
 }
 
 export default function CityStarGrid({
@@ -191,7 +306,7 @@ export default function CityStarGrid({
       </svg>
 
       <button className={`city-grid-core${selected === "keep" ? " selected" : ""}`} type="button" onClick={() => onSelect("keep")} aria-label={`Civilization Core level ${view.buildings.keep.lvl}`}>
-        {view.buildings.keep.lvl < 10 && <i className="city-core-shield-net" aria-hidden="true" />}
+        {view.buildings.keep.lvl < 10 && <CoreShieldLattice moving={moving} quality={quality} />}
         <PlanetOrbitPreview skin={equipped.planetBody} halo={equipped.halo} orbit={equipped.orbit} chrome={false} fitAssembly transparent className="city-grid-core-planet" staticPreview={staticPlanet} />
         <span><small>CIVILIZATION</small><b>{name}</b><em>{view.buildings.keep.lvl}</em></span>
       </button>
