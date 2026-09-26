@@ -306,7 +306,7 @@ export default function CityStarGrid({
       </svg>
 
       <button className={`city-grid-core${selected === "keep" ? " selected" : ""}`} type="button" onClick={() => onSelect("keep")} aria-label={`Civilization Core level ${view.buildings.keep.lvl}`}>
-        {view.buildings.keep.lvl < 10 && <CoreShieldLattice moving={moving} quality={quality} />}
+        <CoreShieldLattice moving={moving} quality={quality} />
         <PlanetOrbitPreview skin={equipped.planetBody} halo={equipped.halo} orbit={equipped.orbit} chrome={false} fitAssembly transparent className="city-grid-core-planet" staticPreview={staticPlanet} />
         <span><small>CIVILIZATION</small><b>{name}</b><em>{view.buildings.keep.lvl}</em></span>
       </button>
