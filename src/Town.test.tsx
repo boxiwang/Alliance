@@ -27,7 +27,8 @@ describe("Town troop training UI", () => {
     expect(html).toContain('aria-label="Star Grid"');
     expect(html).toContain("ECONOMY · 4");
     expect(html).toContain("MILITARY · 3");
-    expect(html).toContain("OPERATIONS QUEUE");
+    expect(html).toContain("OPERATIONS");
+    expect(html).toContain("All queues idle");
     expect(html).toContain("BUILD 1");
     expect(html).toContain("ARMY TRAIN");
     expect(html).toContain("RESEARCH");

@@ -1133,7 +1133,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .mini-comms-mark{width:31px;height:31px;display:grid;place-items:center;border:1px solid rgba(56,217,255,.28);border-radius:50%;background:radial-gradient(circle,rgba(56,217,255,.16),transparent 68%);color:#8beaff;text-shadow:0 0 9px #38d9ff}
 .mini-comms-peek-copy{min-width:0;display:flex;flex-direction:column;gap:4px}.mini-comms-peek-copy small{color:#5c9caf;font:700 6.5px var(--mono);letter-spacing:.12em}.mini-comms-peek-copy b{display:flex;align-items:baseline;min-width:0;gap:7px;color:#9eb3bd;font:500 9px var(--sans);line-height:1.3;white-space:nowrap}.mini-comms-peek-copy em{flex:none;color:#d8edf4;font:700 8px var(--hud);font-style:normal}.mini-comms-peek-copy b{overflow:hidden;text-overflow:ellipsis}.mini-comms-unread{min-width:21px;height:18px;display:grid;place-items:center;padding:0 5px;border-radius:9px;background:#ff647e;color:#22060c;font:800 8px var(--mono);box-shadow:0 0 10px rgba(255,95,120,.28)}.mini-comms-chevron{color:#5e8797;font:700 13px var(--mono)}
 .mini-comms-peek-copy b.quiet{color:#3f6575;font:700 6px var(--mono);letter-spacing:.12em}
-.mini-comms.expanded{display:grid;grid-template-rows:auto auto minmax(150px,1fr) auto;height:min(456px,calc(100vh - 36px));animation:mini-comms-arrive .16s ease-out}
+.mini-comms.expanded{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:min(456px,calc(100vh - 36px));animation:mini-comms-arrive .16s ease-out}
 @keyframes mini-comms-arrive{from{transform:translateY(10px);opacity:.5}}
 .mini-comms>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border-bottom:1px solid rgba(56,217,255,.13);background:linear-gradient(90deg,rgba(56,217,255,.075),transparent)}.mini-comms>header>div:first-child{display:grid;grid-template-columns:24px 1fr;align-items:center;min-width:0}.mini-comms>header>div:first-child>span{grid-row:1/3;color:#7fe7fc;text-shadow:0 0 8px #38d9ff}.mini-comms>header b{color:#dff8ff;font:750 9px var(--hud);letter-spacing:.09em}.mini-comms>header small{color:#486f80;font:700 5.5px var(--mono);letter-spacing:.12em}.mini-comms>header>div:last-child{display:flex;gap:5px}.mini-comms>header button{height:27px;padding:0 8px;border:1px solid rgba(56,217,255,.18);border-radius:6px;background:rgba(56,217,255,.045);color:#6fb9ca;font:700 6px var(--mono);letter-spacing:.06em;cursor:pointer}.mini-comms>header button:last-child{width:28px;padding:0;font-size:13px}.mini-comms>header button:hover{border-color:rgba(56,217,255,.5);color:#dffaff}
 .mini-comms>nav{display:grid;grid-template-columns:repeat(3,1fr);padding:4px;border-bottom:1px solid rgba(56,217,255,.11);background:#040b17}.mini-comms>nav button{min-width:0;display:grid;grid-template-columns:auto 1fr;gap:1px 6px;align-items:center;padding:8px;border:1px solid transparent;border-radius:6px;background:transparent;color:#4f7181;text-align:left;cursor:pointer}.mini-comms>nav button>span{grid-row:1/3;color:#4f8193}.mini-comms>nav button b{font:700 7px var(--hud);letter-spacing:.08em}.mini-comms>nav button small{font:700 5px var(--mono);letter-spacing:.08em;color:#3f5a69}.mini-comms>nav button.active{border-color:rgba(56,217,255,.21);background:rgba(56,217,255,.07);color:#ccecf4}.mini-comms>nav button.active>span{color:#70dbef}.mini-comms>nav button.active small{color:#5d92a2}
@@ -1556,15 +1556,34 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 /* Messages: the console height is fitted in JS to end at the viewport bottom; drop the page's trailing gap so nothing scrolls. */
 @media(min-width:1001px){.comms-page{padding-bottom:0}.comms-page .comms{min-height:0}}
 
-/* Collapsed Comms dock: a HUD frame (corner brackets + breathing inner rim + soft
-   outer halo) so it never blends into the panels and windows behind it. */
+/* Collapsed Comms dock: a brighter frame (breathing inner rim + soft outer halo)
+   so it never blends into the panels and windows behind it. */
 .mini-comms.collapsed{border-color:rgba(98,222,255,.55);box-shadow:0 22px 60px rgba(0,0,0,.6),0 0 0 1px rgba(56,217,255,.14),0 0 22px rgba(56,217,255,.2)}
-.mini-comms.collapsed::before,.mini-comms.collapsed::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2}
-.mini-comms.collapsed::before{background:
-  linear-gradient(#8beeff,#8beeff) top 4px left 4px/11px 1.5px no-repeat,linear-gradient(#8beeff,#8beeff) top 4px left 4px/1.5px 11px no-repeat,
-  linear-gradient(#8beeff,#8beeff) top 4px right 4px/11px 1.5px no-repeat,linear-gradient(#8beeff,#8beeff) top 4px right 4px/1.5px 11px no-repeat,
-  linear-gradient(#8beeff,#8beeff) bottom 4px left 4px/11px 1.5px no-repeat,linear-gradient(#8beeff,#8beeff) bottom 4px left 4px/1.5px 11px no-repeat,
-  linear-gradient(#8beeff,#8beeff) bottom 4px right 4px/11px 1.5px no-repeat,linear-gradient(#8beeff,#8beeff) bottom 4px right 4px/1.5px 11px no-repeat;opacity:.85}
+.mini-comms.collapsed::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2}
+
 .mini-comms.collapsed::after{box-shadow:inset 0 0 0 1px rgba(125,235,255,.5),inset 0 0 16px rgba(56,217,255,.2);animation:mini-comms-breathe 3.6s ease-in-out infinite}
 @keyframes mini-comms-breathe{0%,100%{opacity:.45}50%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.mini-comms.collapsed::after{animation:none;opacity:.8}}
+
+/* Mini chat shows plain names (no animated name signatures in the compact dock). */
+.mini-comms-name{color:#d8edf4}
+.mini-comms-message small .mini-comms-name{color:#a8c2cc}
+
+/* City: compact Operations rail — active queues lead as full rows with their
+   meter; idle ones collapse to small two-column tiles, giving the Star Grid room. */
+.city-command-layout{grid-template-columns:212px minmax(540px,1fr) 320px}
+.city-command-layout>.operations-queue>header{padding:10px 12px}
+.operations-empty{margin:10px 12px 2px;color:#50697c;font:600 8px var(--mono);letter-spacing:.06em}
+.city-command-layout>.operations-queue .operation-slots{grid-template-columns:1fr 1fr;gap:5px;padding:9px 10px;background:transparent}
+.city-command-layout>.operations-queue .operation-slot{min-height:0;border:1px solid rgba(92,129,171,.14);border-radius:6px}
+.city-command-layout>.operations-queue .operation-slot.active{order:-1;grid-column:1/-1;min-height:54px;padding:9px 10px 11px;border-color:color-mix(in srgb,var(--queue) 35%,transparent)}
+.city-command-layout>.operations-queue .operation-slot.idle{display:flex;align-items:center;gap:6px;min-height:32px;padding:6px 8px;background:rgba(7,14,26,.7)}
+.city-command-layout>.operations-queue .operation-slot.idle::before{content:"";flex:none;width:5px;height:5px;border-radius:50%;background:color-mix(in srgb,var(--queue) 55%,#28394a)}
+.city-command-layout>.operations-queue .operation-slot.idle b,.city-command-layout>.operations-queue .operation-slot.idle time{display:none}
+.city-command-layout>.operations-queue .operation-slot.idle small{overflow:hidden;color:#6f8ba0;font-size:7px;letter-spacing:.1em;white-space:nowrap;text-overflow:ellipsis}
+.city-command-layout>.operations-queue .operation-slot.idle:hover small{color:#cfe9f6}
+.city-command-layout>.operations-queue .operation-slot.locked{opacity:.5}
+.city-command-layout>.operations-queue .operation-slot.locked::before{background:#3a4856}
+.city-command-layout>.operations-queue .operation-slot.rally.idle{cursor:default}
+/* Opaque dock: nothing behind it bleeds through (the Star Map disables backdrop blur). */
+.mini-comms{background:linear-gradient(145deg,#050f1d,#070a19)}

@@ -317,7 +317,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
           <span className="ci">{c.icon}</span>
           <span className="cx"><b>{c.label}</b>{c.detail && <span>{c.detail}</span>}</span>
         </button>)}
-        <button className="chan soon" disabled title="Alliance chat arrives with shared multiplayer — coming soon">
+        <button className="chan soon" disabled>
           <span className="ci">◇</span>
           <span className="cx"><b>Alliance</b><span>Coming soon</span></span>
           <span className="soon-tag">SOON</span>
@@ -375,7 +375,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
           {shareTrayOpen && !pendingShare && <div className="comms-share-tray"><span><b>RELAY CHAMBER EMPTY</b><small>LOCK ANY SIGNAL IN THE STAR MAP TO RELAY ITS VECTOR OR LIVE RECON.</small></span><button onClick={onWorld}>OPEN STAR MAP ▸</button></div>}
           {pendingShare && <div className="comms-pending-share"><SharedIntelCard share={pendingShare} now={now} onOpen={() => openSharedTarget(pendingShare)} compactView /><button className="comms-share-remove" aria-label="Remove intelligence attachment" onClick={removePendingShare}>×</button></div>}
           <div className="box">
-            <button className={`attach ${pendingShare ? "loaded" : ""}`} title="Relay a coordinate or recon envelope" onClick={() => setShareTrayOpen((value) => !value)}>+</button>
+            <button className={`attach ${pendingShare ? "loaded" : ""}`} aria-label="Relay a coordinate or recon envelope" onClick={() => setShareTrayOpen((value) => !value)}>+</button>
             <input
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -405,7 +405,7 @@ function MessageRow({ m, now, ownChatSignal, reducedMotion, onInspect, onOpenWor
       <div className="meta">
         {m.f && <span className="tick" style={{ color: fcol(m.f), background: `${fcol(m.f)}1a` }}>[{m.f}]</span>}
         <button className="nm player-name-button" disabled={!m.a || !PLAYER_SIGNALS[m.a]} onClick={() => m.a && onInspect(m.a)}><NameSignal signal={m.own ? ownChatSignal : (m.sig ?? null)} mode="demo" reducedMotion={reducedMotion}>{m.a || "UNKNOWN"}</NameSignal></button>
-        {m.v && <span className="vbadge" title="on-chain pledge observed">✓</span>}
+        {m.v && <span className="vbadge" aria-label="on-chain pledge observed">✓</span>}
         {m.tag && <span className={`mtag ${m.tag}`}>{m.tag}</span>}
         <span className="mtime">{m.t}</span>
       </div>
@@ -458,7 +458,7 @@ function renderContext(ctx: { active: ChannelId; roster: PresenceCity[]; onlineC
   if (dmWith || active === "cosmos" || active === "contacts") return <>
     <div className="ct-title">Online · {onlineCount}</div>
     <div className="roster">
-      {online.map((p) => <button key={p.id} className={`rm rm-btn${p.id === address ? " self" : ""}`} disabled={p.id === address} title={p.id === address ? undefined : `Message ${p.name}`} onClick={() => openDM(p.id, p.name)}>
+      {online.map((p) => <button key={p.id} className={`rm rm-btn${p.id === address ? " self" : ""}`} disabled={p.id === address}  onClick={() => openDM(p.id, p.name)}>
         <span className="rm-av">{(p.name || "?").slice(0, 1)}<i className="rm-online" /></span>
         <span className="rm-nm">{p.name}{p.id === address ? " (you)" : ""}</span>
         {p.id !== address && <span className="rm-pm" aria-hidden="true">✉</span>}

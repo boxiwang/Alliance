@@ -1380,7 +1380,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     if (!drag.current) return;
     if (!drag.current.moved && Math.hypot(event.clientX - drag.current.x, event.clientY - drag.current.y) > 3) drag.current.moved = true;
     if (!drag.current.moved) return;
-    const scale = viewport.width / Math.max(1, event.currentTarget.clientWidth);
+    // World units per screen px under the SVG's xMidYMid "meet" fit — the SAME
+    // mapping every layer draws with. Using only the width drifted the camera
+    // ~16% short on wide map frames, so markers snapped back on release.
+    const el = event.currentTarget;
+    const scale = Math.max(viewport.width / Math.max(1, el.clientWidth), viewport.height / Math.max(1, el.clientHeight));
     const nextCamera = {
       x: Math.max(0, Math.min(world.config.width, drag.current.camera.x - (event.clientX - drag.current.x) * scale)),
       y: Math.max(0, Math.min(world.config.height, drag.current.camera.y - (event.clientY - drag.current.y) * scale)),
@@ -1403,7 +1407,6 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     // The SVG plane only holds markers for its overscan margin. Before a long
     // gesture runs past it, commit the camera once and continue from here — one
     // marker-only re-raster instead of an empty edge.
-    const el = event.currentTarget;
     const marginX = el.clientWidth * (WORLD_PAN_OVERSCAN - 1) / 2, marginY = el.clientHeight * (WORLD_PAN_OVERSCAN - 1) / 2;
     if (Math.abs(panX) > marginX * .7 || Math.abs(panY) > marginY * .7) {
       drag.current = { x: event.clientX, y: event.clientY, camera: nextCamera, moved: true };
@@ -1609,7 +1612,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".05em", color: "#4f7a68" }}>Warehouse reserves excluded · recon decays.</div>
           </div>;
         })()}
-        <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")} title={detailZoom ? "Civilization signatures resolved" : "Civilization signatures resolve inside Tactical range"}><i className="city" />{detailZoom ? "CIVILIZATIONS" : "CIV SIGNALS · TAC LOCK"}</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>
+        <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")}><i className="city" />{detailZoom ? "CIVILIZATIONS" : "CIV SIGNALS · TAC LOCK"}</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>
         <div className="world-map-hint">FRONTIER I · ROGUE L1–{rogueMaxLevel} · {world.config.width}×{world.config.height} · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS{renderStressCount ? ` · ${renderStressCount.toLocaleString()} FX PROBES` : ""}{strikeStressCount ? ` · ${strikeStressCount} STRIKES` : ""}</div>
       </div>
       <aside className={`world-side ${selected ? "target-open" : "signals-open"}`}>
@@ -1670,7 +1673,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
               return <div className="world-force-row" key={`${arm}-${tier}`}>
                 <span>{TROOPS_META[arm].emoji} {TROOPS_META[arm].label} T{tier}<small><b>{compact(displayTroops(sel))}</b> / {compact(displayTroops(qty))}</small></span>
                 <input type="range" min="0" max={rowMax} step="1" value={sel} onChange={(event) => setTroop(arm, tier, Number(event.target.value))} disabled={rowMax <= 0} />
-                <button className="world-force-max" title={selected.kind === "resource" ? "Add only the troops whose load this planet can use" : `Fill ${TROOPS_META[arm].label} T${tier} to its maximum`} aria-label={`Fill ${TROOPS_META[arm].label} tier ${tier} to useful maximum`} onClick={() => maxTroop(arm, tier, usefulMax)}>FILL MAX</button>
+                <button className="world-force-max" aria-label={`Fill ${TROOPS_META[arm].label} tier ${tier} to useful maximum`} onClick={() => maxTroop(arm, tier, usefulMax)}>FILL MAX</button>
               </div>;
             }))}
             {totalTroops(viewGame) === 0 && <div className="world-no-force">NO TROOPS</div>}

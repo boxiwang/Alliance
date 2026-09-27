@@ -513,7 +513,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       <div className="speedup-tray-items">
         {compatible.map((item) => {
           const quantity = inventoryById.get(item.id) || 0;
-          return <button key={item.id} type="button" disabled={quantity <= 0 || inventoryBusy || commandBusy} onClick={() => requestSpeedupUse(item.id, target)} aria-label={`Use ${item.name}, ${quantity} owned`} title={item.name}>
+          return <button key={item.id} type="button" disabled={quantity <= 0 || inventoryBusy || commandBusy} onClick={() => requestSpeedupUse(item.id, target)} aria-label={`Use ${item.name}, ${quantity} owned`}>
             <img src={speedupIconPath(item)} alt="" />
             <span className="mono">×{quantity}</span>
           </button>;
@@ -631,7 +631,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
 
       <div className={`city-command-layout${facilityInterior && facilityOpen === "academy" ? " research-interior" : facilityInterior && facilityOpen === "storage" ? " warehouse-interior" : ""}`}>
       <section className="operations-queue" aria-label="Operations queue">
-        <header><span>OPERATIONS QUEUE</span><b className="mono">{activeOperationQueues}/{operationQueueSlots} ACTIVE</b></header>
+        <header><span>OPERATIONS</span><b className="mono">{activeOperationQueues}/{operationQueueSlots} ACTIVE</b></header>
+        {activeOperationQueues === 0 && <p className="operations-empty">All queues idle — pick one to start.</p>}
         <div className="operation-slots">
           {Array.from({ length: buildQueueSlots }, (_, slot) => {
             const building = buildQueues[slot];
@@ -655,7 +656,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
               {active && <i className="operation-meter" style={{ width: trainPct(view, type, now) + "%" }} />}
             </button>;
           })}
-          <button className={`operation-slot${view.researchQueue.finishAt > 0 ? " active research" : " idle"}`} onClick={() => view.buildings.academy.lvl >= 1 && openFacility("academy")}>
+          <button className={`operation-slot${view.researchQueue.finishAt > 0 ? " active research" : " idle"}${view.buildings.academy.lvl >= 1 ? "" : " locked"}`} onClick={() => view.buildings.academy.lvl >= 1 && openFacility("academy")}>
             <small>RESEARCH</small><b>{view.researchQueue.finishAt > 0 ? researchTech(view.researchQueue.tech)?.name ?? "Researching" : view.buildings.academy.lvl >= 1 ? "IDLE" : "LOCKED"}</b>
             <time className="mono">{view.researchQueue.finishAt > 0 ? fmtMs(view.researchQueue.finishAt - now) : view.buildings.academy.lvl >= 1 ? "AVAILABLE" : "RI L1"}</time>
             {view.researchQueue.finishAt > 0 && <i className="operation-meter" style={{ width: queuePct(view.researchQueue.durationSec, view.researchQueue.finishAt, now) + "%" }} />}
@@ -675,7 +676,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="speedup-items">
             {usableSpeedups.map((entry) => {
               const item = MVP_ITEM_BY_ID.get(entry.itemId)!;
-              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy || !selectedSpeedupTarget} onClick={() => selectedSpeedupTarget && requestSpeedupUse(entry.itemId, selectedSpeedupTarget)} title={item.name} aria-label={`Use ${item.name}, ${entry.quantity} owned`}><img src={speedupIconPath(item)} alt="" /><span>×{entry.quantity}</span></button>;
+              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy || !selectedSpeedupTarget} onClick={() => selectedSpeedupTarget && requestSpeedupUse(entry.itemId, selectedSpeedupTarget)} aria-label={`Use ${item.name}, ${entry.quantity} owned`}><img src={speedupIconPath(item)} alt="" /><span>×{entry.quantity}</span></button>;
             })}
             {selectedSpeedupTarget && usableSpeedups.length === 0 && <i>NO SPEEDUPS AVAILABLE</i>}
           </div>
@@ -865,7 +866,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
                   const title = mode === "promote" && candidate <= sourceTier
                     ? `Target must be higher than T${sourceTier}`
                     : unlocked ? `T${candidate}` : `Requires ${BUILDINGS[buildingKey].label} Lv.${requiredLevel}`;
-                  return <button key={candidate} disabled={!unlocked} title={title} className={"chip tier-chip" + (tier === candidate ? " on" : "")} onClick={() => setTrainTier((current) => ({ ...current, [type]: candidate }))}>T{candidate}</button>;
+                  return <button key={candidate} disabled={!unlocked} aria-label={title} className={"chip tier-chip" + (tier === candidate ? " on" : "")} onClick={() => setTrainTier((current) => ({ ...current, [type]: candidate }))}>T{candidate}</button>;
                 })}
               </div>
             </div>
@@ -1082,7 +1083,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         </header>
         <div className="bmain">
           {locked ? (
-            <div className="bgate" title={`Unlocks at Townhall Lv.${unlockAtKeep(k)}`}>🔒 TH {unlockAtKeep(k)}</div>
+            <div className="bgate" aria-label={`Unlocks at Townhall Lv.${unlockAtKeep(k)}`}>🔒 TH {unlockAtKeep(k)}</div>
           ) : !upgradable ? (
             <div className="bgate">SOON</div>
           ) : upgrading ? (
@@ -1093,7 +1094,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           ) : atMaximum ? (
             <div className="bgate maxed">MAX LEVEL</div>
           ) : atCap ? (
-            <div className="bgate" title="Upgrade Townhall first">🔒 TH {b.lvl + 1}</div>
+            <div className="bgate" aria-label="Upgrade Townhall first">🔒 TH {b.lvl + 1}</div>
           ) : (
             <div className={`bcard-state ${upgradeReady ? "ready" : "blocked"}`}><b>{status}</b><i>→</i></div>
           )}
@@ -1194,7 +1195,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     return <span className="upgrade-costs">{RES_ORDER.filter((resource) => (cost[resource] ?? 0) > 0).map((resource) => {
       const required = cost[resource] ?? 0;
       const enough = view.res[resource] >= required;
-      return <span className={`upgrade-cost ${enough ? "enough" : "short"}`} key={resource} title={`${compact(displayResource(view.res[resource]))} available`}><i>{RES[resource].emoji}</i><b className="mono">{compact(displayResource(required))}</b></span>;
+      return <span className={`upgrade-cost ${enough ? "enough" : "short"}`} key={resource}><i>{RES[resource].emoji}</i><b className="mono">{compact(displayResource(required))}</b></span>;
     })}</span>;
   }
 

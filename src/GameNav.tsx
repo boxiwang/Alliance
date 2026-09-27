@@ -97,7 +97,7 @@ export default function GameNav({
         <div className="command-nav-controls">
           <div className="command-might"><small>MIGHT</small><b>{compact(might)}</b></div>
           <div className="command-tabs">
-            <button className="soon" disabled aria-disabled="true" title="Alliances arrive with shared multiplayer — coming soon">
+            <button className="soon" disabled aria-disabled="true">
               <span>◇</span><b>ALLIANCE</b><em className="soon-tag">SOON</em>
             </button>
             <button className={view === "city" ? "active" : ""} aria-current={view === "city" ? "page" : undefined} onClick={onCity}>

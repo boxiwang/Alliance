@@ -24,6 +24,32 @@ type Props = {
   tier?: "low" | "medium" | "high" | "ultra";
 };
 
+// Deep-zoom nebula detail + dust, computed per pixel on the GPU from WORLD
+// coordinates (domain-warped fbm): nothing tiles, at any zoom, and the
+// Full-Spectrum drift is continuous. Rendered soft at ≤1× backing resolution.
+const NEBULA_VERT = "attribute vec2 aPos;void main(){gl_Position=vec4(aPos,0.,1.);}";
+const NEBULA_FRAG = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2 uRes;uniform vec4 uCam;uniform vec2 uOff;uniform float uTime,uDeep,uInner,uScale;
+float h(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float v=0.,a=.5;mat2 m=mat2(1.6,1.2,-1.2,1.6);for(int i=0;i<5;i++){v+=a*n(p);p=m*p+vec2(3.1,1.7);a*=.5;}return v;}
+void main(){
+  vec2 css=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y)/uScale;
+  vec2 w=uCam.xy*.9+(css-uOff)/uCam.z;            // parallax depth .9
+  vec2 q=w/14.+vec2(uTime*.02,uTime*.008);
+  vec2 warp=vec2(fbm(q+vec2(1.7,9.2)),fbm(q+vec2(8.3,2.8)));
+  float cloud=smoothstep(.46,.86,fbm(q+warp*1.6));
+  float dust=smoothstep(.56,.94,fbm(w/3.1+warp*2.2+vec2(uTime*.03,0.)));
+  vec3 col=mix(vec3(.27,.66,.78),vec3(.58,.38,.9),uInner);
+  float a=(cloud*.24+dust*.15)*uDeep;
+  gl_FragColor=vec4(col*a,a);
+}`;
+
 /** Deterministic hash → [0,1) for a world cell, so procedural stars never tile. */
 function hash2(ix: number, iy: number, salt: number): number {
   let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(salt, 2246822519);
@@ -81,6 +107,7 @@ function makeNoiseTile(size: number, seed: number, rgb: [number, number, number]
 export default function WorldBackdropLayer(props: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef<HTMLCanvasElement>(null);
+  const glRef = useRef<HTMLCanvasElement>(null);
   const propsRef = useRef(props);
   const dirtyRef = useRef(true);
   useLayoutEffect(() => { propsRef.current = props; dirtyRef.current = true; });
@@ -95,14 +122,33 @@ export default function WorldBackdropLayer(props: Props) {
     let drawNow: (() => void) | null = null;
     // Texture tiles are generated once, after the first paint (≈20ms, idle), then
     // the base layer repaints with them. Patterns are world-anchored below.
-    let textures: { teal: CanvasPattern; violet: CanvasPattern; dust: CanvasPattern } | null = null;
+    let textures: { teal: CanvasPattern; violet: CanvasPattern } | null = null;
+    // GPU nebula (Enhanced / Full-Spectrum), created lazily the first time it is needed.
+    const glCanvas = glRef.current;
+    let gl: WebGLRenderingContext | null = null, glFailed = false, glU: Record<string, WebGLUniformLocation | null> = {};
+    const glScale = () => Math.min(1, dpr) * .75;
+    const ensureGL = (): WebGLRenderingContext | null => {
+      if (gl || glFailed || !glCanvas) return gl;
+      const c = glCanvas.getContext("webgl", { alpha: true, premultipliedAlpha: true, antialias: false, powerPreference: "low-power" });
+      const compile = (type: number, src: string) => { const sh = c!.createShader(type)!; c!.shaderSource(sh, src); c!.compileShader(sh); return c!.getShaderParameter(sh, c!.COMPILE_STATUS) ? sh : null; };
+      const vs = c && compile(c.VERTEX_SHADER, NEBULA_VERT), fs = c && compile(c.FRAGMENT_SHADER, NEBULA_FRAG);
+      if (!c || !vs || !fs) { glFailed = true; return null; }
+      const prog = c.createProgram()!; c.attachShader(prog, vs); c.attachShader(prog, fs); c.linkProgram(prog);
+      if (!c.getProgramParameter(prog, c.LINK_STATUS)) { glFailed = true; return null; }
+      c.useProgram(prog);
+      const buf = c.createBuffer(); c.bindBuffer(c.ARRAY_BUFFER, buf);
+      c.bufferData(c.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), c.STATIC_DRAW);
+      const loc = c.getAttribLocation(prog, "aPos"); c.enableVertexAttribArray(loc); c.vertexAttribPointer(loc, 2, c.FLOAT, false, 0, 0);
+      for (const name of ["uRes", "uCam", "uOff", "uTime", "uDeep", "uInner", "uScale"]) glU[name] = c.getUniformLocation(prog, name);
+      gl = c;
+      return gl;
+    };
     const texTimer = window.setTimeout(() => {
       if ((propsRef.current.tier ?? "high") === "low") return;
       const teal = makeNoiseTile(256, 4663, [70, 170, 200], { base: 3, octaves: 5, lo: .46, hi: .86, alpha: .16 });
       const violet = makeNoiseTile(256, 9001, [150, 96, 230], { base: 3, octaves: 5, lo: .5, hi: .9, alpha: .15 });
-      const dust = makeNoiseTile(128, 777, [200, 220, 255], { base: 6, octaves: 4, lo: .55, hi: .95, alpha: .09, grain: .012 });
-      const tp = ctx.createPattern(teal, "repeat"), vp = ctx.createPattern(violet, "repeat"), dp = ctx.createPattern(dust, "repeat");
-      if (tp && vp && dp) { textures = { teal: tp, violet: vp, dust: dp }; dirtyRef.current = true; }
+      const tp = ctx.createPattern(teal, "repeat"), vp = ctx.createPattern(violet, "repeat");
+      if (tp && vp) { textures = { teal: tp, violet: vp }; dirtyRef.current = true; }
     }, 60);
     const resize = () => {
       const nextDpr = Math.max(1, Math.min(propsRef.current.dprCap || 2, window.devicePixelRatio || 1));
@@ -112,6 +158,7 @@ export default function WorldBackdropLayer(props: Props) {
       if (nextW === cw && nextH === ch && nextDpr === dpr) return;
       dpr = nextDpr; cw = nextW; ch = nextH;
       for (const c of [canvas, starCanvas]) { c.width = Math.round(cw * dpr); c.height = Math.round(ch * dpr); }
+      if (glCanvas) { glCanvas.width = Math.max(1, Math.round(cw * glScale())); glCanvas.height = Math.max(1, Math.round(ch * glScale())); }
       dirtyRef.current = true;
       drawNow?.();
     };
@@ -146,6 +193,10 @@ export default function WorldBackdropLayer(props: Props) {
       const reach = Math.max(...[[minX, minY], [maxX, minY], [minX, maxY], [maxX, maxY]].map(([x, y]) => Math.hypot(x - c.x, y - c.y)));
       const pxPerSecond = (Math.PI * 2 / STAR_SPIN_SECONDS) * reach * s;
       const starInterval = Math.max(0, Math.min(250, 400 / Math.max(.001, pxPerSecond)));
+      // Full-Spectrum: as the depth veil darkens the ground, the stars brighten
+      // (same smoothstep as the veil, so both move together).
+      const depth = Math.max(0, Math.min(1, (z - 2.5) / 9.5));
+      const starLift = tier === "ultra" ? depth * depth * (3 - 2 * depth) : 0;
       function drawStars(now: number) {
         sctx!.setTransform(dpr, 0, 0, dpr, 0, 0); sctx!.clearRect(0, 0, cw, ch);
         // Stars: 64-unit tile, slowly rotating about the wormhole like the old <animateTransform>.
@@ -156,9 +207,9 @@ export default function WorldBackdropLayer(props: Props) {
         const bx0 = Math.min(...corners.map((q) => q[0])), bx1 = Math.max(...corners.map((q) => q[0]));
         const by0 = Math.min(...corners.map((q) => q[1])), by1 = Math.max(...corners.map((q) => q[1]));
         for (const [sx, sy, r, rgb, a] of STARS) {
-          sctx!.fillStyle = `rgba(${rgb},${a})`;
+          sctx!.fillStyle = `rgba(${rgb},${Math.min(1, a * (1 + starLift * .9)).toFixed(3)})`;
           sctx!.beginPath();
-          const rad = Math.max(.35, (r / z) * s);
+          const rad = Math.max(.35, (r / z) * s) * (1 + starLift * .2);
           for (let tx = Math.floor(bx0 / STAR_TILE) * STAR_TILE; tx <= bx1; tx += STAR_TILE) {
             for (let ty = Math.floor(by0 / STAR_TILE) * STAR_TILE; ty <= by1; ty += STAR_TILE) {
               const wx = tx + sx, wy = ty + sy;
@@ -208,23 +259,40 @@ export default function WorldBackdropLayer(props: Props) {
           const inner = Math.max(0, Math.min(1, 1 - Math.hypot(vcx - p.center.x, vcy - p.center.y) / p.worldRadius));
           layer(textures.teal, 256, 150, .82, 1 - inner * .75, 0, .6);
           layer(textures.violet, 256, 190, .78, .25 + inner * .75, 23, .45);
-          if (tier === "high" || tier === "ultra") {
-            // Mid-scale nebula detail + fine dust resolve as you zoom in. Each is two
-            // copies at incommensurate scales and angles, so no repeat is visible.
-            const deep = Math.max(0, Math.min(1, (z - 3) / 5));
-            const detail = inner > .5 ? textures.violet : textures.teal;
-            layer(detail, 256, 34, .9, deep * .5, 0, 1);
-            layer(detail, 256, 53.7, .88, deep * .5, 37, .8);
-            layer(textures.dust, 128, 9, .96, deep * .85, 0, 1.3);
-            layer(textures.dust, 128, 14.3, .95, deep * .85, 61, 1.1);
-          }
           ctx.globalAlpha = 1;
+        }
+        // Depth darkening: from afar the gas reads as colour; up close space is mostly
+        // black. The veil sits over the ground/nebula but under every star layer.
+        const dark = Math.max(0, Math.min(1, (z - 2.5) / 9.5));
+        const veil = dark * dark * (3 - 2 * dark) * .72;
+        if (veil > .003) { ctx.fillStyle = `rgba(2,3,9,${veil.toFixed(3)})`; ctx.fillRect(0, 0, cw, ch); }
+        // Deep-zoom nebula detail + dust on the GPU (Enhanced / Full-Spectrum only).
+        const gpuNebula = (tier === "high" || tier === "ultra") ? ensureGL() : null;
+        if (gpuNebula && glCanvas) {
+          const g = gpuNebula, scale = glScale();
+          const vcx = vp.x + vp.width / 2, vcy = vp.y + vp.height / 2;
+          const inner = Math.max(0, Math.min(1, 1 - Math.hypot(vcx - p.center.x, vcy - p.center.y) / p.worldRadius));
+          const deep = Math.max(0, Math.min(1, (z - 2.5) / 4.5));
+          g.viewport(0, 0, glCanvas.width, glCanvas.height);
+          g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT);
+          if (deep > .004) {
+            g.uniform2f(glU.uRes, glCanvas.width, glCanvas.height);
+            g.uniform4f(glU.uCam, vp.x, vp.y, s, 1);
+            g.uniform2f(glU.uOff, ox, oy);
+            g.uniform1f(glU.uTime, alive ? now / 1000 : 0);
+            g.uniform1f(glU.uDeep, deep * (1 - veil * .55)); // faint wisps survive in the dark
+            g.uniform1f(glU.uInner, inner);
+            g.uniform1f(glU.uScale, scale);
+            g.drawArrays(g.TRIANGLES, 0, 6);
+          }
+        } else if (gl && glCanvas) {
+          gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); // tier lowered: hide the GPU layer
         }
         if (tier !== "low") {
           // Far stars at 55% of the camera's travel: depth while panning. Hashed per
           // cell (no repeating lattice).
           const fs = s * .55, fminX = vp.x - ox / fs, fmaxX = vp.x + (cw - ox) / fs, fminY = vp.y - oy / fs, fmaxY = vp.y + (ch - oy) / fs;
-          ctx.fillStyle = "rgba(190,215,255,.34)"; ctx.beginPath();
+          ctx.fillStyle = `rgba(190,215,255,${(.34 * (1 + starLift * .7)).toFixed(3)})`; ctx.beginPath();
           for (let cx0 = Math.floor(fminX / 24); cx0 <= Math.floor(fmaxX / 24); cx0 += 1) for (let cy0 = Math.floor(fminY / 24); cy0 <= Math.floor(fmaxY / 24); cy0 += 1) {
             if (hash2(cx0, cy0, 1) > .55) continue;
             const px = ox + (cx0 * 24 + hash2(cx0, cy0, 2) * 24 - vp.x) * fs, py = oy + (cy0 * 24 + hash2(cx0, cy0, 3) * 24 - vp.y) * fs;
@@ -236,7 +304,7 @@ export default function WorldBackdropLayer(props: Props) {
           if (micro > 0) {
             const t = alive ? now / 1000 : 0;
             for (let group = 0; group < 3; group += 1) {
-              ctx.fillStyle = `rgba(215,230,255,${(micro * [.28, .45, .7][group]).toFixed(3)})`; ctx.beginPath();
+              ctx.fillStyle = `rgba(215,230,255,${Math.min(1, micro * [.28, .45, .7][group] * (1 + starLift * .45)).toFixed(3)})`; ctx.beginPath();
               for (let cx0 = Math.floor(minX / 5); cx0 <= Math.floor(maxX / 5); cx0 += 1) for (let cy0 = Math.floor(minY / 5); cy0 <= Math.floor(maxY / 5); cy0 += 1) {
                 const seed = hash2(cx0, cy0, 11);
                 if (seed > .7) continue;
@@ -296,11 +364,17 @@ export default function WorldBackdropLayer(props: Props) {
     };
     drawNow = () => { cancelAnimationFrame(raf); draw(performance.now()); };
     draw(performance.now());
-    return () => { cancelAnimationFrame(raf); observer.disconnect(); window.clearTimeout(texTimer); };
+    return () => {
+      cancelAnimationFrame(raf); observer.disconnect(); window.clearTimeout(texTimer);
+      // Release the nebula context when the Star Map unmounts (skipped in dev: StrictMode
+      // remounts onto the same canvas, which would then only hand back the lost context).
+      if (gl && !import.meta.env.DEV) gl.getExtension("WEBGL_lose_context")?.loseContext();
+    };
   }, []);
 
   return <>
     <canvas ref={canvasRef} className="world-backdrop-layer" aria-hidden="true" />
+    <canvas ref={glRef} className="world-backdrop-layer world-backdrop-nebula" aria-hidden="true" />
     <canvas ref={starsRef} className="world-backdrop-layer world-backdrop-stars" aria-hidden="true" />
   </>;
 }
