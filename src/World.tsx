@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { Profile } from "./lib/profile";
 import {
@@ -12,7 +12,7 @@ import { gmFillTroops, hasLocalGm } from "./lib/gm";
 import type {
   CityEntity, HeadlessMarch, MonsterEntity, Point, ResourceEntity, WorldReport,
 } from "./lib/world-engine";
-import { ISSUED_WORLD_COSMETICS, distance, energyAt, isInsidePlayableWorld, isScoutReportActive, scoutReportExpiresAt, worldCenter, worldPlayableRadius, worldRogueMaxLevel, zoneForPoint } from "./lib/world-engine";
+import { ISSUED_WORLD_COSMETICS, distance, energyAt, isInsidePlayableWorld, isScoutReportActive, scoutReportExpiresAt, worldCenter, worldPlayableRadius, relocateCity, warpBlockReason, warpReadiness, WARP_RULES, worldResourceMaxLevel, worldRogueMaxLevel, zoneForPoint } from "./lib/world-engine";
 import { carryCapacity, resolveCombat } from "./lib/expedition";
 import type { LocalWorldSession } from "./lib/world-adapter";
 import {
@@ -23,7 +23,7 @@ import GameNav from "./GameNav";
 import MiniComms from "./MiniComms";
 import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
-import WorldVisualLayer, { createWorldVisualStress, worldVisualBodyRadius, worldWormholeRadius, type WorldViewport, type WorldVisualCity } from "./WorldVisualLayer";
+import WorldVisualLayer, { createWorldVisualStress, worldStrategicBlend, worldVisualBodyRadius, worldWormholeRadius, type WorldViewport, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
 import WorldMarchLayer from "./WorldMarchLayer";
 import WorldBackdropLayer from "./WorldBackdropLayer";
@@ -39,7 +39,7 @@ import { RealtimeClient, type PresenceCity, type ScoutSnapshot, type LiveMarch }
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
-import { ensureGameAuthority, sendGameCommand, type GameCommandResponse } from "./lib/backend";
+import { ensureGameAuthority, sendGameCommand, type GameCommandResponse, loadInventory } from "./lib/backend";
 
 type SelectableEntity = ResourceEntity | MonsterEntity | CityEntity;
 type WorldLayer = "resource" | "monster" | "city";
@@ -57,6 +57,12 @@ const RESOURCE_COLORS = { cash: "#43f2a1", oil: "#ffb454", power: "#38d9ff" };
 const REMOTE_FACTION_COLOR: Record<string, string> = { ORBT: "#38d9ff", PEPE: "#43f2a1", DOGE: "#ffb454", MOG: "#aa82ff", WIF: "#7cc0ff" };
 const RESOURCE_EMOJI = { cash: "💰", oil: "⛽", power: "⚡" };
 const RESOURCE_GRADIENT = { cash: "url(#world-planet-cash)", oil: "url(#world-planet-oil)", power: "url(#world-planet-power)" };
+// Star Map style: resources/Rogues sized to the tile grid and visually quiet so
+// cities, relations and selection lead the eye. The previous "classic" style is
+// archived at git tag archive/classic-starmap; there is only one style now.
+const CALM_MAP = true;
+const RESOURCE_FILL = CALM_MAP ? { cash: "url(#world-planet-cash-calm)", oil: "url(#world-planet-oil-calm)", power: "url(#world-planet-power-calm)" } : RESOURCE_GRADIENT;
+const ROGUE_FILL = CALM_MAP ? "url(#world-planet-rogue-calm)" : "url(#world-planet-rogue)";
 // In-flight gather milestones (shown live in Live Fleets) are kept out of the results archive.
 const ARCHIVE_HIDDEN_OUTCOMES = new Set(["gathering_started", "gathering_completed"]);
 
@@ -147,6 +153,55 @@ export function resourceOccupationDisposition(
   return viewerAllianceId && occupierAlliance === viewerAllianceId ? "ally" : "enemy";
 }
 
+// Selected body scale: calm markers start small, so they grow a little more.
+type SearchKind = "monster" | "cash" | "oil" | "power";
+const SEARCH_KINDS: { id: SearchKind; label: string }[] = [
+  { id: "monster", label: "ROGUE" }, { id: "cash", label: "CASH" }, { id: "oil", label: "OIL" }, { id: "power", label: "POWER" },
+];
+const SELECT_SCALE = CALM_MAP ? 1.4 : 1.2;
+type LockTone = "own" | "rival" | "cash" | "oil" | "power" | "rogue" | "locked";
+
+/** Edge arrow toward the home city whenever it is off-screen (mainstream SLG "home" compass). */
+function HomeBeacon({ viewportRef, home, onHome }: { viewportRef: RefObject<WorldViewport>; home: Point; onHome: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const homeRef = useRef(home);
+  homeRef.current = home;
+  useEffect(() => {
+    let raf = 0, lastKey = "";
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const el = ref.current, vp = viewportRef.current, box = el?.parentElement;
+      if (!el || !vp || !box) return;
+      const cw = box.clientWidth, ch = box.clientHeight, h = homeRef.current;
+      const scale = Math.min(cw / vp.width, ch / vp.height);
+      const ox = (cw - vp.width * scale) / 2, oy = (ch - vp.height * scale) / 2;
+      const hx = ox + (h.x - vp.x) * scale, hy = oy + (h.y - vp.y) * scale;
+      const margin = 46;
+      const visible = hx > margin && hx < cw - margin && hy > margin && hy < ch - margin;
+      const cx = cw / 2, cy = ch / 2, dx = hx - cx, dy = hy - cy;
+      const t = Math.min((cw / 2 - margin) / Math.max(1e-6, Math.abs(dx)), (ch / 2 - margin) / Math.max(1e-6, Math.abs(dy)));
+      const px = cx + dx * t, py = cy + dy * t, angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      const tiles = Math.round(Math.hypot(h.x - (vp.x + vp.width / 2), h.y - (vp.y + vp.height / 2)));
+      const key = visible ? "hidden" : `${px.toFixed(1)}|${py.toFixed(1)}|${angle.toFixed(1)}|${tiles}`;
+      if (key === lastKey) return;
+      lastKey = key;
+      el.style.display = visible ? "none" : "";
+      if (visible) return;
+      el.style.transform = `translate(${px}px, ${py}px)`;
+      const arrow = el.querySelector<HTMLElement>(".world-home-beacon-arrow");
+      if (arrow) arrow.style.transform = `rotate(${angle}deg)`;
+      const label = el.querySelector<HTMLElement>(".world-home-beacon-distance");
+      if (label) label.textContent = `${tiles}`;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [viewportRef]);
+  return <button ref={ref} type="button" className="world-home-beacon" style={{ display: "none" }} onClick={onHome} aria-label="Return to your home city">
+    <span className="world-home-beacon-arrow" aria-hidden="true" />
+    <b>HOME</b><span className="world-home-beacon-distance" />
+  </button>;
+}
+
 function WorldLevelBadge({ x, y, level }: { x: number; y: number; level: number }) {
   return <g className="world-level-badge"><circle cx={x + 6.5} cy={y + 6.2} r="3.25" /><text x={x + 6.5} y={y + 7.25}>{level}</text></g>;
 }
@@ -191,7 +246,7 @@ function WorldEntityGlyph({ entity, detailZoom, occupation }: { entity: Selectab
     const radius = detailZoom ? 7.2 : 4.2;
     return <g className={`world-planet-glyph ${entity.resource} ${detailZoom ? "tactical" : "field"}`}>
       {occupation !== "neutral" && <><circle cx={x} cy={y} r={radius + 2.15} className="world-occupation-ring" /><circle cx={x + radius * .82} cy={y - radius * .72} r="1.45" className="world-occupation-pip" /></>}
-      <circle cx={x} cy={y} r={radius} fill={RESOURCE_GRADIENT[entity.resource]} />
+      <circle cx={x} cy={y} r={radius} fill={RESOURCE_FILL[entity.resource]} />
       <ellipse cx={x} cy={y} rx={radius * 1.22} ry={radius * .35} transform={`rotate(-18 ${x} ${y})`} fill="none" stroke={color} strokeWidth=".55" opacity=".68" />
       <circle cx={x - radius * .3} cy={y - radius * .32} r={radius * .18} className="world-planet-specular" />
       {detailZoom && <><path d={`M ${x - 5.5} ${y + 1.8}Q ${x} ${y + 4.7} ${x + 5.5} ${y + 1.1}`} className="world-planet-contour" /><WorldSurfaceMark x={x} y={y} kind={entity.resource} /></>}
@@ -201,7 +256,7 @@ function WorldEntityGlyph({ entity, detailZoom, occupation }: { entity: Selectab
   if (entity.kind === "city") {
     return <polygon points={`${x},${y - 4.1} ${x + 3.6},${y - 2} ${x + 3.6},${y + 2} ${x},${y + 4.1} ${x - 3.6},${y + 2} ${x - 3.6},${y - 2}`} fill={color} />;
   }
-  if (detailZoom) return <g className="world-rogue-glyph"><circle cx={x} cy={y} r="7.2" fill="url(#world-planet-rogue)" /><ellipse cx={x} cy={y} rx="8.5" ry="2.4" transform={`rotate(16 ${x} ${y})`} /><path d={`M ${x - 5.4} ${y + 1.7}Q ${x} ${y + 4.5} ${x + 5.4} ${y + 1}`} className="world-planet-contour" /><WorldSurfaceMark x={x} y={y} kind="rogue" /><WorldLevelBadge x={x} y={y} level={entity.level} /></g>;
+  if (detailZoom) return <g className="world-rogue-glyph"><circle cx={x} cy={y} r="7.2" fill={ROGUE_FILL} /><ellipse cx={x} cy={y} rx="8.5" ry="2.4" transform={`rotate(16 ${x} ${y})`} /><path d={`M ${x - 5.4} ${y + 1.7}Q ${x} ${y + 4.5} ${x + 5.4} ${y + 1}`} className="world-planet-contour" /><WorldSurfaceMark x={x} y={y} kind="rogue" /><WorldLevelBadge x={x} y={y} level={entity.level} /></g>;
   return <path d={`M ${x} ${y - 4.2} L ${x + 4} ${y + 3.4} H ${x - 4} Z`} fill={color} />;
 }
 
@@ -380,6 +435,11 @@ const ERROR_COPY: Record<string, string> = {
   rogue_level_locked: "Defeat the previous Rogue level first.", frontier_complete: "Frontier I is complete. The Wormhole is ready for a future map.",
   rogue_unavailable: "No matching Rogue signal is currently available.",
   target_shielded: "That city is protected by a shield.",
+  fleets_away: "Bring every fleet home before warping.", city_burning: "Your city is burning — let it recover before warping.",
+  outside_frontier: "That spot is outside the Frontier.", reserve_zone: "The Wormhole reserve cannot be settled.",
+  too_close_city: `Too close to another commander — keep ${WARP_RULES.minCitySpacing} tiles apart.`, tile_occupied: "A planet or Rogue already occupies that spot.",
+  no_space: "No safe sector found. Try again.", no_warp_item: "You have no Warp item of that type left.",
+  under_attack: "An attack is inbound — you cannot warp now.", world_unreachable: "Warp link failed. Try again.", warp_rejected: "The warp was rejected.",
 };
 
 function fmtDuration(seconds: number): string {
@@ -596,7 +656,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const [gpuVisualsReady, setGpuVisualsReady] = useState(false);
+  // null = WebGL still initialising, true = drawing, false = unavailable (SVG fallback).
+  // The SVG fallback must not flash in while WebGL is merely compiling shaders.
+  const [gpuVisualsState, setGpuVisualsReady] = useState<boolean | null>(null);
+  const gpuVisualsReady = gpuVisualsState === true;
+  const gpuFallback = gpuVisualsState === false;
   // True while the WebGL Void-Touched shader is actively covering the home planet;
   // when so, we hide the SVG skin underneath to avoid a doubled halo.
   const [voidShaderActive, setVoidShaderActive] = useState(false);
@@ -696,6 +760,15 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   useEffect(() => {
     try { localStorage.setItem(`ruglands:world-bookmarks:${address.toLowerCase()}`, JSON.stringify(bookmarks)); } catch {}
   }, [address, bookmarks]);
+  // Map search (mainstream SLG pattern): pick a kind + level, jump to the nearest
+  // free match from home; pressing again steps to the next nearest.
+  const [warpOpen, setWarpOpen] = useState(false);
+  const [warpBusy, setWarpBusy] = useState(false);
+  const [warpCounts, setWarpCounts] = useState<{ precision: number; drift: number } | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchKind, setSearchKind] = useState<SearchKind>("monster");
+  const [searchLevels, setSearchLevels] = useState<Record<SearchKind, number>>({ monster: 0, cash: 1, oil: 1, power: 1 });
+  const [searchResult, setSearchResult] = useState<{ key: string; index: number; total: number; targetId: string } | null>(null);
   const world = session.world;
   const viewGame = useMemo(() => project(game, now), [game, now]);
   const targets = useMemo(() => Object.values(world.entities).filter((entity): entity is SelectableEntity => entity.kind === "resource" || entity.kind === "monster" || (entity.kind === "city" && entity.ownerId !== session.playerId)), [world.entities, session.playerId]);
@@ -726,6 +799,64 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // React state and SVG viewBoxes commit once on release. This avoids rebuilding
   // the full map 60–200 times/second and keeps every layer on the same camera.
   const liveViewportRef = useRef<WorldViewport>({ x: viewX, y: viewY, width: viewport.width, height: viewport.height });
+  const zoomRef = useRef(zoom); zoomRef.current = zoom;
+  const cameraRef = useRef(camera); cameraRef.current = camera;
+  // Live zoom. Wheel/pinch and the +/- buttons move a live zoom that canvas layers
+  // read every frame; the SVG plane is scaled on the compositor. React commits the
+  // zoom every ~90ms (and whenever the plane drifts >15% from what it rasterised),
+  // so SVG markers and name plates never stretch far from their true size.
+  const liveZoom = useRef<number | null>(null);
+  const lastZoomCommit = useRef(0);
+  const zoomSettle = useRef<number | undefined>(undefined);
+  const zoomTween = useRef(0);
+  useEffect(() => () => { window.clearTimeout(zoomSettle.current); cancelAnimationFrame(zoomTween.current); }, []);
+  function commitZoom(z: number) { lastZoomCommit.current = performance.now(); setZoom(z); }
+  function applyLiveZoom(requested: number) {
+    const z = Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, requested));
+    liveZoom.current = z;
+    const baseW = world.config.width, baseH = world.config.width * .655, cam = cameraRef.current;
+    liveViewportRef.current = { x: cam.x - baseW / z / 2, y: cam.y - baseH / z / 2, width: baseW / z, height: baseH / z };
+    const drift = z / zoomRef.current;
+    const planeTransform = `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN * drift})`;
+    if (svgRef.current) svgRef.current.style.transform = planeTransform;
+    if (overlayRef.current) overlayRef.current.style.transform = planeTransform;
+    markWorldMotion();
+    if (performance.now() - lastZoomCommit.current > 90 || Math.abs(Math.log(drift)) > Math.log(1.15)) commitZoom(z);
+    window.clearTimeout(zoomSettle.current);
+    zoomSettle.current = window.setTimeout(() => { if (liveZoom.current != null && liveZoom.current !== zoomRef.current) commitZoom(liveZoom.current); liveZoom.current = null; }, 120);
+  }
+  const currentZoom = () => liveZoom.current ?? zoomRef.current;
+  // Proportional wheel zoom: a mouse notch (deltaY≈100) ≈ 14%; trackpad pinch
+  // (ctrlKey) and momentum scroll produce small deltas and zoom smoothly.
+  function onMapWheel(event: WheelEvent) {
+    event.preventDefault();
+    cancelAnimationFrame(zoomTween.current);
+    const delta = event.deltaMode === 1 ? event.deltaY * 33 : event.deltaY;
+    const factor = Math.exp(-delta * (event.ctrlKey ? .01 : .0013));
+    applyLiveZoom(currentZoom() * Math.max(.8, Math.min(1.25, factor)));
+  }
+  const wheelHandler = useRef(onMapWheel); wheelHandler.current = onMapWheel;
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    // Native, non-passive listener: React's onWheel is passive, so preventDefault was ignored.
+    const listener = (event: WheelEvent) => wheelHandler.current(event);
+    el.addEventListener("wheel", listener, { passive: false });
+    return () => el.removeEventListener("wheel", listener);
+  }, []);
+  function animateZoomTo(requested: number) {
+    const target = Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, requested));
+    const from = currentZoom();
+    cancelAnimationFrame(zoomTween.current);
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { applyLiveZoom(target); return; }
+    const started = performance.now();
+    const step = (time: number) => {
+      const k = Math.min(1, (time - started) / 200), eased = 1 - Math.pow(1 - k, 3);
+      applyLiveZoom(Math.exp(Math.log(from) + (Math.log(target) - Math.log(from)) * eased));
+      if (k < 1) zoomTween.current = requestAnimationFrame(step);
+    };
+    zoomTween.current = requestAnimationFrame(step);
+  }
   useLayoutEffect(() => {
     liveViewportRef.current = { x: viewX, y: viewY, width: viewport.width, height: viewport.height };
     const restingTransform = `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})`;
@@ -747,6 +878,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const energy = energyAt(player, now, world.config);
   // Rogues unlock sequentially: you may engage up to (highest defeated + 1).
   const rogueMaxLevel = worldRogueMaxLevel(N);
+  const resourceMaxLevel = worldResourceMaxLevel(N);
   const frontierComplete = player.highestMonsterDefeated >= rogueMaxLevel;
   const nextRogueLevel = Math.min(rogueMaxLevel, player.highestMonsterDefeated + 1);
   const rogueLocked = !!selected && selected.kind === "monster"
@@ -769,8 +901,27 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const latestReports = player.reportIds.slice().reverse().map((id) => world.reports[id]).filter((report) => report && !ARCHIVE_HIDDEN_OUTCOMES.has(report.outcome)).slice(0, 6);
   const strategicZoom = zoom < 1.45;
   const markerScale = worldMarkerScale(zoom);
-  const importantScale = (strategicZoom ? 1.6 : 1.18) / zoom;
-  const homeIdentityOffset = worldIdentityLocalOffset(zoom, true);
+  // Strategic → Field is a smooth band, so the home planet and its name plate
+  // grow/shrink together instead of jumping in opposite directions at 145%.
+  const strategicBlend = worldStrategicBlend(zoom);
+  const importantScale = (1.6 + (1.18 - 1.6) * strategicBlend) / zoom;
+  const worldPerPxEarly = Math.max(viewport.width / Math.max(1, mapPx.w), viewport.height / Math.max(1, mapPx.h));
+  // In Tactical the home planet keeps growing; the plate grows with it
+  // (sub-linearly, ^0.7) and stays the same gap below the planet body.
+  const homeBodyPx = worldVisualBodyRadius(zoom, true, false, CALM_MAP);
+  const homeTagGrowth = zoom > WORLD_TACTICAL_ZOOM ? Math.pow(homeBodyPx / worldVisualBodyRadius(WORLD_TACTICAL_ZOOM, true, false, CALM_MAP), .7) : 1;
+  // Home plate: smaller when zoomed all the way out (0.95 → 1.18 across the
+  // Strategic band) and growing with the planet in Tactical.
+  const homeTagBase = (.95 + (1.18 - .95) * strategicBlend) / zoom;
+  const homeTagScale = homeTagBase * homeTagGrowth;
+  const homeIdentityOffset = (() => {
+    const fieldLocal = worldIdentityLocalOffset(zoom, true);
+    if (mapPx.w <= 10) return fieldLocal;
+    if (zoom > WORLD_TACTICAL_ZOOM) return (homeBodyPx + 18 * homeTagGrowth) * worldPerPxEarly / homeTagScale;
+    const fieldPx = fieldLocal * (1.18 / zoom) / worldPerPxEarly; // the Field design position
+    const px = strategicBlend >= 1 ? fieldPx : (homeBodyPx + 2) + (fieldPx - (homeBodyPx + 2)) * strategicBlend;
+    return px * worldPerPxEarly / homeTagScale;
+  })();
   const rivalIdentityOffset = worldIdentityLocalOffset(zoom, false);
   // The home planet must read as clearly the biggest body on the map at every
   // zoom. importantScale is a flat 1/zoom shrink, so in deep Tactical view it
@@ -781,12 +932,20 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // in px (grows with zoom via LOD), so convert px→world and wrap at 3.35× the
   // body — just outside the halo/orbit — with a non-scaling (constant-thin) stroke.
   const worldPerPx = Math.max(viewport.width / mapPx.w, viewport.height / mapPx.h);
-  const selectionRadius = (own: boolean, sel: boolean) => worldVisualBodyRadius(zoom, own, sel) * 2.85 + 8;
+  const selectionRadius = (own: boolean, sel: boolean) => worldVisualBodyRadius(zoom, own, sel, CALM_MAP) * 2.85 + 8;
+  // ~1.1 tile radius, clamped so resources stay readable yet always read smaller than a city.
+  // The cap itself grows with depth (11px at Tactical entry → 17px at 1600%) so a
+  // deep zoom still rewards the player with a larger, inspectable planet.
+  const calmDepth = Math.max(0, Math.min(1, Math.log2(Math.max(1, zoom) / WORLD_TACTICAL_ZOOM) / Math.log2(WORLD_MAX_ZOOM / WORLD_TACTICAL_ZOOM)));
+  const calmTargetRadiusPx = detailZoom ? Math.max(8, Math.min(11 + calmDepth * 6, 1.1 / Math.max(.0001, worldPerPx))) : Math.max(3.5, Math.min(6, .9 / Math.max(.0001, worldPerPx)));
+  // Until the map box has been measured (mapPx starts at 1×1) worldPerPx is huge;
+  // fall back to the default marker scale so the first frame is not a wall of Rogues.
+  const calmTargetScale = mapPx.w > 10 && mapPx.h > 10 ? calmTargetRadiusPx * worldPerPx / (detailZoom ? 7.2 : 4.2) : markerScale;
   const filteredTargets = useMemo(() => targets.filter((entity) => layers[entity.kind]
     && worldTargetObservable(entity.kind, zoom)
     && !(entity.kind === "resource" && entity.state === "depleted")
     && !(entity.kind === "monster" && entity.state === "defeated")), [layers, targets, zoom]);
-  const nearbySignals = useMemo(() => filteredTargets.slice()
+  const nearbySignals = useMemo(() => filteredTargets.filter((target) => target.kind !== "city")
     .sort((left, right) => distance(playerCity.position, left.position) - distance(playerCity.position, right.position))
     .slice(0, 3), [filteredTargets, playerCity.position.x, playerCity.position.y]);
   const signalClusters = useMemo(() => clusterWorldSignals(filteredTargets, 72), [filteredTargets]);
@@ -819,7 +978,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const live = cityEntities
       .filter((entity) => entity.ownerId === session.playerId || (detailZoom && layers.city))
       .map((city): WorldVisualCity => {
-        const cosmetics = world.players[city.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS;
+        // Your own planet always shows what you have equipped right now; the world
+        // snapshot's copy can lag (it arrives from the server after first paint).
+        const cosmetics = city.ownerId === session.playerId ? { ...ISSUED_WORLD_COSMETICS, ...equippedCosmetics } : world.players[city.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS;
         return {
           id: city.id,
           position: city.position,
@@ -832,7 +993,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         };
       });
     return live.concat(detailZoom ? stressVisuals : []);
-  }, [cityEntities, detailZoom, layers.city, selectedId, session.playerId, stressVisuals, world.players]);
+  }, [cityEntities, detailZoom, layers.city, selectedId, session.playerId, stressVisuals, world.players, equippedCosmetics]);
   const monsterPreview = useMemo(() => {
     if (!selected || selected.kind !== "monster" || sentCount <= 0) return null;
     const runtime = { ...(N.runtimeAccountModifiers ?? {}) };
@@ -873,6 +1034,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       <radialGradient id="world-planet-oil" cx="32%" cy="27%"><stop offset="0" stopColor="#d1b58a"/><stop offset=".16" stopColor="#9a754b"/><stop offset=".56" stopColor="#513a25"/><stop offset="1" stopColor="#140e09"/></radialGradient>
       <radialGradient id="world-planet-power" cx="32%" cy="27%"><stop offset="0" stopColor="#b5ccd1"/><stop offset=".16" stopColor="#6895a1"/><stop offset=".56" stopColor="#2b5262"/><stop offset="1" stopColor="#08131a"/></radialGradient>
       <radialGradient id="world-planet-rogue" cx="32%" cy="27%"><stop offset="0" stopColor="#b9a3ac"/><stop offset=".16" stopColor="#805967"/><stop offset=".56" stopColor="#452632"/><stop offset="1" stopColor="#12080d"/></radialGradient>
+      <radialGradient id="world-planet-cash-calm" cx="32%" cy="27%"><stop offset="0" stopColor="#a3bcb0"/><stop offset=".2" stopColor="#62847a"/><stop offset=".6" stopColor="#2c4640"/><stop offset="1" stopColor="#0a1210"/></radialGradient>
+      <radialGradient id="world-planet-oil-calm" cx="32%" cy="27%"><stop offset="0" stopColor="#c8b595"/><stop offset=".2" stopColor="#8b7456"/><stop offset=".6" stopColor="#453828"/><stop offset="1" stopColor="#120e0a"/></radialGradient>
+      <radialGradient id="world-planet-power-calm" cx="32%" cy="27%"><stop offset="0" stopColor="#b1c5cb"/><stop offset=".2" stopColor="#66848f"/><stop offset=".6" stopColor="#2f4550"/><stop offset="1" stopColor="#0a1217"/></radialGradient>
+      <radialGradient id="world-planet-rogue-calm" cx="32%" cy="27%"><stop offset="0" stopColor="#bba3ab"/><stop offset=".2" stopColor="#826570"/><stop offset=".6" stopColor="#432f37"/><stop offset="1" stopColor="#110a0d"/></radialGradient>
       <radialGradient id="world-planet-dust" cx="31%" cy="25%"><stop offset="0" stopColor="#d7bb88"/><stop offset=".28" stopColor="#94724a"/><stop offset=".68" stopColor="#49331e"/><stop offset="1" stopColor="#171009"/></radialGradient>
       <radialGradient id="world-planet-blue" cx="30%" cy="24%"><stop offset="0" stopColor="#8eeaff"/><stop offset=".2" stopColor="#2a90bd"/><stop offset=".63" stopColor="#075071"/><stop offset="1" stopColor="#031326"/></radialGradient>
       <radialGradient id="world-planet-void" cx="36%" cy="30%"><stop offset="0" stopColor="#3a3f63"/><stop offset=".32" stopColor="#1a2038"/><stop offset=".7" stopColor="#0a0e1e"/><stop offset="1" stopColor="#02040b"/></radialGradient>
@@ -904,30 +1069,33 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const minX = cx - viewport.width * .82, maxX = cx + viewport.width * .82;
     const minY = cy - viewport.height * .82, maxY = cy + viewport.height * .82;
     return filteredTargets.filter((entity) => entity.position.x >= minX && entity.position.x <= maxX && entity.position.y >= minY && entity.position.y <= maxY)
+      .sort((a, b) => (a.id === selectedId ? 1 : 0) - (b.id === selectedId ? 1 : 0))
       .map((entity) => {
         const color = entityColor(entity); const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id; const verified = entity.kind === "resource" || scoutedTargetIds.has(entity.id);
         const occupation = entity.kind === "resource" ? resourceOccupationDisposition(entity, world.marches, world.players, session.playerId, profile.faction) : "neutral";
         const publicCosmetics = entity.kind === "city" ? world.players[entity.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS : null;
-        return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${markerScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setHomeSelected(false); setRemoteSelectedId(null); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
-          {selectedTarget && (entity.kind !== "city" || !gpuVisualsReady) && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
-          {(!gpuVisualsReady || entity.kind !== "city") && <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />}
+        const targetScale = CALM_MAP && entity.kind !== "city" ? calmTargetScale : markerScale;
+        const outOfReach = entity.kind === "monster" && entity.level > nextRogueLevel;
+        return <g key={entity.id} transform={`translate(${entity.position.x} ${entity.position.y}) scale(${targetScale}) translate(${-entity.position.x} ${-entity.position.y})`} className={`world-target ${entity.kind} state-${entity.state} ${outOfReach ? "out-of-reach" : ""} occupation-${occupation} ${selectedTarget ? "selected" : ""} ${verified ? "verified" : "public"} ${bookmarks.includes(entity.id) ? "bookmarked" : ""} ${unavailable ? "depleted" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(entity.id); setHomeSelected(false); setRemoteSelectedId(null); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
+          {selectedTarget && entity.kind === "city" && gpuFallback && <><circle cx={entity.position.x} cy={entity.position.y} r="9" className="world-lock-ring" /><path d={`M ${entity.position.x - 12} ${entity.position.y} h 6 M ${entity.position.x + 6} ${entity.position.y} h 6 M ${entity.position.x} ${entity.position.y - 12} v 6 M ${entity.position.x} ${entity.position.y + 6} v 6`} className="world-lock-cross" /></>}
+          {(gpuFallback || entity.kind !== "city") && <circle cx={entity.position.x} cy={entity.position.y} r={entity.kind === "city" ? 4.5 : 3.6} fill={color} className="world-signal-halo" />}
           {entity.kind === "city" && publicCosmetics ? <>
-            {gpuVisualsReady ? <circle cx={entity.position.x} cy={entity.position.y} r="14" className="world-city-hit" /> : <>
+            {!gpuFallback ? <circle cx={entity.position.x} cy={entity.position.y} r="14" className="world-city-hit" /> : <>
               {publicCosmetics.halo && <WorldHaloFx cx={entity.position.x} cy={entity.position.y} r={9} halo={publicCosmetics.halo} half="back" />}
               {publicCosmetics.orbit && <WorldOrbitFx cx={entity.position.x} cy={entity.position.y} r={9} orbit={publicCosmetics.orbit} half="back" />}
               <WorldPlanetFx cx={entity.position.x} cy={entity.position.y} r={9} skin={publicCosmetics.planetBody} />
               {publicCosmetics.orbit && <WorldOrbitFx cx={entity.position.x} cy={entity.position.y} r={9} orbit={publicCosmetics.orbit} half="front" />}
               {publicCosmetics.halo && <WorldHaloFx cx={entity.position.x} cy={entity.position.y} r={9} halo={publicCosmetics.halo} half="front" />}
             </>}
-          </> : <WorldEntityGlyph entity={entity} detailZoom={detailZoom} occupation={occupation} />}
-          {!gpuVisualsReady && entity.kind === "city" && detailZoom && (selectedId === entity.id
+          </> : <g className="world-target-body" style={{ transformOrigin: `${entity.position.x}px ${entity.position.y}px` }}><WorldEntityGlyph entity={entity} detailZoom={detailZoom} occupation={occupation} /></g>}
+          {gpuFallback && entity.kind === "city" && detailZoom && (selectedId === entity.id
             ? <CityIdentityTag x={entity.position.x} y={entity.position.y} level={entity.townhallLevel} name={localWorldTargetName(world, entity.id)} signal={publicCosmetics?.chatSignal} relation={cityRelation(entity.ownerId)} />
             : <WorldLevelBadge x={entity.position.x} y={entity.position.y} level={entity.townhallLevel} />)}
           {verified && entity.kind !== "resource" && <circle cx={entity.position.x + 4.5} cy={entity.position.y - 4.5} r="1.2" className="world-verified-dot" />}
           {bookmarks.includes(entity.id) && <text x={entity.position.x + 7} y={entity.position.y - 6} className="world-bookmark-star">★</text>}
         </g>;
       });
-  }, [filteredTargets, strategicZoom, detailZoom, markerScale, selectedId, bookmarks, scoutedTargetIds, world.marches, world.players, world.entities, session.playerId, profile.faction, viewport.width, viewport.height, cullQX, cullQY, cullCell, gpuVisualsReady]);
+  }, [filteredTargets, strategicZoom, detailZoom, markerScale, calmTargetScale, nextRogueLevel, selectedId, bookmarks, scoutedTargetIds, world.marches, world.players, world.entities, session.playerId, profile.faction, viewport.width, viewport.height, cullQX, cullQY, cullCell, gpuVisualsState]);
 
   // Other real commanders overlaid on the shared map (read-only). Culled to the
   // viewport and only shown once you're zoomed past strategic, same as targets.
@@ -1092,6 +1260,92 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       ? `Deep Scan discovered an uncharted L${target.level} Rogue signal.`
       : `Tracking the nearest L${target.level} Rogue signal.`);
   }
+  const searchLevel = searchKind === "monster" ? Math.min(rogueMaxLevel, searchLevels.monster || nextRogueLevel) : Math.min(resourceMaxLevel, searchLevels[searchKind]);
+  const searchMaxLevel = searchKind === "monster" ? rogueMaxLevel : resourceMaxLevel;
+  const searchKey = `${searchKind}:${searchLevel}`;
+  function setSearchLevel(level: number) {
+    setSearchLevels((current) => ({ ...current, [searchKind]: Math.max(1, Math.min(searchMaxLevel, level)) }));
+    setSearchResult(null);
+  }
+  function runSearch() {
+    const label = SEARCH_KINDS.find((kind) => kind.id === searchKind)!.label;
+    const candidates = targets.filter((entity) => searchKind === "monster"
+      ? entity.kind === "monster" && entity.state === "alive" && entity.level === searchLevel
+      : entity.kind === "resource" && entity.resource === searchKind && entity.state === "available" && entity.level === searchLevel
+        && resourceOccupationDisposition(entity, world.marches, world.players, session.playerId, profile.faction) === "neutral")
+      .sort((left, right) => distance(playerCity.position, left.position) - distance(playerCity.position, right.position));
+    if (!candidates.length) {
+      // Nothing charted at the next Rogue tier: fall back to the server Deep Scan.
+      if (searchKind === "monster" && searchLevel === nextRogueLevel) { setSearchResult(null); void findNextRogue(); return; }
+      setSearchResult(null); setMessage(`No free L${searchLevel} ${label} signal found. Try another level.`); return;
+    }
+    const index = searchResult?.key === searchKey ? (searchResult.index + 1) % candidates.length : 0;
+    const target = candidates[index];
+    setSearchResult({ key: searchKey, index, total: candidates.length, targetId: target.id });
+    setSelectedId(target.id); setHomeSelected(false); setRemoteSelectedId(null); setSelection(emptySelection()); setTileMark(null);
+    setCamera({ ...target.position }); setZoom((value) => Math.max(value, 3.2)); setMessage(""); playSelectSfx();
+  }
+  useEffect(() => {
+    if (!searchOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setSearchOpen(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [searchOpen]);
+  // ---- Warp (city relocation) ----
+  const warpDestination = tileMark ? { x: tileMark.x + .5, y: tileMark.y + .5 } : null;
+  const inboundAttack = marches.some((march) => march.defender === address && march.arriveAt > now);
+  const warpNotReady = inboundAttack ? "under_attack" : warpReadiness(world, session.playerId);
+  const warpDestinationBlock = warpDestination ? warpBlockReason(world, session.playerId, warpDestination, N) : null;
+  function refreshWarpCounts() {
+    if (authorityVersion <= 0) { setWarpCounts(null); return; }
+    loadInventory(address).then((rows) => setWarpCounts({
+      precision: rows.find((row) => row.itemId === "war.relocator.advanced")?.quantity ?? 0,
+      drift: rows.find((row) => row.itemId === "war.relocator.random")?.quantity ?? 0,
+    })).catch(() => setWarpCounts(null));
+  }
+  function openWarp() {
+    const x = Number(coordinateDraft.x), y = Number(coordinateDraft.y);
+    if (coordinateDraft.x !== "" && coordinateDraft.y !== "" && Number.isFinite(x) && Number.isFinite(y)) {
+      setTileMark({ x: Math.floor(x), y: Math.floor(y) }); setCamera({ x, y });
+    }
+    setSearchOpen(false); setWarpOpen(true); refreshWarpCounts();
+  }
+  async function executeWarp(mode: "precision" | "random") {
+    if (warpBusy) return;
+    if (mode === "precision" && !warpDestination) { setMessage("Click an empty tile to choose the destination."); return; }
+    setWarpBusy(true);
+    try {
+      let position: Point | undefined;
+      if (authorityVersion > 0) {
+        const result = await sendWorldCommandWithRetry("world.warp", mode === "random" ? { mode } : { mode, x: warpDestination!.x, y: warpDestination!.y }, `world-warp:${crypto.randomUUID()}`);
+        if (!result.ok) { setMessage(ERROR_COPY[result.reason || ""] || "Warp failed."); return; }
+        commitServer(result);
+        position = result.position;
+      } else {
+        // Local session: same engine rule, no item — dev/GM only. Production players
+        // must warp through the server (item + shared-coordinate reservation).
+        if (!import.meta.env.DEV && !gm) { setMessage("Warp needs a server connection. Try again in a moment."); return; }
+        const warped = relocateCity(session.world, session.playerId, mode === "random" ? { mode } : { mode, target: warpDestination! }, Date.now(), N);
+        if (warped.error) { setMessage(ERROR_COPY[warped.error] || "Warp failed."); return; }
+        const next: LocalWorldSession = { ...session, world: warped.world };
+        sessionRef.current = next; setSession(next); saveLocalWorldSession(next);
+        position = warped.position;
+      }
+      if (position) {
+        setCamera({ ...position });
+        setMessage(`Warp complete · new home ${Math.round(position.x).toString().padStart(3, "0")}:${Math.round(position.y).toString().padStart(3, "0")}.`);
+      }
+      setTileMark(null); setWarpOpen(false); setSelectedId(null); setHomeSelected(true); playSelectSfx();
+      refreshWarpCounts();
+    } catch { setMessage("Warp link failed. Try again."); }
+    finally { setWarpBusy(false); }
+  }
+  useEffect(() => {
+    if (!warpOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setWarpOpen(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [warpOpen]);
   function toggleLayer(layer: WorldLayer) {
     setLayers((current) => ({ ...current, [layer]: !current[layer] }));
     if (selected?.kind === layer) setSelectedId(null);
@@ -1182,7 +1436,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     if (committedCamera) setCamera(committedCamera);
   }
 
-  return <section className="world world-crypto world-cosmos">
+  return <section className={`world world-crypto world-cosmos${CALM_MAP ? " world-calm" : ""}${zoom >= 5.5 ? " world-deep" : ""}${detailZoom ? " world-tactical" : ""}`} style={CALM_MAP ? { ["--badge-boost" as string]: "1.5" } as CSSProperties : undefined}>
     <CosmicBackdrop address={address} />
     <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="world" profile={profile} townhallLevel={viewGame.buildings.keep.lvl}
@@ -1195,7 +1449,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     {gm && <div className="world-gm-strip"><span>LOCAL GM</span><button onClick={fillTroops}>FILL TROOPS</button><button onClick={finishMarches} disabled={!activeMarches.length}>RESOLVE FLEETS</button><button onClick={() => setStrikeBurstNonce((value) => value + 1)}>CAST STRIKE SUITE</button></div>}
     {message && <div className="world-message">{message}</div>}
     <div className="world-layout">
-      <div className="world-map-shell">
+      <div className={`world-map-shell${gpuVisualsState === null ? " world-map-booting" : ""}`}>
         <div className="world-map-status"><b>{zoomLabel}</b><em>{Math.round(zoom * 100)}%</em></div>
         {marches.length > 0 && <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 7, display: "flex", flexDirection: "column", gap: 5, maxWidth: 300 }}>
           {marches.slice(0, 4).map((m) => {
@@ -1209,23 +1463,57 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             </div>;
           })}
         </div>}
-        <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button onClick={() => setCamera(center)}>WORMHOLE</button><button onClick={findNextRogue}>{frontierComplete ? "CORE READY" : `NEXT ROGUE · L${nextRogueLevel}`}</button><button aria-label="Zoom in" onClick={() => setZoom((value) => steppedWorldZoom(value, "in", 1.35))}>＋</button><button aria-label="Zoom out" onClick={() => setZoom((value) => steppedWorldZoom(value, "out", 1.35))}>－</button></div>
-        <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>GO</button><button type="button" className="world-warp-locked" onClick={() => setMessage("Relocation requires a Warp Engine consumable. Warp travel is not enabled in this MVP build.")}>WARP 🔒</button></form>
-        <div className="world-coordinate world-coordinate-x">X {Math.round(viewX).toString().padStart(3, "0")} — {Math.round(viewX + viewport.width).toString().padStart(3, "0")}</div>
-        <div className="world-coordinate world-coordinate-y">Y {Math.round(viewY).toString().padStart(3, "0")} — {Math.round(viewY + viewport.height).toString().padStart(3, "0")}</div>
-        <WorldBackdropLayer viewportRef={liveViewportRef} worldWidth={world.config.width} worldHeight={world.config.height} center={center} worldRadius={worldRadius} reserveRadius={world.config.circleReserveRadius} zoom={zoom} dprCap={quality.dprCap} animateStars={quality.bgAnimate} />
-        <svg ref={svgRef} className="world-map world-map-v2 world-map-pan-plane" viewBox={renderViewBox} style={{ transform: `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})` }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerCancel} onWheel={(event) => { event.preventDefault(); markWorldMotion(700); setZoom((value) => steppedWorldZoom(value, event.deltaY < 0 ? "in" : "out", 1.14)); }}>
+        <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button className={searchOpen ? "active" : ""} aria-expanded={searchOpen} onClick={() => setSearchOpen((open) => !open)}>SEARCH</button><button aria-label="Zoom in" onClick={() => animateZoomTo(steppedWorldZoom(currentZoom(), "in", 1.35))}>＋</button><button aria-label="Zoom out" onClick={() => animateZoomTo(steppedWorldZoom(currentZoom(), "out", 1.35))}>－</button></div>
+        {searchOpen && <div className="world-search-panel" role="dialog" aria-label="Search the Star Map">
+          <header><b>SEARCH</b><button aria-label="Close search" onClick={() => setSearchOpen(false)}>×</button></header>
+          <div className="world-search-kinds" role="tablist">{SEARCH_KINDS.map((kind) => <button key={kind.id} role="tab" aria-selected={searchKind === kind.id} className={searchKind === kind.id ? "active" : ""} onClick={() => { setSearchKind(kind.id); setSearchResult(null); }}><i className={kind.id} />{kind.label}</button>)}</div>
+          <div className="world-search-level">
+            <span>LEVEL</span>
+            <button aria-label="Lower level" disabled={searchLevel <= 1} onClick={() => setSearchLevel(searchLevel - 1)}>−</button>
+            <input type="range" aria-label="Target level" min={1} max={searchMaxLevel} value={searchLevel} onChange={(event) => setSearchLevel(Number(event.target.value))} />
+            <button aria-label="Higher level" disabled={searchLevel >= searchMaxLevel} onClick={() => setSearchLevel(searchLevel + 1)}>+</button>
+            <b>L{searchLevel}</b>
+          </div>
+          {searchKind === "monster" && <p className={`world-search-note ${searchLevel > nextRogueLevel ? "warn" : ""}`}>{searchLevel > nextRogueLevel ? `Locked · defeat L${nextRogueLevel} first` : `Unlocked up to L${nextRogueLevel}`}</p>}
+          {searchResult?.key === searchKey && (() => { const hit = targets.find((entity) => entity.id === searchResult.targetId); return hit ? <p className="world-search-result"><b>{searchResult.index + 1}/{searchResult.total}</b> · {Math.round(hit.position.x).toString().padStart(3, "0")}:{Math.round(hit.position.y).toString().padStart(3, "0")} · {fmtDuration(travelSecondsTo(hit.position))}</p> : null; })()}
+          <button className="world-search-go" onClick={runSearch}>{searchResult?.key === searchKey ? "NEXT ▸" : "SEARCH"}</button>
+        </div>}
+        {warpOpen && <div className="world-warp-panel" role="dialog" aria-label="Warp your city">
+          <header><b>WARP</b><button aria-label="Close warp" onClick={() => setWarpOpen(false)}>×</button></header>
+          {warpNotReady && <p className="world-warp-alert">{ERROR_COPY[warpNotReady]}</p>}
+          <section>
+            <div className="world-warp-option-head"><b>PRECISION JUMP</b><em>{warpCounts ? `×${warpCounts.precision}` : "DEV"}</em></div>
+            <p>{warpDestination ? <>Destination <b>{Math.round(warpDestination.x).toString().padStart(3, "0")}:{Math.round(warpDestination.y).toString().padStart(3, "0")}</b> · {fmtDuration(travelSecondsTo(warpDestination))} march from your current home</> : "Click an empty tile on the map, or enter X / Y and press WARP."}</p>
+            {warpDestination && warpDestinationBlock && <p className="world-warp-invalid">{ERROR_COPY[warpDestinationBlock]}</p>}
+            <button className="world-warp-go" disabled={warpBusy || !!warpNotReady || !warpDestination || !!warpDestinationBlock || warpCounts?.precision === 0} onClick={() => void executeWarp("precision")}>{warpBusy ? "WARPING…" : "WARP HERE"}</button>
+          </section>
+          <section>
+            <div className="world-warp-option-head"><b>DRIFT JUMP</b><em>{warpCounts ? `×${warpCounts.drift}` : "DEV"}</em></div>
+            <p>Jump to a random safe sector of the Frontier.</p>
+            <button className="world-warp-go secondary" disabled={warpBusy || !!warpNotReady || warpCounts?.drift === 0} onClick={() => void executeWarp("random")}>RANDOM WARP</button>
+          </section>
+          <footer>Fleets must be home · no warp while an attack is inbound · keep {WARP_RULES.minCitySpacing} tiles from other cities</footer>
+        </div>}
+        <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>GO</button><button type="button" className={`world-warp-open ${warpOpen ? "active" : ""}`} aria-expanded={warpOpen} onClick={() => (warpOpen ? setWarpOpen(false) : openWarp())}>WARP</button></form>
+        <div className="world-coordinate world-coordinate-x">X {Math.round(Math.max(0, viewX)).toString().padStart(3, "0")} — {Math.round(Math.min(world.config.width, viewX + viewport.width)).toString().padStart(3, "0")}</div>
+        <div className="world-coordinate world-coordinate-y">Y {Math.round(Math.max(0, viewY)).toString().padStart(3, "0")} — {Math.round(Math.min(world.config.height, viewY + viewport.height)).toString().padStart(3, "0")}</div>
+        <WorldBackdropLayer viewportRef={liveViewportRef} worldWidth={world.config.width} worldHeight={world.config.height} center={center} worldRadius={worldRadius} reserveRadius={world.config.circleReserveRadius} zoom={zoom} dprCap={quality.dprCap} animateStars={quality.bgAnimate} calm={CALM_MAP} />
+        <svg ref={svgRef} className="world-map world-map-v2 world-map-pan-plane" viewBox={renderViewBox} style={{ transform: `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})` }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerCancel} >
           {mapScaffold}
-          {!gpuVisualsReady && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
+          {gpuFallback && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {mapClusters}
+          {/* Target lock sits under the markers so the level plate stays readable. */}
+          {selected && selected.kind !== "city" && <CelestialLock key={`lock-${selected.id}`} position={selected.position} worldPerPx={worldPerPx}
+            radius={(CALM_MAP ? calmTargetRadiusPx : (detailZoom ? 7.2 : 4.2) * markerScale / Math.max(.0001, worldPerPx)) * SELECT_SCALE + 7}
+            tone={selected.kind === "resource" ? selected.resource : selected.level > nextRogueLevel ? "locked" : "rogue"} />}
           {mapTargets}
           {mapRemotePlayers}
-          <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera({ ...playerCity.position }); setSelectedId(null); setHomeSelected(true); setRemoteSelectedId(null); playSelectSfx(); }}>
-            {strategicZoom && !gpuVisualsReady ? <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
+          <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(null); setHomeSelected(true); setRemoteSelectedId(null); playSelectSfx(); }}>
+            {strategicZoom && gpuFallback ? <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
               <circle cx={playerCity.position.x} cy={playerCity.position.y} r="9" className="world-home-ring" />
               <rect x={playerCity.position.x - 4.5} y={playerCity.position.y - 4.5} width="9" height="9" rx="1" transform={`rotate(45 ${playerCity.position.x} ${playerCity.position.y})`} />
               <circle cx={playerCity.position.x} cy={playerCity.position.y} r="1.7" />
-            </g> : !strategicZoom && !gpuVisualsReady ? <>
+            </g> : !strategicZoom && gpuFallback ? <>
               {equippedPlanetHalo && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldHaloFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} halo={equippedPlanetHalo} half="back" /></g>}
               {equippedPlanetOrbit && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldOrbitFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} orbit={equippedPlanetOrbit} half="back" /></g>}
               {(!voidSkinEquipped || !voidShaderActive) && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
@@ -1234,11 +1522,15 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
               {equippedPlanetOrbit && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldOrbitFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} orbit={equippedPlanetOrbit} half="front" /></g>}
               {equippedPlanetHalo && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldHaloFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} halo={equippedPlanetHalo} half="front" /></g>}
             </> : <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><circle cx={playerCity.position.x} cy={playerCity.position.y} r="14" className="world-city-hit" /></g>}
-            {!gpuVisualsReady && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
+            {gpuFallback && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeTagScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
               <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own relation="self" />
               <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
             </g>}
           </g>
+          {warpOpen && warpDestination && <g className={`world-warp-ghost ${warpDestinationBlock ? "invalid" : "valid"}`} pointerEvents="none">
+            <circle cx={warpDestination.x} cy={warpDestination.y} r={WARP_RULES.minCitySpacing} className="world-warp-spacing" />
+            <circle cx={warpDestination.x} cy={warpDestination.y} r={world.config.cityFootprint} className="world-warp-footprint" />
+          </g>}
           {tileMark && <g className="world-tile-mark" pointerEvents="none">
             <rect x={tileMark.x} y={tileMark.y} width="1" height="1" className="world-tile-cell" />
             <g transform={`translate(${tileMark.x + .5} ${tileMark.y + .5}) scale(${1 / zoom}) translate(${-(tileMark.x + .5)} ${-(tileMark.y + .5)})`}>
@@ -1247,15 +1539,16 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             </g>
           </g>}
         </svg>
-        <WorldVisualLayer viewportRef={liveViewportRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} />
+        <WorldVisualLayer viewportRef={liveViewportRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} calm={CALM_MAP} />
         <WorldStrikeLayer world={world} viewportRef={liveViewportRef} zoom={zoom} gm={gm} stressCount={strikeStressCount} burstNonce={strikeBurstNonce} dprCap={quality.dprCap} />
+        <HomeBeacon viewportRef={liveViewportRef} home={playerCity.position} onHome={() => setCamera({ ...playerCity.position })} />
         <WorldMarchLayer world={world} viewportRef={liveViewportRef} zoom={zoom} viewerId={session.playerId} quality={quality} />
         {gpuVisualsReady && <svg ref={overlayRef} className="world-map world-map-overlay world-map-pan-plane" viewBox={renderViewBox} style={{ transform: `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})` }} aria-hidden="true">
           {mapMarches.map((march) => <MarchLine key={`overlay-${march.id}`} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {/* Selection ring for cities: a full circle in screen-space with a
               constant thin stroke, wrapping outside the planet's cosmetics at
               every zoom. Resources/rogues keep the base SVG lock-ring. */}
-          {selected?.kind === "city" && <CelestialLock position={selected.position} radius={selectionRadius(false, true)} worldPerPx={worldPerPx} />}
+          {selected?.kind === "city" && <CelestialLock key={`lock-${selected.id}`} position={selected.position} radius={selectionRadius(false, true)} worldPerPx={worldPerPx} />}
           {homeSelected && <CelestialLock position={playerCity.position} radius={selectionRadius(true, false)} worldPerPx={worldPerPx} own />}
           <g className="world-wormhole-caption" transform={`translate(${center.x} ${center.y}) scale(${worldPerPx})`}>
             <text y={-worldWormholeRadius(zoom) * 1.7 - 22} className="world-circle-label">WORMHOLE</text>
@@ -1269,12 +1562,12 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
                 : <WorldLevelBadge x={city.position.x} y={city.position.y} level={city.townhallLevel} />}
             </g>;
           })}
-          <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${importantScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
+          <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeTagScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
             <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own relation="self" />
             <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
           </g>
         </svg>}
-        {!gpuVisualsReady && voidSkinEquipped && <VoidPlanetOverlay svgRef={svgRef} home={playerCity.position} zoom={zoom} strategic={strategicZoom} onActiveChange={setVoidShaderActive} />}
+        {gpuFallback && voidSkinEquipped && <VoidPlanetOverlay svgRef={svgRef} home={playerCity.position} zoom={zoom} strategic={strategicZoom} onActiveChange={setVoidShaderActive} />}
         {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
         {remoteSelected && (() => {
           const col = REMOTE_FACTION_COLOR[String(remoteSelected.faction || "")] || "#7cc0ff";
@@ -1395,18 +1688,20 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   </section>;
 }
 
-function CelestialLock({ position, radius, worldPerPx, own = false }: { position: Point; radius: number; worldPerPx: number; own?: boolean }) {
+function CelestialLock({ position, radius, worldPerPx, own = false, tone }: { position: Point; radius: number; worldPerPx: number; own?: boolean; tone?: LockTone }) {
   const arc = (angle: number) => {
     const a = (angle - 13) * Math.PI / 180, b = (angle + 13) * Math.PI / 180;
     return `M ${Math.cos(a) * radius} ${Math.sin(a) * radius} A ${radius} ${radius} 0 0 1 ${Math.cos(b) * radius} ${Math.sin(b) * radius}`;
   };
-  return <g className={`world-celestial-lock ${own ? "own" : "rival"}`} transform={`translate(${position.x} ${position.y}) scale(${worldPerPx})`} pointerEvents="none">
-    {[35, 145, 215, 325].map((angle) => <g key={angle}>
-      <path className="lock-underlay" d={arc(angle)} />
-      <path className="lock-arc" d={arc(angle)} />
-      <path className="lock-tick" transform={`rotate(${angle})`} d={`M ${radius + 4} 0 h 5 M ${radius - 4} -2 v 4`} />
-    </g>)}
-    <path className="lock-diamond" d={`M 0 ${-radius - 5} l 3 -4 l -3 -4 l -3 4 Z`} />
+  return <g className={`world-celestial-lock ${tone ?? (own ? "own" : "rival")}`} transform={`translate(${position.x} ${position.y}) scale(${worldPerPx})`} pointerEvents="none">
+    <g className="lock-body">
+      {[35, 145, 215, 325].map((angle) => <g key={angle}>
+        <path className="lock-underlay" d={arc(angle)} />
+        <path className="lock-arc" d={arc(angle)} />
+        <path className="lock-tick" transform={`rotate(${angle})`} d={`M ${radius + 4} 0 h 5 M ${radius - 4} -2 v 4`} />
+      </g>)}
+      <path className="lock-diamond" d={`M 0 ${-radius - 5} l 3 -4 l -3 -4 l -3 4 Z`} />
+    </g>
   </g>;
 }
 

@@ -6,10 +6,10 @@ import {
   project, troopRosterCount, worldMarchSlots,
 } from "./game";
 import type {
-  DispatchMarchInput, HeadlessWorld, MarchAction, TroopManifest,
+  DispatchMarchInput, HeadlessWorld, MarchAction, Point, TroopManifest, WarpRequest,
 } from "./world-engine";
 import {
-  advanceHeadlessWorld, dispatchMarch, recallMarch, scanForRogue,
+  advanceHeadlessWorld, dispatchMarch, recallMarch, relocateCity, scanForRogue,
 } from "./world-engine";
 
 export interface WorldAuthoritySnapshot {
@@ -33,7 +33,8 @@ export type WorldAuthorityCommand =
   | { type: "world.advance"; args: Record<string, never> }
   | { type: "world.dispatch"; args: { targetId: string; action: MarchAction; force?: Partial<TroopManifest>; dispatchKey: string } }
   | { type: "world.recall"; args: { marchId: string } }
-  | { type: "world.scan"; args: { requestedLevel: number } };
+  | { type: "world.scan"; args: { requestedLevel: number } }
+  | { type: "world.warp"; args: WarpRequest };
 
 export interface WorldAuthorityResult {
   session: WorldAuthoritySession;
@@ -43,6 +44,7 @@ export interface WorldAuthorityResult {
   changed: boolean;
   targetId?: string | null;
   spawned?: boolean;
+  position?: Point;
 }
 
 function clone<T>(value: T): T { return structuredClone(value); }
@@ -191,6 +193,11 @@ export function applyWorldAuthorityCommand(
     if (before === JSON.stringify(prepared.session.world.marches[command.args.marchId])) {
       return { ...prepared, ok: false, reason: "march_not_recallable" };
     }
+  } else if (command.type === "world.warp") {
+    const warp = relocateCity(prepared.session.world, prepared.session.playerId, command.args, now, numbers);
+    if (warp.error) return { ...prepared, ok: false, reason: warp.error };
+    prepared.session.world = warp.world;
+    prepared.position = warp.position;
   } else {
     const scan = scanForRogue(prepared.session.world, prepared.session.playerId, command.args.requestedLevel, now, numbers);
     prepared.session.world = scan.world;

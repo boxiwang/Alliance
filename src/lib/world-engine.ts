@@ -1611,3 +1611,81 @@ export function advanceHeadlessWorld(source: HeadlessWorld, now = Date.now(), nu
   world.scheduledEvents = world.scheduledEvents.filter((event) => !event.processedAt);
   return world;
 }
+
+// ---------------------------------------------------------------------------
+// Warp (city relocation). Precision Jump = a chosen coordinate; Drift Jump = a
+// random safe sector. Pure: the caller consumes the item and, on the server,
+// reserves the coordinate in the shared WorldRoom before committing.
+
+export type WarpRequest = { mode: "precision"; target: Point } | { mode: "random" };
+export type WarpError = "no_city" | "fleets_away" | "city_burning" | "outside_frontier" | "reserve_zone" | "too_close_city" | "tile_occupied" | "no_space";
+export const WARP_RULES = { minCitySpacing: 6, minTargetClearance: 2.5 } as const;
+
+function warpRules(numbers: any) {
+  return {
+    minCitySpacing: Math.max(1, Number(numbers?.world?.warp?.minCitySpacing) || WARP_RULES.minCitySpacing),
+    minTargetClearance: Math.max(.5, Number(numbers?.world?.warp?.minTargetClearance) || WARP_RULES.minTargetClearance),
+  };
+}
+
+/** Why a city could not stand at `point` (null = valid). Other players' cities count; the mover's own does not. */
+export function warpBlockReason(world: HeadlessWorld, playerId: string, point: Point, numbers: any = getN()): WarpError | null {
+  const rules = warpRules(numbers);
+  if (!isInsidePlayableWorld(point, world.config, world.config.cityFootprint + 1)) return "outside_frontier";
+  if (distance(point, worldCenter(world.config)) <= world.config.circleReserveRadius + world.config.cityFootprint) return "reserve_zone";
+  for (const entity of Object.values(world.entities)) {
+    if (entity.kind === "city") {
+      if (entity.ownerId === playerId) continue;
+      if (distance(entity.position, point) < rules.minCitySpacing) return "too_close_city";
+    } else if (distance(entity.position, point) < rules.minTargetClearance) {
+      if (entity.kind === "resource" && entity.state === "depleted") continue;
+      if (entity.kind === "monster" && entity.state === "defeated") continue;
+      return "tile_occupied";
+    }
+  }
+  return null;
+}
+
+/** Warp is blocked while any of the player's fleets are away or the city is burning. */
+export function warpReadiness(world: HeadlessWorld, playerId: string): WarpError | null {
+  const player = world.players[playerId];
+  const city = player ? world.entities[player.cityId] : undefined;
+  if (!player || !city || city.kind !== "city") return "no_city";
+  if (city.state === "burning") return "city_burning";
+  const away = Object.values(world.marches).some((march) => march.playerId === playerId && !["completed", "failed", "recalled"].includes(march.state));
+  return away ? "fleets_away" : null;
+}
+
+export function relocateCity(
+  source: HeadlessWorld, playerId: string, request: WarpRequest, now = Date.now(), numbers: any = getN(), random: () => number = Math.random,
+): { world: HeadlessWorld; error?: WarpError; position?: Point } {
+  const ready = warpReadiness(source, playerId);
+  if (ready) return { world: source, error: ready };
+  let target: Point | null = null;
+  if (request.mode === "precision") {
+    const point = { x: Math.round(request.target.x * 100) / 100, y: Math.round(request.target.y * 100) / 100 };
+    const blocked = warpBlockReason(source, playerId, point, numbers);
+    if (blocked) return { world: source, error: blocked };
+    target = point;
+  } else {
+    // Drift Jump: uniform over the playable annulus, first valid of up to 400 samples.
+    const center = worldCenter(source.config);
+    const inner = source.config.circleReserveRadius + source.config.cityFootprint + 4;
+    const outer = worldPlayableRadius(source.config, source.config.cityFootprint + 1);
+    for (let attempt = 0; attempt < 400 && !target; attempt += 1) {
+      const radial = Math.sqrt(inner ** 2 + random() * (outer ** 2 - inner ** 2));
+      const angle = random() * Math.PI * 2;
+      const point = { x: Math.round((center.x + Math.cos(angle) * radial) * 100) / 100, y: Math.round((center.y + Math.sin(angle) * radial) * 100) / 100 };
+      if (!warpBlockReason(source, playerId, point, numbers)) target = point;
+    }
+    if (!target) return { world: source, error: "no_space" };
+  }
+  const world = structuredClone(source);
+  const city = world.entities[world.players[playerId].cityId] as CityEntity;
+  const from = city.position;
+  city.position = { ...target };
+  city.zone = zoneForPoint(city.position, world.config);
+  city.revision += 1;
+  addFeed(world, now, "city_relocated", city.id, playerId, { position: city.position, from, mode: request.mode });
+  return { world, position: city.position };
+}

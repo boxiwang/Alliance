@@ -36,20 +36,30 @@ export function worldVisualBudget(zoom: number): number {
   return zoom < 1.45 ? WORLD_VISUAL_BUDGET.strategic : zoom < 3 ? WORLD_VISUAL_BUDGET.field : WORLD_VISUAL_BUDGET.tactical;
 }
 
-export function worldVisualBodyRadius(zoom: number, own = false, selected = false): number {
+/** 0 in Strategic, 1 in Field: a smooth band (120%→170%) instead of a hard switch at 145%. */
+export function worldStrategicBlend(zoom: number): number {
+  const t = Math.max(0, Math.min(1, (zoom - 1.2) / (1.7 - 1.2)));
+  return t * t * (3 - 2 * t);
+}
+
+export function worldVisualBodyRadius(zoom: number, own = false, selected = false, calm = false): number {
   let radius: number;
   // Strategic view is a constellation: preserve identity color/orbit, but keep
   // hundreds of civilizations from turning into one luminous carpet.
-  if (zoom < 1.45) radius = own ? 5.4 : 3;
-  else if (zoom < 3) radius = own ? 14 : 11;
+  if (zoom < 3) {
+    const blend = worldStrategicBlend(zoom);
+    radius = own ? 5.4 + (14 - 5.4) * blend : 3 + (11 - 3) * blend;
+  }
   else {
     const amount = Math.max(0, Math.min(1, Math.log2(zoom / 3) / Math.log2(16 / 3)));
     // Deep Tactical is the cosmetic inspection range. The local civilization
     // reaches a true 44 px body radius at 1600% (2x the previous 22 px), and a
     // selected rival receives nearly the same treatment. Unselected rivals
     // stay compact so a dense neighborhood does not become a wall of bloom.
-    if (own) radius = 15.5 + amount * 28.5;
-    else if (selected) radius = 14.5 + amount * 27.5;
+    // The current (calm) style halves the deep-zoom growth of the home / selected body so
+    // a dense alliance cluster does not become a wall of halos and orbits.
+    if (own) radius = 15.5 + amount * (calm ? 14.5 : 28.5);
+    else if (selected) radius = 14.5 + amount * (calm ? 13.5 : 27.5);
     else radius = 12.5 + amount * 5.5;
   }
   return radius + (selected && zoom < 3 ? (zoom < 1.45 ? 1.2 : 1.5) : 0);
@@ -489,17 +499,18 @@ function compile(gl: WebGLRenderingContext, type: number, source: string): WebGL
 }
 
 export default function WorldVisualLayer({
-  viewportRef, cities, wormhole, zoom, onReadyChange,
+  viewportRef, cities, wormhole, zoom, onReadyChange, calm = false,
 }: {
   viewportRef: RefObject<WorldViewport>;
   cities: WorldVisualCity[];
   wormhole: Point;
   zoom: number;
   onReadyChange?: (ready: boolean) => void;
+  calm?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const latest = useRef({ cities, wormhole, zoom });
-  useLayoutEffect(() => { latest.current = { cities, wormhole, zoom }; }, [cities, wormhole, zoom]);
+  const latest = useRef({ cities, wormhole, zoom, calm });
+  useLayoutEffect(() => { latest.current = { cities, wormhole, zoom, calm }; }, [cities, wormhole, zoom, calm]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -585,7 +596,7 @@ export default function WorldVisualLayer({
       const liveViewport = viewportRef.current;
       if (!liveViewport || rect.width < 2 || rect.height < 2) return;
 
-      const { cities: source, wormhole: hole, zoom: currentZoom } = latest.current;
+      const { cities: source, wormhole: hole, zoom: currentZoom, calm: calmStyle } = latest.current;
       const frameGap = Math.min(100, time - lastFrame); lastFrame = time;
       statsFrames += 1;
       statsWorstGap = Math.max(statsWorstGap, frameGap);
@@ -633,7 +644,7 @@ export default function WorldVisualLayer({
         // The 3.6x shader quad includes crowns, rings and orbital particles.
         // Expand the planner band with the largest inspectable body so those
         // effects do not pop or clip while a large planet enters the viewport.
-        const visualExtent = Math.max(36, worldVisualBodyRadius(currentZoom, true) * 3.6);
+        const visualExtent = Math.max(36, worldVisualBodyRadius(currentZoom, true, false, calmStyle) * 3.6);
         const margin = visualExtent / Math.max(.001, scale);
         const overscanX = liveViewport.width * .55 + margin;
         const overscanY = liveViewport.height * .55 + margin;
@@ -667,10 +678,10 @@ export default function WorldVisualLayer({
         }
         for (const city of planned.detailed) {
           const screen = mapPoint(city.position);
-          const radius = worldVisualBodyRadius(currentZoom, city.own, city.selected);
+          const radius = worldVisualBodyRadius(currentZoom, city.own, city.selected, calmStyle);
           if (screen.x + radius * 3.6 < -bufferPadX || screen.x - radius * 3.6 > rect.width + bufferPadX || screen.y + radius * 3.6 < -bufferPadY || screen.y - radius * 3.6 > rect.height + bufferPadY) continue;
           const flags = (city.own ? 1 : 0) + (city.selected ? 2 : 0) + (city.burning ? 4 : 0);
-          offset = writeQuad(offset, screen.x, screen.y, radius, SKIN_INDEX[city.skin] ?? 0, city.orbit ? ORBIT_INDEX[city.orbit] : -1, city.halo ? HALO_INDEX[city.halo] : -1, stableSeed(city.id), flags, lod);
+          offset = writeQuad(offset, screen.x, screen.y, radius, SKIN_INDEX[city.skin] ?? 0, city.orbit ? ORBIT_INDEX[city.orbit] : -1, city.halo ? HALO_INDEX[city.halo] : -1, stableSeed(city.id), flags, city.own ? Math.max(1, lod) : lod);
           detailedDrawn += 1;
         }
         cityDrawn = detailedDrawn + beaconDrawn;

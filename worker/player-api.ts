@@ -46,6 +46,19 @@ async function sharedWorldCoord(env: BackendEnv, playerId: string): Promise<{ x:
   } catch { return null; }
 }
 
+async function reserveWorldCoord(env: BackendEnv, playerId: string, coord: { x: number; y: number }, minSpacing: number, revert = false): Promise<{ ok: boolean; error?: string; previous?: { x: number; y: number } | null }> {
+  if (!env.WORLD_ROOM) return { ok: true, previous: null };
+  try {
+    const id = env.WORLD_ROOM.idFromName("frontier-1");
+    const res = await env.WORLD_ROOM.get(id).fetch("https://world.internal/relocate", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ player: playerId, x: coord.x, y: coord.y, minSpacing, revert }),
+    });
+    const data = await res.json() as { ok?: boolean; error?: string; previous?: { x: number; y: number } | null };
+    return { ok: !!data.ok, error: data.error, previous: data.previous ?? null };
+  } catch { return { ok: false, error: "world_unreachable" }; }
+}
+
 type PlayerRow = {
   id: string;
   auth_method: AuthMethod;
@@ -723,7 +736,8 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
   } catch {}
   let inventoryItemId: string | null = null;
   let result: { state: typeof state; ok: boolean; reason?: string; world?: WorldAuthoritySession; extra?: Record<string, unknown> };
-  const isWorldCommand = type === "world.advance" || type === "world.dispatch" || type === "world.recall" || type === "world.scan";
+  const isWorldCommand = type === "world.advance" || type === "world.dispatch" || type === "world.recall" || type === "world.scan" || type === "world.warp";
+  let warpReservation: { coord: { x: number; y: number }; previous: { x: number; y: number } | null } | null = null;
   if (isWorldCommand) {
     if (!world) return response({ error: "world_authority_disabled" }, 409);
     let command: WorldAuthorityCommand;
@@ -735,12 +749,33 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
       command = { type, args: { marchId: String(args.marchId || "") } };
     } else if (type === "world.scan") {
       command = { type, args: { requestedLevel: Math.max(1, Math.floor(Number(args.requestedLevel) || 1)) } };
+    } else if (type === "world.warp") {
+      const x = Number(args.x), y = Number(args.y);
+      if (args.mode === "random") command = { type, args: { mode: "random" } };
+      else if (Number.isFinite(x) && Number.isFinite(y)) command = { type, args: { mode: "precision", target: { x, y } } };
+      else return response({ error: "invalid_command" }, 400);
     } else command = { type, args: {} };
-    const applied = applyWorldAuthorityCommand(world, state, command, now, defaultN());
-    result = {
-      state: applied.game, ok: applied.ok, reason: applied.reason, world: applied.session,
-      extra: { targetId: applied.targetId, spawned: applied.spawned },
-    };
+    // Warp spends one relocation item; check the balance before simulating.
+    const warpItemId = type === "world.warp" ? (args.mode === "random" ? "war.relocator.random" : "war.relocator.advanced") : null;
+    const warpBalance = warpItemId
+      ? await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?").bind(claims.sub, warpItemId).first<{ quantity: number }>()
+      : null;
+    if (warpItemId && (!warpBalance || warpBalance.quantity < 1)) {
+      result = { state, ok: false, reason: "no_warp_item", world };
+    } else {
+      const applied = applyWorldAuthorityCommand(world, state, command, now, defaultN());
+      result = {
+        state: applied.game, ok: applied.ok, reason: applied.reason, world: applied.session,
+        extra: { targetId: applied.targetId, spawned: applied.spawned, position: applied.position },
+      };
+      if (warpItemId && applied.ok && applied.position) {
+        // The shared WorldRoom is the coordinate authority for real players: reserve first.
+        const minSpacing = Number(defaultN().world?.warp?.minCitySpacing) || 6;
+        const reserved = await reserveWorldCoord(env, claims.sub, applied.position, minSpacing);
+        if (!reserved.ok) result = { state, ok: false, reason: reserved.error || "warp_rejected", world };
+        else { inventoryItemId = warpItemId; warpReservation = { coord: applied.position, previous: reserved.previous ?? null }; }
+      }
+    }
   } else if (type === "speedup.use") {
     const itemId = String(args.itemId || "");
     const item = MVP_ITEM_BY_ID.get(itemId);
@@ -770,7 +805,10 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
     ? await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
       .bind(claims.sub, inventoryItemId).first<{ quantity: number }>()
     : null;
-  if (inventoryItemId && (!inventoryBefore || inventoryBefore.quantity < 1)) return response({ error: "insufficient_inventory" }, 409);
+  if (inventoryItemId && (!inventoryBefore || inventoryBefore.quantity < 1)) {
+    if (warpReservation?.previous) await reserveWorldCoord(env, claims.sub, warpReservation.previous, 0, true);
+    return response({ error: "insufficient_inventory" }, 409);
+  }
   try {
     const insert = env.DB.prepare(`INSERT INTO game_commands
       (id, player_id, idempotency_key, command_type, args_hash, args_json, ok, reason, base_revision, result_revision,
@@ -814,6 +852,8 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
       await env.DB.batch(statements);
     }
   } catch (error) {
+    // The D1 commit lost: give the shared coordinate back before replying.
+    if (warpReservation?.previous) await reserveWorldCoord(env, claims.sub, warpReservation.previous, 0, true);
     const racedReplay = await replayCommand(env, claims, idempotencyKey, fingerprint);
     if (racedReplay) return racedReplay;
     if (error instanceof Error && error.message.includes("insufficient_inventory")) return response({ error: "insufficient_inventory" }, 409);

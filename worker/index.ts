@@ -207,6 +207,7 @@ export class WorldRoom {
       const coord = await this.state.storage.get<WorldCoord>(`coord:v${COORD_VERSION}:${pid}`);
       return Response.json({ coord: coord || null });
     }
+    if (url.pathname === "/relocate" && req.method === "POST") return this.relocate(req);
     const pid = (req.headers.get("x-alliance-player") || "").slice(0, 64);
     const name = (req.headers.get("x-alliance-name") || "Commander").slice(0, 24);
     const sessionId = (req.headers.get("x-alliance-session") || "").slice(0, 64);
@@ -217,6 +218,40 @@ export class WorldRoom {
     server.serializeAttachment({ pid, name, sessionId, windowStart: Date.now(), messageCount: 0 } satisfies SocketAttachment);
     await this.onJoin(server, pid, name);
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // Warp: reserve a new shared coordinate for `player` (internal only — the
+  // public entry forwards just /ws). Rejects a spot inside another commander's
+  // spacing and any warp while a real-player march involves this commander.
+  // `revert` restores a prior coordinate when the D1 commit loses a race.
+  async relocate(req: Request): Promise<Response> {
+    let body: { player?: string; x?: number; y?: number; minSpacing?: number; revert?: boolean } = {};
+    try { body = await req.json(); } catch {}
+    const pid = String(body.player || "").slice(0, 64);
+    const x = Number(body.x), y = Number(body.y);
+    if (!pid || !Number.isFinite(x) || !Number.isFinite(y)) return Response.json({ ok: false, error: "invalid" }, { status: 400 });
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    const coordKey = `coord:v${COORD_VERSION}:${pid}`;
+    const previous = (await this.state.storage.get<WorldCoord>(coordKey)) || null;
+    if (!body.revert) {
+      const now = Date.now();
+      const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
+      const live = marches.filter((march) => march.arriveAt > now);
+      if (live.some((march) => march.defender === pid)) return Response.json({ ok: false, error: "under_attack" }, { status: 409 });
+      if (live.some((march) => march.attacker === pid)) return Response.json({ ok: false, error: "fleets_away" }, { status: 409 });
+      const spacing = Math.max(1, Number(body.minSpacing) || 6);
+      const clash = Object.values(players).some((player) => player.id !== pid && player.coordVersion === COORD_VERSION && player.coords
+        && Math.hypot(player.coords.x - x, player.coords.y - y) < spacing);
+      if (clash) return Response.json({ ok: false, error: "too_close_city" }, { status: 409 });
+    }
+    const coord = { x, y };
+    await this.state.storage.put(coordKey, coord);
+    if (players[pid]) {
+      players[pid].coords = coord;
+      await this.state.storage.put("players", players);
+      this.broadcast({ type: "player", player: players[pid] });
+    }
+    return Response.json({ ok: true, coord, previous });
   }
 
   // The authoritative "who's online" set is the currently-open sockets, not a

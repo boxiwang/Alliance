@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { useLayoutEffect, useRef, type RefObject } from "react";
 import type { WorldViewport } from "./WorldVisualLayer";
 
 // Static Star Map scaffold (ground, nebula, stars, grids, sector rings, wormhole
@@ -17,6 +17,8 @@ type Props = {
   zoom: number;
   dprCap: number;
   animateStars: boolean;
+  /** Current Star Map style: zone tint, grid LOD and a parallax star layer (false = archived classic look). */
+  calm?: boolean;
 };
 
 const STAR_TILE = 64;
@@ -31,20 +33,29 @@ const STAR_SPIN_SECONDS = 420;
 
 export default function WorldBackdropLayer(props: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const starsRef = useRef<HTMLCanvasElement>(null);
   const propsRef = useRef(props);
   const dirtyRef = useRef(true);
   useLayoutEffect(() => { propsRef.current = props; dirtyRef.current = true; });
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-    let raf = 0, cw = 1, ch = 1, dpr = 1, lastKey = "", lastSpin = -1;
+  // Layout effect: set up and paint the first frame before the browser shows the
+  // map, so a refresh never shows the empty shell behind the markers.
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current, starCanvas = starsRef.current;
+    const ctx = canvas?.getContext("2d"), sctx = starCanvas?.getContext("2d");
+    if (!canvas || !ctx || !starCanvas || !sctx) return;
+    let raf = 0, cw = 1, ch = 1, dpr = 1, lastKey = "", lastStarsAt = -Infinity;
+    let drawNow: (() => void) | null = null;
     const resize = () => {
-      dpr = Math.max(1, Math.min(propsRef.current.dprCap || 2, window.devicePixelRatio || 1));
-      cw = Math.max(1, canvas.clientWidth); ch = Math.max(1, canvas.clientHeight);
-      canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
+      const nextDpr = Math.max(1, Math.min(propsRef.current.dprCap || 2, window.devicePixelRatio || 1));
+      const nextW = Math.max(1, canvas.clientWidth), nextH = Math.max(1, canvas.clientHeight);
+      // Assigning canvas.width clears it: only touch the backing store on a real
+      // size change, and repaint in the same frame (observer callbacks run before paint).
+      if (nextW === cw && nextH === ch && nextDpr === dpr) return;
+      dpr = nextDpr; cw = nextW; ch = nextH;
+      for (const c of [canvas, starCanvas]) { c.width = Math.round(cw * dpr); c.height = Math.round(ch * dpr); }
       dirtyRef.current = true;
+      drawNow?.();
     };
     const observer = new ResizeObserver(resize);
     observer.observe(canvas);
@@ -55,11 +66,9 @@ export default function WorldBackdropLayer(props: Props) {
       if (document.hidden) return;
       const p = propsRef.current, vp = p.viewportRef.current;
       if (!vp) return;
-      // Stars turn once per 7 minutes; re-rendering them ~5x/s is indistinguishable.
-      const spin = p.animateStars ? Math.floor(now / 200) : 0;
       const key = `${vp.x.toFixed(3)}|${vp.y.toFixed(3)}|${vp.width.toFixed(3)}|${cw}|${ch}`;
-      if (!dirtyRef.current && key === lastKey && spin === lastSpin) return;
-      dirtyRef.current = false; lastKey = key; lastSpin = spin;
+      const baseDirty = dirtyRef.current || key !== lastKey;
+      dirtyRef.current = false; lastKey = key;
 
       // Same viewBox "meet" mapping as the SVG and the other canvas layers.
       const s = Math.min(cw / vp.width, ch / vp.height);
@@ -67,6 +76,40 @@ export default function WorldBackdropLayer(props: Props) {
       const X = (x: number) => ox + (x - vp.x) * s, Y = (y: number) => oy + (y - vp.y) * s;
       const minX = vp.x - ox / s, maxX = vp.x + (cw - ox) / s, minY = vp.y - oy / s, maxY = vp.y + (ch - oy) / s;
       const W = p.worldWidth, H = p.worldHeight, z = Math.max(1, p.zoom);
+
+      // The star field turns about the Wormhole (one turn / 7 min). Its on-screen
+      // speed grows with zoom, so repaint it often enough that no step exceeds
+      // ~0.4px: a few times a second zoomed out, every frame zoomed in.
+      const c = p.center;
+      const reach = Math.max(...[[minX, minY], [maxX, minY], [minX, maxY], [maxX, maxY]].map(([x, y]) => Math.hypot(x - c.x, y - c.y)));
+      const pxPerSecond = (Math.PI * 2 / STAR_SPIN_SECONDS) * reach * s;
+      const starInterval = Math.max(0, Math.min(250, 400 / Math.max(.001, pxPerSecond)));
+      function drawStars(now: number) {
+        sctx!.setTransform(dpr, 0, 0, dpr, 0, 0); sctx!.clearRect(0, 0, cw, ch);
+        // Stars: 64-unit tile, slowly rotating about the wormhole like the old <animateTransform>.
+        const angle = p.animateStars ? (now / 1000 / STAR_SPIN_SECONDS) * Math.PI * 2 : 0;
+        const cos = Math.cos(angle), sin = Math.sin(angle);
+        const back = (x: number, y: number) => [c.x + (x - c.x) * cos + (y - c.y) * sin, c.y - (x - c.x) * sin + (y - c.y) * cos];
+        const corners = [back(minX, minY), back(maxX, minY), back(minX, maxY), back(maxX, maxY)];
+        const bx0 = Math.min(...corners.map((q) => q[0])), bx1 = Math.max(...corners.map((q) => q[0]));
+        const by0 = Math.min(...corners.map((q) => q[1])), by1 = Math.max(...corners.map((q) => q[1]));
+        for (const [sx, sy, r, rgb, a] of STARS) {
+          sctx!.fillStyle = `rgba(${rgb},${a})`;
+          sctx!.beginPath();
+          const rad = Math.max(.35, (r / z) * s);
+          for (let tx = Math.floor(bx0 / STAR_TILE) * STAR_TILE; tx <= bx1; tx += STAR_TILE) {
+            for (let ty = Math.floor(by0 / STAR_TILE) * STAR_TILE; ty <= by1; ty += STAR_TILE) {
+              const wx = tx + sx, wy = ty + sy;
+              const px = X(c.x + (wx - c.x) * cos - (wy - c.y) * sin), py = Y(c.y + (wx - c.x) * sin + (wy - c.y) * cos);
+              if (px < -2 || py < -2 || px > cw + 2 || py > ch + 2) continue;
+              sctx!.moveTo(px + rad, py); sctx!.arc(px, py, rad, 0, Math.PI * 2);
+            }
+          }
+          sctx!.fill();
+        }
+      }
+      if (baseDirty || (p.animateStars && now - lastStarsAt >= starInterval)) { lastStarsAt = now; drawStars(now); }
+      if (!baseDirty) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cw, ch);
 
@@ -81,24 +124,17 @@ export default function WorldBackdropLayer(props: Props) {
       ellipse(-W + .58 * 3 * W, -H + .42 * 3 * H, [[0, "#152044"], [.34, "#0b1532"], [.72, "#060c20"], [1, "#02050e"]]);
       ellipse(.5 * W, .5 * H, [[0, "rgba(122,73,216,.16)"], [.48, "rgba(33,94,155,.07)"], [1, "rgba(3,7,17,0)"]]);
 
-      // Stars: 64-unit tile, slowly rotating about the wormhole like the old <animateTransform>.
-      const angle = p.animateStars ? (now / 1000 / STAR_SPIN_SECONDS) * Math.PI * 2 : 0;
-      const cos = Math.cos(angle), sin = Math.sin(angle), c = p.center;
-      const back = (x: number, y: number) => [c.x + (x - c.x) * cos + (y - c.y) * sin, c.y - (x - c.x) * sin + (y - c.y) * cos];
-      const corners = [back(minX, minY), back(maxX, minY), back(minX, maxY), back(maxX, maxY)];
-      const bx0 = Math.min(...corners.map((q) => q[0])), bx1 = Math.max(...corners.map((q) => q[0]));
-      const by0 = Math.min(...corners.map((q) => q[1])), by1 = Math.max(...corners.map((q) => q[1]));
-      for (const [sx, sy, r, rgb, a] of STARS) {
-        ctx.fillStyle = `rgba(${rgb},${a})`;
-        ctx.beginPath();
-        const rad = Math.max(.35, (r / z) * s);
-        for (let tx = Math.floor(bx0 / STAR_TILE) * STAR_TILE; tx <= bx1; tx += STAR_TILE) {
-          for (let ty = Math.floor(by0 / STAR_TILE) * STAR_TILE; ty <= by1; ty += STAR_TILE) {
-            const wx = tx + sx, wy = ty + sy;
-            const px = X(c.x + (wx - c.x) * cos - (wy - c.y) * sin), py = Y(c.y + (wx - c.x) * sin + (wy - c.y) * cos);
-            if (px < -2 || py < -2 || px > cw + 2 || py > ch + 2) continue;
-            ctx.moveTo(px + rad, py); ctx.arc(px, py, rad, 0, Math.PI * 2);
-          }
+      if (p.calm) {
+        // Zone tint: cool teal at the rim warming to violet toward the Wormhole.
+        const zone = ctx.createRadialGradient(X(p.center.x), Y(p.center.y), 0, X(p.center.x), Y(p.center.y), p.worldRadius * s);
+        zone.addColorStop(0, "rgba(124,72,226,.12)"); zone.addColorStop(.4, "rgba(78,82,210,.06)");
+        zone.addColorStop(.78, "rgba(34,140,170,.05)"); zone.addColorStop(1, "rgba(20,110,140,0)");
+        ctx.fillStyle = zone; ctx.fillRect(0, 0, cw, ch);
+        // Far star layer at 55% of the camera's travel: depth while panning, no per-frame cost at rest.
+        const fs = s * .55, fminX = vp.x - ox / fs, fmaxX = vp.x + (cw - ox) / fs, fminY = vp.y - oy / fs, fmaxY = vp.y + (ch - oy) / fs;
+        ctx.fillStyle = "rgba(190,215,255,.34)"; ctx.beginPath();
+        for (let tx = Math.floor(fminX / 97) * 97; tx <= fmaxX; tx += 97) for (let ty = Math.floor(fminY / 97) * 97; ty <= fmaxY; ty += 97) {
+          for (const [sx, sy] of [[11, 23], [53, 71], [79, 17], [31, 88]]) { const px = ox + (tx + sx - vp.x) * fs, py = oy + (ty + sy - vp.y) * fs; ctx.moveTo(px + .6, py); ctx.arc(px, py, .6, 0, Math.PI * 2); }
         }
         ctx.fill();
       }
@@ -113,7 +149,7 @@ export default function WorldBackdropLayer(props: Props) {
         for (let y = Math.ceil(minY / step) * step; y <= maxY; y += step) { const py = Y(y); ctx.moveTo(0, py); ctx.lineTo(cw, py); }
         ctx.stroke();
       };
-      lines(8, "23,52,74", .34, (.25 / z) * s);
+      if (!p.calm || z >= 3) lines(8, "23,52,74", .34, (.25 / z) * s);
       lines(40, "46,120,146", .52, (.48 / z) * s);
       const dot = (.7 / z) * s / 2;
       ctx.fillStyle = `rgba(65,223,252,${.5 * Math.min(1, dot / .35)})`; ctx.beginPath();
@@ -144,9 +180,13 @@ export default function WorldBackdropLayer(props: Props) {
       ctx.beginPath(); ctx.moveTo(cx - arm, cy); ctx.lineTo(cx + arm, cy); ctx.moveTo(cx, cy - arm); ctx.lineTo(cx, cy + arm); ctx.stroke();
       ctx.globalAlpha = 1;
     };
-    raf = requestAnimationFrame(draw);
+    drawNow = () => { cancelAnimationFrame(raf); draw(performance.now()); };
+    draw(performance.now());
     return () => { cancelAnimationFrame(raf); observer.disconnect(); };
   }, []);
 
-  return <canvas ref={canvasRef} className="world-backdrop-layer" aria-hidden="true" />;
+  return <>
+    <canvas ref={canvasRef} className="world-backdrop-layer" aria-hidden="true" />
+    <canvas ref={starsRef} className="world-backdrop-layer world-backdrop-stars" aria-hidden="true" />
+  </>;
 }

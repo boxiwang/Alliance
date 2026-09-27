@@ -51,8 +51,8 @@ export const MVP_ITEMS: readonly MvpItem[] = [
   { id: "resource.power.small", name: "Power Reserve", category: "resource", rarity: "common", status: "planned", description: "Adds a protected bundle of Power." },
   { id: "energy.cell.10", name: "Energy Cell", category: "energy", rarity: "common", status: "planned", description: "Restores 10 Star Map energy." },
   { id: "war.shield.8h", name: "Peace Shield 8h", category: "war", rarity: "rare", status: "planned", description: "Stops hostile attacks against your city for 8 hours." },
-  { id: "war.relocator.random", name: "Drift Jump", category: "war", rarity: "common", status: "planned", description: "Relocates your city to a random valid sector." },
-  { id: "war.relocator.advanced", name: "Precision Jump", category: "war", rarity: "epic", status: "planned", description: "Relocates your city to a chosen valid coordinate." },
+  { id: "war.relocator.random", name: "Drift Jump", category: "war", rarity: "common", status: "active", description: "Relocates your city to a random valid sector." },
+  { id: "war.relocator.advanced", name: "Precision Jump", category: "war", rarity: "epic", status: "active", description: "Relocates your city to a chosen valid coordinate." },
   { id: "identity.rename", name: "Rename Signal", category: "identity", rarity: "rare", status: "planned", description: "Changes your unique commander name without waiting for the free rename window." },
   { id: "relic.key.standard", name: "Relic Key", category: "relic", rarity: "rare", status: "planned", description: "Opens one standard Relic cache." },
 ] as const;
@@ -60,6 +60,8 @@ export const MVP_ITEMS: readonly MvpItem[] = [
 export const MVP_ITEM_BY_ID = new Map(MVP_ITEMS.map((item) => [item.id, item]));
 
 export const ALPHA_STARTER_ITEMS: Readonly<Record<string, number>> = {
+  "war.relocator.advanced": 1,
+  "war.relocator.random": 2,
   "speedup.universal.1m": 20,
   "speedup.universal.5m": 10,
   "speedup.universal.1h": 2,

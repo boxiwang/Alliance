@@ -332,13 +332,13 @@ export async function ensureGameAuthority(address: string, game: unknown, world:
  * state + a reason (rejected). The idempotency key belongs to the caller so the
  * exact same command can be retried after an uncertain network response.
  */
-export type GameCommandResponse = { ok: boolean; reason?: string; game: unknown; world: unknown; revision: number; replayed: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean };
+export type GameCommandResponse = { ok: boolean; reason?: string; game: unknown; world: unknown; revision: number; replayed: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean; position?: { x: number; y: number } };
 
 export async function sendGameCommand(address: string, type: string, args: Record<string, unknown>, idempotencyKey: string): Promise<GameCommandResponse> {
   const session = loadBackendSession(address);
   if (!session) throw new Error("session_required");
-  const res = await post<{ ok?: boolean; reason?: string; game?: unknown; world?: unknown; revision?: number; replayed?: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean }>("/command", { type, args, idempotencyKey }, session.token);
-  return { ok: !!res.ok, reason: res.reason, game: res.game ?? null, world: res.world ?? null, revision: Number(res.revision) || 0, replayed: !!res.replayed, inventory: res.inventory, targetId: res.targetId, spawned: res.spawned };
+  const res = await post<{ ok?: boolean; reason?: string; game?: unknown; world?: unknown; revision?: number; replayed?: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean; position?: { x: number; y: number } }>("/command", { type, args, idempotencyKey }, session.token);
+  return { ok: !!res.ok, reason: res.reason, game: res.game ?? null, world: res.world ?? null, revision: Number(res.revision) || 0, replayed: !!res.replayed, inventory: res.inventory, targetId: res.targetId, spawned: res.spawned, position: res.position };
 }
 
 /**

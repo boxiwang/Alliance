@@ -1275,8 +1275,8 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world-celestial-lock{color:#66c9d9;fill:none;stroke-linecap:round}
 .world-celestial-lock.rival{color:#b299df}
 .world-celestial-lock .lock-underlay{stroke:#020911;stroke-width:4;opacity:.85}
-.world-celestial-lock .lock-arc{stroke:currentColor;stroke-width:1.1;opacity:.78;filter:drop-shadow(0 0 2px currentColor)}
-.world-celestial-lock .lock-tick{stroke:currentColor;stroke-width:.8;opacity:.45}
+.world-celestial-lock .lock-arc{stroke:currentColor;stroke-width:1.35;opacity:.92;filter:drop-shadow(0 0 2px currentColor)}
+.world-celestial-lock .lock-tick{stroke:currentColor;stroke-width:.9;opacity:.6}
 .world-celestial-lock .lock-diamond{fill:currentColor;stroke:none;opacity:.7}
 .world-map-overlay .world-wormhole-caption .world-circle-label{font-size:11px;letter-spacing:.22em;stroke-width:3px}
 .world-wormhole-caption .world-circle-sub{font-size:7px;letter-spacing:.12em;paint-order:stroke;stroke:#030611;stroke-width:2px}
@@ -1445,3 +1445,106 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world.world-cosmos *,.world.world-cosmos *::before,.world.world-cosmos *::after{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 .world.world-cosmos .world-map-shell{background:#02040c}
 .world.world-cosmos .world-side{background:linear-gradient(180deg,#091426,#050b18)}
+
+/* Star Map style (the only style; classic archived at tag archive/classic-starmap) — quiet resources, cities and relations lead */
+.world-calm .world-planet-glyph,.world-calm .world-planet-glyph.tactical,.world-calm .world-rogue-glyph,.world-calm .world-surface-mark{filter:none}
+.world-calm .world-planet-glyph>ellipse,.world-calm .world-rogue-glyph>ellipse,.world-calm .world-planet-contour,.world-calm.world-tactical .world-target:not(.city) .world-signal-halo{display:none}
+.world-calm .world-target:not(.city) .world-signal-halo{opacity:.55}
+.world-calm .world-planet-glyph circle[fill^="url"],.world-calm .world-rogue-glyph circle[fill^="url"]{stroke:rgba(214,232,242,.22);stroke-width:.6;vector-effect:non-scaling-stroke}
+.world-calm .world-target:hover .world-planet-glyph,.world-calm .world-target:hover .world-rogue-glyph{filter:brightness(1.25)}
+.world-calm .world-target.monster.out-of-reach:not(.selected){opacity:.42}
+.world-calm .world-target:not(.city) .world-level-badge{transform-box:fill-box;transform-origin:center;transform:scale(var(--badge-boost,1))}
+.world-calm .world-level-badge circle{fill:rgba(6,11,20,.92);stroke:rgba(165,196,210,.32);stroke-width:.4;filter:none}
+.world-calm .world-level-badge text{fill:#b9cad6;font-weight:700}
+.world-calm .world-target:not(.city):not(:hover):not(.selected) .world-level-badge{opacity:.78}
+.world-calm:not(.world-tactical) .world-planet-glyph circle[fill^="url"]{stroke-width:1.3}
+.world-calm:not(.world-tactical) .world-planet-glyph.cash circle[fill^="url"]{stroke:rgba(67,242,161,.7)}
+.world-calm:not(.world-tactical) .world-planet-glyph.oil circle[fill^="url"]{stroke:rgba(255,180,84,.7)}
+.world-calm:not(.world-tactical) .world-planet-glyph.power circle[fill^="url"]{stroke:rgba(56,217,255,.7)}
+
+/* Target selection: the body grows gently and the same CelestialLock used for
+   cities closes in once (muted type tones instead of a saturated reticle). */
+.world-target-body{transform-box:view-box;transition:transform .24s cubic-bezier(.2,.9,.3,1)}
+.world-target.selected .world-target-body{transform:scale(1.2)}
+.world-calm .world-target.selected .world-target-body{transform:scale(1.4)}
+.world-calm .world-target.selected .world-level-badge{opacity:1}
+.world-celestial-lock.cash{color:#6fcfa6}
+.world-celestial-lock.oil{color:#d8b27a}
+.world-celestial-lock.power{color:#66c9d9}
+.world-celestial-lock.rogue{color:#e08a9b}
+.world-celestial-lock.locked{color:#c9a26a}
+.world-celestial-lock .lock-body{animation:world-lock-on .3s cubic-bezier(.2,.8,.2,1) both}
+@keyframes world-lock-on{from{opacity:0;transform:scale(1.35)}to{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.world-celestial-lock .lock-body{animation:none}.world-target-body{transition:none}}
+
+/* Star Map search (replaces the Wormhole shortcut) */
+.world-map-tools button.active{border-color:rgba(56,217,255,.6);background:rgba(20,70,92,.5);color:#dffaff}
+.world-search-panel{position:absolute;z-index:6;right:14px;top:50px;width:262px;padding:10px 11px 11px;border:1px solid rgba(56,217,255,.24);border-radius:4px;background:rgba(3,10,20,.96);box-shadow:0 14px 40px rgba(0,0,0,.45);font:9px var(--mono);color:#9fb3c9}
+.world-search-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.world-search-panel header b{color:#dffaff;font:600 9px var(--hud);letter-spacing:.16em}
+.world-search-panel header button{width:20px;height:20px;padding:0;border:1px solid rgba(103,152,177,.2);border-radius:3px;background:transparent;color:#7896a8;cursor:pointer}
+.world-search-kinds{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:10px}
+.world-search-kinds button{display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 2px;border:1px solid rgba(56,217,255,.14);border-radius:3px;background:rgba(6,14,26,.8);color:#6f8aa0;font:600 7.5px var(--hud);letter-spacing:.1em;cursor:pointer}
+.world-search-kinds button.active{border-color:rgba(56,217,255,.5);background:rgba(20,70,92,.4);color:#e6fbff}
+.world-search-kinds i{width:6px;height:6px;border-radius:50%;background:#ff5f78}
+.world-search-kinds i.cash{background:#43f2a1}.world-search-kinds i.oil{background:#ffb454}.world-search-kinds i.power{background:#38d9ff}
+.world-search-level{display:grid;grid-template-columns:auto 20px 1fr 20px 30px;align-items:center;gap:6px}
+.world-search-level span{color:#5f7a90;font:600 7.5px var(--hud);letter-spacing:.12em}
+.world-search-level button{height:20px;padding:0;border:1px solid rgba(56,217,255,.2);border-radius:3px;background:rgba(6,14,26,.8);color:#79dff7;cursor:pointer}
+.world-search-level button:disabled{opacity:.35;cursor:default}
+.world-search-level input{width:100%;accent-color:#38d9ff}
+.world-search-level b{color:#e6fbff;font:600 10px var(--hud);text-align:right}
+.world-search-note{margin:7px 0 0;color:#5f7a90}.world-search-note.warn{color:#e2b56d}
+.world-search-result{margin:7px 0 0;color:#8fb3c7}.world-search-result b{color:#dffaff}
+.world-search-go{width:100%;margin-top:9px;padding:8px;border:1px solid rgba(56,217,255,.45);border-radius:3px;background:linear-gradient(100deg,rgba(56,217,255,.18),rgba(95,78,198,.1));color:#e6fbff;font:600 8.5px var(--hud);letter-spacing:.16em;cursor:pointer}
+.world-search-go:hover{border-color:rgba(56,217,255,.8)}
+/* The Comms dock floats over the bottom-right: keep the side panel's last rows reachable above it. */
+.world.world-cosmos .world-side{padding-bottom:104px}
+
+/* Warp (city relocation) */
+.world-coordinate-jump .world-warp-open{border-color:rgba(56,217,255,.36);background:rgba(56,217,255,.1);color:#bff0ff}
+.world-coordinate-jump .world-warp-open.active{border-color:rgba(56,217,255,.7);background:rgba(20,70,92,.5);color:#e6fbff}
+.world-warp-panel{position:absolute;z-index:6;left:16px;top:94px;width:282px;padding:10px 11px 11px;border:1px solid rgba(56,217,255,.24);border-radius:4px;background:rgba(3,10,20,.96);box-shadow:0 14px 40px rgba(0,0,0,.45);font:9px/1.5 var(--mono);color:#8fa6ba}
+.world-warp-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.world-warp-panel header b{color:#dffaff;font:600 9px var(--hud);letter-spacing:.16em}
+.world-warp-panel header button{width:20px;height:20px;padding:0;border:1px solid rgba(103,152,177,.2);border-radius:3px;background:transparent;color:#7896a8;cursor:pointer}
+.world-warp-panel section{padding:9px 0;border-top:1px solid rgba(56,217,255,.1)}
+.world-warp-panel section p{margin:4px 0 0}
+.world-warp-panel section p b{color:#dffaff;font-weight:600}
+.world-warp-option-head{display:flex;align-items:center;justify-content:space-between}
+.world-warp-option-head b{color:#cfe9f6;font:600 8px var(--hud);letter-spacing:.14em}
+.world-warp-option-head em{color:#79dff7;font:600 9px var(--mono);font-style:normal}
+.world-warp-alert{margin:0 0 6px;padding:6px 8px;border-left:2px solid #e2b56d;background:rgba(226,181,109,.08);color:#e9c98b}
+.world-warp-invalid{color:#ff8a9c}
+.world-warp-go{width:100%;margin-top:8px;padding:8px;border:1px solid rgba(56,217,255,.45);border-radius:3px;background:linear-gradient(100deg,rgba(56,217,255,.18),rgba(95,78,198,.1));color:#e6fbff;font:600 8.5px var(--hud);letter-spacing:.16em;cursor:pointer}
+.world-warp-go.secondary{border-color:rgba(170,130,255,.4);background:rgba(170,130,255,.1)}
+.world-warp-go:disabled{opacity:.4;cursor:not-allowed}
+.world-warp-panel footer{padding-top:8px;border-top:1px solid rgba(56,217,255,.1);color:#4f6a80;font-size:8px}
+.world-warp-ghost .world-warp-spacing{fill:none;stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.world-warp-ghost .world-warp-footprint{stroke-width:1.4;vector-effect:non-scaling-stroke}
+.world-warp-ghost.valid .world-warp-spacing{stroke:rgba(102,201,217,.55)}
+.world-warp-ghost.valid .world-warp-footprint{fill:rgba(102,201,217,.14);stroke:#66c9d9}
+.world-warp-ghost.invalid .world-warp-spacing{stroke:rgba(255,113,136,.5)}
+.world-warp-ghost.invalid .world-warp-footprint{fill:rgba(255,113,136,.14);stroke:#ff7188}
+
+/* Target panel tidy: the intel state is a compact chip, not a field-like bar. */
+.world-target-toolbar .world-intel-ribbon{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:4px 9px 4px 8px;border-width:1px;border-left-width:1px;border-radius:11px;font:600 7.5px var(--mono);letter-spacing:.14em}
+.world-target-toolbar .world-intel-ribbon::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor}
+.world-gather-recommend small{display:block;margin-bottom:2px;color:#5f8f7a;font:600 7px var(--hud);letter-spacing:.16em}
+/* Legend + footer read over a soft scrim instead of colliding with planets. */
+.world.world-cosmos .world-map-shell::after{z-index:3;background:linear-gradient(180deg,rgba(2,4,12,0) calc(100% - 84px),rgba(2,4,12,.74))}
+.world.world-cosmos .world-map-hint{padding:4px 8px;border-radius:3px;background:rgba(3,10,20,.8);color:#5d7f93}
+
+/* Home compass: pinned to the map edge, pointing at the home city when it is off-screen. */
+.world-home-beacon{position:absolute;z-index:5;left:0;top:0;display:flex;align-items:center;gap:5px;height:24px;margin:-12px 0 0 -38px;padding:0 9px 0 5px;border:1px solid rgba(102,201,217,.45);border-radius:12px;background:rgba(3,10,20,.9);color:#9fe3ef;font:600 7.5px var(--hud);letter-spacing:.14em;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+.world-home-beacon:hover{border-color:rgba(102,201,217,.85);color:#e6fbff}
+.world-home-beacon-arrow{width:14px;height:14px;display:grid;place-items:center}
+.world-home-beacon-arrow::before{content:"";border-left:7px solid #66c9d9;border-top:4px solid transparent;border-bottom:4px solid transparent;filter:drop-shadow(0 0 3px rgba(102,201,217,.7))}
+.world-home-beacon-distance{color:#66c9d9;font:600 8px var(--mono);letter-spacing:.04em}
+.world-home-beacon-distance::after{content:" LU";color:#4f7d8a;font-size:7px}
+
+/* Boot: the backdrop paints first; markers, cities and fleets fade in together
+   once WebGL has resolved, instead of a fallback planet swapping to the real one. */
+.world-map-pan-plane,.world-visual-layer,.world-march-layer,.world-strike-layer{transition:opacity .28s ease}
+.world-map-booting .world-map-pan-plane,.world-map-booting .world-visual-layer,.world-map-booting .world-march-layer,.world-map-booting .world-strike-layer{opacity:0}
+@media (prefers-reduced-motion:reduce){.world-map-pan-plane,.world-visual-layer,.world-march-layer,.world-strike-layer{transition:none}}

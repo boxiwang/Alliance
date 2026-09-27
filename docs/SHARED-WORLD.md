@@ -60,3 +60,18 @@ combat remains the next batch.
 friends alpha. Own-home coordinate unification (client step 2 above) can land as a
 fast-follow; it is not launch-blocking because the mismatch is invisible to any
 single player.
+
+## Warp (city relocation) — implemented 2026-09-26 (Claude)
+- Items: **Precision Jump** (`war.relocator.advanced`, chosen coordinate) and **Drift Jump**
+  (`war.relocator.random`, random safe sector). Both are now `active`; the alpha starter grant gives
+  1 Precision + 2 Drift (granted on next login to existing players too). Not sold in the shop yet.
+- Rules (engine `relocateCity` / `warpBlockReason` / `warpReadiness`, `numbers.world.warp` can override):
+  inside the playable circle, outside the Wormhole reserve, ≥ 6 tiles from any other city,
+  ≥ 2.5 tiles from a live planet/Rogue; blocked while any own fleet is away, while the city is burning,
+  and (WorldRoom) while a real-player march involves the commander (`under_attack` / `fleets_away`).
+- Server path: `POST /command {type:"world.warp", args:{mode:"precision",x,y}|{mode:"random"}}` →
+  item balance check → authoritative `world.warp` on the personal world → **WorldRoom `/relocate`
+  reserves the shared coordinate** (spacing vs every real commander) → D1 commit consumes the item
+  atomically with the new `world_json`. If the D1 commit loses, the reservation is reverted.
+- Client: WARP in the coordinate box opens the Warp panel; click an empty tile (or type X/Y) to
+  preview a green/red footprint + spacing ring. Local/dev sessions use the same engine rule, no item.
