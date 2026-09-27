@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RealtimeClient, type LiveChat, type PresenceCity, type ServerReport } from "./lib/realtime";
 import type { Profile } from "./lib/profile";
 import { capacity, displayResource, displayTroops, mightBreakdown, prodPerHour, project, totalTroops, worldMarchSlots } from "./lib/game";
@@ -78,6 +78,24 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   const [serverReports, setServerReports] = useState<ServerReport[]>([]);
   const rtRef = useRef<RealtimeClient | null>(null);
   const composingRef = useRef(false);
+  // The three-column console fills exactly to the bottom of the viewport from
+  // wherever the header ends, so the composer is always on screen (the thread
+  // scrolls inside). Measured, not a hard-coded header height.
+  const commsRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = commsRef.current;
+    if (!el) return;
+    const fit = () => {
+      if (window.innerWidth <= 1000) { el.style.height = ""; return; } // stacked mobile layout scrolls normally
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      el.style.height = `${Math.max(320, window.innerHeight - top - 16)}px`;
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(document.body);
+    window.addEventListener("resize", fit);
+    return () => { observer.disconnect(); window.removeEventListener("resize", fit); };
+  }, []);
   const partnerOf = (key: string) => key.split("|").find((x) => x !== address) || key;
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
@@ -291,7 +309,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       standing={totalTroops(game)} wounded={game.wounded} might={mightBreakdown(game).total}
       onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={() => {}} onShop={onShop} onProfile={onProfile} />
 
-    <div className="comms">
+    <div className="comms" ref={commsRef}>
       {/* LEFT — channels */}
       <aside className="col">
         <div className="cm-grp">Channels</div>

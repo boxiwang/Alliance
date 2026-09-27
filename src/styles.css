@@ -1548,3 +1548,23 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world-map-pan-plane,.world-visual-layer,.world-march-layer,.world-strike-layer{transition:opacity .28s ease}
 .world-map-booting .world-map-pan-plane,.world-map-booting .world-visual-layer,.world-map-booting .world-march-layer,.world-map-booting .world-strike-layer{opacity:0}
 @media (prefers-reduced-motion:reduce){.world-map-pan-plane,.world-visual-layer,.world-march-layer,.world-strike-layer{transition:none}}
+
+/* Draggable Comms dock */
+@media (min-width:700px){.mini-comms-peek,.mini-comms>header.mini-comms-drag{cursor:grab;touch-action:none}.mini-comms-peek:active,.mini-comms>header.mini-comms-drag:active{cursor:grabbing}}
+.mini-comms.moved{transition:none}
+
+/* Messages: the console height is fitted in JS to end at the viewport bottom; drop the page's trailing gap so nothing scrolls. */
+@media(min-width:1001px){.comms-page{padding-bottom:0}.comms-page .comms{min-height:0}}
+
+/* Collapsed Comms dock: a HUD frame (corner brackets + breathing inner rim + soft
+   outer halo) so it never blends into the panels and windows behind it. */
+.mini-comms.collapsed{border-color:rgba(98,222,255,.55);box-shadow:0 22px 60px rgba(0,0,0,.6),0 0 0 1px rgba(56,217,255,.14),0 0 22px rgba(56,217,255,.2)}
+.mini-comms.collapsed::before,.mini-comms.collapsed::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2}
+.mini-comms.collapsed::before{background:
+  linear-gradient(#8beeff,#8beeff) top 4px left 4px/11px 1.5px no-repeat,linear-gradient(#8beeff,#8beeff) top 4px left 4px/1.5px 11px no-repeat,
+  linear-gradient(#8beeff,#8beeff) top 4px right 4px/11px 1.5px no-repeat,linear-gradient(#8beeff,#8beeff) top 4px right 4px/1.5px 11px no-repeat,
+  linear-gradient(#8beeff,#8beeff) bottom 4px left 4px/11px 1.5px no-repeat,linear-gradient(#8beeff,#8beeff) bottom 4px left 4px/1.5px 11px no-repeat,
+  linear-gradient(#8beeff,#8beeff) bottom 4px right 4px/11px 1.5px no-repeat,linear-gradient(#8beeff,#8beeff) bottom 4px right 4px/1.5px 11px no-repeat;opacity:.85}
+.mini-comms.collapsed::after{box-shadow:inset 0 0 0 1px rgba(125,235,255,.5),inset 0 0 16px rgba(56,217,255,.2);animation:mini-comms-breathe 3.6s ease-in-out infinite}
+@keyframes mini-comms-breathe{0%,100%{opacity:.45}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.mini-comms.collapsed::after{animation:none;opacity:.8}}

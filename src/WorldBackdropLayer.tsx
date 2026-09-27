@@ -19,7 +19,17 @@ type Props = {
   animateStars: boolean;
   /** Current Star Map style: zone tint, grid LOD and a parallax star layer (false = archived classic look). */
   calm?: boolean;
+  /** Graphics tier: low = clean scaffold; medium + nebula/parallax/micro stars;
+   *  high + anti-tiling nebula detail and dust; ultra + a living (drifting, twinkling) sky. */
+  tier?: "low" | "medium" | "high" | "ultra";
 };
+
+/** Deterministic hash → [0,1) for a world cell, so procedural stars never tile. */
+function hash2(ix: number, iy: number, salt: number): number {
+  let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(salt, 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
 
 const STAR_TILE = 64;
 const STARS: [number, number, number, string, number][] = [
@@ -30,6 +40,43 @@ const STARS: [number, number, number, string, number][] = [
   [12, 59, .2, "115,223,255", .48],
 ];
 const STAR_SPIN_SECONDS = 420;
+
+/** Seamless value-noise fbm tile, colourised into `rgb` with alpha from the noise. */
+function makeNoiseTile(size: number, seed: number, rgb: [number, number, number], opts: { base: number; octaves: number; lo: number; hi: number; alpha: number; grain?: number }): HTMLCanvasElement {
+  let state = seed >>> 0;
+  const rand = () => { state = (state + 0x6d2b79f5) >>> 0; let t = state; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const layers: { period: number; grid: Float32Array }[] = [];
+  for (let o = 0; o < opts.octaves; o += 1) {
+    const period = opts.base * 2 ** o;
+    const grid = new Float32Array(period * period);
+    for (let i = 0; i < grid.length; i += 1) grid[i] = rand();
+    layers.push({ period, grid });
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const image = ctx.createImageData(size, size);
+  const fade = (t: number) => t * t * (3 - 2 * t);
+  for (let y = 0; y < size; y += 1) for (let x = 0; x < size; x += 1) {
+    let value = 0, amp = .5, norm = 0;
+    for (const { period, grid } of layers) {
+      const fx = x / size * period, fy = y / size * period;
+      const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fade(fx - x0), ty = fade(fy - y0);
+      const at = (gx: number, gy: number) => grid[((gy % period) * period) + (gx % period)];
+      const top = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * tx;
+      const bottom = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * tx;
+      value += (top + (bottom - top) * ty) * amp; norm += amp; amp *= .5;
+    }
+    value /= norm;
+    let a = Math.max(0, Math.min(1, (value - opts.lo) / (opts.hi - opts.lo)));
+    a = a * a * (3 - 2 * a) * opts.alpha;
+    if (opts.grain) a += (rand() < opts.grain ? .55 : 0) * opts.alpha;
+    const i = (y * size + x) * 4;
+    image.data[i] = rgb[0]; image.data[i + 1] = rgb[1]; image.data[i + 2] = rgb[2]; image.data[i + 3] = Math.round(Math.min(1, a) * 255);
+  }
+  ctx.putImageData(image, 0, 0);
+  return canvas;
+}
 
 export default function WorldBackdropLayer(props: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,8 +91,19 @@ export default function WorldBackdropLayer(props: Props) {
     const canvas = canvasRef.current, starCanvas = starsRef.current;
     const ctx = canvas?.getContext("2d"), sctx = starCanvas?.getContext("2d");
     if (!canvas || !ctx || !starCanvas || !sctx) return;
-    let raf = 0, cw = 1, ch = 1, dpr = 1, lastKey = "", lastStarsAt = -Infinity;
+    let raf = 0, cw = 1, ch = 1, dpr = 1, lastKey = "", lastStarsAt = -Infinity, lastAliveAt = -Infinity;
     let drawNow: (() => void) | null = null;
+    // Texture tiles are generated once, after the first paint (≈20ms, idle), then
+    // the base layer repaints with them. Patterns are world-anchored below.
+    let textures: { teal: CanvasPattern; violet: CanvasPattern; dust: CanvasPattern } | null = null;
+    const texTimer = window.setTimeout(() => {
+      if ((propsRef.current.tier ?? "high") === "low") return;
+      const teal = makeNoiseTile(256, 4663, [70, 170, 200], { base: 3, octaves: 5, lo: .46, hi: .86, alpha: .16 });
+      const violet = makeNoiseTile(256, 9001, [150, 96, 230], { base: 3, octaves: 5, lo: .5, hi: .9, alpha: .15 });
+      const dust = makeNoiseTile(128, 777, [200, 220, 255], { base: 6, octaves: 4, lo: .55, hi: .95, alpha: .09, grain: .012 });
+      const tp = ctx.createPattern(teal, "repeat"), vp = ctx.createPattern(violet, "repeat"), dp = ctx.createPattern(dust, "repeat");
+      if (tp && vp && dp) { textures = { teal: tp, violet: vp, dust: dp }; dirtyRef.current = true; }
+    }, 60);
     const resize = () => {
       const nextDpr = Math.max(1, Math.min(propsRef.current.dprCap || 2, window.devicePixelRatio || 1));
       const nextW = Math.max(1, canvas.clientWidth), nextH = Math.max(1, canvas.clientHeight);
@@ -67,7 +125,11 @@ export default function WorldBackdropLayer(props: Props) {
       const p = propsRef.current, vp = p.viewportRef.current;
       if (!vp) return;
       const key = `${vp.x.toFixed(3)}|${vp.y.toFixed(3)}|${vp.width.toFixed(3)}|${cw}|${ch}`;
-      const baseDirty = dirtyRef.current || key !== lastKey;
+      const tier = p.tier ?? "high";
+      const alive = tier === "ultra" && p.animateStars;
+      const aliveTick = alive && now - lastAliveAt >= 66;
+      if (aliveTick) lastAliveAt = now;
+      const baseDirty = dirtyRef.current || key !== lastKey || aliveTick;
       dirtyRef.current = false; lastKey = key;
 
       // Same viewBox "meet" mapping as the SVG and the other canvas layers.
@@ -130,13 +192,65 @@ export default function WorldBackdropLayer(props: Props) {
         zone.addColorStop(0, "rgba(124,72,226,.12)"); zone.addColorStop(.4, "rgba(78,82,210,.06)");
         zone.addColorStop(.78, "rgba(34,140,170,.05)"); zone.addColorStop(1, "rgba(20,110,140,0)");
         ctx.fillStyle = zone; ctx.fillRect(0, 0, cw, ch);
-        // Far star layer at 55% of the camera's travel: depth while panning, no per-frame cost at rest.
-        const fs = s * .55, fminX = vp.x - ox / fs, fmaxX = vp.x + (cw - ox) / fs, fminY = vp.y - oy / fs, fmaxY = vp.y + (ch - oy) / fs;
-        ctx.fillStyle = "rgba(190,215,255,.34)"; ctx.beginPath();
-        for (let tx = Math.floor(fminX / 97) * 97; tx <= fmaxX; tx += 97) for (let ty = Math.floor(fminY / 97) * 97; ty <= fmaxY; ty += 97) {
-          for (const [sx, sy] of [[11, 23], [53, 71], [79, 17], [31, 88]]) { const px = ox + (tx + sx - vp.x) * fs, py = oy + (ty + sy - vp.y) * fs; ctx.moveTo(px + .6, py); ctx.arc(px, py, .6, 0, Math.PI * 2); }
+        if (textures && tier !== "low") {
+          // World-anchored pattern with parallax: tileWorld world units per tile,
+          // the layer travels `depth` × the camera (farther = slower). `rot`
+          // turns a copy so two overlapping scales never line up into a grid.
+          const drift = alive ? now / 1000 * .35 : 0; // Full-Spectrum: slow nebula drift (world units)
+          const layer = (pattern: CanvasPattern, tilePx: number, tileWorld: number, depth: number, alpha: number, rot = 0, flow = 1) => {
+            if (alpha <= .004) return;
+            const k = (tileWorld * s) / tilePx;
+            pattern.setTransform(new DOMMatrix().translateSelf(ox - (vp.x * depth - drift * flow) * s, oy - (vp.y * depth - drift * flow * .4) * s).rotateSelf(rot).scaleSelf(k, k));
+            ctx.globalAlpha = alpha; ctx.fillStyle = pattern; ctx.fillRect(0, 0, cw, ch);
+          };
+          // Nebula colour follows depth into the map: teal at the rim, violet near the Wormhole.
+          const vcx = vp.x + vp.width / 2, vcy = vp.y + vp.height / 2;
+          const inner = Math.max(0, Math.min(1, 1 - Math.hypot(vcx - p.center.x, vcy - p.center.y) / p.worldRadius));
+          layer(textures.teal, 256, 150, .82, 1 - inner * .75, 0, .6);
+          layer(textures.violet, 256, 190, .78, .25 + inner * .75, 23, .45);
+          if (tier === "high" || tier === "ultra") {
+            // Mid-scale nebula detail + fine dust resolve as you zoom in. Each is two
+            // copies at incommensurate scales and angles, so no repeat is visible.
+            const deep = Math.max(0, Math.min(1, (z - 3) / 5));
+            const detail = inner > .5 ? textures.violet : textures.teal;
+            layer(detail, 256, 34, .9, deep * .5, 0, 1);
+            layer(detail, 256, 53.7, .88, deep * .5, 37, .8);
+            layer(textures.dust, 128, 9, .96, deep * .85, 0, 1.3);
+            layer(textures.dust, 128, 14.3, .95, deep * .85, 61, 1.1);
+          }
+          ctx.globalAlpha = 1;
         }
-        ctx.fill();
+        if (tier !== "low") {
+          // Far stars at 55% of the camera's travel: depth while panning. Hashed per
+          // cell (no repeating lattice).
+          const fs = s * .55, fminX = vp.x - ox / fs, fmaxX = vp.x + (cw - ox) / fs, fminY = vp.y - oy / fs, fmaxY = vp.y + (ch - oy) / fs;
+          ctx.fillStyle = "rgba(190,215,255,.34)"; ctx.beginPath();
+          for (let cx0 = Math.floor(fminX / 24); cx0 <= Math.floor(fmaxX / 24); cx0 += 1) for (let cy0 = Math.floor(fminY / 24); cy0 <= Math.floor(fmaxY / 24); cy0 += 1) {
+            if (hash2(cx0, cy0, 1) > .55) continue;
+            const px = ox + (cx0 * 24 + hash2(cx0, cy0, 2) * 24 - vp.x) * fs, py = oy + (cy0 * 24 + hash2(cx0, cy0, 3) * 24 - vp.y) * fs;
+            ctx.moveTo(px + .6, py); ctx.arc(px, py, .6, 0, Math.PI * 2);
+          }
+          ctx.fill();
+          // Micro stars: world-anchored, fading in with depth; three brightness groups.
+          const micro = Math.max(0, Math.min(1, (z - 3.5) / 5));
+          if (micro > 0) {
+            const t = alive ? now / 1000 : 0;
+            for (let group = 0; group < 3; group += 1) {
+              ctx.fillStyle = `rgba(215,230,255,${(micro * [.28, .45, .7][group]).toFixed(3)})`; ctx.beginPath();
+              for (let cx0 = Math.floor(minX / 5); cx0 <= Math.floor(maxX / 5); cx0 += 1) for (let cy0 = Math.floor(minY / 5); cy0 <= Math.floor(maxY / 5); cy0 += 1) {
+                const seed = hash2(cx0, cy0, 11);
+                if (seed > .7) continue;
+                // Full-Spectrum: each star drifts between brightness groups (twinkle).
+                const g = alive ? (Math.floor(seed * 3 + t * (.5 + seed)) % 3) : Math.floor(hash2(cx0, cy0, 12) * 3);
+                if (g !== group) continue;
+                const r = .45 + hash2(cx0, cy0, 13) * .65;
+                const px = X(cx0 * 5 + hash2(cx0, cy0, 14) * 5), py = Y(cy0 * 5 + hash2(cx0, cy0, 15) * 5);
+                ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, Math.PI * 2);
+              }
+              ctx.fill();
+            }
+          }
+        }
       }
 
       // Grids. The SVG patterns stroked each line on the tile edge, so the tile
@@ -182,7 +296,7 @@ export default function WorldBackdropLayer(props: Props) {
     };
     drawNow = () => { cancelAnimationFrame(raf); draw(performance.now()); };
     draw(performance.now());
-    return () => { cancelAnimationFrame(raf); observer.disconnect(); };
+    return () => { cancelAnimationFrame(raf); observer.disconnect(); window.clearTimeout(texTimer); };
   }, []);
 
   return <>
