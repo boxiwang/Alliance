@@ -1079,7 +1079,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .relic-cursor-preview>small{position:absolute;left:0;right:0;bottom:13px;color:#3f6475;font:700 6px var(--mono);letter-spacing:.15em;text-align:center}
 @keyframes cursor-preview-lock{to{transform:translate(-50%,-50%) rotate(360deg)}}
 .profile-cursor-vault .cursor-effect-icon{border:0;border-radius:0}.profile-cursor-vault .cursor-effect-icon svg{width:23px;height:23px;filter:drop-shadow(0 0 4px currentColor)}.profile-cursor-vault .cursor-effect-reticle,.profile-cursor-vault .cursor-effect-comet{color:#59dcff}.profile-cursor-vault .cursor-effect-sigil{color:#f3c46b}
-.game-cursor-active,.game-cursor-active *{cursor:none!important}
+.game-cursor-active,.game-cursor-active *{cursor:var(--game-cursor,auto)!important}
 .game-cursor{position:fixed;z-index:2147483000;left:0;top:0;opacity:0;pointer-events:none;will-change:transform;transition:opacity .08s linear;color:#59dcff;filter:drop-shadow(0 0 5px rgba(89,220,255,.72))}
 .game-cursor-sigil{color:#f3c46b;filter:drop-shadow(0 0 5px rgba(243,196,107,.78))}.game-cursor-comet{filter:drop-shadow(0 0 5px rgba(89,220,255,.8))}
 
@@ -1437,3 +1437,11 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .comms-page{padding:0 0 60px}
 @media(max-width:760px){.page:has(.town),.page:has(.world),.page:has(.alliance-page),.page:has(.messages-page),.page:has(.comms-page),.page:has(.shop-page),.page:has(.profile-screen){--game-shell-gutter:8px}}
 @media(prefers-reduced-motion:reduce){.command-credits.shop-active,.command-credits.shop-active:before,.command-credits.shop-active:after,.command-credits.shop-active>span,.command-credits.shop-active>span:before,.command-credits.shop-active strong,.command-credits.bump b{animation:none}}
+
+/* Star Map performance: the static scaffold is a live-camera canvas under the
+   panned SVG plane, and nothing on this page blurs the animated layers behind it
+   (every backdrop-filter was re-blurred on each canvas frame). */
+.world-backdrop-layer{position:absolute;z-index:0;inset:0;width:100%;height:100%;pointer-events:none;contain:strict}
+.world.world-cosmos *,.world.world-cosmos *::before,.world.world-cosmos *::after{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.world.world-cosmos .world-map-shell{background:#02040c}
+.world.world-cosmos .world-side{background:linear-gradient(180deg,#091426,#050b18)}

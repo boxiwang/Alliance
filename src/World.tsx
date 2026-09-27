@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 import { Profile } from "./lib/profile";
 import {
   GameState, RES, RES_ORDER, TROOP_ORDER, TROOPS_META, TroopKey,
@@ -25,6 +26,8 @@ import VoidPlanetOverlay from "./VoidPlanet";
 import WorldVisualLayer, { createWorldVisualStress, worldVisualBodyRadius, worldWormholeRadius, type WorldViewport, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
 import WorldMarchLayer from "./WorldMarchLayer";
+import WorldBackdropLayer from "./WorldBackdropLayer";
+import { markWorldMotion } from "./lib/world-motion";
 import { useGraphicsQuality } from "./useGraphicsQuality";
 import type { GraphicsQuality } from "./lib/graphics-tier";
 import {
@@ -878,19 +881,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       <linearGradient id="world-void-tail" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#8a3cff" stopOpacity=".55"/><stop offset=".55" stopColor="#7a2cff" stopOpacity=".18"/><stop offset="1" stopColor="#7a2cff" stopOpacity="0"/></linearGradient>
       <filter id="signal-glow" x="-200%" y="-200%" width="400%" height="400%"><feGaussianBlur stdDeviation="1.6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
     </defs>
-    <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-ground)" />
-    <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-nebula)" />
-    <g className="world-starfield">
-      <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-stars)" />
-      {quality.bgAnimate && <animateTransform attributeName="transform" type="rotate" from={`0 ${center.x} ${center.y}`} to={`360 ${center.x} ${center.y}`} dur="420s" repeatCount="indefinite" />}
-    </g>
-    <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-micro-grid)" />
-    <rect x={-world.config.width} y={-world.config.height} width={world.config.width * 3} height={world.config.height * 3} fill="url(#world-grid)" />
-    {Array.from({ length: 5 }, (_, index) => index + 1).map((ring) => <circle key={ring} cx={center.x} cy={center.y} r={worldRadius * ring / 5} className="world-sector-ring" opacity={ring === 5 ? .9 : .34} />)}
-    <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius * 1.55} fill="url(#circle-core)" />
-    <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius} className="world-core-ring" />
-    <circle cx={center.x} cy={center.y} r={world.config.circleReserveRadius * .62} className="world-core-ring inner" />
-    <path d={`M ${center.x - world.config.circleReserveRadius - 8} ${center.y} H ${center.x + world.config.circleReserveRadius + 8} M ${center.x} ${center.y - world.config.circleReserveRadius - 8} V ${center.y + world.config.circleReserveRadius + 8}`} className="world-core-cross" />
+    {/* Ground, nebula, stars, grids, sector rings and the reserve glow are drawn by
+        WorldBackdropLayer from the live camera, so a long pan never exposes the shell. */}
     <g transform={`translate(${center.x} ${center.y}) scale(${importantScale}) translate(${-center.x} ${-center.y})`} className="world-core-marker" onPointerDown={(event) => event.stopPropagation()} onClick={() => setCamera(center)}><circle cx={center.x} cy={center.y} r="32" className="world-core-hit" /></g>
   </>, [zoom, world.config, center.x, center.y, worldRadius, importantScale, quality.bgAnimate]);
 
@@ -1147,12 +1139,24 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       height: viewport.height,
     };
     liveViewportRef.current = nextViewport;
+    markWorldMotion();
     // Composite an already-rasterized, overscanned SVG during the gesture.
     // Updating viewBox here forces Safari to repaint thousands of SVG nodes and
     // is the direct source of the black flash. WebGL/Canvas still use the live
     // camera above, so planets, fleets and strikes stay locked to the grid.
     const panX = event.clientX - drag.current.x;
     const panY = event.clientY - drag.current.y;
+    // The SVG plane only holds markers for its overscan margin. Before a long
+    // gesture runs past it, commit the camera once and continue from here — one
+    // marker-only re-raster instead of an empty edge.
+    const el = event.currentTarget;
+    const marginX = el.clientWidth * (WORLD_PAN_OVERSCAN - 1) / 2, marginY = el.clientHeight * (WORLD_PAN_OVERSCAN - 1) / 2;
+    if (Math.abs(panX) > marginX * .7 || Math.abs(panY) > marginY * .7) {
+      drag.current = { x: event.clientX, y: event.clientY, camera: nextCamera, moved: true };
+      pendingCamera.current = null;
+      flushSync(() => setCamera(nextCamera));
+      return;
+    }
     const liveTransform = `translate3d(${panX}px,${panY}px,0) scale(${WORLD_PAN_OVERSCAN})`;
     if (svgRef.current) svgRef.current.style.transform = liveTransform;
     if (overlayRef.current) overlayRef.current.style.transform = liveTransform;
@@ -1209,7 +1213,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>GO</button><button type="button" className="world-warp-locked" onClick={() => setMessage("Relocation requires a Warp Engine consumable. Warp travel is not enabled in this MVP build.")}>WARP 🔒</button></form>
         <div className="world-coordinate world-coordinate-x">X {Math.round(viewX).toString().padStart(3, "0")} — {Math.round(viewX + viewport.width).toString().padStart(3, "0")}</div>
         <div className="world-coordinate world-coordinate-y">Y {Math.round(viewY).toString().padStart(3, "0")} — {Math.round(viewY + viewport.height).toString().padStart(3, "0")}</div>
-        <svg ref={svgRef} className="world-map world-map-v2 world-map-pan-plane" viewBox={renderViewBox} style={{ transform: `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})` }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerCancel} onWheel={(event) => { event.preventDefault(); setZoom((value) => steppedWorldZoom(value, event.deltaY < 0 ? "in" : "out", 1.14)); }}>
+        <WorldBackdropLayer viewportRef={liveViewportRef} worldWidth={world.config.width} worldHeight={world.config.height} center={center} worldRadius={worldRadius} reserveRadius={world.config.circleReserveRadius} zoom={zoom} dprCap={quality.dprCap} animateStars={quality.bgAnimate} />
+        <svg ref={svgRef} className="world-map world-map-v2 world-map-pan-plane" viewBox={renderViewBox} style={{ transform: `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})` }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerCancel} onWheel={(event) => { event.preventDefault(); markWorldMotion(700); setZoom((value) => steppedWorldZoom(value, event.deltaY < 0 ? "in" : "out", 1.14)); }}>
           {mapScaffold}
           {!gpuVisualsReady && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {mapClusters}

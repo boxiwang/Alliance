@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { worldFrameDue } from "./lib/world-motion";
 import type { Point } from "./lib/world-engine";
 import type { PlanetHaloId, PlanetOrbitId, PlanetSkinId } from "./lib/player-account";
 import { PLANET_CORE_GLSL } from "./planet-core-shared";
@@ -548,6 +549,7 @@ export default function WorldVisualLayer({
     let slowFrames = 0;
     let smoothFrames = 0;
     let lastFrame = performance.now();
+    let lastDrawAt = -Infinity;
     let statsAt = 0;
     let statsFrames = 0;
     let statsWorstGap = 0;
@@ -599,6 +601,10 @@ export default function WorldVisualLayer({
       if (currentZoom >= 8 && cachedZoom < 8) dprCap = inspectionDprMax;
       if (slowFrames > 24 && dprCap > inspectionDprMin) { dprCap = Math.max(inspectionDprMin, dprCap - .25); slowFrames = 0; }
       if (smoothFrames > 420 && dprCap < inspectionDprMax) { dprCap = Math.min(inspectionDprMax, dprCap + .25); smoothFrames = 0; }
+      // Stats above track the rAF cadence; the expensive draw below runs at the
+      // shared Star Map budget (display rate while moving, ~30fps at rest).
+      if (!worldFrameDue(time, lastDrawAt)) return;
+      lastDrawAt = time;
       const dpr = Math.min(dprCap, window.devicePixelRatio || 1);
       const deviceWidth = Math.max(2, Math.round(rect.width * dpr));
       const deviceHeight = Math.max(2, Math.round(rect.height * dpr));
@@ -646,12 +652,10 @@ export default function WorldVisualLayer({
           y: offsetY + (point.y - liveViewport.y) * scale,
         });
         const bufferPadX = rect.width * .55, bufferPadY = rect.height * .55;
-        const holeScreen = mapPoint(hole);
-        const holeRadius = worldWormholeRadius(currentZoom);
-        if (holeScreen.x + holeRadius * 3.6 > -bufferPadX && holeScreen.x - holeRadius * 3.6 < rect.width + bufferPadX && holeScreen.y + holeRadius * 3.6 > -bufferPadY && holeScreen.y - holeRadius * 3.6 < rect.height + bufferPadY) {
-          offset = writeQuad(offset, holeScreen.x, holeScreen.y, holeRadius, 6, 0, 0, .731, 0, lod);
-          landmarkDrawn = 1;
-        }
+        // The animated Wormhole (black-hole) quad is intentionally not drawn:
+        // it was a per-frame full-shader landmark; WorldBackdropLayer paints a
+        // static reserve glow instead. `hole` stays in the API for later use.
+        void hole;
         // Cheap overflow beacons render first; selecting one promotes it into
         // the detailed budget on the next React frame.
         for (const city of planned.beacons) {

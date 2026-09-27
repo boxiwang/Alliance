@@ -5,8 +5,15 @@ for the *why*; this file is the *where we are right now*.
 
 ---
 
-**Last updated:** 2026-09-08 · **by:** Claude (Comms/Task-1 chat page landed as frontend + local stub; hosting + monetization plans) — on top of Codex's Frontier I ecology
+**Last updated:** 2026-09-26 · **by:** Claude (Star Map performance + black-flash fix; see the ⚡ entry below). Older focus notes follow.
 **Current focus:** Comms page is live at `/?messages` (real GameNav, refined design, local stub only — not real multiplayer yet). Next: define the `chat-adapter` seam and wire System→real events + a City/Star-Map mini-chat; separately, tune the L1→20 Frontier I account and playtest. Hosting = Cloudflare free tier when going multiplayer (~300–1,000 DAU before paying). Monetization proposal in `docs/MONETIZATION.md`. **Full details in `HANDOFF.md` → "Latest changes (Claude, 2026-09-08 — Comms page + plans)".**
+
+### ⚡ Star Map performance + black-flash fix (Claude, 2026-09-26)
+- **Black flash root cause:** the panned SVG plane is pre-rasterized with only ~1/3 screen of overscan, so a long drag exposed the black shell until release. The static scaffold (ground, nebula, stars, grids, sector rings, reserve glow) now lives in `src/WorldBackdropLayer.tsx`, a canvas redrawn from the live camera (only when the camera changes; stars ~5 fps). The SVG keeps markers only and re-centres once before its margin runs out.
+- **Idle cost:** Star Map had 12 `backdrop-filter` layers re-blurred on every canvas frame → all removed on `.world` (solid panel fills). Shared frame budget `src/lib/world-motion.ts`: canvas layers run at display rate while panning/zooming, ~30 fps at rest; the march layer skips frames with no fleet in flight.
+- **Black hole removed** (owner request): the animated Wormhole shader quad is no longer drawn; a static reserve glow replaces it.
+- **Cursor:** `GameCursor` is now a native CSS cursor (data-URL SVG) instead of a DOM follower, so it never lags the pointer.
+- Measured in headless Chrome (M5 Pro, Tactical, `?stress=3000`): slow frames per drag 9–21 (spikes 533/1,366 ms) → 0; long drags show no black edge. Visual parity vs the previous build checked side by side (grid weight matched).
 
 ### 💬 Circular World + shared Messages mock (Codex, 2026-09-08)
 - Corrected the geometry mismatch: World rendering and every placement path now share one circular radius. Spawn grid 40 preserves 1,024 city slots after circle clipping; a full 5,200-entity State is acceptance-tested inside the circle.

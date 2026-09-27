@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import type { HeadlessWorld, HeadlessMarch } from "./lib/world-engine";
 import type { MarchSignatureId } from "./lib/player-account";
 import type { GraphicsQuality } from "./lib/graphics-tier";
+import { worldFrameDue } from "./lib/world-motion";
 
 // Rich fleet signatures on the starmap. This mirrors the Vault's Canvas trail
 // renderer (MarchSignaturePreview) so a fleet in the field looks as good as it
@@ -148,7 +149,10 @@ export default function WorldMarchLayer({
     };
     const observer = new ResizeObserver(resize); observer.observe(canvas); resize();
 
+    let lastDrawAt = -Infinity, canvasEmpty = false;
     const render = (now: number) => {
+      if (!worldFrameDue(now, lastDrawAt)) { rafRef.current = document.hidden ? null : requestAnimationFrame(render); return; }
+      lastDrawAt = now;
       // `now` is the rAF timestamp (page-relative) — good for animation drift.
       // Fleet PROGRESS must use epoch time, since march.dispatchedAt/arriveAt are
       // Date.now() values; mixing the two pins every fleet to its origin.
@@ -156,7 +160,11 @@ export default function WorldMarchLayer({
       const { world: w, zoom: z, viewerId: vid, quality: q } = latestRef.current;
       const vp = viewportRef.current;
       if (!vp) { rafRef.current = requestAnimationFrame(render); return; }
+      // No fleet in flight: the canvas is already clear, so skip the frame entirely.
+      const anyFlying = Object.values(w.marches).some((m) => m.state === "outbound" || m.state === "returning");
+      if (!anyFlying && canvasEmpty) { rafRef.current = document.hidden ? null : requestAnimationFrame(render); return; }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
+      canvasEmpty = !anyFlying;
       if (q.marchFx === "kite") { rafRef.current = requestAnimationFrame(render); return; }
       // viewBox "meet" mapping — uniform scale + centering — so fleets land on
       // the SVG route line, planets and harvest marks exactly.
