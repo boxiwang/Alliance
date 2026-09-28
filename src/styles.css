@@ -1657,9 +1657,6 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 /* Map 2048: "the Dust" — unlisted sectors (labels; the dust is drawn on the backdrop) */
 .world-dust-label{cursor:pointer}
 .world-dust-label text{text-anchor:middle;dominant-baseline:middle;font-family:var(--hud)}
-.world-dust-kicker{fill:#b08a5c;letter-spacing:.42em;opacity:.8}
-.world-dust-title{fill:#e7d3b3;letter-spacing:.18em;opacity:.88;paint-order:stroke;stroke:rgba(14,10,6,.7);stroke-width:.6px}
-.world-dust-sub{fill:#9d8a70;letter-spacing:.12em;opacity:.85}
-.world-dust-track{fill:rgba(231,211,179,.14)}
-.world-dust-fill{fill:#d9a85f;filter:drop-shadow(0 0 4px rgba(217,168,95,.55))}
+.world-dust-title{fill:#d9c29e;letter-spacing:.5em;opacity:.62;paint-order:stroke;stroke:rgba(14,10,6,.7);stroke-width:.6px}
+.world-dust-sub{fill:#9d8a70;letter-spacing:.6em;opacity:.5}
 .world-dust-label:hover .world-dust-title{opacity:1}

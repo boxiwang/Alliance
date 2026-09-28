@@ -83,9 +83,6 @@ export const WORLD_MAX_ZOOM = 16;
 export const WORLD_TACTICAL_ZOOM = 3;
 /** Most target markers one screen may draw before the Field view switches to clusters. */
 const TARGET_MARKER_BUDGET = 320;
-/** Quadrant opening order (NW, NE, SE, SW) and its sector numerals for the Dust labels. */
-const SECTOR_ORDER = [0, 1, 3, 2];
-const SECTOR_NUMERALS = ["I", "II", "III", "IV"];
 const WORLD_PAN_OVERSCAN = 1.65;
 
 /** Rival civilizations only resolve inside the Tactical sensor envelope. */
@@ -616,7 +613,6 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [serverClusters, setServerClusters] = useState<SignalCluster[] | null>(null);
   // Dense Field view: the server sent an aggregate instead of every planet.
   const [serverFieldClusters, setServerFieldClusters] = useState<SignalCluster[] | null>(null);
-  const [quadrantInfo, setQuadrantInfo] = useState<{ open: number[]; counts: number[]; capacity: number } | null>(null);
   const searchReplyRef = useRef<((result: { total: number; target: unknown | null }) => void) | null>(null);
   const [remoteSelectedId, setRemoteSelectedId] = useState<string | null>(null);
   // My own spawn coordinate, owned by the server (shared map). Once known, the
@@ -662,7 +658,6 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       }
     };
     rt.handlers.onViewClusters = (clusters) => setServerClusters(clusters);
-    rt.handlers.onQuadrants = (info) => setQuadrantInfo(info);
     rt.handlers.onSearchResult = (result) => searchReplyRef.current?.(result);
     rt.handlers.onScoutResult = (_target, name, _coords, snapshot) => { setScoutingId(null); setScoutIntel({ name, snapshot }); };
     rt.handlers.onMarch = (m) => setMarches((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m]);
@@ -1712,33 +1707,23 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         <WorldBackdropLayer sealedQuadrants={sealedQuadrants} viewportRef={liveViewportRef} worldWidth={world.config.width} worldHeight={world.config.height} center={center} worldRadius={worldRadius} reserveRadius={world.config.circleReserveRadius} zoom={zoom} dprCap={quality.dprCap} animateStars={quality.bgAnimate} calm={CALM_MAP} tier={quality.tier} />
         <svg ref={svgRef} className="world-map world-map-v2 world-map-pan-plane" viewBox={renderViewBox} style={{ transform: `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})` }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerCancel} >
           {mapScaffold}
-          {sealedQuadrants.map((quadrant) => {
-            // "The Dust" (naming bible world.fog): an unlisted sector that goes live when the
-            // one before it fills. The dust itself is drawn by WorldBackdropLayer.
-            // Centre of the quadrant's slice of the round Frontier (screen y grows downward).
-            const arcMid = [Math.PI * 1.25, Math.PI * 1.75, Math.PI * .75, Math.PI * .25][quadrant];
+          {(() => {
+            // The Dust (naming bible world.fog) keeps its secrets: one quiet label on the
+            // sealed wedge nearest the camera, no sector numbers, no opening conditions.
+            if (!sealedQuadrants.length) return null;
+            const arcMid = [Math.PI * 1.25, Math.PI * 1.75, Math.PI * .75, Math.PI * .25];
             const labelRadius = world.config.circleReserveRadius + (worldRadius - world.config.circleReserveRadius) * .55;
-            const x = center.x + Math.cos(arcMid) * labelRadius, y = center.y + Math.sin(arcMid) * labelRadius;
-            const order = SECTOR_ORDER.indexOf(quadrant);
-            const gate = SECTOR_ORDER[order - 1];
-            const gateCount = quadrantInfo?.counts[gate] ?? 0, cap = quadrantInfo?.capacity ?? 256;
-            const listsNext = world.config.openQuadrants?.includes(gate);
+            const spot = (quadrant: number) => ({ x: center.x + Math.cos(arcMid[quadrant]) * labelRadius, y: center.y + Math.sin(arcMid[quadrant]) * labelRadius });
+            const camX = viewX + viewport.width / 2, camY = viewY + viewport.height / 2;
+            const nearest = [...sealedQuadrants].sort((a, b) => Math.hypot(spot(a).x - camX, spot(a).y - camY) - Math.hypot(spot(b).x - camX, spot(b).y - camY))[0];
+            const { x, y } = spot(nearest);
             const u = worldPerPx;
-            return <g key={`sealed-${quadrant}`} className="world-dust-label" onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => setResultNotice({ title: `The Dust · Sector ${SECTOR_NUMERALS[order]}`, good: false,
-                detail: listsNext
-                  ? `Scanners return nothing but dust. When Sector ${SECTOR_NUMERALS[order - 1]} fills (${gateCount}/${cap} civilizations), the dust settles and Sector ${SECTOR_NUMERALS[order]} goes live.`
-                  : `Deep dust. Sector ${SECTOR_NUMERALS[order]} lists after Sector ${SECTOR_NUMERALS[order - 1]} goes live and fills.` })}>
-              <text x={x} y={y - 22 * u} className="world-dust-kicker" style={{ fontSize: 10 * u }}>THE DUST</text>
-              <text x={x} y={y} className="world-dust-title" style={{ fontSize: 22 * u }}>SECTOR {SECTOR_NUMERALS[order]} · UNLISTED</text>
-              <text x={x} y={y + 22 * u} className="world-dust-sub" style={{ fontSize: 10 * u }}>{listsNext ? `Goes live when Sector ${SECTOR_NUMERALS[order - 1]} reaches ${cap} civilizations` : `Lists after Sector ${SECTOR_NUMERALS[order - 1]}`}</text>
-              {listsNext && <g>
-                <rect x={x - 110 * u} y={y + 36 * u} width={220 * u} height={4 * u} rx={2 * u} className="world-dust-track" />
-                <rect x={x - 110 * u} y={y + 36 * u} width={220 * u * Math.min(1, gateCount / cap)} height={4 * u} rx={2 * u} className="world-dust-fill" />
-                <text x={x} y={y + 56 * u} className="world-dust-sub" style={{ fontSize: 9 * u }}>SECTOR {SECTOR_NUMERALS[order - 1]} · {gateCount} / {cap}</text>
-              </g>}
+            return <g className="world-dust-label" onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => setResultNotice({ title: "The Dust", good: false, detail: "Scanners return nothing but dust. Whatever lies beyond has not been charted." })}>
+              <text x={x} y={y} className="world-dust-title" style={{ fontSize: 20 * u }}>THE DUST</text>
+              <text x={x} y={y + 18 * u} className="world-dust-sub" style={{ fontSize: 8 * u }}>UNCHARTED</text>
             </g>;
-          })}
+          })()}
           {gpuFallback && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {mapClusters}
           {/* Target lock sits under the markers so the level plate stays readable. */}
