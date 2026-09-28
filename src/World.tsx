@@ -75,8 +75,14 @@ const ARCHIVE_HIDDEN_OUTCOMES = new Set(["gathering_started", "gathering_complet
 
 type SignalCluster = { id: string; kind: "resource" | "monster"; position: Point; count: number };
 export const WORLD_MIN_ZOOM = 1;
+// Zoom is anchored to a 512-tile span (docs/MAP-2048.md): the same zoom shows the same number
+// of tiles on any map size, so markers keep their on-screen size; bigger maps zoom out further.
+export const WORLD_VIEW_SPAN = 512;
+const worldZoomFloor = (mapWidth: number) => Math.min(WORLD_MIN_ZOOM, WORLD_VIEW_SPAN / Math.max(1, mapWidth));
 export const WORLD_MAX_ZOOM = 16;
 export const WORLD_TACTICAL_ZOOM = 3;
+/** Most target markers one screen may draw before the Field view switches to clusters. */
+const TARGET_MARKER_BUDGET = 320;
 const WORLD_PAN_OVERSCAN = 1.65;
 
 /** Rival civilizations only resolve inside the Tactical sensor envelope. */
@@ -122,8 +128,8 @@ export function worldIdentityLocalOffset(zoom: number, own: boolean): number {
   return own ? 14 + amount * 16 : 14 + amount * 3;
 }
 
-function steppedWorldZoom(value: number, direction: "in" | "out", factor: number): number {
-  return Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, direction === "in" ? value * factor : value / factor));
+function steppedWorldZoom(value: number, direction: "in" | "out", factor: number, floor = WORLD_MIN_ZOOM): number {
+  return Math.max(floor, Math.min(WORLD_MAX_ZOOM, direction === "in" ? value * factor : value / factor));
 }
 
 export function clusterWorldSignals(entities: SelectableEntity[], cellSize = 44): SignalCluster[] {
@@ -166,7 +172,7 @@ type SearchTab = SearchKind | "coord";
 const SEARCH_KINDS: { id: SearchTab; label: string }[] = [
   { id: "monster", label: "ROGUE" }, { id: "cash", label: "CASH" }, { id: "oil", label: "OIL" }, { id: "power", label: "POWER" }, { id: "coord", label: "COORD" },
 ];
-const WARP_LOCATION_BLOCKS = new Set(["outside_frontier", "reserve_zone", "too_close_city", "tile_occupied"]);
+const WARP_LOCATION_BLOCKS = new Set(["outside_frontier", "sector_sealed", "reserve_zone", "too_close_city", "tile_occupied"]);
 const coordLabel = (point: Point) => `${Math.floor(point.x).toString().padStart(3, "0")}:${Math.floor(point.y).toString().padStart(3, "0")}`;
 const SELECT_SCALE = CALM_MAP ? 1.4 : 1.2;
 type LockTone = "own" | "rival" | "cash" | "oil" | "power" | "rogue" | "locked";
@@ -449,7 +455,7 @@ const ERROR_COPY: Record<string, string> = {
   outside_frontier: "That spot is outside the Frontier.", reserve_zone: "The Wormhole reserve cannot be settled.",
   too_close_city: `Too close to another commander — keep ${WARP_RULES.minCitySpacing} tiles apart.`, tile_occupied: "A planet or Rogue already occupies that spot.",
   no_space: "No safe sector found. Try again.", no_warp_item: "You have no Warp item of that type left.",
-  under_attack: "An attack is inbound — you cannot warp now.", rate_limited: "Too many warp attempts. Wait a minute and try again.", world_unreachable: "Warp link failed. Try again.", warp_rejected: "The warp was rejected.",
+  sector_sealed: "That quadrant is not open yet.", under_attack: "An attack is inbound — you cannot warp now.", rate_limited: "Too many warp attempts. Wait a minute and try again.", world_unreachable: "Warp link failed. Try again.", warp_rejected: "The warp was rejected.",
 };
 
 function fmtDuration(seconds: number): string {
@@ -578,6 +584,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const gameRef = useRef(initial.game);
   const sessionRef = useRef(initial.session);
   const [authorityVersion, setAuthorityVersion] = useState(0);
+  const focusRequestedRef = useRef(false);
   const authorityRef = useRef(0);
   const advanceBusyRef = useRef(false);
   const [now, setNow] = useState(Date.now());
@@ -728,6 +735,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     setGame(opened.game); gameRef.current = opened.game; setSession(opened.session); sessionRef.current = opened.session;
     const city = opened.session.world.entities[opened.session.world.players[opened.session.playerId].cityId] as CityEntity;
     const requestedFocus = takeWorldFocus(address);
+    focusRequestedRef.current = !!requestedFocus;
     const focusedEntity = requestedFocus?.targetId ? opened.session.world.entities[requestedFocus.targetId] : null;
     if (requestedFocus) {
       const position = focusedEntity?.position || requestedFocus.position;
@@ -759,6 +767,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       setSession(nextSession); setGame(nextGame);
       saveLocalWorldSession(nextSession); saveGame(nextGame);
       seenReportCount.current = nextSession.world.players[nextSession.playerId]?.reportIds.length || 0;
+      // The server home can differ from the provisional local one: frame it unless the
+      // player arrived here to look at something specific.
+      const serverHome = nextSession.world.entities[nextSession.world.players[nextSession.playerId]?.cityId];
+      if (serverHome && !focusRequestedRef.current) setCamera({ ...serverHome.position });
     })().catch(() => {
       if (!cancelled) setMessage("Command link unavailable. Progress remains safe on this device; reconnect to continue server play.");
     });
@@ -853,7 +865,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const activeMarches = allActiveMarches.filter((march) => march.playerId === session.playerId);
   const mapMarches = allActiveMarches.filter((march) => worldMarchObservable(march.playerId, session.playerId, zoom));
   const sentCount = TROOP_ORDER.reduce((sum, arm) => sum + Object.values(selection[arm]).reduce((subtotal, qty) => subtotal + (qty || 0), 0), 0);
-  const viewport = { width: world.config.width / zoom, height: world.config.width * .655 / zoom };
+  const zoomFloor = worldZoomFloor(world.config.width);
+  const viewport = { width: WORLD_VIEW_SPAN / zoom, height: WORLD_VIEW_SPAN * .655 / zoom };
   // The camera may look beyond a State edge. This is intentional: a node near
   // the rim must still be able to occupy the true visual center of the screen.
   const viewX = camera.x - viewport.width / 2;
@@ -877,9 +890,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   useEffect(() => () => { window.clearTimeout(zoomSettle.current); cancelAnimationFrame(zoomTween.current); }, []);
   function commitZoom(z: number) { lastZoomCommit.current = performance.now(); setZoom(z); }
   function applyLiveZoom(requested: number) {
-    const z = Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, requested));
+    const z = Math.max(worldZoomFloor(sessionRef.current.world.config.width), Math.min(WORLD_MAX_ZOOM, requested));
     liveZoom.current = z;
-    const baseW = world.config.width, baseH = world.config.width * .655, cam = cameraRef.current;
+    const baseW = WORLD_VIEW_SPAN, baseH = WORLD_VIEW_SPAN * .655, cam = cameraRef.current;
     liveViewportRef.current = { x: cam.x - baseW / z / 2, y: cam.y - baseH / z / 2, width: baseW / z, height: baseH / z };
     const drift = z / zoomRef.current;
     const planeTransform = `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN * drift})`;
@@ -910,7 +923,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     return () => el.removeEventListener("wheel", listener);
   }, []);
   function animateZoomTo(requested: number) {
-    const target = Math.max(WORLD_MIN_ZOOM, Math.min(WORLD_MAX_ZOOM, requested));
+    const target = Math.max(worldZoomFloor(sessionRef.current.world.config.width), Math.min(WORLD_MAX_ZOOM, requested));
     const from = currentZoom();
     cancelAnimationFrame(zoomTween.current);
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { applyLiveZoom(target); return; }
@@ -997,6 +1010,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // in px (grows with zoom via LOD), so convert px→world and wrap at 3.35× the
   // body — just outside the halo/orbit — with a non-scaling (constant-thin) stroke.
   const worldPerPx = Math.max(viewport.width / mapPx.w, viewport.height / mapPx.h);
+  // Map 2048: quadrants that are not open yet render as sealed (no targets, no warp).
+  const sealedQuadrants = useMemo(() => world.config.openQuadrants ? [0, 1, 2, 3].filter((quadrant) => !world.config.openQuadrants!.includes(quadrant)) : [],
+    [world.config.openQuadrants]);
   const selectionRadius = (own: boolean, sel: boolean) => worldVisualBodyRadius(zoom, own, sel, CALM_MAP) * 2.85 + 8;
   // ~1.1 tile radius, clamped so resources stay readable yet always read smaller than a city.
   // The cap itself grows with depth (11px at Tactical entry → 17px at 1600%) so a
@@ -1119,16 +1135,39 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   </>, [zoom, world.config, center.x, center.y, worldRadius, importantScale, quality.bgAnimate]);
 
   // LAYER 2a — strategic clusters. Depends on the signal set + zoom, not the camera.
-  const mapClusters = useMemo(() => strategicZoom ? signalClusters.map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera(cluster.position); setZoom(1.8); }}>
+  // Level of detail (docs/MAP-2048.md, "no lag on low-end devices"): when one screen holds more
+  // targets than the marker budget, the Field view shows local signal clusters instead of
+  // hundreds of SVG planets; zooming in brings individual planets back.
+  // Counted over the same band mapTargets renders (one screen plus the pan margin).
+  const visibleTargetCount = useMemo(() => {
+    if (strategicZoom) return 0;
+    const cx = viewX + viewport.width / 2, cy = viewY + viewport.height / 2;
+    const halfW = viewport.width * .82, halfH = viewport.height * .82;
+    let count = 0;
+    for (const entity of filteredTargets) {
+      if (Math.abs(entity.position.x - cx) <= halfW && Math.abs(entity.position.y - cy) <= halfH) count += 1;
+    }
+    return count;
+  }, [strategicZoom, filteredTargets, viewX, viewY, viewport.width, viewport.height]);
+  const denseField = !strategicZoom && visibleTargetCount > TARGET_MARKER_BUDGET;
+  const fieldClusters = useMemo(() => {
+    if (!denseField) return null;
+    // Power-of-two cells so clusters do not re-shuffle on every zoom tick.
+    const cell = 2 ** Math.round(Math.log2(Math.max(16, viewport.width / 8)));
+    const pad = viewport.width * .6;
+    return clusterWorldSignals(filteredTargets.filter((entity) => entity.position.x >= viewX - pad && entity.position.x <= viewX + viewport.width + pad
+      && entity.position.y >= viewY - pad && entity.position.y <= viewY + viewport.height + pad), cell);
+  }, [denseField, filteredTargets, viewX, viewY, viewport.width, viewport.height]);
+  const mapClusters = useMemo(() => (strategicZoom || fieldClusters) ? (fieldClusters ?? signalClusters).map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1 * Math.max(1, 1 / zoom)}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera(cluster.position); setZoom((value) => Math.max(1.8, Math.min(WORLD_MAX_ZOOM, value * 1.8))); }}>
     <circle cx={cluster.position.x} cy={cluster.position.y} r="6.5" /><circle cx={cluster.position.x} cy={cluster.position.y} r="3.7" /><text x={cluster.position.x} y={cluster.position.y + 1.3}>{cluster.count}</text>
-  </g>) : null, [strategicZoom, signalClusters, markerScale]);
+  </g>) : null, [strategicZoom, fieldClusters, signalClusters, markerScale, zoom]);
 
   // LAYER 2b — planet / rogue / rival-city markers. Rebuilt only when the entities
   // themselves change (spawn / deplete / occupation), when zoom changes the marker
   // scale/detail, when the selection or bookmarks change, or when the coarse cull
   // cell changes — NOT on every drag frame and NOT on the 1s clock tick.
   const mapTargets = useMemo(() => {
-    if (strategicZoom) return null;
+    if (strategicZoom || denseField) return null;
     const cx = cullQX * cullCell, cy = cullQY * cullCell;
     // One visible screen plus a measured gesture margin. The old 3x band put
     // 200–300 richly styled SVG nodesets in Safari's viewBox repaint path even
@@ -1162,7 +1201,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           {bookmarks.includes(entity.id) && <text x={entity.position.x + 7} y={entity.position.y - 6} className="world-bookmark-star">★</text>}
         </g>;
       });
-  }, [filteredTargets, strategicZoom, detailZoom, markerScale, calmTargetScale, nextRogueLevel, selectedId, bookmarks, scoutedTargetIds, world.marches, world.players, world.entities, session.playerId, profile.faction, viewport.width, viewport.height, cullQX, cullQY, cullCell, gpuVisualsState]);
+  }, [denseField, filteredTargets, strategicZoom, detailZoom, markerScale, calmTargetScale, nextRogueLevel, selectedId, bookmarks, scoutedTargetIds, world.marches, world.players, world.entities, session.playerId, profile.faction, viewport.width, viewport.height, cullQX, cullQY, cullCell, gpuVisualsState]);
 
   // Other real commanders overlaid on the shared map (read-only). Culled to the
   // viewport and only shown once you're zoomed past strategic, same as targets.
@@ -1607,7 +1646,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             </div>;
           })}
         </div>}
-        <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button className={searchOpen ? "active" : ""} aria-expanded={searchOpen} onClick={() => setSearchOpen((open) => !open)}>SEARCH</button><button aria-label="Zoom in" onClick={() => animateZoomTo(steppedWorldZoom(currentZoom(), "in", 1.35))}>＋</button><button aria-label="Zoom out" onClick={() => animateZoomTo(steppedWorldZoom(currentZoom(), "out", 1.35))}>－</button></div>
+        <div className="world-map-tools"><button onClick={() => setCamera({ ...playerCity.position })}>HOME</button><button className={searchOpen ? "active" : ""} aria-expanded={searchOpen} onClick={() => setSearchOpen((open) => !open)}>SEARCH</button><button aria-label="Zoom in" onClick={() => animateZoomTo(steppedWorldZoom(currentZoom(), "in", 1.35))}>＋</button><button aria-label="Zoom out" onClick={() => animateZoomTo(steppedWorldZoom(currentZoom(), "out", 1.35, zoomFloor))}>－</button></div>
         {searchOpen && <div className="world-search-panel" role="dialog" aria-label="Search the Star Map">
           <header><b>SEARCH</b><button aria-label="Close search" onClick={() => setSearchOpen(false)}>×</button></header>
           <div className="world-search-kinds" role="tablist">{SEARCH_KINDS.map((kind) => <button key={kind.id} role="tab" aria-selected={searchKind === kind.id} className={searchKind === kind.id ? "active" : ""} onClick={() => { setSearchKind(kind.id); setSearchResult(null); }}><i className={kind.id} />{kind.label}</button>)}</div>
@@ -1656,6 +1695,14 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         <WorldBackdropLayer viewportRef={liveViewportRef} worldWidth={world.config.width} worldHeight={world.config.height} center={center} worldRadius={worldRadius} reserveRadius={world.config.circleReserveRadius} zoom={zoom} dprCap={quality.dprCap} animateStars={quality.bgAnimate} calm={CALM_MAP} tier={quality.tier} />
         <svg ref={svgRef} className="world-map world-map-v2 world-map-pan-plane" viewBox={renderViewBox} style={{ transform: `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})` }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerCancel} >
           {mapScaffold}
+          {sealedQuadrants.map((quadrant) => {
+            const cx = world.config.width / 2, cy = world.config.height / 2;
+            const x = quadrant % 2 ? cx : 0, y = quadrant >= 2 ? cy : 0;
+            return <g key={`sealed-${quadrant}`} className="world-sealed" pointerEvents="none">
+              <rect x={x} y={y} width={cx} height={cy} />
+              <text x={x + cx / 2} y={y + cy / 2} style={{ fontSize: 13 * worldPerPx }}>SEALED SECTOR · OPENS AS THE STATE GROWS</text>
+            </g>;
+          })}
           {gpuFallback && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}
           {mapClusters}
           {/* Target lock sits under the markers so the level plate stays readable. */}

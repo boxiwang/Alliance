@@ -69,7 +69,7 @@
     "march": {
       "capacityFractionOfMaxTroops": 1,
       "baseMarchCapacity": 1000,
-      "baseTravelSecondsPerTile": 6,
+      "baseTravelSecondsPerTile": 1.95,
       "note": "sys.march_capacity — world-map phase",
       "marchQueueSlots": 2,
       "scoutSpeedMultiplier": 3,
@@ -4837,7 +4837,7 @@
     "centerOpensBy": "server_progression",
     "ecology": {
       "mapId": "map.frontier-1",
-      "sectorSize": 32,
+      "sectorSize": 128,
       "rogueMaxLevel": 20,
       "resourceMaxLevel": 8,
       "levelJitter": 1,
@@ -4849,18 +4849,22 @@
       "note": "The public ecology is independent of personal progression. NEXT ROGUE finds an existing target first; only L1-6 may be discovered on demand through an explicit player scan."
     },
     "state": {
-      "width": 512,
-      "height": 512,
+      "width": 2048,
+      "height": 2048,
       "maxPlayers": 1024,
       "spawnGrid": 40,
       "spawnJitter": 1.25,
-      "circleReserveRadius": 38,
-      "spatialCellSize": 16,
+      "circleReserveRadius": 152,
+      "spatialCellSize": 32,
       "cityFootprint": 2,
-      "minEntitySpacing": 6
+      "minEntitySpacing": 6,
+      "quadrantCapacity": 256,
+      "quadrantNote": "docs/MAP-2048.md: new players spawn in the active quadrant (order NW, NE, SE, SW); when it holds quadrantCapacity cities the next quadrant opens. Unopened quadrants are sealed (no targets, no warp)."
     },
     "population": {
       "localNpcCities": 0,
+      "resourceTilesPer": 100,
+      "monsterTilesPer": 400,
       "resourceFieldsPerPlayer": 3.2,
       "monstersPerPlayer": 1,
       "minimumResourceFields": 480,
@@ -4902,7 +4906,8 @@
       "equalPvpAttackerWinRatioMax": 0.5,
       "fullNodeGatherHoursMin": 2,
       "fullNodeGatherHoursMax": 6,
-      "typicalDistanceTiles": 20,
+      "typicalDistanceTiles": 40,
+        "typicalDistanceNote": "Map 2048 (docs/MAP-2048.md): marches run ~3x faster (edge to centre ~30 min) and a level-matched planet is typically ~40 tiles away.",
       "roundTripSecondsMin": 120,
       "roundTripSecondsMax": 600,
       "dailyEnergyAttacksMin": 8,

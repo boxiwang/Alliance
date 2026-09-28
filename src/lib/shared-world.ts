@@ -10,7 +10,7 @@ import {
   type WorldAuthorityCommand, type WorldAuthoritySession, type WorldAuthoritySnapshot,
 } from "./world-authority";
 import {
-  advanceHeadlessWorld, distance, initHeadlessWorld, mutateInPlace, populateWorld, settlePlayerMarches, spawnPlayer, worldEngineConfig, zoneForPoint,
+  advanceHeadlessWorld, distance, initHeadlessWorld, mutateInPlace, populateWorld, settlePlayerMarches, spawnPlayer, worldEngineConfig, worldPlayableRadius, zoneForPoint,
   type CityEntity, type HeadlessMarch, type HeadlessPlayer, type HeadlessWorld, type Point, type PublicCosmeticLoadout, type WorldEntity,
 } from "./world-engine";
 
@@ -41,8 +41,22 @@ export type SharedCommandResult = {
   position?: Point;
 };
 
+/** Playable area of the open quadrants (the Wormhole reserve excluded), in tiles. */
+export function openArea(world: HeadlessWorld): number {
+  const outer = worldPlayableRadius(world.config), inner = world.config.circleReserveRadius;
+  const open = world.config.openQuadrants?.length ?? 4;
+  return Math.PI * (outer * outer - inner * inner) * open / 4;
+}
+
 function population(world: HeadlessWorld, numbers: any): { resources: number; monsters: number } {
   const pop = numbers.world?.population ?? {};
+  // Map 2048: the ecology fills the open territory by area (docs/MAP-2048.md), so every
+  // alliance's land has resource points regardless of how many players arrived yet.
+  const perResource = Number(pop.resourceTilesPer), perMonster = Number(pop.monsterTilesPer);
+  if (perResource > 0 && perMonster > 0) {
+    const area = openArea(world);
+    return { resources: Math.floor(area / perResource), monsters: Math.floor(area / perMonster) };
+  }
   const players = Object.keys(world.players).length;
   const resources = Math.min(Math.floor(Number(pop.resourceCap) || Infinity),
     Math.ceil(Math.max(Number(pop.minimumResourceFields) || 0, players * (Number(pop.resourceFieldsPerPlayer) || 0))));
@@ -61,9 +75,74 @@ export function topUpEcology(world: HeadlessWorld, now: number, numbers: any): H
   return addResources || addMonsters ? populateWorld(world, addResources, addMonsters, now, numbers) : world;
 }
 
+/** Quadrant opening order: NW, NE, SE, SW (clockwise). */
+export const QUADRANT_ORDER = [0, 1, 3, 2];
+
+export function sharedWorldConfig(numbers: any, openQuadrants: number[] = [QUADRANT_ORDER[0]]) {
+  return { ...worldEngineConfig(numbers), openQuadrants: [...openQuadrants] };
+}
+
 export function createSharedWorld(now: number, numbers: any): SharedWorldState {
-  const world = topUpEcology(initHeadlessWorld(SHARED_STATE_ID, now, worldEngineConfig(numbers)), now, numbers);
+  const world = mutateInPlace(() => topUpEcology(initHeadlessWorld(SHARED_STATE_ID, now, sharedWorldConfig(numbers)), now, numbers));
   return { version: 1, world, synced: {} };
+}
+
+export function openQuadrants(state: SharedWorldState): number[] {
+  return state.world.config.openQuadrants ? [...state.world.config.openQuadrants] : [0, 1, 2, 3];
+}
+
+/** Opens a quadrant for settlement and fills its ecology. */
+export function openSharedQuadrant(state: SharedWorldState, quadrant: number, now: number, numbers: any): SharedWorldState {
+  const open = openQuadrants(state);
+  if (open.includes(quadrant)) return state;
+  state.world.config = { ...state.world.config, openQuadrants: [...open, quadrant] };
+  return { ...state, world: mutateInPlace(() => topUpEcology(state.world, now, numbers)) };
+}
+
+/**
+ * One-time move to a new map size (docs/MAP-2048.md): every fleet is brought home, all
+ * public targets are regenerated, and each player keeps troops, resources, wounded, energy
+ * and progress at the new home the WorldRoom assigned (`homes`). Economy snapshots carry over.
+ */
+export function rebuildSharedWorld(old: SharedWorldState, homes: Record<string, Point>, now: number, numbers: any): SharedWorldState {
+  const quadrants = new Set<number>();
+  const config = sharedWorldConfig(numbers);
+  const center = { x: config.width / 2, y: config.height / 2 };
+  for (const home of Object.values(homes)) quadrants.add((home.y < center.y ? 0 : 2) + (home.x < center.x ? 0 : 1));
+  const opened = QUADRANT_ORDER.filter((quadrant) => quadrant === QUADRANT_ORDER[0] || quadrants.has(quadrant));
+  return mutateInPlace(() => {
+    let settled = old.world;
+    for (const playerId of Object.keys(old.world.players)) settled = settlePlayerMarches(settled, playerId, now, numbers);
+    let world = initHeadlessWorld(SHARED_STATE_ID, now, sharedWorldConfig(numbers, opened));
+    const synced: Record<string, WorldAuthoritySnapshot> = {};
+    for (const [playerId, previous] of Object.entries(settled.players)) {
+      const home = homes[playerId];
+      if (!home || !old.synced[playerId]) continue;
+      world = spawnPlayer(world, { id: playerId, allianceId: null }, now);
+      const player = world.players[playerId];
+      const city = world.entities[player.cityId] as CityEntity;
+      const previousCity = settled.entities[previous.cityId];
+      Object.assign(player, {
+        troops: previous.troops, woundedTroops: previous.woundedTroops, wounded: previous.wounded, dead: previous.dead,
+        resources: previous.resources, energyStored: previous.energyStored, energyUpdatedAt: previous.energyUpdatedAt,
+        highestMonsterDefeated: previous.highestMonsterDefeated, deepScanCooldowns: previous.deepScanCooldowns,
+        marchSlots: previous.marchSlots, marchCapacity: previous.marchCapacity, accountModifiers: previous.accountModifiers,
+        cosmetics: previous.cosmetics, reportIds: [], deepScanTargetIds: {},
+      });
+      if (previousCity?.kind === "city") {
+        Object.assign(city, {
+          townhallLevel: previousCity.townhallLevel, wallLevel: previousCity.wallLevel, hospitalLevel: previousCity.hospitalLevel,
+          storageLevel: previousCity.storageLevel, might: previousCity.might, garrison: previousCity.garrison, resources: previousCity.resources,
+          shieldUntil: previousCity.shieldUntil, hasAttacked: previousCity.hasAttacked,
+        });
+      }
+      city.position = { ...home };
+      city.zone = zoneForPoint(home, world.config);
+      synced[playerId] = old.synced[playerId];
+    }
+    world = topUpEcology(world, now, numbers);
+    return { version: 1 as const, world, synced };
+  });
 }
 
 export function sharedHasPlayer(state: SharedWorldState, playerId: string): boolean {
@@ -242,7 +321,7 @@ export function searchShared(state: SharedWorldState, playerId: string, kind: Se
 export type SharedCluster = { id: string; kind: "resource" | "monster"; position: Point; count: number };
 
 /** Strategic-zoom aggregate of live public targets (no player data), same shape as the Star Map clusters. */
-export function sharedClusters(state: SharedWorldState, cellSize = 72): SharedCluster[] {
+export function sharedClusters(state: SharedWorldState, cellSize = 72 * state.world.config.width / 512): SharedCluster[] {
   const buckets = new Map<string, { kind: "resource" | "monster"; x: number; y: number; count: number }>();
   for (const entity of Object.values(state.world.entities)) {
     if (entity.kind === "resource" ? entity.state !== "available" && entity.state !== "occupied" : entity.kind !== "monster" || entity.state !== "alive") continue;

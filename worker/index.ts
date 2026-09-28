@@ -8,12 +8,12 @@ import { verifySession } from "./auth";
 import { handlePlayerApi, sharedClaims, sharedCommandRoute, sharedCutover, sharedSyncRoute, type BackendEnv, type SharedWorldPort } from "./player-api";
 import { defaultN } from "../src/lib/numbers";
 import {
-  advanceSharedWorld, applySharedCommand, createSharedWorld, joinSharedWorld, nextSharedEventAt, playerSlice, searchShared,
-  setSharedHome, sharedClusters, sharedHasPlayer, sharedView, type SearchKind, type SharedWorldState,
+  advanceSharedWorld, applySharedCommand, createSharedWorld, joinSharedWorld, nextSharedEventAt, openQuadrants, openSharedQuadrant,
+  playerSlice, rebuildSharedWorld, searchShared, setSharedHome, sharedClusters, sharedHasPlayer, sharedView, type SearchKind, type SharedWorldState,
 } from "../src/lib/shared-world";
 import type { WorldAuthoritySession } from "../src/lib/world-authority";
 import { STORE_PREFIX, assembleShared, chunkDelta, sharedChunks } from "../src/lib/shared-store";
-import { DORMANT_MAX_CORE, assignOuterRingCoord, clampViewRect, dormantCandidates, type ViewRect, type WorldCoord } from "./world-coords";
+import { DORMANT_MAX_CORE, assignOuterRingCoord, clampViewRect, dormantCandidates, quadrantOfCoord, spawnQuadrant, type ViewRect, type WorldCoord } from "./world-coords";
 import { projectGameJson } from "./economy";
 import { capacity } from "../src/lib/game";
 
@@ -86,7 +86,7 @@ export default {
 
 const MAX_CHAT = 80;         // stored chat history (ring, per channel/thread)
 const RETAIN_MS = 7 * 24 * 60 * 60 * 1000; // drop chat older than a week (save storage)
-const COORD_VERSION = 2;
+const COORD_VERSION = 3; // 3 = map 2048 (docs/MAP-2048.md); older coordinates are reassigned
 
 type PlayerRow = {
   id: string; name: string; coords: { x: number; y: number };
@@ -244,8 +244,15 @@ export class WorldRoom {
   // What storage holds right now (chunk key → JSON), so a save writes only the changes.
   savedChunks = new Map<string, string>();
 
+  loading: Promise<SharedWorldState> | null = null;
+
   async loadShared(): Promise<SharedWorldState> {
     if (this.shared) return this.shared;
+    if (!this.loading) this.loading = this.readShared().finally(() => { this.loading = null; });
+    return this.loading;
+  }
+
+  private async readShared(): Promise<SharedWorldState> {
     const stored = await this.state.storage.list<string>({ prefix: STORE_PREFIX });
     const chunks = new Map<string, string>();
     for (const [key, value] of stored) if (typeof value === "string") chunks.set(key, value);
@@ -265,8 +272,54 @@ export class WorldRoom {
       }
     }
     if (!loaded) { await this.saveShared(createSharedWorld(Date.now(), defaultN())); return this.shared!; }
+    if (loaded.world.config.width !== Number(defaultN().world?.state?.width)) loaded = await this.migrateMapSize(loaded);
     this.shared = loaded;
     return loaded;
+  }
+
+  /**
+   * One-time move of the shared world to the configured map size (docs/MAP-2048.md):
+   * every player on the roster gets a new outer-ring home by the quadrant rule, fleets
+   * come home, targets regenerate. Old coordinates and telegraph marches are dropped.
+   */
+  async migrateMapSize(old: SharedWorldState): Promise<SharedWorldState> {
+    const now = Date.now();
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    const ids = new Set([...Object.keys(players).filter((id) => players[id].coords), ...Object.keys(old.world.players)]);
+    const homes: Record<string, WorldCoord> = {};
+    const taken: WorldCoord[] = [];
+    const counts = [0, 0, 0, 0];
+    const open = [0];
+    for (const id of ids) {
+      const pick = spawnQuadrant(counts, open);
+      if (pick.opens !== null) open.push(pick.opens);
+      const coord = assignOuterRingCoord(taken, Math.random, pick.quadrant);
+      taken.push(coord); counts[quadrantOfCoord(coord)] += 1; homes[id] = coord;
+      await this.state.storage.put(`coord:v${COORD_VERSION}:${id}`, coord);
+      if (players[id]) { players[id].coords = coord; players[id].coordVersion = COORD_VERSION; }
+    }
+    await this.state.storage.put("players", players);
+    await this.state.storage.put("marches", []);
+    const rebuilt = rebuildSharedWorld(old, homes, now, defaultN());
+    await this.saveShared(rebuilt);
+    return rebuilt;
+  }
+
+  /**
+   * A new home on the outer ring of the active quadrant; opens the next quadrant (and fills
+   * its ecology) when the active one is full. `inLock` = already inside the world lock.
+   */
+  async assignSpawn(players: Record<string, PlayerRow>, exclude: string, inLock: boolean): Promise<WorldCoord> {
+    const placed = Object.values(players).filter((player) => player.id !== exclude && player.coordVersion === COORD_VERSION && player.coords);
+    const counts = [0, 0, 0, 0];
+    for (const player of placed) counts[quadrantOfCoord(player.coords)] += 1;
+    const shared = await this.loadShared();
+    const pick = spawnQuadrant(counts, openQuadrants(shared));
+    if (pick.opens !== null) {
+      const open = async () => { const current = await this.loadShared(); await this.saveShared(openSharedQuadrant(current, pick.opens!, Date.now(), defaultN())); };
+      if (inLock) await open(); else await this.locked(open);
+    }
+    return assignOuterRingCoord(placed.map((player) => player.coords), Math.random, pick.quadrant);
   }
 
   /** True once any shared world exists in storage (new or legacy format). */
@@ -304,7 +357,7 @@ export class WorldRoom {
     const existing = await this.state.storage.get<WorldCoord>(key);
     if (existing) return existing;
     const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
-    const coord = assignOuterRingCoord(Object.values(players).filter((player) => player.coordVersion === COORD_VERSION).map((player) => player.coords));
+    const coord = await this.assignSpawn(players, playerId, true);
     await this.state.storage.put(key, coord);
     return coord;
   }
@@ -520,6 +573,8 @@ export class WorldRoom {
   }
 
   async onJoin(ws: WebSocket, pid: string, name: string) {
+    // A pending map-size migration rewrites the roster: let it finish before reading it.
+    if (await this.hasShared()) await this.locked(() => this.loadShared());
     const players = ((await this.state.storage.get<Record<string, PlayerRow>>("players")) || {});
     const retired = await this.retireDormant(players, Date.now());
     const coordKey = `coord:v${COORD_VERSION}:${pid}`;
@@ -527,10 +582,7 @@ export class WorldRoom {
     const returning = await this.state.storage.get<number>(`dormant:${pid}`);
     if (returning) await this.state.storage.delete(`dormant:${pid}`);
     if (!coord) {
-      const assigned = Object.values(players)
-        .filter((player) => player.id !== pid && player.coordVersion === COORD_VERSION)
-        .map((player) => player.coords);
-      coord = assignOuterRingCoord(assigned);
+      coord = await this.assignSpawn(players, pid, false);
       await this.state.storage.put(coordKey, coord);
     }
     if (!players[pid]) {

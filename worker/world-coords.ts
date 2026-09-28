@@ -1,13 +1,35 @@
 export type WorldCoord = { x: number; y: number };
 
-const WORLD_SIZE = 512;
+// Map 2048 (docs/MAP-2048.md). Spacing grew with the map: alliances get room to settle.
+const WORLD_SIZE = 2048;
 const CENTER = WORLD_SIZE / 2;
 const PLAYABLE_RADIUS = WORLD_SIZE / 2 - 3;
 const OUTER_SPAWN_RADIUS = PLAYABLE_RADIUS * 0.9;
-const CENTRAL_RESERVE_RADIUS = 70;
-const MIN_RADIUS = CENTRAL_RESERVE_RADIUS + 12;
-const RING_STEP = 10.5;
-const MIN_ARC_SPACING = 13;
+const CENTRAL_RESERVE_RADIUS = 280;
+const MIN_RADIUS = CENTRAL_RESERVE_RADIUS + 48;
+const RING_STEP = 16;
+const MIN_ARC_SPACING = 20;
+
+/** Quadrant of a coordinate: 0 NW, 1 NE, 2 SW, 3 SE (same rule as the World engine). */
+export function quadrantOfCoord(coord: WorldCoord): number {
+  return (coord.y < CENTER ? 0 : 2) + (coord.x < CENTER ? 0 : 1);
+}
+
+/** Opening order (clockwise from NW) and cities per quadrant before the next one opens. */
+export const QUADRANT_ORDER = [0, 1, 3, 2];
+export const QUADRANT_CAPACITY = 256;
+
+/**
+ * Where the next new player spawns: the first open quadrant (in order) below capacity; when
+ * every open quadrant is full, the next unopened one opens. `opens` names a quadrant to open.
+ */
+export function spawnQuadrant(counts: number[], open: number[], capacity = QUADRANT_CAPACITY): { quadrant: number; opens: number | null } {
+  for (const quadrant of QUADRANT_ORDER) if (open.includes(quadrant) && (counts[quadrant] || 0) < capacity) return { quadrant, opens: null };
+  const next = QUADRANT_ORDER.find((quadrant) => !open.includes(quadrant));
+  if (next !== undefined) return { quadrant: next, opens: next };
+  const least = [...QUADRANT_ORDER].sort((a, b) => (counts[a] || 0) - (counts[b] || 0))[0];
+  return { quadrant: least, opens: null };
+}
 
 function roundCoord(value: number): number {
   return Math.round(value * 100) / 100;
@@ -46,9 +68,9 @@ const radiusOf = (coord: WorldCoord): number => Math.hypot(coord.x - CENTER, coo
  * that has space, and only step inward once a ring fills. Coords stay stable
  * because the DO persists each player's assigned slot.
  */
-export function assignOuterRingCoord(taken: WorldCoord[], rand: () => number = Math.random): WorldCoord {
+export function assignOuterRingCoord(taken: WorldCoord[], rand: () => number = Math.random, quadrant?: number): WorldCoord {
   const occupied = new Set(taken.map((coord) => `${coord.x},${coord.y}`));
-  const free = SLOTS.filter((coord) => !occupied.has(`${coord.x},${coord.y}`));
+  const free = SLOTS.filter((coord) => !occupied.has(`${coord.x},${coord.y}`) && (quadrant === undefined || quadrantOfCoord(coord) === quadrant));
   if (!free.length) return SLOTS[taken.length % SLOTS.length];
   // SLOTS are ordered outermost-ring first, so free[0] is on the current
   // outermost ring with space; take that whole ring and pick a random slot.

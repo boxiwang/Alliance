@@ -18,6 +18,8 @@ export interface WorldEngineConfig {
   spawnJitter: number;
   circleReserveRadius: number;
   spatialCellSize: number;
+  /** Shared world: quadrants open for settlement (0 NW, 1 NE, 2 SW, 3 SE). Undefined = all. */
+  openQuadrants?: number[];
   cityFootprint: number;
   minEntitySpacing: number;
   marchSlots: number;
@@ -415,6 +417,30 @@ export function isInsidePlayableWorld(point: Point, config: WorldEngineConfig = 
   return distance(point, worldCenter(config)) <= worldPlayableRadius(config, inset);
 }
 
+// Quadrants (docs/MAP-2048.md): 0 NW, 1 NE, 2 SW, 3 SE around the Wormhole.
+export function quadrantOf(point: Point, config: WorldEngineConfig = DEFAULT_WORLD_ENGINE_CONFIG): number {
+  const center = worldCenter(config);
+  return (point.y < center.y ? 0 : 2) + (point.x < center.x ? 0 : 1);
+}
+
+export function isQuadrantOpen(point: Point, config: WorldEngineConfig = DEFAULT_WORLD_ENGINE_CONFIG): boolean {
+  return !config.openQuadrants || config.openQuadrants.includes(quadrantOf(point, config));
+}
+
+/** Inside the Frontier circle and in an open quadrant: where targets and cities may be placed. */
+export function isOpenTerritory(point: Point, config: WorldEngineConfig = DEFAULT_WORLD_ENGINE_CONFIG, inset = 3): boolean {
+  return isInsidePlayableWorld(point, config, inset) && isQuadrantOpen(point, config);
+}
+
+// Angle range of each quadrant in screen coordinates (y grows downward).
+const QUADRANT_ANGLE_START = [Math.PI, Math.PI * 1.5, Math.PI * .5, 0];
+/** A random direction from the centre that points into an open quadrant. */
+function randomOpenAngle(config: WorldEngineConfig, random: () => number): number {
+  const open = config.openQuadrants?.length ? config.openQuadrants : [0, 1, 2, 3];
+  const quadrant = open[Math.min(open.length - 1, Math.floor(random() * open.length))];
+  return QUADRANT_ANGLE_START[quadrant] + random() * Math.PI / 2;
+}
+
 // Depth 0 = the outer region (the big-area rim where fresh players sit, LOW level), depth 1 = the
 // inner reserve by the wormhole (small area, HIGH level). Normalised to the map edge (half-width),
 // not the diagonal, so the abundant outer band is genuinely low-level instead of corner-only.
@@ -613,9 +639,8 @@ export function queryNearby(
   return found.sort((a, b) => distance(point, a.position) - distance(point, b.position));
 }
 
-function randomLegalPoint(world: HeadlessWorld, random: () => number, minimumSpacing = world.config.minEntitySpacing): Point {
+function randomLegalPoint(world: HeadlessWorld, random: () => number, minimumSpacing = world.config.minEntitySpacing, index = buildSpatialIndex(world)): Point {
   const center = worldCenter(world.config);
-  const index = buildSpatialIndex(world);
   const outerRadius = worldPlayableRadius(world.config);
   // Every entity claims a clear cell: reject points within `minimumSpacing` of any other
   // city/resource/rogue so markers and name plates keep breathing room. If a dense State
@@ -625,7 +650,7 @@ function randomLegalPoint(world: HeadlessWorld, random: () => number, minimumSpa
   const step = Math.max(1, spacingBase / 4);
   for (let spacing = spacingBase; spacing >= 1; spacing -= step) {
     for (let attempt = 0; attempt < 200; attempt += 1) {
-      const angle = random() * Math.PI * 2;
+      const angle = randomOpenAngle(world.config, random);
       const radial = Math.sqrt(world.config.circleReserveRadius ** 2
         + random() * (outerRadius ** 2 - world.config.circleReserveRadius ** 2));
       const point = { x: center.x + Math.cos(angle) * radial, y: center.y + Math.sin(angle) * radial };
@@ -647,16 +672,16 @@ function sectorBalancedLegalPoint(
   random: () => number,
   sectorCounts: Map<string, number>,
   sectorSize: number,
+  index = buildSpatialIndex(world),
 ): Point {
   const center = worldCenter(world.config);
-  const index = buildSpatialIndex(world);
   const outerRadius = worldPlayableRadius(world.config);
   const spacing = Number.isFinite(world.config.minEntitySpacing) && world.config.minEntitySpacing > 0
     ? world.config.minEntitySpacing : DEFAULT_WORLD_ENGINE_CONFIG.minEntitySpacing;
   let best: Point | null = null;
   let bestCount = Number.POSITIVE_INFINITY;
   for (let attempt = 0; attempt < 24; attempt += 1) {
-    const angle = random() * Math.PI * 2;
+    const angle = randomOpenAngle(world.config, random);
     const radial = Math.sqrt(world.config.circleReserveRadius ** 2
       + random() * (outerRadius ** 2 - world.config.circleReserveRadius ** 2));
     const point = { x: center.x + Math.cos(angle) * radial, y: center.y + Math.sin(angle) * radial };
@@ -665,7 +690,7 @@ function sectorBalancedLegalPoint(
     if (count < bestCount) { best = point; bestCount = count; }
     if (count === 0) break;
   }
-  return best || randomLegalPoint(world, random);
+  return best || randomLegalPoint(world, random, undefined, index);
 }
 
 const ROGUE_DATA_MAX_LEVEL = 30;
@@ -696,26 +721,26 @@ function sampledLevelForPoint(point: Point, config: WorldEngineConfig, maxLevel:
 
 // Place a target on the radial ring for a SPECIFIC level (low level -> outer, high -> inner) so
 // guaranteed-ladder seeds and same-level respawns keep their geography. levelForPoint(result)===level.
-function radialPointForLevel(world: HeadlessWorld, level: number, maxLevel: number, random: () => number): Point {
+function radialPointForLevel(world: HeadlessWorld, level: number, maxLevel: number, random: () => number, sharedIndex?: SpatialIndex): Point {
   const center = worldCenter(world.config);
   const rIn = world.config.circleReserveRadius;
   const rEdge = worldPlayableRadius(world.config);
   const minSpacing = Number.isFinite(world.config.minEntitySpacing) && world.config.minEntitySpacing > 0
     ? world.config.minEntitySpacing : DEFAULT_WORLD_ENGINE_CONFIG.minEntitySpacing;
-  const index = buildSpatialIndex(world);
+  const index = sharedIndex ?? buildSpatialIndex(world);
   const step = Math.max(1, minSpacing / 4);
   for (let spacing = minSpacing; spacing >= 1; spacing -= step) {
     for (let attempt = 0; attempt < 120; attempt += 1) {
       const depth = Math.max(0, Math.min(1, (level - 1 + random()) / maxLevel));
       const radial = Math.max(rIn + 1, rEdge - depth * (rEdge - rIn));
-      const angle = random() * Math.PI * 2;
+      const angle = randomOpenAngle(world.config, random);
       const point = { x: center.x + Math.cos(angle) * radial, y: center.y + Math.sin(angle) * radial };
-      if (!isInsidePlayableWorld(point, world.config)) continue;
+      if (!isOpenTerritory(point, world.config)) continue;
       if (distance(point, center) <= world.config.circleReserveRadius) continue;
       if (!queryNearby(world, point, spacing, undefined, index).length) return point;
     }
   }
-  return randomLegalPoint(world, random);
+  return randomLegalPoint(world, random, undefined, index);
 }
 
 function tuneResourceForLevel(entity: ResourceEntity, level: number, numbers: any, refill: boolean): void {
@@ -737,7 +762,7 @@ function tuneMonsterForLevel(entity: MonsterEntity, level: number, numbers: any)
   };
 }
 
-function addResourceEntity(world: HeadlessWorld, position: Point, level: number, resource: ResKey, now: number, numbers: any): void {
+function addResourceEntity(world: HeadlessWorld, position: Point, level: number, resource: ResKey, now: number, numbers: any): ResourceEntity {
   const id = `resource-${world.nextEntitySeq++}`;
   const entity: ResourceEntity = {
     id, kind: "resource", state: "available", position, zone: zoneForPoint(position, world.config),
@@ -745,9 +770,10 @@ function addResourceEntity(world: HeadlessWorld, position: Point, level: number,
   };
   tuneResourceForLevel(entity, level, numbers, true);
   world.entities[id] = entity;
+  return entity;
 }
 
-function addMonsterEntity(world: HeadlessWorld, position: Point, level: number, now: number, numbers: any, random: () => number): void {
+function addMonsterEntity(world: HeadlessWorld, position: Point, level: number, now: number, numbers: any, random: () => number): MonsterEntity {
   const arms: TroopKey[] = ["army", "navy", "air"];
   const id = `monster-${world.nextEntitySeq++}`;
   const entity: MonsterEntity = {
@@ -757,6 +783,7 @@ function addMonsterEntity(world: HeadlessWorld, position: Point, level: number, 
   };
   tuneMonsterForLevel(entity, level, numbers);
   world.entities[id] = entity;
+  return entity;
 }
 
 // A legal point in an annulus around a city. This is used only after an explicit
@@ -774,7 +801,7 @@ function nearbyLegalPoint(world: HeadlessWorld, origin: Point, minRadius: number
       const highSq = Math.max(lowSq, maxRadius * maxRadius);
       const dist = Math.sqrt(lowSq + random() * (highSq - lowSq));
       const point = { x: origin.x + Math.cos(angle) * dist, y: origin.y + Math.sin(angle) * dist };
-      if (!isInsidePlayableWorld(point, world.config)) continue;
+      if (!isOpenTerritory(point, world.config)) continue;
       if (distance(point, center) <= world.config.circleReserveRadius) continue;
       if (!queryNearby(world, point, spacing, undefined, index).length) return point;
     }
@@ -874,13 +901,20 @@ export function populateWorld(
   const resourceMinPerLevel = Math.max(0, Math.floor(Number(pop.resourceMinPerLevel) || 0));
   const rogueMinPerLevel = Math.max(0, Math.floor(Number(pop.rogueMinPerLevel) || 0));
 
+  // One spatial index for the whole fill, kept current as entities are added (rebuilding it
+  // per placement was quadratic in the number of targets).
+  const index = buildSpatialIndex(world);
+  const indexEntity = (entity: WorldEntity) => {
+    const key = cellKey(Math.floor(entity.position.x / index.cellSize), Math.floor(entity.position.y / index.cellSize));
+    (index.cells[key] ||= []).push(entity.id);
+  };
   let resourceIdx = 0;
   const placeResource = (position: Point, level = sampledLevelForPoint(position, world.config, resourceMaxLevel, random, jitter)) => {
-    addResourceEntity(world, position, level, resources[resourceIdx++ % resources.length], now, numbers);
+    indexEntity(addResourceEntity(world, position, level, resources[resourceIdx++ % resources.length], now, numbers));
     markSector(resourceSectors, position);
   };
   const placeMonster = (position: Point, level = sampledLevelForPoint(position, world.config, rogueMaxLevel, random, jitter)) => {
-    addMonsterEntity(world, position, level, now, numbers, random);
+    indexEntity(addMonsterEntity(world, position, level, now, numbers, random));
     markSector(rogueSectors, position);
   };
 
@@ -889,15 +923,15 @@ export function populateWorld(
   // no rung ever goes missing.
   let placedResources = 0;
   for (let level = 1; level <= resourceMaxLevel && placedResources < resourceCount; level += 1)
-    for (let k = 0; k < resourceMinPerLevel && placedResources < resourceCount; k += 1) { placeResource(radialPointForLevel(world, level, resourceMaxLevel, random), level); placedResources += 1; }
+    for (let k = 0; k < resourceMinPerLevel && placedResources < resourceCount; k += 1) { placeResource(radialPointForLevel(world, level, resourceMaxLevel, random, index), level); placedResources += 1; }
   let placedMonsters = 0;
   for (let level = 1; level <= rogueMaxLevel && placedMonsters < monsterCount; level += 1)
-    for (let k = 0; k < rogueMinPerLevel && placedMonsters < monsterCount; k += 1) { placeMonster(radialPointForLevel(world, level, rogueMaxLevel, random), level); placedMonsters += 1; }
+    for (let k = 0; k < rogueMinPerLevel && placedMonsters < monsterCount; k += 1) { placeMonster(radialPointForLevel(world, level, rogueMaxLevel, random, index), level); placedMonsters += 1; }
 
   // Fill the remainder uniformly; because outer rings carry far more area, this weights the world
   // toward abundant low-level targets in the outer region and leaves the inner circle scarce/high.
-  for (; placedResources < resourceCount; placedResources += 1) placeResource(sectorBalancedLegalPoint(world, random, resourceSectors, sectorSize));
-  for (; placedMonsters < monsterCount; placedMonsters += 1) placeMonster(sectorBalancedLegalPoint(world, random, rogueSectors, sectorSize));
+  for (; placedResources < resourceCount; placedResources += 1) placeResource(sectorBalancedLegalPoint(world, random, resourceSectors, sectorSize, index));
+  for (; placedMonsters < monsterCount; placedMonsters += 1) placeMonster(sectorBalancedLegalPoint(world, random, rogueSectors, sectorSize, index));
   return world;
 }
 
@@ -1784,7 +1818,7 @@ export function advanceHeadlessWorld(source: HeadlessWorld, now = Date.now(), nu
 // reserves the coordinate in the shared WorldRoom before committing.
 
 export type WarpRequest = { mode: "precision"; target: Point } | { mode: "random" };
-export type WarpError = "no_city" | "fleets_away" | "city_burning" | "outside_frontier" | "reserve_zone" | "too_close_city" | "tile_occupied" | "no_space";
+export type WarpError = "no_city" | "fleets_away" | "city_burning" | "outside_frontier" | "sector_sealed" | "reserve_zone" | "too_close_city" | "tile_occupied" | "no_space";
 export const WARP_RULES = { minCitySpacing: 6, minTargetClearance: 2.5 } as const;
 
 function warpRules(numbers: any) {
@@ -1827,6 +1861,7 @@ export function nearestWarpPoint(world: HeadlessWorld, playerId: string, from: P
 
 function warpBlockAmong(world: HeadlessWorld, playerId: string, point: Point, rules: ReturnType<typeof warpRules>, entities: WorldEntity[]): WarpError | null {
   if (!isInsidePlayableWorld(point, world.config, world.config.cityFootprint + 1)) return "outside_frontier";
+  if (!isQuadrantOpen(point, world.config)) return "sector_sealed";
   if (distance(point, worldCenter(world.config)) <= world.config.circleReserveRadius + world.config.cityFootprint) return "reserve_zone";
   for (const entity of entities) {
     if (entity.kind === "city") {

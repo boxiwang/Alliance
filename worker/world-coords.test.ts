@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DORMANT_AFTER_MS, VIEW_MAX_SPAN, assignOuterRingCoord, clampViewRect, dormantCandidates, outerRingSlots, WORLD_COORD_LIMITS } from "./world-coords";
+import { DORMANT_AFTER_MS, QUADRANT_CAPACITY, VIEW_MAX_SPAN, assignOuterRingCoord, clampViewRect, dormantCandidates, outerRingSlots, quadrantOfCoord, spawnQuadrant, WORLD_COORD_LIMITS } from "./world-coords";
 
 describe("shared-world outer-ring coordinates", () => {
   it("fills the outer ring before stepping inward", () => {
@@ -60,5 +60,23 @@ describe("map view rect (location privacy)", () => {
     expect(wide.x1 - wide.x0).toBe(VIEW_MAX_SPAN);
     expect((wide.x0 + wide.x1) / 2).toBe(256);
     expect(wide.y1 - wide.y0).toBe(20);
+  });
+});
+
+describe("quadrant opening (map 2048)", () => {
+  it("fills NW first, then opens NE, SE, SW in order", () => {
+    expect(spawnQuadrant([0, 0, 0, 0], [0])).toEqual({ quadrant: 0, opens: null });
+    expect(spawnQuadrant([QUADRANT_CAPACITY - 1, 0, 0, 0], [0])).toEqual({ quadrant: 0, opens: null });
+    expect(spawnQuadrant([QUADRANT_CAPACITY, 0, 0, 0], [0])).toEqual({ quadrant: 1, opens: 1 });
+    expect(spawnQuadrant([QUADRANT_CAPACITY, QUADRANT_CAPACITY, 0, 0], [0, 1])).toEqual({ quadrant: 3, opens: 3 });
+    const full = [QUADRANT_CAPACITY, QUADRANT_CAPACITY + 5, QUADRANT_CAPACITY + 2, QUADRANT_CAPACITY + 1];
+    expect(spawnQuadrant(full, [0, 1, 2, 3])).toEqual({ quadrant: 0, opens: null });
+  });
+
+  it("assigns outer-ring slots inside the requested quadrant only", () => {
+    for (const quadrant of [0, 1, 2, 3]) {
+      for (const r of [0, 0.3, 0.7, 0.999]) expect(quadrantOfCoord(assignOuterRingCoord([], () => r, quadrant))).toBe(quadrant);
+    }
+    expect(outerRingSlots().filter((coord) => quadrantOfCoord(coord) === 0).length).toBeGreaterThanOrEqual(QUADRANT_CAPACITY);
   });
 });

@@ -442,7 +442,8 @@ describe("headless world — march authority and feedback", () => {
     const node = firstEntity(world, "resource");
     node.level = 1; node.capacity = 100000; node.amount = 100000;
     (world.entities[world.players.holder.cityId] as any).position = { x: node.position.x + 1, y: node.position.y };
-    (world.entities[world.players.raider.cityId] as any).position = { x: node.position.x + 12, y: node.position.y };
+    // Far enough that the holder has gathered for a while when the raider lands.
+    (world.entities[world.players.raider.cityId] as any).position = { x: node.position.x + 400, y: node.position.y };
     const held = dispatchMarch(world, { playerId: "holder", targetId: node.id, action: "gather", force: { army: { "1": 84 }, navy: {}, air: {} }, idempotencyKey: "h" }, 2000);
     expect(held.ok).toBe(true);
     if (!held.ok) return;

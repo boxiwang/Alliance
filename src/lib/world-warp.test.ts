@@ -18,7 +18,7 @@ describe("warp (city relocation)", () => {
   it("moves the city to a valid chosen coordinate and records it in the feed", () => {
     const world = base();
     const center = worldCenter(world.config);
-    const target = { x: center.x + 150, y: center.y };
+    const target = { x: center.x + world.config.circleReserveRadius + 150, y: center.y };
     expect(warpBlockReason(world, "mover", target)).toBeNull();
     const result = relocateCity(world, "mover", { mode: "precision", target }, 2000);
     expect(result.error).toBeUndefined();
@@ -40,7 +40,7 @@ describe("warp (city relocation)", () => {
     const world = base();
     world.marches["m1"] = { id: "m1", playerId: "mover", state: "outbound" } as any;
     const center = worldCenter(world.config);
-    expect(relocateCity(world, "mover", { mode: "precision", target: { x: center.x + 150, y: center.y } }).error).toBe("fleets_away");
+    expect(relocateCity(world, "mover", { mode: "precision", target: { x: center.x + world.config.circleReserveRadius + 150, y: center.y } }).error).toBe("fleets_away");
   });
 
   it("suggests the nearest tile a Precision Warp would accept", () => {
@@ -59,7 +59,7 @@ describe("warp (city relocation)", () => {
     }
     // A valid tile suggests itself.
     const center = worldCenter(world.config);
-    const open = { x: Math.floor(center.x + 150) + .5, y: Math.floor(center.y) + .5 };
+    const open = { x: Math.floor(center.x + world.config.circleReserveRadius + 150) + .5, y: Math.floor(center.y) + .5 };
     expect(nearestWarpPoint(world, "mover", open)).toEqual(open);
   });
 
