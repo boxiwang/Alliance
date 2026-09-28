@@ -24,7 +24,30 @@ export interface SharedScoutIntel extends SharedTarget {
   snapshot: Record<string, unknown>;
 }
 
-export type SharedWorldIntel = SharedCoordinate | SharedScoutIntel;
+/**
+ * A rival commander's card relayed to chat ("this is who hit us"). Identity only —
+ * never a location: coordinates stay private (location-privacy rule).
+ */
+export interface SharedCommander {
+  kind: "commander";
+  id: string;
+  playerId: string;
+  name: string;
+  faction: string | null;
+  coreLevel: number;
+  avatar: string | null;
+  createdAt: number;
+}
+
+export type SharedWorldIntel = SharedCoordinate | SharedScoutIntel | SharedCommander;
+export type SharedMapIntel = SharedCoordinate | SharedScoutIntel;
+
+export function createCommanderShare(player: { id: string; name: string; faction: string | null; keepLevel: number; avatar?: string | null }, createdAt = Date.now()): SharedCommander {
+  return {
+    kind: "commander", id: `commander:${player.id}:${createdAt}`, playerId: player.id, name: player.name || "Commander",
+    faction: player.faction || null, coreLevel: Math.max(1, Math.floor(player.keepLevel || 1)), avatar: player.avatar || null, createdAt,
+  };
+}
 
 export interface PendingWorldFocus {
   targetId: string | null;
@@ -91,7 +114,7 @@ export function createScoutIntelShare(
 }
 
 export function sharedIntelIsActive(share: SharedWorldIntel, now = Date.now()): boolean {
-  return share.kind === "coordinate" || now < share.expiresAt;
+  return share.kind === "coordinate" || share.kind === "commander" || now < share.expiresAt;
 }
 
 export function queueCommsShare(address: string, share: SharedWorldIntel): void {
@@ -99,7 +122,11 @@ export function queueCommsShare(address: string, share: SharedWorldIntel): void 
 }
 
 export function loadQueuedCommsShare(address: string): SharedWorldIntel | null {
-  const value = readJson(shareKey(address)) as Partial<SharedWorldIntel> | null;
+  const raw = readJson(shareKey(address)) as Partial<SharedCommander> | null;
+  if (raw?.kind === "commander" && typeof raw.playerId === "string" && typeof raw.name === "string" && typeof raw.id === "string" && Number.isFinite(raw.createdAt)) {
+    return raw as SharedCommander;
+  }
+  const value = readJson(shareKey(address)) as Partial<SharedMapIntel> | null;
   if (!value || !validPoint(value.position) || typeof value.targetId !== "string" || typeof value.targetName !== "string") return null;
   if (value.kind === "coordinate" && typeof value.id === "string" && Number.isFinite(value.createdAt)) {
     return { ...value, targetKind: targetKind(value.targetKind) } as SharedCoordinate;

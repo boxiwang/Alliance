@@ -91,6 +91,7 @@ type PlayerRow = {
   id: string; name: string; coords: { x: number; y: number };
   might: number; keepLevel: number; faction: string | null;
   cosmetics: unknown; online: boolean; lastSeen: number; coordVersion?: number;
+  avatar?: string | null;
 };
 type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown; signal?: string | null };
 
@@ -186,6 +187,14 @@ const dmKey = (a: string, b: string) => [a, b].sort().join("|");
 function sanitizeIntel(value: unknown): unknown | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
+  // Commander card: identity only, never a location (location-privacy rule).
+  if (v.kind === "commander") {
+    if (typeof v.playerId !== "string" || typeof v.name !== "string" || v.playerId.length > 64 || v.name.length > 48) return null;
+    const faction = typeof v.faction === "string" ? v.faction.replace(/[^a-z0-9_$.-]/gi, "").slice(0, 24) : null;
+    const avatar = typeof v.avatar === "string" && /^[a-z0-9-]{1,24}$/.test(v.avatar) ? v.avatar : null;
+    return { kind: "commander", id: String(v.id || "").slice(0, 120), playerId: v.playerId, name: v.name, faction: faction || null,
+      coreLevel: Math.max(1, Math.min(30, Math.floor(Number(v.coreLevel) || 1))), avatar, createdAt: Number(v.createdAt) || Date.now() };
+  }
   const pos = v.position as { x?: unknown; y?: unknown } | undefined;
   if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number") return null;
   if (v.kind !== "coordinate" && v.kind !== "scout-intel") return null;
@@ -629,6 +638,7 @@ export class WorldRoom {
       if (account?.display_name) p.name = account.display_name;
       const cosmetics = sanitizeCosmetics(data.cosmetics);
       if (cosmetics) p.cosmetics = cosmetics;
+      if (typeof data.avatar === "string" && /^[a-z0-9-]{1,24}$/.test(data.avatar)) p.avatar = data.avatar;
       const might = finiteInteger(data.might, 0, 10_000_000_000);
       const keepLevel = finiteInteger(data.keepLevel, 1, 30);
       if (might !== null) p.might = might;

@@ -1620,3 +1620,23 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 /* Rival cities: invisible hit area (the planet skin and name plate ignore the pointer) */
 .world-remote-player{cursor:pointer}
 .world-remote-hit{fill:transparent;pointer-events:all}
+/* Commander card (rival city) — Kingshot-style lord card, no coordinates, Might scan-gated */
+.commander-card{position:absolute;left:14px;bottom:64px;z-index:6;width:268px;padding:12px 13px 11px;border:1px solid color-mix(in srgb,var(--commander) 38%,transparent);border-radius:12px;background:linear-gradient(160deg,rgba(9,18,32,.97),rgba(6,12,22,.97));box-shadow:0 14px 34px rgba(0,0,0,.42);color:#cfe6f2}
+.commander-card-close{position:absolute;right:8px;top:8px;width:20px;height:20px;padding:0;border:1px solid rgba(120,160,190,.25);border-radius:6px;background:transparent;color:#7f9bad;line-height:1;cursor:pointer}
+.commander-card header{display:flex;align-items:center;gap:11px;margin:0 0 10px;padding:0 22px 10px 0;border-bottom:1px solid rgba(120,160,190,.14)}
+.commander-card-sigil{flex:none;width:46px!important;height:46px!important;pointer-events:none;box-shadow:0 0 18px color-mix(in srgb,var(--commander) 30%,transparent)}
+.commander-card header small{display:block;color:#5c8296;font:700 7px var(--mono);letter-spacing:.16em}
+.commander-card header b{display:block;max-width:170px;overflow:hidden;margin:2px 0;color:#eef7fb;font:700 14px var(--hud);text-overflow:ellipsis;white-space:nowrap}
+.commander-card header em{color:color-mix(in srgb,var(--commander) 70%,#9fb8c8);font:600 8px var(--mono);font-style:normal;letter-spacing:.08em}
+.commander-card dl{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 10px}
+.commander-card dl>div{padding:5px 7px;border:1px solid rgba(120,160,190,.14);border-radius:7px;background:rgba(255,255,255,.03)}
+.commander-card dt{color:#567689;font:700 6px var(--mono);letter-spacing:.1em}
+.commander-card dd{margin:1px 0 0;color:#cfe6f2;font:700 10.5px var(--mono)}
+.commander-card dd.locked{color:#9fb0bf;font-size:9.5px}
+.commander-card-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.commander-card-actions button{padding:7px 4px;border:1px solid rgba(120,160,190,.28);border-radius:7px;background:rgba(12,26,44,.9);color:#cfe6f2;font:700 8.5px var(--hud);letter-spacing:.08em;cursor:pointer}
+.commander-card-actions button.attack{border-color:rgba(255,111,133,.55);color:#ffd0d8}
+.commander-card-actions button:disabled{opacity:.55;cursor:default}
+.commander-card p{margin:8px 0 0;color:#5c8296;font:600 7.5px var(--mono);letter-spacing:.06em}
+.comms-intel-card.commander .comms-intel-commander{display:flex;align-items:center;gap:9px}
+.comms-intel-card.commander .command-sigil{flex:none;width:34px!important;height:34px!important;pointer-events:none}

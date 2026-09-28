@@ -145,7 +145,7 @@ export default function MiniComms({ address, profile, onOpenMessages, onReport, 
     rt.handlers.onReport = (report) => reportRef.current?.(report);
     rt.handlers.onMarch = (march) => marchEvents.current.onMarch?.(march);
     rt.handlers.onMarchDone = (id) => marchEvents.current.onMarchDone?.(id);
-    rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, cosmetics: loadCosmeticVault(address).equipped });
+    rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, cosmetics: loadCosmeticVault(address).equipped, avatar: profile.avatarId || "genesis" });
     return () => rt.close();
   }, [address, profile.name, profile.factionSymbol]);
 

@@ -44,7 +44,7 @@ const hasCoords = (p: PresenceCity): p is MapCity => !!p.coords && Number.isFini
 const VIEW_MAX_SPAN = 420; // matches worker/world-coords.ts
 const rectHas = (rect: ViewRect, c: { x: number; y: number }) => c.x >= rect.x0 && c.x <= rect.x1 && c.y >= rect.y0 && c.y <= rect.y1;
 import { radiantCrownSvgPath } from "./planet-halo-shared";
-import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
+import { createCommanderShare, createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
 import { ensureGameAuthority, sendGameCommand, type GameCommandResponse, loadInventory } from "./lib/backend";
 
@@ -665,6 +665,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       keepLevel: g?.buildings?.keep?.lvl ?? 1,
       might: g ? mightBreakdown(project(g, Date.now())).total : 0,
       cosmetics: loadCosmeticVault(address).equipped,
+      avatar: profile.avatarId || "genesis",
     });
     return () => rt.close();
   }, [address, profile.name, profile.factionSymbol]);
@@ -678,8 +679,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       keepLevel: game.buildings.keep.lvl,
       might: mightBreakdown(project(game, Date.now())).total,
       cosmetics: loadCosmeticVault(address).equipped,
+      avatar: profile.avatarId || "genesis",
     });
-  }, [game.buildings.keep.lvl, profile.factionSymbol, profile.name, address]);
+  }, [game.buildings.keep.lvl, profile.factionSymbol, profile.name, profile.avatarId, address]);
   const [selection, setSelection] = useState<Record<TroopKey, Record<string, number>>>(emptySelection);
   const [message, setMessage] = useState(initial.session.migratedLegacyAt ? "Old World marches were safely settled and migrated." : "");
   const [zoom, setZoom] = useState(1.8);
@@ -1219,7 +1221,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           <WorldPlanetFx cx={cx} cy={cy} r={bodyR} skin={skin} />
           {orbit && <WorldOrbitFx cx={cx} cy={cy} r={bodyR} orbit={orbit} half="front" />}
           {halo && <WorldHaloFx cx={cx} cy={cy} r={bodyR} halo={halo} half="front" />}
-          <CityIdentityTag x={cx} y={cy} level={p.keepLevel || 1} name={p.name || "Commander"} signal={cos.chatSignal ?? "clear-channel"} relation="neutral" />
+          <CityIdentityTag x={cx} y={cy} level={p.keepLevel || 1} name={`${p.faction ? `[${p.faction}] ` : ""}${p.name || "Commander"}`} signal={cos.chatSignal ?? "clear-channel"} relation="neutral" />
         </g>;
       });
   }, [strategicZoom, remotePlayers, remoteSelectedId, viewX, viewY, viewport.width, viewport.height, markerScale, detailZoom]);
@@ -1677,7 +1679,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
               {equippedPlanetHalo && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldHaloFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} halo={equippedPlanetHalo} half="front" /></g>}
             </> : <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><circle cx={playerCity.position.x} cy={playerCity.position.y} r="14" className="world-city-hit" /></g>}
             {gpuFallback && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeTagScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
-              <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own relation="self" />
+              <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={`${profile.factionSymbol ? `[${profile.factionSymbol}] ` : ""}${profile.name}`} signal={equippedCosmetics.chatSignal} own relation="self" />
               <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
             </g>}
           </g>
@@ -1717,28 +1719,40 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             </g>;
           })}
           <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeTagScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
-            <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={profile.name} signal={equippedCosmetics.chatSignal} own relation="self" />
+            <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={`${profile.factionSymbol ? `[${profile.factionSymbol}] ` : ""}${profile.name}`} signal={equippedCosmetics.chatSignal} own relation="self" />
             <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
           </g>
         </svg>}
         {gpuFallback && voidSkinEquipped && <VoidPlanetOverlay svgRef={svgRef} home={playerCity.position} zoom={zoom} strategic={strategicZoom} onActiveChange={setVoidShaderActive} />}
         {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
         {remoteSelected && (() => {
+          // Commander card (Kingshot-style lord card, our rules): sigil, alliance tag + name,
+          // Core. Might stays hidden until you scout — which alerts the target. No coordinates.
           const col = REMOTE_FACTION_COLOR[String(remoteSelected.faction || "")] || "#7cc0ff";
-          const btn: CSSProperties = { flex: 1, padding: "7px 8px", borderRadius: 7, border: "1px solid rgba(120,160,190,.28)", background: "rgba(12,26,44,.9)", color: "#cfe6f2", font: "700 9px var(--hud)", letterSpacing: ".08em", cursor: "pointer", textTransform: "uppercase" };
-          return <div style={{ position: "absolute", left: 14, bottom: 64, width: 232, padding: "12px 13px", borderRadius: 12, border: `1px solid ${col}55`, background: "linear-gradient(160deg,rgba(9,18,32,.96),rgba(6,12,22,.96))", boxShadow: "0 14px 34px rgba(0,0,0,.4)", backdropFilter: "blur(6px)", zIndex: 6 }}>
-            <button aria-label="Close commander card" onClick={() => setRemoteSelectedId(null)} style={{ position: "absolute", right: 8, top: 7, width: 20, height: 20, borderRadius: 6, border: "1px solid rgba(120,160,190,.25)", background: "transparent", color: "#7f9bad", cursor: "pointer", lineHeight: 1 }}>×</button>
-            <div style={{ font: "700 7px var(--mono)", letterSpacing: ".16em", color: "#5c8296" }}>COMMANDER</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "3px 0 8px" }}><span style={{ width: 9, height: 9, borderRadius: 2, background: col, boxShadow: `0 0 8px ${col}` }} /><b style={{ font: "700 14px var(--hud)", color: "#eaf4fa" }}>{remoteSelected.name || "Commander"}</b></div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
-              {([["FACTION", remoteSelected.faction ? `$${remoteSelected.faction}` : "UNALIGNED"], ["CORE", `Lv.${remoteSelected.keepLevel || 1}`], ["MIGHT", "🔒 SCAN"], ["LOCATION", "🔒 HIDDEN"]] as Array<[string, string]>).map(([k, v]) =><div key={k} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(120,160,190,.14)", borderRadius: 7, padding: "5px 7px" }}><div style={{ font: "700 6px var(--mono)", letterSpacing: ".1em", color: "#567689" }}>{k}</div><div style={{ font: "700 11px var(--mono)", color: "#cfe6f2" }}>{v}</div></div>)}
+          const tag = remoteSelected.faction ? `[${remoteSelected.faction}] ` : "";
+          const sigil = /^[a-z0-9-]{1,24}$/.test(String(remoteSelected.avatar || "")) ? remoteSelected.avatar : "genesis";
+          const skin = (remoteSelected.cosmetics as { planetBody?: string } | null)?.planetBody;
+          return <div className="commander-card" style={{ "--commander": col } as CSSProperties}>
+            <button className="commander-card-close" aria-label="Close commander card" onClick={() => setRemoteSelectedId(null)}>×</button>
+            <header>
+              <span className={`command-sigil command-sigil-${sigil} commander-card-sigil`}><i /></span>
+              <div>
+                <small>COMMANDER</small>
+                <b>{tag}{remoteSelected.name || "Commander"}</b>
+                <em>CORE {remoteSelected.keepLevel || 1}{skin ? ` · ${skin.split("-").join(" ").toUpperCase()}` : ""}</em>
+              </div>
+            </header>
+            <dl>
+              <div><dt>ALLIANCE</dt><dd>{remoteSelected.faction ? `$${remoteSelected.faction}` : "No alliance"}</dd></div>
+              <div><dt>MIGHT</dt><dd className="locked">🔒 Scout to reveal</dd></div>
+            </dl>
+            <div className="commander-card-actions">
+              <button disabled={scoutingId === remoteSelected.id} onClick={() => { setScoutingId(remoteSelected.id); setScoutIntel(null); rtRef.current?.sendScout(remoteSelected.id); }}>{scoutingId === remoteSelected.id ? "SCANNING…" : "◎ SCOUT"}</button>
+              <button className="attack" onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>⚔ ATTACK</button>
+              <button onClick={() => { queueCommsShare(address, createCommanderShare(remoteSelected)); onMessages(); }}>⇪ SHARE</button>
+              <button onClick={onMessages}>✉ MESSAGE</button>
             </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button style={btn} disabled={scoutingId === remoteSelected.id} onClick={() => { setScoutingId(remoteSelected.id); setScoutIntel(null); rtRef.current?.sendScout(remoteSelected.id); }}>{scoutingId === remoteSelected.id ? "SCANNING…" : "◎ SCOUT"}</button>
-              <button style={{ ...btn, borderColor: "rgba(255,111,133,.55)", color: "#ffd0d8" }} onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>⚔ ATTACK</button>
-            </div>
-            <button style={{ ...btn, flex: "none", width: "100%", marginTop: 6, borderColor: `${col}66`, color: "#eaf4fa" }} onClick={onMessages}>MESSAGE ▸</button>
-            <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".06em", color: "#5c8296" }}>Scouting &amp; attacks alert the target. Battle casualties/loot arrive next.</div>
+            <p>Scouting and attacks alert the target.</p>
           </div>;
         })()}
         {scoutIntel && (() => {

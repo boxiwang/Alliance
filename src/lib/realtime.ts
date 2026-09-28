@@ -9,6 +9,8 @@ export type PresenceCity = {
   id: string; name: string; coords: { x: number; y: number } | null;
   might: number; keepLevel: number; faction: string | null;
   cosmetics: unknown; online: boolean; lastSeen: number;
+  /** Commander sigil (profile avatar), shown on the map card. */
+  avatar?: string | null;
 };
 export type ViewRect = { x0: number; y0: number; x1: number; y1: number };
 export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown; signal?: string | null };
@@ -112,7 +114,7 @@ export class RealtimeClient {
   }
   // Shared-world Search: nearest free target of a kind/level from home; `index` walks outward.
   sendSearch(kind: string, level: number, index: number) { this.send({ type: "search", kind, level, index }); }
-  sendPresence(p: { name?: string; might?: number; keepLevel?: number; faction?: string | null; cosmetics?: unknown }) {
+  sendPresence(p: { name?: string; might?: number; keepLevel?: number; faction?: string | null; cosmetics?: unknown; avatar?: string | null }) {
     this.send({ type: "presence", ...p });
   }
   close() { this.closed = true; try { this.ws?.close(); } catch {} }

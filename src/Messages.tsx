@@ -123,7 +123,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     rt.handlers.onStatus = setRtConnected;
     rt.handlers.onReport = (report) => setServerReports((cur) => [...cur, report].slice(-80));
     const g = loadGame(address);
-    rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, keepLevel: g?.buildings?.keep?.lvl ?? 1, cosmetics: loadCosmeticVault(address).equipped });
+    rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, keepLevel: g?.buildings?.keep?.lvl ?? 1, cosmetics: loadCosmeticVault(address).equipped, avatar: profile.avatarId || "genesis" });
     return () => rt.close();
   }, [address, profile.name, profile.factionSymbol]);
 
@@ -251,7 +251,10 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     if (isCosmos) {
       let text = body;
       let intel: SharedWorldIntel | undefined;
-      if (pendingShare && sharedIntelIsActive(pendingShare, now)) {
+      if (pendingShare?.kind === "commander") {
+        text = `${body ? body + " — " : ""}[Commander] ${pendingShare.faction ? `[${pendingShare.faction}] ` : ""}${pendingShare.name}`.trim();
+        intel = pendingShare;
+      } else if (pendingShare && sharedIntelIsActive(pendingShare, now)) {
         const tag = pendingShare.kind === "scout-intel" ? "Recon" : pendingShare.targetKind === "monster" ? "Rogue" : pendingShare.targetKind === "resource" ? "Resource" : "City";
         const pos = pendingShare.position ? ` ${Math.round(pendingShare.position.x)}:${Math.round(pendingShare.position.y)}` : "";
         text = `${body ? body + " — " : ""}[${tag}] ${pendingShare.targetName || ""}${pos}`.trim();
@@ -268,7 +271,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     const message: ChatMessage = {
       id: `comms:${Date.now()}`,
       a: profile.name || "Ruglord", f: profile.factionSymbol || "ORBT", own: true, t: "now",
-      b: body || (pendingShare?.kind === "scout-intel" ? "Recon envelope relayed." : pendingShare?.targetKind === "monster" ? "Rogue vector relayed." : pendingShare?.targetKind === "resource" ? "Resource vector relayed." : "Civilization vector relayed."),
+      b: body || (pendingShare?.kind === "commander" ? "Commander card relayed." : pendingShare?.kind === "scout-intel" ? "Recon envelope relayed." : pendingShare?.targetKind === "monster" ? "Rogue vector relayed." : pendingShare?.targetKind === "resource" ? "Resource vector relayed." : "Civilization vector relayed."),
       intel: pendingShare || undefined,
       sourceLanguage: "auto",
       authorLocale: account.language,
@@ -287,6 +290,8 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   }
 
   function openSharedTarget(share: SharedWorldIntel) {
+    // A commander card carries no location: open a direct line to that commander instead.
+    if (share.kind === "commander") { openDM(share.playerId, share.name); return; }
     queueWorldFocus(address, share.targetId, share.position);
     onWorld();
   }
@@ -433,6 +438,17 @@ function intelRemaining(expiresAt: number, now: number): string {
 }
 
 function SharedIntelCard({ share, now, onOpen, compactView = false }: { share: SharedWorldIntel; now: number; onOpen: () => void; compactView?: boolean }) {
+  if (share.kind === "commander") {
+    const sigil = /^[a-z0-9-]{1,24}$/.test(String(share.avatar || "")) ? share.avatar : "genesis";
+    return <div className={`comms-intel-card commander ${compactView ? "compact" : ""}`}>
+      <header><span>◆ COMMANDER</span><em>LOCATION PRIVATE</em></header>
+      <div className="comms-intel-commander">
+        <span className={`command-sigil command-sigil-${sigil}`}><i /></span>
+        <div className="comms-intel-target"><b>{share.faction ? `[${share.faction}] ` : ""}{share.name}</b><small>CORE {share.coreLevel}{share.faction ? ` · $${share.faction}` : " · NO ALLIANCE"}</small></div>
+      </div>
+      {!compactView && <button onClick={onOpen}>MESSAGE ▸</button>}
+    </div>;
+  }
   const live = sharedIntelIsActive(share, now);
   const coordinate = `${Math.round(share.position.x).toString().padStart(3, "0")}:${Math.round(share.position.y).toString().padStart(3, "0")}`;
   const targetKind = share.targetKind || "city";
