@@ -198,10 +198,10 @@ function AnimatedResource({ resource, value, rate, cap, quiet }: { resource: Res
 }
 
 function DualClock() {
-  const [clock, setClock] = useState(() => formatDualClock(new Date()));
+  const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     let interval = 0;
-    const tick = () => setClock(formatDualClock(new Date()));
+    const tick = () => setNow(new Date());
     const msToNextMinute = 60000 - (Date.now() % 60000);
     const timeout = window.setTimeout(() => {
       tick();
@@ -212,10 +212,27 @@ function DualClock() {
       if (interval) window.clearInterval(interval);
     };
   }, []);
+  const clock = formatDualClock(now);
+  const [hh, mm] = clock.utc.split(":");
+  // One ring = one server (UTC) day; the arc and the bead mark how much of it has passed.
+  const dayFraction = (now.getUTCHours() * 60 + now.getUTCMinutes()) / 1440;
+  const circumference = 2 * Math.PI * 10.5;
+  const angle = dayFraction * Math.PI * 2 - Math.PI / 2;
+  const offsetHours = -now.getTimezoneOffset() / 60;
+  const offset = offsetHours === 0 ? "UTC" : `UTC${offsetHours > 0 ? "+" : "−"}${Math.abs(offsetHours)}`;
   return (
-    <div className="command-clock" aria-label="Server time UTC and local time">
-      <span><small>UTC</small><b className="mono">{clock.utc}</b></span>
-      <span><small>LOCAL</small><b className="mono">{clock.local}</b></span>
+    <div className="command-clock" aria-label={`Server time ${clock.utc} UTC, local time ${clock.local}`}>
+      <svg className="command-clock-dial" viewBox="0 0 28 28" aria-hidden="true">
+        <circle className="track" cx="14" cy="14" r="10.5" />
+        <circle className="arc" cx="14" cy="14" r="10.5" strokeDasharray={`${dayFraction * circumference} ${circumference}`} transform="rotate(-90 14 14)" />
+        <circle className="bead" cx={14 + Math.cos(angle) * 10.5} cy={14 + Math.sin(angle) * 10.5} r="1.7" />
+        <circle className="core" cx="14" cy="14" r="2.2" />
+      </svg>
+      <div className="command-clock-read">
+        <small>SERVER · UTC</small>
+        <b>{hh}<i>:</i>{mm}</b>
+        <em>LOCAL {clock.local}<span>{offset}</span></em>
+      </div>
     </div>
   );
 }
