@@ -3,7 +3,7 @@ import type { Profile } from "./lib/profile";
 import { RES, RES_ORDER, ResKey, BKey, displayResource, displayTroops } from "./lib/game";
 import { compact, formatDualClock } from "./lib/format";
 import BuildingGlyph from "./BuildingGlyph";
-import { loadPlayerAccount } from "./lib/player-account";
+import { TITLE_SEALS, loadCosmeticVault, loadPlayerAccount } from "./lib/player-account";
 import { loadShopAccount } from "./lib/backend";
 
 const RESOURCE_COLOR: Record<ResKey, string> = {
@@ -45,6 +45,7 @@ export default function GameNav({
   onProfile: () => void;
 }) {
   const account = loadPlayerAccount(profile.address);
+  const equippedTitle = TITLE_SEALS.find((seal) => seal.id === loadCosmeticVault(profile.address).equipped.title);
   const [authoritativeCredits, setAuthoritativeCredits] = useState(credits ?? account.credits);
   const [displayedCredits, setDisplayedCredits] = useState(credits ?? account.credits);
   const [creditPulse, setCreditPulse] = useState(false);
@@ -86,14 +87,22 @@ export default function GameNav({
   return (
     <nav className="command-nav" aria-label="Game view and account status">
       <div className="command-nav-head">
-        <div className="command-identity-wrap">
-          <button type="button" className={`command-sigil command-sigil-${profile.avatarId || "genesis"} ${view === "profile" ? "active" : ""}`} aria-label="Open commander archive" aria-current={view === "profile" ? "page" : undefined} onClick={onProfile}><i /></button>
-          <div className="command-identity">
-            <span>ALLIANCE // CIV-{profile.address.slice(-3).toUpperCase()}</span>
-            <div><b>{profile.name}</b><em>CORE {townhallLevel}</em></div>
-            <small>{location}{profile.factionSymbol ? ` · $${profile.factionSymbol}` : ""}</small>
-          </div>
-        </div>
+        {/* Identity = the way into Profile & settings (mainstream SLG: tap your avatar).
+            One button: sigil with Core badge and settings gear, [TAG] name, equipped title. */}
+        <button type="button" className={`command-profile ${view === "profile" ? "active" : ""}`}
+          aria-label="Open profile and settings" aria-current={view === "profile" ? "page" : undefined} onClick={onProfile}>
+          <span className="command-profile-avatar">
+            <span className={`command-sigil command-sigil-${profile.avatarId || "genesis"}`}><i /></span>
+            <em className="command-profile-core">{townhallLevel}</em>
+            <span className="command-profile-gear" aria-hidden="true">
+              <svg viewBox="0 0 16 16"><path d="M8 5.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Zm6.1 3.6-.1-1.6 1.4-1.1-1.4-2.4-1.7.6a5.6 5.6 0 0 0-1.4-.8L10.6 1.8H7.8l-.3 1.7c-.5.2-1 .5-1.4.8L4.4 3.7 3 6.1l1.4 1.1-.1.8.1.8L3 9.9l1.4 2.4 1.7-.6c.4.3.9.6 1.4.8l.3 1.7h2.8l.3-1.7c.5-.2 1-.5 1.4-.8l1.7.6 1.4-2.4-1.4-1.1Z" /></svg>
+            </span>
+          </span>
+          <span className="command-profile-text">
+            <b>{profile.factionSymbol ? <i>[{profile.factionSymbol}]</i> : null}{profile.name}</b>
+            <small>{equippedTitle ? equippedTitle.name.toUpperCase() : "PROFILE & SETTINGS"}</small>
+          </span>
+        </button>
         <div className="command-nav-controls">
           <DualClock />
           <div className="command-might"><small>MIGHT</small><b>{compact(might)}</b></div>

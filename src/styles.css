@@ -1662,3 +1662,20 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world-dust-title{fill:#d9c29e;letter-spacing:.5em;opacity:.62;paint-order:stroke;stroke:rgba(14,10,6,.7);stroke-width:.6px}
 .world-dust-sub{fill:#9d8a70;letter-spacing:.6em;opacity:.5}
 .world-dust-label:hover .world-dust-title{opacity:1}
+/* Nav identity = Profile & settings entry: sigil + Core badge + gear, [TAG] name, title */
+.command-profile{display:flex;min-width:0;align-items:center;gap:12px;padding:5px 14px 5px 6px;border:1px solid rgba(120,160,200,.16);border-radius:12px;background:linear-gradient(135deg,rgba(56,217,255,.05),rgba(128,74,210,.05));color:inherit;text-align:left;cursor:pointer;transition:border-color .18s,background .18s,box-shadow .18s}
+.command-profile:hover{border-color:rgba(56,217,255,.42);background:linear-gradient(135deg,rgba(56,217,255,.1),rgba(128,74,210,.08));box-shadow:0 0 22px rgba(56,217,255,.1)}
+.command-profile:active{transform:translateY(1px)}
+.command-profile.active{border-color:rgba(56,217,255,.6);box-shadow:inset 2px 0 #38d9ff,0 0 22px rgba(56,217,255,.12)}
+.command-profile:focus-visible{outline:2px solid rgba(56,217,255,.7);outline-offset:2px}
+.command-profile-avatar{position:relative;flex:none;width:44px;height:44px;display:grid;place-items:center}
+.command-profile-avatar .command-sigil{pointer-events:none;transform:scale(1.2)}
+.command-profile-core{position:absolute;left:-4px;bottom:-4px;min-width:18px;height:18px;padding:0 4px;display:grid;place-items:center;border:1.5px solid #0a1424;border-radius:9px;background:linear-gradient(135deg,#38d9ff,#5f7cff);color:#04101f;font:800 9.5px/1 var(--hud);font-style:normal;box-shadow:0 0 10px rgba(56,217,255,.45)}
+.command-profile-gear{position:absolute;right:-5px;top:-5px;width:17px;height:17px;display:grid;place-items:center;border:1.5px solid #0a1424;border-radius:50%;background:#132238;color:#8fb4c8;transition:color .18s,transform .35s}
+.command-profile-gear svg{width:10px;height:10px;fill:currentColor}
+.command-profile:hover .command-profile-gear{color:#dff7ff;transform:rotate(60deg)}
+.command-profile-text{min-width:0;display:flex;flex-direction:column;gap:4px}
+.command-profile-text b{overflow:hidden;color:#eef7fb;font:700 15px var(--hud);letter-spacing:.02em;text-overflow:ellipsis;white-space:nowrap}
+.command-profile-text b i{margin-right:5px;font-style:normal;color:#7fd6ee}
+.command-profile-text small{overflow:hidden;color:#8f9fb5;font:600 8.5px var(--mono);letter-spacing:.14em;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:620px){.command-profile{padding-right:10px}.command-profile-text small{display:none}}
