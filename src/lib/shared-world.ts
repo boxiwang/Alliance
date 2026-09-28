@@ -10,7 +10,7 @@ import {
   type WorldAuthorityCommand, type WorldAuthoritySession, type WorldAuthoritySnapshot,
 } from "./world-authority";
 import {
-  advanceHeadlessWorld, distance, initHeadlessWorld, populateWorld, settlePlayerMarches, spawnPlayer, worldEngineConfig, zoneForPoint,
+  advanceHeadlessWorld, distance, initHeadlessWorld, mutateInPlace, populateWorld, settlePlayerMarches, spawnPlayer, worldEngineConfig, zoneForPoint,
   type CityEntity, type HeadlessMarch, type HeadlessPlayer, type HeadlessWorld, type Point, type PublicCosmeticLoadout, type WorldEntity,
 } from "./world-engine";
 
@@ -82,6 +82,12 @@ export function joinSharedWorld(source: SharedWorldState, input: {
   playerId: string; coord: Point; game: GameState; carry?: SharedCarryOver; now: number; numbers: any;
 }): SharedWorldState {
   if (sharedHasPlayer(source, input.playerId)) return source;
+  return mutateInPlace(() => joinInPlace(source, input));
+}
+
+function joinInPlace(source: SharedWorldState, input: {
+  playerId: string; coord: Point; game: GameState; carry?: SharedCarryOver; now: number; numbers: any;
+}): SharedWorldState {
   const game = project(input.game, input.now);
   let world = spawnPlayer(source.world, {
     id: input.playerId, allianceId: null, // alliances are not live; contest truce waits for them
@@ -128,14 +134,15 @@ export function retirePrivateWorld(session: WorldAuthoritySession, game: GameSta
 /** Runs one world command (or a plain sync with `world.advance`) for a player. */
 export function applySharedCommand(state: SharedWorldState, playerId: string, game: GameState, command: WorldAuthorityCommand, now: number, numbers: any): SharedCommandResult {
   if (!sharedHasPlayer(state, playerId)) return { state, game, ok: false, reason: "not_in_shared_world" };
-  const result = applyWorldAuthorityCommand(sessionFor(state, playerId), game, command, now, numbers);
+  // In place: the shared world is large; a failed D1 write reloads the last committed copy.
+  const result = mutateInPlace(() => applyWorldAuthorityCommand(sessionFor(state, playerId), game, command, now, numbers));
   const next: SharedWorldState = { version: 1, world: result.session.world, synced: { ...state.synced, [playerId]: result.session.syncedGame } };
   return { state: next, game: result.game, ok: result.ok, reason: result.reason, targetId: result.targetId, spawned: result.spawned, position: result.position };
 }
 
 /** Alarm tick: resolve every due arrival, gather, return and respawn. */
 export function advanceSharedWorld(state: SharedWorldState, now: number, numbers: any): SharedWorldState {
-  return { ...state, world: advanceHeadlessWorld(state.world, now, numbers) };
+  return { ...state, world: mutateInPlace(() => advanceHeadlessWorld(state.world, now, numbers)) };
 }
 
 export function nextSharedEventAt(state: SharedWorldState): number | null {
@@ -149,8 +156,10 @@ export function setSharedHome(state: SharedWorldState, playerId: string, coord: 
   const player = state.world.players[playerId];
   const city = player ? state.world.entities[player.cityId] : undefined;
   if (!city || city.kind !== "city" || (city.position.x === coord.x && city.position.y === coord.y)) return state;
-  const world = { ...state.world, entities: { ...state.world.entities, [city.id]: { ...city, position: { ...coord }, zone: zoneForPoint(coord, state.world.config) } } };
-  return { ...state, world };
+  city.position = { ...coord };
+  city.zone = zoneForPoint(coord, state.world.config);
+  city.revision += 1;
+  return { ...state };
 }
 
 // ---- Reads (never expose other players' homes, troops or resources) ----

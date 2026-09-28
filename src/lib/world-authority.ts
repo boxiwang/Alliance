@@ -9,7 +9,7 @@ import type {
   DispatchMarchInput, HeadlessWorld, MarchAction, Point, TroopManifest, WarpRequest,
 } from "./world-engine";
 import {
-  advanceHeadlessWorld, dispatchMarch, recallMarch, relocateCity, removeSimulatedCities, scanForRogue, simulatedCityCount,
+  advanceHeadlessWorld, dispatchMarch, isMutatingInPlace, recallMarch, relocateCity, removeSimulatedCities, scanForRogue, simulatedCityCount,
 } from "./world-engine";
 
 export interface WorldAuthoritySnapshot {
@@ -160,9 +160,11 @@ function compactSession(session: WorldAuthoritySession): void {
 }
 
 function reconcile(sourceSession: WorldAuthoritySession, sourceGame: GameState, now: number, numbers: any): WorldAuthorityResult {
-  const session = clone(sourceSession);
+  // In-place (shared world): mutate the session directly; change detection is skipped.
+  const inPlace = isMutatingInPlace();
+  const session = inPlace ? sourceSession : clone(sourceSession);
   let game = project(sourceGame, now);
-  const before = JSON.stringify(session.world);
+  const before = inPlace ? "" : JSON.stringify(session.world);
   if (!simulatedCityCount(numbers)) session.world = removeSimulatedCities(session.world, now, numbers);
   session.world = advanceHeadlessWorld(session.world, now, numbers);
   applyExternalGameDelta(session, game);
@@ -170,7 +172,7 @@ function reconcile(sourceSession: WorldAuthoritySession, sourceGame: GameState, 
   updateMetadata(session, game, numbers);
   session.syncedGame = snapshotAuthorityGame(game);
   compactSession(session);
-  return { session, game, ok: true, changed: before !== JSON.stringify(session.world) };
+  return { session, game, ok: true, changed: inPlace || before !== JSON.stringify(session.world) };
 }
 
 export function applyWorldAuthorityCommand(

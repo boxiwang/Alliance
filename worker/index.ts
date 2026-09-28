@@ -12,6 +12,7 @@ import {
   setSharedHome, sharedClusters, sharedHasPlayer, sharedView, type SearchKind, type SharedWorldState,
 } from "../src/lib/shared-world";
 import type { WorldAuthoritySession } from "../src/lib/world-authority";
+import { STORE_PREFIX, assembleShared, chunkDelta, sharedChunks } from "../src/lib/shared-store";
 import { DORMANT_MAX_CORE, assignOuterRingCoord, clampViewRect, dormantCandidates, type ViewRect, type WorldCoord } from "./world-coords";
 import { projectGameJson } from "./economy";
 import { capacity } from "../src/lib/game";
@@ -222,7 +223,7 @@ function finiteInteger(value: unknown, min: number, max: number): number | null 
   return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.floor(number))) : null;
 }
 
-const SHARED_CHUNK_CHARS = 500_000; // DO storage values are capped at 2 MiB
+const LEGACY_CHUNK_KEY = "sw:count"; // pre-chunked-store format (one JSON split in pieces)
 const WARP_SPACING = 6;
 
 export class WorldRoom {
@@ -240,28 +241,58 @@ export class WorldRoom {
     return run;
   }
 
+  // What storage holds right now (chunk key → JSON), so a save writes only the changes.
+  savedChunks = new Map<string, string>();
+
   async loadShared(): Promise<SharedWorldState> {
     if (this.shared) return this.shared;
-    const count = (await this.state.storage.get<number>("sw:count")) || 0;
-    if (count > 0) {
-      const keys = Array.from({ length: count }, (_, index) => `sw:${index}`);
-      const parts = await this.state.storage.get<string>(keys);
-      try { this.shared = JSON.parse(keys.map((key) => parts.get(key) || "").join("")) as SharedWorldState; } catch { this.shared = undefined; }
+    const stored = await this.state.storage.list<string>({ prefix: STORE_PREFIX });
+    const chunks = new Map<string, string>();
+    for (const [key, value] of stored) if (typeof value === "string") chunks.set(key, value);
+    this.savedChunks = chunks;
+    let loaded = assembleShared(chunks);
+    if (!loaded) {
+      // Older single-blob save (sw:*): read it once, then move to the chunked store.
+      const count = (await this.state.storage.get<number>(LEGACY_CHUNK_KEY)) || 0;
+      if (count > 0) {
+        const keys = Array.from({ length: count }, (_, index) => `sw:${index}`);
+        const parts = await this.state.storage.get<string>(keys);
+        try { loaded = JSON.parse(keys.map((key) => parts.get(key) || "").join("")) as SharedWorldState; } catch { loaded = null; }
+        if (loaded) {
+          await this.saveShared(loaded);
+          await this.state.storage.delete([LEGACY_CHUNK_KEY, ...keys]);
+        }
+      }
     }
-    if (!this.shared) await this.saveShared(createSharedWorld(Date.now(), defaultN()));
-    return this.shared!;
+    if (!loaded) { await this.saveShared(createSharedWorld(Date.now(), defaultN())); return this.shared!; }
+    this.shared = loaded;
+    return loaded;
   }
 
+  /** True once any shared world exists in storage (new or legacy format). */
+  async hasShared(): Promise<boolean> {
+    if (this.shared) return true;
+    if ((await this.state.storage.list({ prefix: `${STORE_PREFIX}meta`, limit: 1 })).size) return true;
+    return !!(await this.state.storage.get<number>(LEGACY_CHUNK_KEY));
+  }
+
+  // Writes only the chunks whose content changed, atomically.
   async saveShared(next: SharedWorldState) {
-    const json = JSON.stringify(next);
-    const count = Math.max(1, Math.ceil(json.length / SHARED_CHUNK_CHARS));
-    const previous = (await this.state.storage.get<number>("sw:count")) || 0;
-    const entries: Record<string, unknown> = { "sw:count": count };
-    for (let index = 0; index < count; index += 1) entries[`sw:${index}`] = json.slice(index * SHARED_CHUNK_CHARS, (index + 1) * SHARED_CHUNK_CHARS);
-    await this.state.storage.put(entries);
-    if (previous > count) await this.state.storage.delete(Array.from({ length: previous - count }, (_, index) => `sw:${count + index}`));
+    const chunks = sharedChunks(next);
+    const { put, remove } = chunkDelta(this.savedChunks, chunks);
+    if (put.size || remove.length) {
+      await this.state.storage.transaction(async (txn) => {
+        const entries = [...put];
+        for (let index = 0; index < entries.length; index += 128) await txn.put(Object.fromEntries(entries.slice(index, index + 128)));
+        for (let index = 0; index < remove.length; index += 128) await txn.delete(remove.slice(index, index + 128));
+      });
+    }
+    this.savedChunks = chunks;
     this.shared = next;
   }
+
+  /** Drop uncommitted in-place changes: the next read reloads the last saved world. */
+  forgetShared() { this.shared = undefined; }
 
   sessionSlice(state: SharedWorldState, playerId: string): WorldAuthoritySession {
     // version 7 = the client LocalWorldSession version, so it never re-runs private-world migrations on a slice.
@@ -332,7 +363,13 @@ export class WorldRoom {
         if (warpTo) await this.moveCoord(warpTo.playerId, warpTo.coord);
         await this.scheduleAlarm();
       },
-      discard: () => { if (!done) { done = true; pending = null; warpTo = null; } },
+      discard: () => {
+        if (done) return;
+        done = true; warpTo = null;
+        // The shared world is mutated in place: forget it so the last committed copy reloads.
+        if (pending) this.forgetShared();
+        pending = null;
+      },
     };
   }
 
@@ -503,7 +540,7 @@ export class WorldRoom {
     }
     const home = coord;
     await this.locked(async () => {
-      if (!(await this.state.storage.get<number>("sw:count"))) return;
+      if (!(await this.hasShared())) return;
       const shared = await this.loadShared();
       if (!sharedHasPlayer(shared, pid)) return;
       const moved = setSharedHome(shared, pid, home);
@@ -688,7 +725,7 @@ export class WorldRoom {
     // Strategic zoom: only the public target aggregate (no players, no coordinates of cities).
     if (strategic) {
       ws.serializeAttachment(att);
-      if (!(await this.state.storage.get<number>("sw:count"))) return;
+      if (!(await this.hasShared())) return;
       const shared = await this.loadShared();
       try { ws.send(JSON.stringify({ type: "view_clusters", clusters: sharedClusters(shared) })); } catch {}
       return;
@@ -702,7 +739,7 @@ export class WorldRoom {
       .filter((player) => player.id !== att.pid && player.coordVersion === COORD_VERSION && inView(rect, player.coords))
       .slice(0, VIEW_MAX_CITIES);
     // Shared world: public targets in view + which player's fleet occupies them (no march paths).
-    const shared = (await this.state.storage.get<number>("sw:count")) ? await this.loadShared() : undefined;
+    const shared = (await this.hasShared()) ? await this.loadShared() : undefined;
     const view = shared ? sharedView(shared, rect) : null;
     try { ws.send(JSON.stringify({ type: "view_players", rect, players: visible, ...(view ? { targets: view.targets, occupiers: view.occupiers } : {}) })); } catch {}
   }
@@ -713,7 +750,7 @@ export class WorldRoom {
     if (!["monster", "cash", "oil", "power"].includes(kind)) return;
     const level = Math.max(1, Math.floor(Number(data.level) || 1));
     const index = Math.max(0, Math.floor(Number(data.index) || 0));
-    const shared = (await this.state.storage.get<number>("sw:count")) ? await this.loadShared() : undefined;
+    const shared = (await this.hasShared()) ? await this.loadShared() : undefined;
     const found = shared ? searchShared(shared, pid, kind, level, index) : { target: null, total: 0 };
     try { ws.send(JSON.stringify({ type: "search_result", kind, level, index, total: found.total, target: found.target })); } catch {}
   }
@@ -755,7 +792,7 @@ export class WorldRoom {
   // Wake at the next telegraph arrival or shared-world event, whichever is first.
   async scheduleAlarm() {
     const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
-    const shared = this.shared ?? ((await this.state.storage.get<number>("sw:count")) ? await this.loadShared() : undefined);
+    const shared = this.shared ?? ((await this.hasShared()) ? await this.loadShared() : undefined);
     const next = Math.min(...marches.map((m) => m.arriveAt), shared ? nextSharedEventAt(shared) ?? Infinity : Infinity);
     if (!Number.isFinite(next)) return;
     const current = await this.state.storage.getAlarm();
@@ -778,7 +815,7 @@ export class WorldRoom {
     if (due.length) await this.state.storage.put("marches", remaining);
     // Shared world: resolve every due arrival, gather, return and respawn, owners online or not.
     await this.locked(async () => {
-      if (!(await this.state.storage.get<number>("sw:count"))) return;
+      if (!(await this.hasShared())) return;
       const shared = await this.loadShared();
       const nextEvent = nextSharedEventAt(shared);
       if (nextEvent !== null && nextEvent <= now) await this.saveShared(advanceSharedWorld(shared, now, defaultN()));

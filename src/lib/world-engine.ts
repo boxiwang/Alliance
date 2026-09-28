@@ -371,6 +371,17 @@ export type DispatchMarchResult =
 
 function clone<T>(value: T): T { return structuredClone(value); }
 
+// The shared world (docs/MAP-2048.md) runs the engine in place: no whole-world copies.
+// Everywhere else the engine stays copy-on-write (pure) as before.
+let inPlaceDepth = 0;
+/** Run engine calls that mutate the given world directly instead of copying it. */
+export function mutateInPlace<T>(fn: () => T): T {
+  inPlaceDepth += 1;
+  try { return fn(); } finally { inPlaceDepth -= 1; }
+}
+export function isMutatingInPlace(): boolean { return inPlaceDepth > 0; }
+function own(source: HeadlessWorld): HeadlessWorld { return inPlaceDepth ? source : clone(source); }
+
 function hashText(text: string): number {
   let h = 2166136261;
   for (let i = 0; i < text.length; i += 1) {
@@ -555,7 +566,7 @@ function spawnPlayerMutable(world: HeadlessWorld, input: SpawnPlayerInput, now: 
 }
 
 export function spawnPlayers(source: HeadlessWorld, inputs: SpawnPlayerInput[], now = Date.now()): HeadlessWorld {
-  const world = clone(source);
+  const world = own(source);
   inputs.forEach((input) => spawnPlayerMutable(world, input, now));
   return world;
 }
@@ -788,7 +799,7 @@ export function scanForRogue(
   now = Date.now(),
   numbers: any = getN(),
 ): RogueScanResult {
-  const world = clone(source);
+  const world = own(source);
   const player = world.players[playerId];
   if (!player) return { world, targetId: null, spawned: false, error: "player_not_found" };
   const city = world.entities[player.cityId];
@@ -846,7 +857,7 @@ export function populateWorld(
   now = Date.now(),
   numbers: any = getN(),
 ): HeadlessWorld {
-  const world = clone(source);
+  const world = own(source);
   const random = rng(hashText(`${world.stateId}:population:${world.nextEntitySeq}`));
   const resources: ResKey[] = ["cash", "oil", "power"];
   const pop = numbers.world?.population ?? {};
@@ -905,7 +916,7 @@ function targetRespawnAt(world: HeadlessWorld, kind: "resource" | "monster", ent
 }
 
 export function occupyResource(source: HeadlessWorld, resourceId: string, marchId: string, now = Date.now()): { world: HeadlessWorld; ok: boolean } {
-  const world = clone(source);
+  const world = own(source);
   const entity = world.entities[resourceId];
   if (!entity || entity.kind !== "resource" || entity.state !== "available") return { world, ok: false };
   entity.state = "occupied"; entity.occupiedByMarchId = marchId; entity.revision += 1;
@@ -914,7 +925,7 @@ export function occupyResource(source: HeadlessWorld, resourceId: string, marchI
 }
 
 export function depleteResource(source: HeadlessWorld, resourceId: string, amount: number, now = Date.now()): HeadlessWorld {
-  const world = clone(source);
+  const world = own(source);
   const entity = world.entities[resourceId];
   if (!entity || entity.kind !== "resource") return world;
   entity.amount = Math.max(0, entity.amount - Math.max(0, amount));
@@ -929,7 +940,7 @@ export function depleteResource(source: HeadlessWorld, resourceId: string, amoun
 }
 
 export function defeatMonster(source: HeadlessWorld, monsterId: string, actorId: string, now = Date.now()): HeadlessWorld {
-  const world = clone(source);
+  const world = own(source);
   const entity = world.entities[monsterId];
   if (!entity || entity.kind !== "monster" || entity.state === "defeated") return world;
   entity.state = "defeated"; entity.engagedByMarchId = null; entity.revision += 1;
@@ -940,7 +951,7 @@ export function defeatMonster(source: HeadlessWorld, monsterId: string, actorId:
 }
 
 export function breachCity(source: HeadlessWorld, cityId: string, actorId: string, wallDamage: number, now = Date.now()): HeadlessWorld {
-  const world = clone(source);
+  const world = own(source);
   const entity = world.entities[cityId];
   if (!entity || entity.kind !== "city") return world;
   entity.wall.value = Math.max(0, entity.wall.value - Math.max(0, wallDamage));
@@ -978,7 +989,7 @@ function respawnTarget(world: HeadlessWorld, entity: ResourceEntity | MonsterEnt
 
 /** One-time browser-local migration from player halos to neutral radial geography. */
 export function redistributeWorldTargets(source: HeadlessWorld, now = Date.now(), numbers: any = getN()): HeadlessWorld {
-  const world = clone(source);
+  const world = own(source);
   const random = rng(hashText(`${world.stateId}:radial-geography:v1`));
   const activeTargetIds = new Set(Object.values(world.marches)
     .filter((march) => !["completed", "failed"].includes(march.state))
@@ -1008,7 +1019,7 @@ export function redistributeWorldTargets(source: HeadlessWorld, now = Date.now()
  * idle targets move into the same circular boundary used by all new population calls.
  */
 export function migrateWorldToCircularBoundary(source: HeadlessWorld, now = Date.now(), numbers: any = getN()): HeadlessWorld {
-  const world = clone(source);
+  const world = own(source);
   world.spawnAnchors = generateSpawnAnchors(world.stateId, world.config);
   const usedAnchors = new Set<number>();
   const players = Object.values(world.players).sort((left, right) => left.joinedAt - right.joinedAt || left.id.localeCompare(right.id));
@@ -1231,7 +1242,7 @@ export function dispatchMarch(
   now = Date.now(),
   numbers: any = getN(),
 ): DispatchMarchResult {
-  const world = clone(source);
+  const world = own(source);
   const player = world.players[input.playerId];
   if (!player) return { ok: false, world, error: "player_not_found" };
   if (!input.idempotencyKey.trim()) return { ok: false, world, error: "idempotency_key_required" };
@@ -1673,7 +1684,7 @@ function processReturn(world: HeadlessWorld, march: HeadlessMarch, at: number): 
 }
 
 export function recallMarch(source: HeadlessWorld, marchId: string, playerId: string, now = Date.now(), numbers: any = getN()): HeadlessWorld {
-  const world = clone(source);
+  const world = own(source);
   const march = world.marches[marchId];
   if (!march || march.playerId !== playerId || !["outbound", "gathering"].includes(march.state)) return world;
   const target = world.entities[march.targetId];
@@ -1700,7 +1711,7 @@ export function settlePlayerMarches(source: HeadlessWorld, playerId: string, now
   Object.values(source.marches)
     .filter((march) => march.playerId === playerId && ["outbound", "gathering"].includes(march.state))
     .forEach((march) => { world = recallMarch(world, march.id, playerId, now, numbers); });
-  world = world === source ? clone(source) : world;
+  world = world === source ? own(source) : world;
   Object.values(world.marches)
     .filter((march) => march.playerId === playerId && march.state === "returning")
     .forEach((march) => processReturn(world, march, now));
@@ -1729,7 +1740,7 @@ export function removeSimulatedCities(source: HeadlessWorld, now = Date.now(), n
   Object.values(source.marches)
     .filter((march) => cityIds.has(march.targetId) && !march.playerId.startsWith(SIMULATED_PLAYER_PREFIX) && ["outbound", "gathering"].includes(march.state))
     .forEach((march) => { world = recallMarch(world, march.id, march.playerId, now, numbers); });
-  world = world === source ? clone(source) : world;
+  world = world === source ? own(source) : world;
   simulated.forEach((player) => {
     delete world.entities[player.cityId];
     delete world.players[player.id];
@@ -1743,7 +1754,7 @@ export function removeSimulatedCities(source: HeadlessWorld, now = Date.now(), n
 }
 
 export function advanceHeadlessWorld(source: HeadlessWorld, now = Date.now(), numbers: any = getN()): HeadlessWorld {
-  const world = clone(source);
+  const world = own(source);
   // Batch-sort due events. Repeat only when a handler creates another already-due event,
   // so a 10k-event catch-up is O(n log n), not 10k repeated full-array scans.
   for (;;) {
