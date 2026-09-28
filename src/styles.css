@@ -1617,3 +1617,6 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 /* Retaliation locate in System reports (P0-4) */
 .logrow .lg-locate{margin-left:8px;padding:2px 7px;border:1px solid rgba(255,111,133,.45);border-radius:3px;background:rgba(255,111,133,.08);color:#ffb3c0;font:600 9px var(--hud);letter-spacing:.12em;cursor:pointer}
 .logrow .lg-locate:hover{border-color:rgba(255,111,133,.8)}
+/* Rival cities: invisible hit area (the planet skin and name plate ignore the pointer) */
+.world-remote-player{cursor:pointer}
+.world-remote-hit{fill:transparent;pointer-events:all}

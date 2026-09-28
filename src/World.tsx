@@ -1211,6 +1211,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         const halo = (PLANET_HALOS.some((h) => h.id === cos.halo) ? cos.halo : null) as PlanetHaloId | null;
         const orbit = (PLANET_ORBITS.some((o) => o.id === cos.orbit) ? cos.orbit : null) as PlanetOrbitId | null;
         return <g key={`rp-${p.id}`} transform={`translate(${cx} ${cy}) scale(${markerScale}) translate(${-cx} ${-cy})`} className={`world-remote-player ${sel ? "selected" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setRemoteSelectedId(p.id); setSelectedId(null); setHomeSelected(false); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
+          {/* Planet skin and name plate ignore the pointer, so the city needs its own hit area. */}
+          <circle cx={cx} cy={cy} r={bodyR + 3} className="world-remote-hit" />
           {sel && <circle cx={cx} cy={cy} r={bodyR + 3.6} fill="none" stroke={col} strokeWidth={0.8} opacity={0.9} />}
           {halo && <WorldHaloFx cx={cx} cy={cy} r={bodyR} halo={halo} half="back" />}
           {orbit && <WorldOrbitFx cx={cx} cy={cy} r={bodyR} orbit={orbit} half="back" />}
