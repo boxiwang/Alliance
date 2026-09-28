@@ -1167,7 +1167,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     return clusterWorldSignals(filteredTargets.filter((entity) => entity.position.x >= viewX - pad && entity.position.x <= viewX + viewport.width + pad
       && entity.position.y >= viewY - pad && entity.position.y <= viewY + viewport.height + pad), cell);
   }, [denseField, sharedMode, serverFieldClusters, layers, filteredTargets, viewX, viewY, viewport.width, viewport.height]);
-  const mapClusters = useMemo(() => (strategicZoom || fieldClusters) ? (fieldClusters ?? signalClusters).map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1 * Math.max(1, 1 / zoom)}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera(cluster.position); setZoom((value) => Math.max(1.8, Math.min(WORLD_MAX_ZOOM, value * 1.8))); }}>
+  const mapClusters = useMemo(() => (strategicZoom || fieldClusters) ? (fieldClusters ?? signalClusters).map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1 * Math.max(1, 1 / zoom)}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setRemoteSelectedId(null); setCamera(cluster.position); setZoom((value) => Math.max(1.8, Math.min(WORLD_MAX_ZOOM, value * 1.8))); }}>
     <circle cx={cluster.position.x} cy={cluster.position.y} r="6.5" /><circle cx={cluster.position.x} cy={cluster.position.y} r="3.7" /><text x={cluster.position.x} y={cluster.position.y + 1.3}>{cluster.count}</text>
   </g>) : null, [strategicZoom, fieldClusters, signalClusters, markerScale, zoom]);
 
@@ -1489,7 +1489,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const x = Number(warpDraft.x), y = Number(warpDraft.y);
     if (warpDraft.x.trim() === "" || warpDraft.y.trim() === "" || !Number.isFinite(x) || !Number.isFinite(y)) { setMessage("Enter a valid X and Y coordinate."); return; }
     const tile = { x: Math.floor(x), y: Math.floor(y) };
-    setTileMark(tile); setSelectedId(null); setCamera({ x: tile.x + .5, y: tile.y + .5 });
+    setTileMark(tile); setSelectedId(null); setRemoteSelectedId(null); setCamera({ x: tile.x + .5, y: tile.y + .5 });
   }
   const warpHint = useMemo(() => (warpOpen && warpDestination && warpDestinationBlock && WARP_LOCATION_BLOCKS.has(warpDestinationBlock)
     ? nearestWarpPoint(world, session.playerId, warpDestination, N) : null),
@@ -1622,7 +1622,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const local = pt.matrixTransform(ctm.inverse());
     const tx = Math.max(0, Math.min(world.config.width - 1, Math.floor(local.x)));
     const ty = Math.max(0, Math.min(world.config.height - 1, Math.floor(local.y)));
-    setTileMark({ x: tx, y: ty }); setSelectedId(null);
+    setTileMark({ x: tx, y: ty }); setSelectedId(null); setRemoteSelectedId(null);
   }
   function pointerCancel() {
     const committedCamera = pendingCamera.current;
