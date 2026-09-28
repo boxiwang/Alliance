@@ -87,6 +87,7 @@ export default function GameNav({
   return (
     <nav className="command-nav" aria-label="Game view and account status">
       <div className="command-nav-head">
+        <div className="command-nav-left">
         {/* Identity = the way into Profile & settings (mainstream SLG: tap your avatar).
             One button: sigil with Core badge and settings gear, [TAG] name, equipped title. */}
         <button type="button" className={`command-profile ${view === "profile" ? "active" : ""}`}
@@ -103,8 +104,10 @@ export default function GameNav({
             {equippedTitle && <small>{equippedTitle.name.toUpperCase()}</small>}
           </span>
         </button>
+        {/* Server clock reads as an instrument beside the identity, not as a control. */}
+        <DualClock />
+        </div>
         <div className="command-nav-controls">
-          <DualClock />
           <div className="command-might"><small>MIGHT</small><b>{compact(might)}</b></div>
           <div className="command-tabs">
             <button className="soon" disabled aria-disabled="true">

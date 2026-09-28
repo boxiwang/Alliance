@@ -1589,7 +1589,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .mini-comms{background:linear-gradient(145deg,#050f1d,#070a19)}
 
 /* Dual clock (P0-8): a chronometer beside MIGHT — same frame, cyan instead of gold */
-.command-clock{display:flex;align-items:center;gap:9px;min-width:132px;padding:6px 12px 6px 10px;border:1px solid rgba(56,217,255,.24);border-radius:8px;background:linear-gradient(135deg,rgba(56,217,255,.08),rgba(128,74,210,.06));box-shadow:inset 2px 0 #38d9ff}
+.command-clock{display:flex;align-items:center;gap:9px;padding:2px 0 2px 16px;border-left:1px solid rgba(120,160,200,.16)}
 .command-clock-dial{flex:none;width:28px;height:28px;overflow:visible}
 .command-clock-dial .track{fill:none;stroke:rgba(56,217,255,.14);stroke-width:1.6}
 .command-clock-dial .arc{fill:none;stroke:#38d9ff;stroke-width:1.6;stroke-linecap:round;opacity:.75;filter:drop-shadow(0 0 2px rgba(56,217,255,.6))}
@@ -1679,3 +1679,6 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .command-profile-text b i{margin-right:5px;font-style:normal;color:#7fd6ee}
 .command-profile-text small{overflow:hidden;color:#8f9fb5;font:600 8.5px var(--mono);letter-spacing:.14em;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:620px){.command-profile{padding-right:10px}.command-profile-text small{display:none}}
+/* Left of the nav head: profile button + server clock */
+.command-nav-left{display:flex;min-width:0;align-items:center;gap:16px}
+@media(max-width:900px){.command-nav-left .command-clock{display:none}}
