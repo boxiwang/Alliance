@@ -108,7 +108,7 @@ export default function NameSignal({
       // and below) drew rings and the Void Whisper hole across the first letters of the
       // neighbouring lines.
       context.save();
-      context.beginPath(); context.rect(0, padY - 3, width, height - padY * 2 + 6); context.clip();
+      context.beginPath(); context.rect(0, padY - 6, width, height - padY * 2 + 12); context.clip();
       context.globalCompositeOperation = "lighter";
 
       if (id === "void-whisper") {

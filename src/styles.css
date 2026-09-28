@@ -1026,7 +1026,9 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 
 /* Commander identity cosmetics — Claude's Name Signals + in-game cursors. */
 .name-signal{position:relative;display:inline-flex;align-items:center;isolation:isolate;white-space:nowrap;color:inherit;line-height:1.15}
-.name-signal canvas{position:absolute;z-index:0;max-width:none;pointer-events:none}
+.name-signal canvas{position:absolute;z-index:0;max-width:none;pointer-events:none;
+  /* Feather the vertical bleed so effects fade out instead of ending on a hard band edge. */
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 34%,#000 66%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 34%,#000 66%,transparent 100%)}
 .name-signal-text{position:relative;z-index:1;display:inline-block;white-space:nowrap}
 .name-signal-clear-channel{color:inherit}
 .name-signal-signal-boost{color:#8fe6ff;animation:name-signal-ping 2.6s ease-in-out infinite}
@@ -1675,7 +1677,10 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .command-profile-gear svg{width:13px;height:13px;fill:currentColor}
 .command-profile:hover .command-profile-gear{color:#dff7ff;transform:rotate(60deg)}
 .command-profile-text{min-width:0;display:flex;flex-direction:column;gap:4px}
-.command-profile-text b{overflow:hidden;color:#eef7fb;font:700 15px var(--hud);letter-spacing:.02em;text-overflow:ellipsis;white-space:nowrap}
+.command-profile-text b{display:flex;min-width:0;align-items:baseline;color:#eef7fb;font:700 15px var(--hud);letter-spacing:.02em;white-space:nowrap}
+/* The name signal canvas bleeds past the text box: never clip the line, only ellipsize the name. */
+.command-profile-text b .name-signal{min-width:0;max-width:220px}
+.command-profile-text b .name-signal-text{display:inline-block;max-width:220px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
 .command-profile-text b i{margin-right:5px;font-style:normal;color:#7fd6ee}
 .command-profile-text small{overflow:hidden;color:#8f9fb5;font:600 8.5px var(--mono);letter-spacing:.14em;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:620px){.command-profile{padding-right:10px}.command-profile-text small{display:none}}
