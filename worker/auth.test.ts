@@ -6,7 +6,9 @@ describe("backend sessions", () => {
     const token = await issueSession("test-secret", { sub: "player-1", method: "guest", role: "player" }, 60);
     expect((await verifySession("test-secret", token))?.sub).toBe("player-1");
     expect(await verifySession("wrong-secret", token)).toBeNull();
-    expect(await verifySession("test-secret", `${token.slice(0, -1)}x`)).toBeNull();
+    // Always change the last character (replacing it with "x" was a no-op when it already was "x").
+    const tampered = `${token.slice(0, -1)}${token.endsWith("x") ? "y" : "x"}`;
+    expect(await verifySession("test-secret", tampered)).toBeNull();
   });
 
   it("normalizes valid wallets and rejects non-address identities", () => {
