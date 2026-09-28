@@ -95,12 +95,12 @@ export default function GameNav({
             <span className={`command-sigil command-sigil-${profile.avatarId || "genesis"}`}><i /></span>
             <em className="command-profile-core">{townhallLevel}</em>
             <span className="command-profile-gear" aria-hidden="true">
-              <svg viewBox="0 0 16 16"><path d="M8 5.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Zm6.1 3.6-.1-1.6 1.4-1.1-1.4-2.4-1.7.6a5.6 5.6 0 0 0-1.4-.8L10.6 1.8H7.8l-.3 1.7c-.5.2-1 .5-1.4.8L4.4 3.7 3 6.1l1.4 1.1-.1.8.1.8L3 9.9l1.4 2.4 1.7-.6c.4.3.9.6 1.4.8l.3 1.7h2.8l.3-1.7c.5-.2 1-.5 1.4-.8l1.7.6 1.4-2.4-1.4-1.1Z" /></svg>
+              <svg viewBox="0 0 16 16"><path d={GEAR_PATH} fillRule="evenodd" /></svg>
             </span>
           </span>
           <span className="command-profile-text">
             <b>{profile.factionSymbol ? <i>[{profile.factionSymbol}]</i> : null}{profile.name}</b>
-            <small>{equippedTitle ? equippedTitle.name.toUpperCase() : "PROFILE & SETTINGS"}</small>
+            {equippedTitle && <small>{equippedTitle.name.toUpperCase()}</small>}
           </span>
         </button>
         <div className="command-nav-controls">
@@ -205,6 +205,20 @@ function AnimatedResource({ resource, value, rate, cap, quiet }: { resource: Res
     {gain && <em key={gain.id} className={`command-resource-gain${gain.full ? " full" : ""}`} onAnimationEnd={() => setGain(null)}>{gain.full ? "CAPACITY" : `+${compact(displayResource(gain.amount))}`}</em>}
   </div>;
 }
+
+/** A proper gear: square teeth around a rim with an axle hole (drawn once, evenodd). */
+const GEAR_PATH = (() => {
+  const teeth = 8, rOuter = 7.4, rRoot = 5.5, hole = 2.3, c = 8;
+  const point = (radius: number, angle: number) => `${(c + Math.cos(angle) * radius).toFixed(2)} ${(c + Math.sin(angle) * radius).toFixed(2)}`;
+  const step = (Math.PI * 2) / teeth, half = step * .23, flank = step * .06;
+  let d = "";
+  for (let i = 0; i < teeth; i += 1) {
+    const a = i * step;
+    d += `${i ? "L" : "M"}${point(rRoot, a - half - flank)} L${point(rOuter, a - half)} L${point(rOuter, a + half)} L${point(rRoot, a + half + flank)} `;
+    d += `A${rRoot} ${rRoot} 0 0 1 ${point(rRoot, a + step - half - flank)} `;
+  }
+  return `${d}Z M${c + hole} ${c} A${hole} ${hole} 0 1 0 ${c - hole} ${c} A${hole} ${hole} 0 1 0 ${c + hole} ${c} Z`;
+})();
 
 function DualClock() {
   const [now, setNow] = useState(() => new Date());
