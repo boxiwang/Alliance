@@ -13,7 +13,8 @@ import {
   type SearchKind, type SharedWorldState,
 } from "../src/lib/shared-world";
 import type { WorldAuthoritySession } from "../src/lib/world-authority";
-import { STORE_PREFIX, assembleShared, chunkDelta, sharedChunks } from "../src/lib/shared-store";
+import type { WorldEntity } from "../src/lib/world-engine";
+import { STORE_PREFIX, assembleShared, chunkDelta, clustersFromChunk, sectorKeysForRect, sharedChunks, targetsFromSectorChunks } from "../src/lib/shared-store";
 import { DORMANT_MAX_CORE, QUADRANT_CAPACITY, assignOuterRingCoord, clampViewRect, dormantCandidates, quadrantOfCoord, spawnQuadrant, type ViewRect, type WorldCoord } from "./world-coords";
 import { projectGameJson } from "./economy";
 import { capacity } from "../src/lib/game";
@@ -781,11 +782,11 @@ export class WorldRoom {
     if (att.viewAt && now - att.viewAt < VIEW_MIN_INTERVAL_MS) return;
     att.viewAt = now;
     // Strategic zoom: only the public target aggregate (no players, no coordinates of cities).
+    // A hibernated room answers from the precomputed chunk instead of loading the world.
     if (strategic) {
       ws.serializeAttachment(att);
-      if (!(await this.hasShared())) return;
-      const shared = await this.loadShared();
-      try { ws.send(JSON.stringify({ type: "view_clusters", clusters: sharedClusters(shared) })); } catch {}
+      const clusters = this.shared ? sharedClusters(this.shared) : clustersFromChunk(await this.state.storage.get<string>(`${STORE_PREFIX}x:clusters`));
+      try { ws.send(JSON.stringify({ type: "view_clusters", clusters })); } catch {}
       return;
     }
     const rect = clampViewRect(raw);
@@ -797,8 +798,14 @@ export class WorldRoom {
       .filter((player) => player.id !== att.pid && player.coordVersion === COORD_VERSION && inView(rect, player.coords))
       .slice(0, VIEW_MAX_CITIES);
     // Shared world: public targets in view + which player's fleet occupies them (no march paths).
-    const shared = (await this.hasShared()) ? await this.loadShared() : undefined;
-    const view = shared ? sharedView(shared, rect) : null;
+    // In memory: query it. Hibernated: read only the sector chunks under the rect (the room
+    // is evicted between messages, and reloading the whole world cost ~50 ms per view).
+    let view: { targets: WorldEntity[]; occupiers: Record<string, string> } | null = null;
+    if (this.shared) view = sharedView(this.shared, rect);
+    else {
+      const parts = await this.state.storage.get<string>(sectorKeysForRect(rect));
+      if (parts.size) view = { targets: targetsFromSectorChunks(parts.values(), rect), occupiers: {} };
+    }
     // Dense Field views: the client draws clusters there anyway, so send the aggregate
     // (a few KB) instead of every planet (hundreds of KB and most of this message's CPU).
     const dense = !!view && view.targets.length > VIEW_TARGET_BUDGET;

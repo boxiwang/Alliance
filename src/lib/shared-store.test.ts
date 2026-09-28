@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import defaults from "../../docs/numbers.json";
 import { initGame } from "./gamestore";
-import { applySharedCommand, createSharedWorld, joinSharedWorld } from "./shared-world";
-import { assembleShared, chunkDelta, sharedChunks } from "./shared-store";
+import { applySharedCommand, createSharedWorld, joinSharedWorld, sharedClusters, sharedView } from "./shared-world";
+import { assembleShared, chunkDelta, clustersFromChunk, sectorKeysForRect, sharedChunks, STORE_PREFIX, targetsFromSectorChunks } from "./shared-store";
 
 const now = 1_800_000_000_000;
 
@@ -44,4 +44,16 @@ describe("shared world chunked store", () => {
   it("has no save without meta", () => {
     expect(assembleShared(new Map())).toBeNull();
   });
+
+  it("answers a view from sector chunks exactly like the in-memory world (hibernated room)", () => {
+    const { state } = world();
+    const chunks = sharedChunks(state);
+    for (const rect of [{ x0: 100, y0: 300, x1: 500, y1: 700 }, { x0: 0, y0: 0, x1: 130, y1: 130 }]) {
+      const fromChunks = targetsFromSectorChunks(sectorKeysForRect(rect).map((key) => chunks.get(key)), rect).map((entity) => entity.id).sort();
+      const inMemory = sharedView(state, rect).targets.map((entity) => entity.id).sort();
+      expect(fromChunks).toEqual(inMemory);
+    }
+    expect(clustersFromChunk(chunks.get(`${STORE_PREFIX}x:clusters`))).toEqual(sharedClusters(state));
+  });
 });
+
