@@ -785,7 +785,10 @@ export class WorldRoom {
     // A hibernated room answers from the precomputed chunk instead of loading the world.
     if (strategic) {
       ws.serializeAttachment(att);
-      const clusters = this.shared ? sharedClusters(this.shared) : clustersFromChunk(await this.state.storage.get<string>(`${STORE_PREFIX}x:clusters`));
+      const stored = this.shared ? undefined : await this.state.storage.get<string>(`${STORE_PREFIX}x:clusters`);
+      // No precomputed chunk yet (written on the next save): compute it from the world once.
+      const clusters = this.shared ? sharedClusters(this.shared)
+        : stored ? clustersFromChunk(stored) : (await this.hasShared()) ? sharedClusters(await this.loadShared()) : [];
       try { ws.send(JSON.stringify({ type: "view_clusters", clusters })); } catch {}
       return;
     }
