@@ -20,6 +20,7 @@ import {
   localWorldTargetName, openLocalWorldSession, recallLocalWorldMarch, saveLocalWorldSession, scanLocalWorldRogue,
 } from "./lib/world-adapter";
 import GameNav from "./GameNav";
+import NameSignal from "./NameSignal";
 import MiniComms from "./MiniComms";
 import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
@@ -1808,7 +1809,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
               <span className={`command-sigil command-sigil-${sigil} commander-card-sigil`}><i /></span>
               <div>
                 <small>COMMANDER</small>
-                <b>{tag}{remoteSelected.name || "Commander"}</b>
+                <b>{tag}<NameSignal key={remoteSelected.id} signal={(remoteSelected.cosmetics as { chatSignal?: ChatSignalId | null } | null)?.chatSignal ?? null}>{remoteSelected.name || "Commander"}</NameSignal></b>
                 <em>CORE {remoteSelected.keepLevel || 1}{skin ? ` · ${skin.split("-").join(" ").toUpperCase()}` : ""}</em>
               </div>
             </header>

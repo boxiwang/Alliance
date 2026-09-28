@@ -15,15 +15,20 @@ function SovereignNameCrown() {
 
 function smooth(value: number): number { return value * value * (3 - 2 * value); }
 
+/** Every "once" effect has reached its resting frame by then. */
+const ONCE_SETTLE_MS = 1600;
+
 /** Rich commander-name treatment. Canvas tiers settle into readable text in live feeds. */
 export default function NameSignal({
-  signal, children, mode = "once", reducedMotion = false, className = "",
+  signal, children, mode = "once", reducedMotion = false, className = "", replay = 0,
 }: {
   signal: ChatSignalId | null | undefined;
   children: string;
   mode?: NameSignalMode;
   reducedMotion?: boolean;
   className?: string;
+  /** Change this number to play a "once" effect again (e.g. on hover). */
+  replay?: number;
 }) {
   const id = signal || "clear-channel";
   const rootRef = useRef<HTMLSpanElement>(null);
@@ -172,13 +177,16 @@ export default function NameSignal({
         }
       }
       context.restore();
+      // "once" settles into readable text: stop repainting (always-visible names such as
+      // the nav identity must not burn a frame loop forever).
+      if (mode === "once" && now - started > ONCE_SETTLE_MS) cancelAnimationFrame(raf);
     };
     raf = requestAnimationFrame(frame);
     return () => {
       disposed = true; cancelAnimationFrame(raf); resizeObserver.disconnect(); intersection.disconnect();
       text.removeAttribute("style"); context.clearRect(0, 0, width, height);
     };
-  }, [id, mode, reducedMotion, rich]);
+  }, [id, mode, reducedMotion, rich, replay]);
 
   return <span ref={rootRef} className={`name-signal name-signal-${id} ${className}`.trim()}>
     {id === "sovereign-flare" && <SovereignNameCrown />}

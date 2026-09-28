@@ -3,6 +3,7 @@ import type { Profile } from "./lib/profile";
 import { RES, RES_ORDER, ResKey, BKey, displayResource, displayTroops } from "./lib/game";
 import { compact, formatDualClock } from "./lib/format";
 import BuildingGlyph from "./BuildingGlyph";
+import NameSignal from "./NameSignal";
 import { TITLE_SEALS, loadCosmeticVault, loadPlayerAccount } from "./lib/player-account";
 import { loadShopAccount } from "./lib/backend";
 
@@ -45,7 +46,16 @@ export default function GameNav({
   onProfile: () => void;
 }) {
   const account = loadPlayerAccount(profile.address);
-  const equippedTitle = TITLE_SEALS.find((seal) => seal.id === loadCosmeticVault(profile.address).equipped.title);
+  const equipped = loadCosmeticVault(profile.address).equipped;
+  const equippedTitle = TITLE_SEALS.find((seal) => seal.id === equipped.title);
+  // The equipped name signal plays once when the game opens and again on hover (throttled).
+  const [signalReplay, setSignalReplay] = useState(0);
+  const lastReplay = useRef(0);
+  const replaySignal = () => {
+    const now = Date.now();
+    if (now - lastReplay.current < 2500) return;
+    lastReplay.current = now; setSignalReplay((value) => value + 1);
+  };
   const [authoritativeCredits, setAuthoritativeCredits] = useState(credits ?? account.credits);
   const [displayedCredits, setDisplayedCredits] = useState(credits ?? account.credits);
   const [creditPulse, setCreditPulse] = useState(false);
@@ -91,7 +101,7 @@ export default function GameNav({
         {/* Identity = the way into Profile & settings (mainstream SLG: tap your avatar).
             One button: sigil with Core badge and settings gear, [TAG] name, equipped title. */}
         <button type="button" className={`command-profile ${view === "profile" ? "active" : ""}`}
-          aria-label="Open profile and settings" aria-current={view === "profile" ? "page" : undefined} onClick={onProfile}>
+          aria-label="Open profile and settings" aria-current={view === "profile" ? "page" : undefined} onClick={onProfile} onMouseEnter={replaySignal}>
           <span className="command-profile-avatar">
             <span className={`command-sigil command-sigil-${profile.avatarId || "genesis"}`}><i /></span>
             <em className="command-profile-core">{townhallLevel}</em>
@@ -100,7 +110,7 @@ export default function GameNav({
             </span>
           </span>
           <span className="command-profile-text">
-            <b>{profile.factionSymbol ? <i>[{profile.factionSymbol}]</i> : null}{profile.name}</b>
+            <b>{profile.factionSymbol ? <i>[{profile.factionSymbol}]</i> : null}<NameSignal signal={equipped.chatSignal} replay={signalReplay} reducedMotion={account.reducedMotion}>{profile.name}</NameSignal></b>
             {equippedTitle && <small>{equippedTitle.name.toUpperCase()}</small>}
           </span>
         </button>
