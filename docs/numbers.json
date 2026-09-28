@@ -4863,8 +4863,8 @@
     },
     "population": {
       "localNpcCities": 0,
-      "resourceTilesPer": 167,
-      "monsterTilesPer": 400,
+      "resourceTilesPer": 250,
+      "monsterTilesPer": 1000,
       "resourceFieldsPerPlayer": 3.2,
       "monstersPerPlayer": 1,
       "minimumResourceFields": 480,

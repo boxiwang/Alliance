@@ -1158,16 +1158,19 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     }
     return count;
   }, [strategicZoom, filteredTargets, viewX, viewY, viewport.width, viewport.height]);
-  const denseField = !strategicZoom && (!!serverFieldClusters || visibleTargetCount > TARGET_MARKER_BUDGET);
+  // Shared world: the switch is a zoom level, identical in both directions (Field = signal
+  // clusters, Tactical = planets) and the server is told which one to send. Local worlds keep
+  // the marker budget.
+  const denseField = !strategicZoom && (sharedMode ? zoom < WORLD_TACTICAL_ZOOM : visibleTargetCount > TARGET_MARKER_BUDGET);
   const fieldClusters = useMemo(() => {
     if (!denseField) return null;
-    if (serverFieldClusters) return serverFieldClusters.filter((cluster) => layers[cluster.kind]);
+    if (sharedMode && serverFieldClusters) return serverFieldClusters.filter((cluster) => layers[cluster.kind]);
     // Power-of-two cells so clusters do not re-shuffle on every zoom tick.
     const cell = 2 ** Math.round(Math.log2(Math.max(16, viewport.width / 8)));
     const pad = viewport.width * .6;
     return clusterWorldSignals(filteredTargets.filter((entity) => entity.position.x >= viewX - pad && entity.position.x <= viewX + viewport.width + pad
       && entity.position.y >= viewY - pad && entity.position.y <= viewY + viewport.height + pad), cell);
-  }, [denseField, serverFieldClusters, layers, filteredTargets, viewX, viewY, viewport.width, viewport.height]);
+  }, [denseField, sharedMode, serverFieldClusters, layers, filteredTargets, viewX, viewY, viewport.width, viewport.height]);
   const mapClusters = useMemo(() => (strategicZoom || fieldClusters) ? (fieldClusters ?? signalClusters).map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1 * Math.max(1, 1 / zoom)}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera(cluster.position); setZoom((value) => Math.max(1.8, Math.min(WORLD_MAX_ZOOM, value * 1.8))); }}>
     <circle cx={cluster.position.x} cy={cluster.position.y} r="6.5" /><circle cx={cluster.position.x} cy={cluster.position.y} r="3.7" /><text x={cluster.position.x} y={cluster.position.y + 1.3}>{cluster.count}</text>
   </g>) : null, [strategicZoom, fieldClusters, signalClusters, markerScale, zoom]);
@@ -1225,8 +1228,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const timer = window.setInterval(ask, 30_000);
     return () => window.clearInterval(timer);
   }, [sharedMode, strategicZoom, rtEpoch]);
+  const lastViewDetailRef = useRef<boolean | null>(null);
   useEffect(() => {
-    lastViewRef.current = null;
+    lastViewRef.current = null; lastViewDetailRef.current = null;
   }, [rtEpoch]);
   useEffect(() => {
     if (strategicZoom) return;
@@ -1236,17 +1240,18 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     // Reuse the last answer only while it still fits the view at a similar scale: after a
     // zoom-in the last answer may have been clusters, and planets are needed now.
     const area = (rect: ViewRect) => (rect.x1 - rect.x0) * (rect.y1 - rect.y0);
-    if (last && want.x0 >= last.x0 && want.y0 >= last.y0 && want.x1 <= last.x1 && want.y1 <= last.y1 && area(want) > area(last) * .35) return;
+    const detail = !denseField; // planets (Tactical) or signal clusters (Field)
+    if (last && lastViewDetailRef.current === detail && want.x0 >= last.x0 && want.y0 >= last.y0 && want.x1 <= last.x1 && want.y1 <= last.y1 && area(want) > area(last) * .35) return;
     const timer = window.setTimeout(() => {
       // The server serves at most VIEW_MAX_SPAN tiles per axis; spend what is left on the margin.
       const sx = Math.max(0, Math.min(spare, (VIEW_MAX_SPAN - (want.x1 - want.x0)) / 2));
       const sy = Math.max(0, Math.min(spare, (VIEW_MAX_SPAN - (want.y1 - want.y0)) / 2));
       const rect = { x0: Math.floor(want.x0 - sx), y0: Math.floor(want.y0 - sy), x1: Math.ceil(want.x1 + sx), y1: Math.ceil(want.y1 + sy) };
-      lastViewRef.current = rect;
-      rtRef.current?.sendView(rect);
+      lastViewRef.current = rect; lastViewDetailRef.current = detail;
+      rtRef.current?.sendView(rect, false, detail);
     }, 200);
     return () => window.clearTimeout(timer);
-  }, [strategicZoom, viewX, viewY, viewport.width, viewport.height, rtEpoch]);
+  }, [strategicZoom, denseField, viewX, viewY, viewport.width, viewport.height, rtEpoch]);
   const mapRemotePlayers = useMemo(() => {
     if (strategicZoom) return null;
     const pad = 30;

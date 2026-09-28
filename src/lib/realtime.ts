@@ -112,8 +112,8 @@ export class RealtimeClient {
   sendScout(to: string) { this.send({ type: "scout", to }); }
   sendMarch(to: string) { this.send({ type: "march", to }); }
   // Map view query: never queued (a stale view is useless); resent after reconnect.
-  sendView(rect: ViewRect, strategic = false) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) { try { this.ws.send(JSON.stringify({ type: "view", rect, strategic })); } catch {} }
+  sendView(rect: ViewRect, strategic = false, detail?: boolean) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) { try { this.ws.send(JSON.stringify({ type: "view", rect, strategic, detail })); } catch {} }
   }
   // Shared-world Search: nearest free target of a kind/level from home; `index` walks outward.
   sendSearch(kind: string, level: number, index: number) { this.send({ type: "search", kind, level, index }); }

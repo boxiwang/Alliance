@@ -651,7 +651,7 @@ export class WorldRoom {
     if (!pid) return;
     const now = Date.now();
     // Map view queries are throttled on their own and do not count against chat.
-    if (data?.type === "view") { await this.handleView(ws, att as SocketAttachment, data.rect, now, !!data.strategic); return; }
+    if (data?.type === "view") { await this.handleView(ws, att as SocketAttachment, data.rect, now, !!data.strategic, typeof data.detail === "boolean" ? data.detail : undefined); return; }
     if (!att.windowStart || now - att.windowStart >= 10_000) { att.windowStart = now; att.messageCount = 0; }
     att.messageCount = (att.messageCount || 0) + 1;
     ws.serializeAttachment(att);
@@ -778,7 +778,7 @@ export class WorldRoom {
   }
 
   // A viewer's map rect → the cities (with coordinates) inside it, capped.
-  async handleView(ws: WebSocket, att: SocketAttachment, raw: unknown, now: number, strategic = false) {
+  async handleView(ws: WebSocket, att: SocketAttachment, raw: unknown, now: number, strategic = false, detail?: boolean) {
     if (att.viewAt && now - att.viewAt < VIEW_MIN_INTERVAL_MS) return;
     att.viewAt = now;
     // Strategic zoom: only the public target aggregate (no players, no coordinates of cities).
@@ -811,7 +811,9 @@ export class WorldRoom {
     }
     // Dense Field views: the client draws clusters there anyway, so send the aggregate
     // (a few KB) instead of every planet (hundreds of KB and most of this message's CPU).
-    const dense = !!view && view.targets.length > VIEW_TARGET_BUDGET;
+    // The client says which it draws (a zoom threshold, the same both ways); older clients
+    // fall back to the target budget.
+    const dense = !!view && (detail === false || (detail === undefined && view.targets.length > VIEW_TARGET_BUDGET));
     const cell = 2 ** Math.round(Math.log2(Math.max(16, (rect.x1 - rect.x0) / 10)));
     const payload = !view ? {} : dense ? { clusters: clusterTargets(view.targets, cell) } : { targets: view.targets, occupiers: view.occupiers };
     try { ws.send(JSON.stringify({ type: "view_players", rect, players: visible, ...payload })); } catch {}
