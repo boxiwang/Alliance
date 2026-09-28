@@ -63,3 +63,14 @@ export const WORLD_COORD_LIMITS = {
   outerSpawnRadius: OUTER_SPAWN_RADIUS,
   slotCount: SLOTS.length,
 } as const;
+
+// Map cleanup (docs/BETA-P0.md P0-3): small cities abandoned for two weeks leave the
+// map. Only the map slot is released — the account and progress stay in D1.
+export const DORMANT_MAX_CORE = 5;
+export const DORMANT_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** Players whose map slot may be released (offline, stale, small by presence Core level). */
+export function dormantCandidates<T extends { id: string; lastSeen?: number; keepLevel?: number }>(players: T[], live: Set<string>, now: number): T[] {
+  return players.filter((player) => !live.has(player.id)
+    && now - (player.lastSeen || 0) >= DORMANT_AFTER_MS && (player.keepLevel || 1) <= DORMANT_MAX_CORE);
+}

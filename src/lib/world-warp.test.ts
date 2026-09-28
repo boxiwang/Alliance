@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  distance, initHeadlessWorld, relocateCity, spawnPlayer, warpBlockReason, worldCenter,
+  distance, initHeadlessWorld, nearestWarpPoint, relocateCity, spawnPlayer, warpBlockReason, worldCenter,
   type CityEntity, type HeadlessWorld,
 } from "./world-engine";
 
@@ -41,6 +41,26 @@ describe("warp (city relocation)", () => {
     world.marches["m1"] = { id: "m1", playerId: "mover", state: "outbound" } as any;
     const center = worldCenter(world.config);
     expect(relocateCity(world, "mover", { mode: "precision", target: { x: center.x + 150, y: center.y } }).error).toBe("fleets_away");
+  });
+
+  it("suggests the nearest tile a Precision Warp would accept", () => {
+    const world = base();
+    const other = cityOf(world, "neighbour").position;
+    const blocked = { x: Math.floor(other.x) + 1.5, y: Math.floor(other.y) + .5 };
+    expect(warpBlockReason(world, "mover", blocked)).toBe("too_close_city");
+    const hint = nearestWarpPoint(world, "mover", blocked)!;
+    expect(hint).not.toBeNull();
+    expect(warpBlockReason(world, "mover", hint)).toBeNull();
+    const reach = distance(hint, blocked);
+    // No accepted tile centre is strictly closer than the suggestion.
+    for (let dy = -12; dy <= 12; dy += 1) for (let dx = -12; dx <= 12; dx += 1) {
+      const point = { x: blocked.x + dx, y: blocked.y + dy };
+      if (distance(point, blocked) < reach - 1e-9) expect(warpBlockReason(world, "mover", point)).not.toBeNull();
+    }
+    // A valid tile suggests itself.
+    const center = worldCenter(world.config);
+    const open = { x: Math.floor(center.x + 150) + .5, y: Math.floor(center.y) + .5 };
+    expect(nearestWarpPoint(world, "mover", open)).toEqual(open);
   });
 
   it("Drift Jump lands on a valid tile away from other cities", () => {

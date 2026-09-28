@@ -35,6 +35,18 @@ export function shortAddr(a: string): string {
   return a.slice(0, 6) + "…" + a.slice(-4);
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+// Server events run on UTC; players think in their machine's local time.
+// Showing both side by side in the nav removes the "what time is that for me" math.
+export function formatDualClock(date: Date): { utc: string; local: string } {
+  const utc = `${pad2(date.getUTCHours())}:${pad2(date.getUTCMinutes())}`;
+  const local = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  return { utc, local };
+}
+
 export function ago(iso: string): string {
   if (!iso) return "—";
   const then = new Date(iso).getTime();

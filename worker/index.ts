@@ -6,7 +6,7 @@
 
 import { verifySession } from "./auth";
 import { handlePlayerApi, type BackendEnv } from "./player-api";
-import { assignOuterRingCoord, type WorldCoord } from "./world-coords";
+import { DORMANT_MAX_CORE, assignOuterRingCoord, dormantCandidates, type WorldCoord } from "./world-coords";
 import { projectGameJson } from "./economy";
 import { capacity } from "../src/lib/game";
 
@@ -90,7 +90,10 @@ type ChatRow = { id: string; pid: string; name: string; text: string; ts: number
 
 // Server-authoritative per-player combat/intel reports (scouted / incoming /
 // battle). Delivered on join (offline players see them on return) and live.
-type ServerReport = { id: string; kind: "scouted" | "incoming" | "battle"; ts: number; by?: string; byName?: string; payload?: Record<string, unknown> };
+type ServerReport = { id: string; kind: "scouted" | "incoming" | "battle" | "relocated"; ts: number; by?: string; byName?: string; payload?: Record<string, unknown> };
+
+// Returning dormant players respawn on a random outer-ring slot (see dormantCandidates).
+const DORMANT_SWEEP_EVERY_MS = 60 * 60 * 1000;
 
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
@@ -208,6 +211,8 @@ export class WorldRoom {
       return Response.json({ coord: coord || null });
     }
     if (url.pathname === "/relocate" && req.method === "POST") return this.relocate(req);
+    if (url.pathname === "/roster") return this.roster();
+    if (url.pathname === "/release" && req.method === "POST") return this.release(req);
     const pid = (req.headers.get("x-alliance-player") || "").slice(0, 64);
     const name = (req.headers.get("x-alliance-name") || "Commander").slice(0, 24);
     const sessionId = (req.headers.get("x-alliance-session") || "").slice(0, 64);
@@ -254,6 +259,35 @@ export class WorldRoom {
     return Response.json({ ok: true, coord, previous });
   }
 
+  // GM ops (internal only, reached through the GM-gated /gm/world/* API).
+  async roster(): Promise<Response> {
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    const live = this.liveIds();
+    const rows = Object.values(players).map((player) => ({
+      id: player.id, name: player.name, keepLevel: player.keepLevel, lastSeen: player.lastSeen, online: live.has(player.id),
+    }));
+    return Response.json({ players: rows });
+  }
+
+  // Release map slots (ghost/test players). The D1 account is untouched; a released
+  // player respawns on a random outer-ring slot with a welcome-back notice.
+  async release(req: Request): Promise<Response> {
+    let body: { ids?: unknown } = {};
+    try { body = await req.json(); } catch {}
+    const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id).slice(0, 64)).slice(0, 500) : [];
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    const live = this.liveIds();
+    const released = ids.filter((id) => players[id] && !live.has(id));
+    for (const id of released) {
+      delete players[id];
+      await this.state.storage.delete(`coord:v${COORD_VERSION}:${id}`);
+      await this.state.storage.put(`dormant:${id}`, Date.now());
+    }
+    if (released.length) await this.state.storage.put("players", players);
+    for (const id of released) this.broadcast({ type: "player_removed", id });
+    return Response.json({ released, skippedOnline: ids.filter((id) => live.has(id)) });
+  }
+
   // The authoritative "who's online" set is the currently-open sockets, not a
   // stored flag — a socket that dies without a clean close (tab crash, network
   // drop, hibernation) would otherwise leave a ghost marked online forever.
@@ -278,10 +312,33 @@ export class WorldRoom {
     return changed;
   }
 
+  // Release the map slots of small, long-inactive cities (at most once an hour).
+  // Presence keepLevel is client-reported, so D1 confirms the Core level first.
+  async retireDormant(players: Record<string, PlayerRow>, now: number): Promise<string[]> {
+    const last = (await this.state.storage.get<number>("dormancySweepAt")) || 0;
+    if (now - last < DORMANT_SWEEP_EVERY_MS) return [];
+    await this.state.storage.put("dormancySweepAt", now);
+    const candidates = dormantCandidates(Object.values(players), this.liveIds(), now);
+    const retired: string[] = [];
+    for (const player of candidates) {
+      const row = await this.env.DB.prepare("SELECT game_json FROM player_state WHERE player_id = ?").bind(player.id).first<{ game_json: string | null }>();
+      const game: any = projectGameJson(row?.game_json, now);
+      if (num(game?.buildings?.keep?.lvl) > DORMANT_MAX_CORE) continue;
+      delete players[player.id];
+      await this.state.storage.delete(`coord:v${COORD_VERSION}:${player.id}`);
+      await this.state.storage.put(`dormant:${player.id}`, now);
+      retired.push(player.id);
+    }
+    return retired;
+  }
+
   async onJoin(ws: WebSocket, pid: string, name: string) {
     const players = ((await this.state.storage.get<Record<string, PlayerRow>>("players")) || {});
+    const retired = await this.retireDormant(players, Date.now());
     const coordKey = `coord:v${COORD_VERSION}:${pid}`;
     let coord = await this.state.storage.get<WorldCoord>(coordKey);
+    const returning = await this.state.storage.get<number>(`dormant:${pid}`);
+    if (returning) await this.state.storage.delete(`dormant:${pid}`);
     if (!coord) {
       const assigned = Object.values(players)
         .filter((player) => player.id !== pid && player.coordVersion === COORD_VERSION)
@@ -314,6 +371,11 @@ export class WorldRoom {
         if (p.length) dms[k] = p;
       }
     }
+    if (returning) {
+      await this.pushReport(pid, { id: crypto.randomUUID(), kind: "relocated", ts: Date.now(), payload: {
+        summary: `Welcome back. Your city was moved to a new outer-ring sector while you were away. Progress is intact.`,
+      } });
+    }
     const reports = (await this.state.storage.get<ServerReport[]>(`reports:${pid}`)) || [];
     const allMarches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
     const marches = allMarches.filter((m) => m.arriveAt > Date.now() && (m.attacker === pid || m.defender === pid));
@@ -321,6 +383,7 @@ export class WorldRoom {
     this.broadcast({ type: "player", player: players[pid] }, ws);
     // Tell everyone about any ghosts we just cleared (or others revived).
     for (const id of flipped) if (id !== pid) this.broadcast({ type: "player", player: players[id] });
+    for (const id of retired) this.broadcast({ type: "player_removed", id });
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {

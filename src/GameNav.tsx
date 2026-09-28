@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Profile } from "./lib/profile";
 import { RES, RES_ORDER, ResKey, BKey, displayResource, displayTroops } from "./lib/game";
-import { compact } from "./lib/format";
+import { compact, formatDualClock } from "./lib/format";
 import BuildingGlyph from "./BuildingGlyph";
 import { loadPlayerAccount } from "./lib/player-account";
 import { loadShopAccount } from "./lib/backend";
@@ -95,6 +95,7 @@ export default function GameNav({
           </div>
         </div>
         <div className="command-nav-controls">
+          <DualClock />
           <div className="command-might"><small>MIGHT</small><b>{compact(might)}</b></div>
           <div className="command-tabs">
             <button className="soon" disabled aria-disabled="true">
@@ -194,6 +195,29 @@ function AnimatedResource({ resource, value, rate, cap, quiet }: { resource: Res
     <span className="command-resource-rate">{full ? "FULL" : rate > 0 ? `+${compact(displayResource(rate))}/H` : "OFFLINE"}</span>
     {gain && <em key={gain.id} className={`command-resource-gain${gain.full ? " full" : ""}`} onAnimationEnd={() => setGain(null)}>{gain.full ? "CAPACITY" : `+${compact(displayResource(gain.amount))}`}</em>}
   </div>;
+}
+
+function DualClock() {
+  const [clock, setClock] = useState(() => formatDualClock(new Date()));
+  useEffect(() => {
+    let interval = 0;
+    const tick = () => setClock(formatDualClock(new Date()));
+    const msToNextMinute = 60000 - (Date.now() % 60000);
+    const timeout = window.setTimeout(() => {
+      tick();
+      interval = window.setInterval(tick, 60000);
+    }, msToNextMinute);
+    return () => {
+      window.clearTimeout(timeout);
+      if (interval) window.clearInterval(interval);
+    };
+  }, []);
+  return (
+    <div className="command-clock" aria-label="Server time UTC and local time">
+      <span><small>UTC</small><b className="mono">{clock.utc}</b></span>
+      <span><small>LOCAL</small><b className="mono">{clock.local}</b></span>
+    </div>
+  );
 }
 
 function CommandMetric({ label, value, tone }: { label: string; value: string; tone: string }) {

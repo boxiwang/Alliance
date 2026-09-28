@@ -1587,3 +1587,30 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .city-command-layout>.operations-queue .operation-slot.rally.idle{cursor:default}
 /* Opaque dock: nothing behind it bleeds through (the Star Map disables backdrop blur). */
 .mini-comms{background:linear-gradient(145deg,#050f1d,#070a19)}
+
+/* Dual clock (P0-8) */
+.command-clock{display:flex;align-items:stretch;gap:1px;padding:1px;border-radius:8px;background:rgba(56,217,255,.06)}
+.command-clock>span{min-width:56px;display:flex;justify-content:center;flex-direction:column;padding:6px 10px;background:linear-gradient(145deg,rgba(56,217,255,.05),#081124)}
+.command-clock small{font:700 7px var(--mono);letter-spacing:.15em;color:#5f788a}
+.command-clock b{font:700 15px var(--hud);letter-spacing:.015em;color:#a9c4d4}
+@media(max-width:700px){.command-clock>span:last-child{display:none}}
+/* COORD search + typed Warp destination (P0-6) */
+.world-search-kinds{grid-template-columns:repeat(5,1fr)}
+.world-search-kinds i.coord{border-radius:1px;background:transparent;box-shadow:inset 0 0 0 1.5px #aa82ff}
+.world-search-coord,.world-warp-coord{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;gap:6px}
+.world-search-coord label,.world-warp-coord label{display:flex;align-items:center;gap:5px;color:#5f7a90;font:600 7.5px var(--hud);letter-spacing:.12em}
+.world-search-coord input,.world-warp-coord input{width:100%;min-width:0;padding:5px 6px;border:1px solid rgba(56,217,255,.2);border-radius:3px;background:#030815;color:#dffaff;font:10px var(--mono)}
+.world-search-coord input:focus,.world-warp-coord input:focus{outline:none;border-color:rgba(56,217,255,.6)}
+.world-search-coord .world-search-go{width:auto;margin:0;padding:6px 12px}
+.world-warp-coord{margin:6px 0 2px}
+.world-warp-coord button{padding:5px 9px;border:1px solid rgba(56,217,255,.35);border-radius:3px;background:rgba(20,70,92,.35);color:#dffaff;font:600 7.5px var(--hud);letter-spacing:.14em;cursor:pointer}
+.world-warp-hint{display:block;width:100%;margin:2px 0 6px;padding:6px 8px;border:1px dashed rgba(67,242,161,.4);border-radius:3px;background:rgba(67,242,161,.06);color:#9fe9c6;font:8.5px var(--mono);text-align:left;cursor:pointer}
+.world-warp-hint b{color:#dfffee}
+.world-warp-hint:hover{border-style:solid;border-color:rgba(67,242,161,.7)}
+/* Admin Live Ops (GM world roster) */
+.adm-ops-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 12px}
+.adm-ops-table{width:100%;border-collapse:collapse;font-size:12px}
+.adm-ops-table th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line2,#2a3342);color:#8a97a8;font-weight:600}
+.adm-ops-table td{padding:6px 8px;border-bottom:1px solid rgba(128,140,160,.14)}
+.adm-ops-table tr.picked td{background:rgba(255,95,120,.08)}
+.adm-ops-online{color:#43c98a;font-size:11px;letter-spacing:.06em}

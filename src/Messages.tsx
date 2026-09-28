@@ -195,6 +195,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       const t = new Date(r.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
       if (r.kind === "scouted") return { sys: "sec" as const, tag: "RECON", t, b: `${r.byName || "A commander"} scouted your city.` };
       if (r.kind === "incoming") return { sys: "mil" as const, tag: "INBOUND", t, b: `${r.byName || "A commander"}'s army is marching on you.` };
+      if (r.kind === "relocated") return { sys: "sec" as const, tag: "RELOCATED", t, b: String(r.payload?.summary || "Your city moved to a new sector.") };
       return { sys: "mil" as const, tag: "BATTLE", t, b: String(r.payload?.summary || "Battle resolved.") };
     });
     return [...server, ...local];

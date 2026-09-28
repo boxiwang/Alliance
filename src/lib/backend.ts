@@ -360,3 +360,14 @@ export async function mirrorPlayerState(address: string, snapshot: { profile?: u
     body: JSON.stringify({ revision, ...snapshot }),
   });
 }
+
+// ---- GM live ops (Admin → Live Ops) ----
+export type GmRosterPlayer = { id: string; name: string; keepLevel: number; lastSeen: number; online: boolean };
+
+export async function gmWorldRoster(token: string): Promise<GmRosterPlayer[]> {
+  return (await get<{ players: GmRosterPlayer[] }>("/gm/world/roster", token)).players;
+}
+
+export async function gmReleaseWorldPlayers(token: string, ids: string[]): Promise<{ released: string[]; skippedOnline: string[] }> {
+  return post("/gm/world/release", { ids }, token);
+}

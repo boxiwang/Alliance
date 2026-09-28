@@ -23,6 +23,7 @@ import {
   applyWorldAuthorityCommand, isWorldAuthoritySession,
   type WorldAuthorityCommand, type WorldAuthoritySession,
 } from "../src/lib/world-authority";
+import { removeSimulatedCities, simulatedCityCount } from "../src/lib/world-engine";
 
 export interface BackendEnv {
   DB: D1Database;
@@ -324,6 +325,22 @@ async function shopDailyClaim(request: Request, env: BackendEnv, claims: Session
   return response({ claimedAt: now, inventory });
 }
 
+// GM ops: world roster and map-slot release (docs/BETA-P0.md P0-2 ghost cleanup).
+async function gmWorld(request: Request, env: BackendEnv, claims: SessionClaims, pathname: string): Promise<Response> {
+  if (claims.role !== "gm") return response({ error: "gm_required" }, 403);
+  if (!env.WORLD_ROOM) return response({ error: "world_unavailable" }, 503);
+  const room = env.WORLD_ROOM.get(env.WORLD_ROOM.idFromName("frontier-1"));
+  if (pathname === "/gm/world/roster") {
+    if (request.method !== "GET") return response({ error: "method_not_allowed" }, 405);
+    return response(await (await room.fetch("https://world.internal/roster")).json());
+  }
+  if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
+  const data = await body(request);
+  const ids = Array.isArray(data?.ids) ? data.ids : [];
+  const res = await room.fetch("https://world.internal/release", { method: "POST", body: JSON.stringify({ ids }) });
+  return response(await res.json());
+}
+
 async function grantAlphaCredits(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
   if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
   if (claims.role !== "gm") return response({ error: "gm_required" }, 403);
@@ -614,6 +631,11 @@ async function gameRoute(env: BackendEnv, claims: SessionClaims): Promise<Respon
   const game = projectGameJson(row?.game_json, Date.now());
   let world: unknown = null;
   try { world = row?.world_json ? JSON.parse(row.world_json) : null; } catch {}
+  // Beta: real players only. Older saves are cleaned for display here and persisted on the next command.
+  const numbers = defaultN();
+  if (isWorldAuthoritySession(world, claims.sub) && !simulatedCityCount(numbers)) {
+    world.world = removeSimulatedCities(world.world, Date.now(), numbers);
+  }
   return response({ game, world, revision: row?.revision ?? 0, authorityVersion: row?.economy_authority_version ?? 0, updatedAt: row?.updated_at ?? 0 });
 }
 
@@ -740,6 +762,10 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
   let warpReservation: { coord: { x: number; y: number }; previous: { x: number; y: number } | null } | null = null;
   if (isWorldCommand) {
     if (!world) return response({ error: "world_authority_disabled" }, 409);
+    // The shared WorldRoom owns real-player coordinates (spawn, warp, dormant respawn).
+    const home = await sharedWorldCoord(env, claims.sub);
+    const homeCity = world.world.entities[world.world.players[world.playerId]?.cityId];
+    if (home && homeCity?.kind === "city" && (homeCity.position.x !== home.x || homeCity.position.y !== home.y)) homeCity.position = home;
     let command: WorldAuthorityCommand;
     if (type === "world.dispatch") {
       const action = String(args.action || "");
@@ -877,7 +903,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (request.method === "POST" && pathname === "/auth/wallet/verify") return walletVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/google") return googleVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/guest") return guestVerify(request, env);
-  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/game/authority/enable", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha", "/shop/account", "/shop/purchase", "/shop/daily-claim", "/shop/grant-alpha"].includes(pathname)) return null;
+  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/game/authority/enable", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha", "/shop/account", "/shop/purchase", "/shop/daily-claim", "/shop/grant-alpha", "/gm/world/roster", "/gm/world/release"].includes(pathname)) return null;
   const claims = await authClaims(request, env);
   if (!claims) return response({ error: "unauthorized" }, 401);
   if (request.method === "GET" && pathname === "/me") return me(request, env, claims);
@@ -896,5 +922,6 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (pathname === "/shop/purchase") return shopPurchase(request, env, claims);
   if (pathname === "/shop/daily-claim") return shopDailyClaim(request, env, claims);
   if (pathname === "/shop/grant-alpha") return grantAlphaCredits(request, env, claims);
+  if (pathname === "/gm/world/roster" || pathname === "/gm/world/release") return gmWorld(request, env, claims, pathname);
   return response({ error: "method_not_allowed" }, 405);
 }

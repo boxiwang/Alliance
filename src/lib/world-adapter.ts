@@ -7,7 +7,7 @@ import {
 } from "./game";
 import type { DispatchMarchInput, HeadlessWorld, PublicCosmeticLoadout, ResourceWallet, SpawnPlayerInput, TroopManifest } from "./world-engine";
 import {
-  ISSUED_WORLD_COSMETICS, advanceHeadlessWorld, dispatchMarch, initHeadlessWorld, migrateWorldToCircularBoundary, populateWorld, recallMarch, redistributeWorldTargets, scanForRogue, spawnPlayers,
+  ISSUED_WORLD_COSMETICS, advanceHeadlessWorld, removeSimulatedCities, simulatedCityCount, dispatchMarch, initHeadlessWorld, migrateWorldToCircularBoundary, populateWorld, recallMarch, redistributeWorldTargets, scanForRogue, spawnPlayers,
   worldEngineConfig, zoneForPoint,
 } from "./world-engine";
 import { clearWorld as clearLegacyWorld, loadWorld as loadLegacyWorld, projectWorld as projectLegacyWorld } from "./world";
@@ -203,9 +203,7 @@ export function createLocalWorldSession(address: string, sourceGame: GameState, 
     storageLevel: Math.max(1, game.buildings.storage.lvl),
     might: might(game), troops: game.troops, woundedTroops: game.woundedTroops, resources: game.res,
   }], now);
-  const configuredNpcCount = Number(numbers.world?.population?.localNpcCities);
-  const npcCount = Math.max(0, Math.min(world.config.maxPlayers - 1,
-    Math.floor(Number.isFinite(configuredNpcCount) ? configuredNpcCount : 47)));
+  const npcCount = Math.min(world.config.maxPlayers - 1, simulatedCityCount(numbers));
   const npcs = Array.from({ length: npcCount }, (_, offset) => npcInput(offset + 1, world, numbers));
   world = spawnPlayers(world, npcs, now);
   const playerCount = Object.keys(world.players).length;
@@ -447,6 +445,8 @@ export function openLocalWorldSession(address: string, sourceGame: GameState, no
     // world persisted before a new config key existed (e.g. minEntitySpacing) picks it up
     // instead of crashing on undefined during migration/respawn.
     stored.world.config = worldEngineConfig(numbers);
+    // The beta map shows real players only: drop simulated rivals unless GM testing asks for them.
+    if (!simulatedCityCount(numbers)) stored.world = removeSimulatedCities(stored.world, now, numbers);
     Object.values(stored.world.players).forEach((player) => {
       player.deepScanCooldowns = player.deepScanCooldowns && typeof player.deepScanCooldowns === "object"
         ? player.deepScanCooldowns : {};

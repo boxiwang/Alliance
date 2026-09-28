@@ -1587,6 +1587,41 @@ export function recallMarch(source: HeadlessWorld, marchId: string, playerId: st
   return world;
 }
 
+/** Id prefix of the simulated rival cities older local worlds were seeded with. */
+export const SIMULATED_PLAYER_PREFIX = "npc.";
+
+/** Configured count of simulated rival cities (GM/local testing only; 0 in the beta). */
+export function simulatedCityCount(numbers: any = getN()): number {
+  const configured = Number(numbers?.world?.population?.localNpcCities);
+  return Number.isFinite(configured) ? Math.max(0, Math.floor(configured)) : 0;
+}
+
+/**
+ * Removes every simulated (npc.*) civilization — the beta map shows real players only.
+ * Fleets still flying at a removed city are recalled home first, so no troops or
+ * cargo are lost. Returns the source unchanged when there is nothing to remove.
+ */
+export function removeSimulatedCities(source: HeadlessWorld, now = Date.now(), numbers: any = getN()): HeadlessWorld {
+  const simulated = Object.values(source.players).filter((player) => player.id.startsWith(SIMULATED_PLAYER_PREFIX));
+  if (!simulated.length) return source;
+  let world = source;
+  const cityIds = new Set(simulated.map((player) => player.cityId));
+  Object.values(source.marches)
+    .filter((march) => cityIds.has(march.targetId) && !march.playerId.startsWith(SIMULATED_PLAYER_PREFIX) && ["outbound", "gathering"].includes(march.state))
+    .forEach((march) => { world = recallMarch(world, march.id, march.playerId, now, numbers); });
+  world = world === source ? clone(source) : world;
+  simulated.forEach((player) => {
+    delete world.entities[player.cityId];
+    delete world.players[player.id];
+  });
+  Object.values(world.marches).forEach((march) => {
+    if (march.playerId.startsWith(SIMULATED_PLAYER_PREFIX)) delete world.marches[march.id];
+  });
+  const removedMarchIds = new Set(Object.keys(source.marches).filter((id) => !world.marches[id]));
+  world.scheduledEvents = world.scheduledEvents.filter((item) => item.processedAt || !(cityIds.has(item.entityId) || removedMarchIds.has(item.entityId)));
+  return world;
+}
+
 export function advanceHeadlessWorld(source: HeadlessWorld, now = Date.now(), numbers: any = getN()): HeadlessWorld {
   const world = clone(source);
   // Batch-sort due events. Repeat only when a handler creates another already-due event,
@@ -1630,10 +1665,39 @@ function warpRules(numbers: any) {
 
 /** Why a city could not stand at `point` (null = valid). Other players' cities count; the mover's own does not. */
 export function warpBlockReason(world: HeadlessWorld, playerId: string, point: Point, numbers: any = getN()): WarpError | null {
+  return warpBlockAmong(world, playerId, point, warpRules(numbers), Object.values(world.entities));
+}
+
+// Sorted (dx, dy) offsets by distance, cached per search radius.
+const warpSearchOffsets = new Map<number, [number, number][]>();
+function offsetsWithin(radius: number): [number, number][] {
+  let list = warpSearchOffsets.get(radius);
+  if (!list) {
+    list = [];
+    for (let dy = -radius; dy <= radius; dy += 1) for (let dx = -radius; dx <= radius; dx += 1) if (dx * dx + dy * dy <= radius * radius) list.push([dx, dy]);
+    list.sort((a, b) => (a[0] * a[0] + a[1] * a[1]) - (b[0] * b[0] + b[1] * b[1]));
+    warpSearchOffsets.set(radius, list);
+  }
+  return list;
+}
+
+/** Closest tile centre to `from` that a Precision Warp would accept, or null within `maxRadius` tiles. */
+export function nearestWarpPoint(world: HeadlessWorld, playerId: string, from: Point, numbers: any = getN(), maxRadius = 40): Point | null {
   const rules = warpRules(numbers);
+  const reach = maxRadius + Math.max(rules.minCitySpacing, rules.minTargetClearance) + 1;
+  const nearby = Object.values(world.entities).filter((entity) => distance(entity.position, from) <= reach);
+  const fx = Math.floor(from.x), fy = Math.floor(from.y);
+  for (const [dx, dy] of offsetsWithin(maxRadius)) {
+    const point = { x: fx + dx + .5, y: fy + dy + .5 };
+    if (!warpBlockAmong(world, playerId, point, rules, nearby)) return point;
+  }
+  return null;
+}
+
+function warpBlockAmong(world: HeadlessWorld, playerId: string, point: Point, rules: ReturnType<typeof warpRules>, entities: WorldEntity[]): WarpError | null {
   if (!isInsidePlayableWorld(point, world.config, world.config.cityFootprint + 1)) return "outside_frontier";
   if (distance(point, worldCenter(world.config)) <= world.config.circleReserveRadius + world.config.cityFootprint) return "reserve_zone";
-  for (const entity of Object.values(world.entities)) {
+  for (const entity of entities) {
     if (entity.kind === "city") {
       if (entity.ownerId === playerId) continue;
       if (distance(entity.position, point) < rules.minCitySpacing) return "too_close_city";

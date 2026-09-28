@@ -4857,7 +4857,7 @@
       "minEntitySpacing": 6
     },
     "population": {
-      "localNpcCities": 47,
+      "localNpcCities": 0,
       "resourceFieldsPerPlayer": 3.2,
       "monstersPerPlayer": 1,
       "minimumResourceFields": 480,

@@ -12,7 +12,7 @@ import { gmFillTroops, hasLocalGm } from "./lib/gm";
 import type {
   CityEntity, HeadlessMarch, MonsterEntity, Point, ResourceEntity, WorldReport,
 } from "./lib/world-engine";
-import { ISSUED_WORLD_COSMETICS, distance, energyAt, isInsidePlayableWorld, isScoutReportActive, scoutReportExpiresAt, worldCenter, worldPlayableRadius, relocateCity, warpBlockReason, warpReadiness, WARP_RULES, worldResourceMaxLevel, worldRogueMaxLevel, zoneForPoint } from "./lib/world-engine";
+import { ISSUED_WORLD_COSMETICS, distance, energyAt, isInsidePlayableWorld, isScoutReportActive, scoutReportExpiresAt, worldCenter, worldPlayableRadius, relocateCity, nearestWarpPoint, warpBlockReason, warpReadiness, WARP_RULES, worldResourceMaxLevel, worldRogueMaxLevel, zoneForPoint } from "./lib/world-engine";
 import { carryCapacity, resolveCombat } from "./lib/expedition";
 import type { LocalWorldSession } from "./lib/world-adapter";
 import {
@@ -155,9 +155,12 @@ export function resourceOccupationDisposition(
 
 // Selected body scale: calm markers start small, so they grow a little more.
 type SearchKind = "monster" | "cash" | "oil" | "power";
-const SEARCH_KINDS: { id: SearchKind; label: string }[] = [
-  { id: "monster", label: "ROGUE" }, { id: "cash", label: "CASH" }, { id: "oil", label: "OIL" }, { id: "power", label: "POWER" },
+type SearchTab = SearchKind | "coord";
+const SEARCH_KINDS: { id: SearchTab; label: string }[] = [
+  { id: "monster", label: "ROGUE" }, { id: "cash", label: "CASH" }, { id: "oil", label: "OIL" }, { id: "power", label: "POWER" }, { id: "coord", label: "COORD" },
 ];
+const WARP_LOCATION_BLOCKS = new Set(["outside_frontier", "reserve_zone", "too_close_city", "tile_occupied"]);
+const coordLabel = (point: Point) => `${Math.floor(point.x).toString().padStart(3, "0")}:${Math.floor(point.y).toString().padStart(3, "0")}`;
 const SELECT_SCALE = CALM_MAP ? 1.4 : 1.2;
 type LockTone = "own" | "rival" | "cash" | "oil" | "power" | "rogue" | "locked";
 
@@ -602,6 +605,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       if (p.id === address || !p.coords) return;
       setRemotePlayers((cur) => { const i = cur.findIndex((x) => x.id === p.id); if (i < 0) return [...cur, p]; const next = cur.slice(); next[i] = p; return next; });
     };
+    rt.handlers.onPlayerRemoved = (id) => setRemotePlayers((cur) => cur.filter((x) => x.id !== id));
     rt.handlers.onScoutResult = (_target, name, _coords, snapshot) => { setScoutingId(null); setScoutIntel({ name, snapshot }); };
     rt.handlers.onMarch = (m) => setMarches((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m]);
     rt.handlers.onMarchDone = (id) => setMarches((cur) => cur.filter((x) => x.id !== id));
@@ -611,6 +615,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       if (report.kind === "scouted") setResultNotice({ title: "You were scouted", detail: `${report.byName || "A commander"} scanned your city.`, good: false });
       else if (report.kind === "incoming") setResultNotice({ title: "⚔ Incoming attack", detail: `${report.byName || "A commander"} is marching on you — ETA ${Math.round(Number(report.payload?.etaSec) || 0)}s.`, good: false });
       else if (report.kind === "battle") setResultNotice({ title: "Battle report", detail: String(report.payload?.summary || "A battle resolved."), good: false });
+      else if (report.kind === "relocated") setResultNotice({ title: "Welcome back", detail: String(report.payload?.summary || "Your city moved to a new sector."), good: true });
     };
     const g = loadGame(address);
     rt.sendPresence({
@@ -766,7 +771,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [warpBusy, setWarpBusy] = useState(false);
   const [warpCounts, setWarpCounts] = useState<{ precision: number; drift: number } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchKind, setSearchKind] = useState<SearchKind>("monster");
+  const [searchKind, setSearchKind] = useState<SearchTab>("monster");
   const [searchLevels, setSearchLevels] = useState<Record<SearchKind, number>>({ monster: 0, cash: 1, oil: 1, power: 1 });
   const [searchResult, setSearchResult] = useState<{ key: string; index: number; total: number; targetId: string } | null>(null);
   const world = session.world;
@@ -1104,7 +1109,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const pad = 30;
     const minX = viewX - pad, maxX = viewX + viewport.width + pad, minY = viewY - pad, maxY = viewY + viewport.height + pad;
     const bodyR = detailZoom ? 7.2 : 4.2;
-    return remotePlayers.filter((p) => p.online && p.coords.x >= minX && p.coords.x <= maxX && p.coords.y >= minY && p.coords.y <= maxY)
+    // Offline cities stay on the map (SLG convention); no online indicator is shown.
+    return remotePlayers.filter((p) => p.coords.x >= minX && p.coords.x <= maxX && p.coords.y >= minY && p.coords.y <= maxY)
       .map((p) => {
         const sel = remoteSelectedId === p.id;
         const col = REMOTE_FACTION_COLOR[String(p.faction || "")] || "#7cc0ff";
@@ -1260,14 +1266,16 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       ? `Deep Scan discovered an uncharted L${target.level} Rogue signal.`
       : `Tracking the nearest L${target.level} Rogue signal.`);
   }
-  const searchLevel = searchKind === "monster" ? Math.min(rogueMaxLevel, searchLevels.monster || nextRogueLevel) : Math.min(resourceMaxLevel, searchLevels[searchKind]);
-  const searchMaxLevel = searchKind === "monster" ? rogueMaxLevel : resourceMaxLevel;
+  const levelKind: SearchKind = searchKind === "coord" ? "monster" : searchKind;
+  const searchLevel = levelKind === "monster" ? Math.min(rogueMaxLevel, searchLevels.monster || nextRogueLevel) : Math.min(resourceMaxLevel, searchLevels[levelKind]);
+  const searchMaxLevel = levelKind === "monster" ? rogueMaxLevel : resourceMaxLevel;
   const searchKey = `${searchKind}:${searchLevel}`;
   function setSearchLevel(level: number) {
-    setSearchLevels((current) => ({ ...current, [searchKind]: Math.max(1, Math.min(searchMaxLevel, level)) }));
+    setSearchLevels((current) => ({ ...current, [levelKind]: Math.max(1, Math.min(searchMaxLevel, level)) }));
     setSearchResult(null);
   }
   function runSearch() {
+    if (searchKind === "coord") { viewCoordinates(); return; }
     const label = SEARCH_KINDS.find((kind) => kind.id === searchKind)!.label;
     const candidates = targets.filter((entity) => searchKind === "monster"
       ? entity.kind === "monster" && entity.state === "alive" && entity.level === searchLevel
@@ -1304,11 +1312,27 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     })).catch(() => setWarpCounts(null));
   }
   function openWarp() {
-    const x = Number(coordinateDraft.x), y = Number(coordinateDraft.y);
-    if (coordinateDraft.x !== "" && coordinateDraft.y !== "" && Number.isFinite(x) && Number.isFinite(y)) {
-      setTileMark({ x: Math.floor(x), y: Math.floor(y) }); setCamera({ x, y });
-    }
     setSearchOpen(false); setWarpOpen(true); refreshWarpCounts();
+  }
+  // Typed destination (the other way to choose besides clicking a tile).
+  const [warpDraft, setWarpDraft] = useState({ x: "", y: "" });
+  useEffect(() => {
+    if (warpOpen && tileMark) setWarpDraft({ x: String(tileMark.x), y: String(tileMark.y) });
+  }, [warpOpen, tileMark]);
+  function setWarpDestinationFromDraft() {
+    const x = Number(warpDraft.x), y = Number(warpDraft.y);
+    if (warpDraft.x.trim() === "" || warpDraft.y.trim() === "" || !Number.isFinite(x) || !Number.isFinite(y)) { setMessage("Enter a valid X and Y coordinate."); return; }
+    const tile = { x: Math.floor(x), y: Math.floor(y) };
+    setTileMark(tile); setSelectedId(null); setCamera({ x: tile.x + .5, y: tile.y + .5 });
+  }
+  const warpHint = useMemo(() => (warpOpen && warpDestination && warpDestinationBlock && WARP_LOCATION_BLOCKS.has(warpDestinationBlock)
+    ? nearestWarpPoint(world, session.playerId, warpDestination, N) : null),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [warpOpen, warpDestination?.x, warpDestination?.y, warpDestinationBlock, world]);
+  function selectWarpHint() {
+    if (!warpHint) return;
+    const tile = { x: Math.floor(warpHint.x), y: Math.floor(warpHint.y) };
+    setTileMark(tile); setCamera({ x: warpHint.x, y: warpHint.y }); playSelectSfx();
   }
   async function executeWarp(mode: "precision" | "random") {
     if (warpBusy) return;
@@ -1355,10 +1379,12 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   }
   function viewCoordinates() {
     const x = Number(coordinateDraft.x); const y = Number(coordinateDraft.y);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) { setMessage("Enter a valid X and Y coordinate."); return; }
-    const point = { x, y };
+    if (coordinateDraft.x.trim() === "" || coordinateDraft.y.trim() === "" || !Number.isFinite(x) || !Number.isFinite(y)) { setMessage("Enter a valid X and Y coordinate."); return; }
+    const tile = { x: Math.floor(x), y: Math.floor(y) };
+    const point = { x: tile.x + .5, y: tile.y + .5 };
     if (!isInsidePlayableWorld(point, world.config, 0)) { setMessage("Those coordinates are outside the circular Frontier."); return; }
-    setCamera(point); setSelectedId(null); setMessage(`Viewing sector ${Math.round(point.x).toString().padStart(3, "0")}:${Math.round(point.y).toString().padStart(3, "0")}. Your civilization has not moved.`);
+    setCamera(point); setTileMark(tile); setSelectedId(null); setHomeSelected(false); setRemoteSelectedId(null);
+    setZoom((value) => Math.max(value, 2.1)); setMessage(""); playSelectSfx();
   }
   async function recall(marchId: string) {
     // gameRef is updated synchronously by commit; the projected render value can
@@ -1470,6 +1496,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         {searchOpen && <div className="world-search-panel" role="dialog" aria-label="Search the Star Map">
           <header><b>SEARCH</b><button aria-label="Close search" onClick={() => setSearchOpen(false)}>×</button></header>
           <div className="world-search-kinds" role="tablist">{SEARCH_KINDS.map((kind) => <button key={kind.id} role="tab" aria-selected={searchKind === kind.id} className={searchKind === kind.id ? "active" : ""} onClick={() => { setSearchKind(kind.id); setSearchResult(null); }}><i className={kind.id} />{kind.label}</button>)}</div>
+          {searchKind === "coord" ? <form className="world-search-coord" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}>
+            <label>X<input aria-label="Search X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" autoFocus /></label>
+            <label>Y<input aria-label="Search Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label>
+            <button className="world-search-go">GO</button>
+          </form> : <>
           <div className="world-search-level">
             <span>LEVEL</span>
             <button aria-label="Lower level" disabled={searchLevel <= 1} onClick={() => setSearchLevel(searchLevel - 1)}>−</button>
@@ -1480,14 +1511,21 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           {searchKind === "monster" && <p className={`world-search-note ${searchLevel > nextRogueLevel ? "warn" : ""}`}>{searchLevel > nextRogueLevel ? `Locked · defeat L${nextRogueLevel} first` : `Unlocked up to L${nextRogueLevel}`}</p>}
           {searchResult?.key === searchKey && (() => { const hit = targets.find((entity) => entity.id === searchResult.targetId); return hit ? <p className="world-search-result"><b>{searchResult.index + 1}/{searchResult.total}</b> · {Math.round(hit.position.x).toString().padStart(3, "0")}:{Math.round(hit.position.y).toString().padStart(3, "0")} · {fmtDuration(travelSecondsTo(hit.position))}</p> : null; })()}
           <button className="world-search-go" onClick={runSearch}>{searchResult?.key === searchKey ? "NEXT ▸" : "SEARCH"}</button>
+          </>}
         </div>}
         {warpOpen && <div className="world-warp-panel" role="dialog" aria-label="Warp your city">
           <header><b>WARP</b><button aria-label="Close warp" onClick={() => setWarpOpen(false)}>×</button></header>
           {warpNotReady && <p className="world-warp-alert">{ERROR_COPY[warpNotReady]}</p>}
           <section>
             <div className="world-warp-option-head"><b>PRECISION JUMP</b><em>{warpCounts ? `×${warpCounts.precision}` : "DEV"}</em></div>
-            <p>{warpDestination ? <>Destination <b>{Math.round(warpDestination.x).toString().padStart(3, "0")}:{Math.round(warpDestination.y).toString().padStart(3, "0")}</b> · {fmtDuration(travelSecondsTo(warpDestination))} march from your current home</> : "Click an empty tile on the map, or enter X / Y and press WARP."}</p>
+            <form className="world-warp-coord" onSubmit={(event) => { event.preventDefault(); setWarpDestinationFromDraft(); }}>
+              <label>X<input aria-label="Warp X coordinate" value={warpDraft.x} onChange={(event) => setWarpDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label>
+              <label>Y<input aria-label="Warp Y coordinate" value={warpDraft.y} onChange={(event) => setWarpDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label>
+              <button>SET</button>
+            </form>
+            <p>{warpDestination ? <>Destination <b>{coordLabel(warpDestination)}</b> · {fmtDuration(travelSecondsTo(warpDestination))} march from your current home</> : "Click an empty tile on the map, or enter X / Y."}</p>
             {warpDestination && warpDestinationBlock && <p className="world-warp-invalid">{ERROR_COPY[warpDestinationBlock]}</p>}
+            {warpHint && <button type="button" className="world-warp-hint" onClick={selectWarpHint}>Nearest open tile <b>{coordLabel(warpHint)}</b> · SELECT</button>}
             <button className="world-warp-go" disabled={warpBusy || !!warpNotReady || !warpDestination || !!warpDestinationBlock || warpCounts?.precision === 0} onClick={() => void executeWarp("precision")}>{warpBusy ? "WARPING…" : "WARP HERE"}</button>
           </section>
           <section>
@@ -1497,7 +1535,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           </section>
           <footer>Fleets must be home · no warp while an attack is inbound · keep {WARP_RULES.minCitySpacing} tiles from other cities</footer>
         </div>}
-        <form className="world-coordinate-jump" onSubmit={(event) => { event.preventDefault(); viewCoordinates(); }}><label>X<input aria-label="X coordinate" value={coordinateDraft.x} onChange={(event) => setCoordinateDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label><label>Y<input aria-label="Y coordinate" value={coordinateDraft.y} onChange={(event) => setCoordinateDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label><button>GO</button><button type="button" className={`world-warp-open ${warpOpen ? "active" : ""}`} aria-expanded={warpOpen} onClick={() => (warpOpen ? setWarpOpen(false) : openWarp())}>WARP</button></form>
+        <div className="world-coordinate-jump"><button type="button" className={`world-warp-open ${warpOpen ? "active" : ""}`} aria-expanded={warpOpen} onClick={() => (warpOpen ? setWarpOpen(false) : openWarp())}>WARP</button></div>
         <div className="world-coordinate world-coordinate-x">X {Math.round(Math.max(0, viewX)).toString().padStart(3, "0")} — {Math.round(Math.min(world.config.width, viewX + viewport.width)).toString().padStart(3, "0")}</div>
         <div className="world-coordinate world-coordinate-y">Y {Math.round(Math.max(0, viewY)).toString().padStart(3, "0")} — {Math.round(Math.min(world.config.height, viewY + viewport.height)).toString().padStart(3, "0")}</div>
         <WorldBackdropLayer viewportRef={liveViewportRef} worldWidth={world.config.width} worldHeight={world.config.height} center={center} worldRadius={worldRadius} reserveRadius={world.config.circleReserveRadius} zoom={zoom} dprCap={quality.dprCap} animateStars={quality.bgAnimate} calm={CALM_MAP} tier={quality.tier} />

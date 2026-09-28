@@ -3,9 +3,10 @@ import { getN, saveN, resetN, hasOverride } from "./lib/numbers";
 import { PersonalSimulationStrategy, simulatePersonalProgression, simulateProgression } from "./lib/simulator";
 import { simulateWorldBalance } from "./lib/world-balance";
 import { validateNumbers, ValidationIssue } from "./lib/validation";
+import AdminOps from "./AdminOps";
 
 type Path = (string | number)[];
-type View = "overview" | "buildings" | "troops" | "research" | "gathering" | "world" | "rules" | "advanced";
+type View = "overview" | "buildings" | "troops" | "research" | "gathering" | "world" | "rules" | "advanced" | "ops";
 
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
@@ -565,7 +566,7 @@ function WorldWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: 
           <NumberSetting {...p(["world", "state", "minEntitySpacing"])} label="Minimum target spacing" help="Preferred breathing room between cities, planets and Rogues." suffix="tiles" />
         </RuleGroup>
         <RuleGroup icon="✦" title="Public ecology" description="The shared map population is independent of any one player's progress.">
-          <NumberSetting {...p(["world", "population", "localNpcCities"])} label="Local test cities" help="NPC rivals generated only by the temporary offline adapter." />
+          <NumberSetting {...p(["world", "population", "localNpcCities"])} label="Local test cities" help="Simulated rivals for local GM testing only. Keep 0 for the beta: real players only." />
           <NumberSetting {...p(["world", "population", "resourceFieldsPerPlayer"])} label="Planets / active player" help="Population target before the map-wide cap." step={0.05} />
           <NumberSetting {...p(["world", "population", "monstersPerPlayer"])} label="Rogues / active player" help="Population target before the map-wide cap." step={0.05} />
           <NumberSetting {...p(["world", "population", "minimumResourceFields"])} label="Minimum fields" help="Keeps a young State from feeling empty." />
@@ -750,6 +751,7 @@ export default function Admin() {
     { key: "world", label: "World", icon: "◎" },
     { key: "rules", label: "Game rules", icon: "⚙" },
     { key: "advanced", label: "Advanced", icon: "⋯" },
+    { key: "ops", label: "Live Ops", icon: "◉" },
   ];
 
   return (
@@ -768,6 +770,7 @@ export default function Admin() {
         {view === "gathering" && <GatheringWorkspace numbers={working} onChange={handleChange} />}
         {view === "world" && <WorldWorkspace numbers={working} onChange={handleChange} />}
         {view === "rules" && <RulesWorkspace numbers={working} onChange={handleChange} />}
+        {view === "ops" && <AdminOps />}
         {view === "advanced" && <div><div className="adm-view-intro"><div><span className="adm-eyebrow">ADVANCED</span><h2>Raw configuration</h2><p>Technical keys and internal notes live here. Most balancing work should happen in the other four pages.</p></div></div><Section title="Open raw configuration" subtitle="For uncommon fields only" defaultOpen={false}><RawNode path={[]} value={working} onChange={handleChange} /></Section></div>}
       </main>
     </div>

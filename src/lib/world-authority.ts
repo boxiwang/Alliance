@@ -9,7 +9,7 @@ import type {
   DispatchMarchInput, HeadlessWorld, MarchAction, Point, TroopManifest, WarpRequest,
 } from "./world-engine";
 import {
-  advanceHeadlessWorld, dispatchMarch, recallMarch, relocateCity, scanForRogue,
+  advanceHeadlessWorld, dispatchMarch, recallMarch, relocateCity, removeSimulatedCities, scanForRogue, simulatedCityCount,
 } from "./world-engine";
 
 export interface WorldAuthoritySnapshot {
@@ -158,6 +158,7 @@ function reconcile(sourceSession: WorldAuthoritySession, sourceGame: GameState, 
   const session = clone(sourceSession);
   let game = project(sourceGame, now);
   const before = JSON.stringify(session.world);
+  if (!simulatedCityCount(numbers)) session.world = removeSimulatedCities(session.world, now, numbers);
   session.world = advanceHeadlessWorld(session.world, now, numbers);
   applyExternalGameDelta(session, game);
   game = applyWorldPlayerToGame(session, game);

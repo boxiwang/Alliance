@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignOuterRingCoord, outerRingSlots, WORLD_COORD_LIMITS } from "./world-coords";
+import { DORMANT_AFTER_MS, assignOuterRingCoord, dormantCandidates, outerRingSlots, WORLD_COORD_LIMITS } from "./world-coords";
 
 describe("shared-world outer-ring coordinates", () => {
   it("fills the outer ring before stepping inward", () => {
@@ -33,5 +33,20 @@ describe("shared-world outer-ring coordinates", () => {
     const takenAll = slots.slice(0, 50);
     const next = assignOuterRingCoord(takenAll, () => 0);
     expect(takenAll.some((c) => c.x === next.x && c.y === next.y)).toBe(false);
+  });
+});
+
+describe("dormant map cleanup", () => {
+  const now = 100 * DORMANT_AFTER_MS;
+  const stale = now - DORMANT_AFTER_MS;
+  it("releases only offline, two-week-stale cities at Core 5 or below", () => {
+    const players = [
+      { id: "small-stale", lastSeen: stale, keepLevel: 5 },
+      { id: "no-presence", lastSeen: stale },
+      { id: "big-stale", lastSeen: stale, keepLevel: 6 },
+      { id: "small-recent", lastSeen: stale + 1, keepLevel: 2 },
+      { id: "small-online", lastSeen: stale, keepLevel: 1 },
+    ];
+    expect(dormantCandidates(players, new Set(["small-online"]), now).map((player) => player.id)).toEqual(["small-stale", "no-presence"]);
   });
 });
