@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import defaults from "../../docs/numbers.json";
 import { initGame } from "./gamestore";
-import { createSharedWorld, joinSharedWorld, openArea, openSharedQuadrant, rebuildSharedWorld } from "./shared-world";
+import { createSharedWorld, joinSharedWorld, openArea, openSharedQuadrant, rebalanceSharedEcology, rebuildSharedWorld } from "./shared-world";
 import { quadrantOf, warpBlockReason } from "./world-engine";
 
 const now = 1_800_000_000_000;
@@ -16,8 +16,9 @@ describe("map 2048 shared world (docs/MAP-2048.md)", () => {
     expect(state.world.config.openQuadrants).toEqual([0]);
     const targets = Object.values(state.world.entities).filter((entity) => entity.kind === "resource" || entity.kind === "monster");
     const area = openArea(state.world);
-    expect(targets.filter((entity) => entity.kind === "resource").length).toBe(Math.floor(area / 100));
-    expect(targets.filter((entity) => entity.kind === "monster").length).toBe(Math.floor(area / 400));
+    const pop = (defaults as any).world.population;
+    expect(targets.filter((entity) => entity.kind === "resource").length).toBe(Math.floor(area / pop.resourceTilesPer));
+    expect(targets.filter((entity) => entity.kind === "monster").length).toBe(Math.floor(area / pop.monsterTilesPer));
     expect(targets.every((entity) => quadrantOf(entity.position, state.world.config) === 0)).toBe(true);
     expect(elapsed).toBeLessThan(15_000);
   });
@@ -53,5 +54,18 @@ describe("map 2048 shared world (docs/MAP-2048.md)", () => {
     expect(rebuilt.world.entities[player.cityId].position).toEqual({ x: 200, y: 700 });
     expect(rebuilt.synced["0xaaa"]).toEqual(old.synced["0xaaa"]);
     expect(Object.keys(rebuilt.world.marches)).toEqual([]);
+  });
+
+  it("retires surplus idle planets when the density is lowered, never one in use", () => {
+    const dense = numbers(); dense.world.population.resourceTilesPer = 100;
+    const state = createSharedWorld(now, dense);
+    const busy = Object.values(state.world.entities).find((entity) => entity.kind === "resource")!;
+    if (busy.kind === "resource") { busy.state = "occupied"; busy.occupiedByMarchId = "m-busy"; }
+    const lighter = numbers();
+    expect(rebalanceSharedEcology(state, now + 1, lighter)).toBe(true);
+    const planets = Object.values(state.world.entities).filter((entity) => entity.kind === "resource");
+    expect(planets.length).toBe(Math.floor(openArea(state.world) / lighter.world.population.resourceTilesPer));
+    expect(state.world.entities[busy.id]).toBeDefined();
+    expect(rebalanceSharedEcology(state, now + 2, lighter)).toBe(false);
   });
 });

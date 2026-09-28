@@ -1640,6 +1640,12 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .commander-card p{margin:8px 0 0;color:#5c8296;font:600 7.5px var(--mono);letter-spacing:.06em}
 .comms-intel-card.commander .comms-intel-commander{display:flex;align-items:center;gap:9px}
 .comms-intel-card.commander .command-sigil{flex:none;width:34px!important;height:34px!important;pointer-events:none}
-/* Map 2048: sealed (not yet open) quadrants */
-.world-sealed rect{fill:rgba(2,4,10,.62);stroke:rgba(120,146,176,.22);stroke-width:1;stroke-dasharray:6 6;vector-effect:non-scaling-stroke}
-.world-sealed text{fill:#5f7488;font-family:var(--hud);letter-spacing:.2em;text-anchor:middle;dominant-baseline:middle}
+/* Map 2048: "the Dust" — unlisted sectors (labels; the dust is drawn on the backdrop) */
+.world-dust-label{cursor:pointer}
+.world-dust-label text{text-anchor:middle;dominant-baseline:middle;font-family:var(--hud)}
+.world-dust-kicker{fill:#b08a5c;letter-spacing:.42em;opacity:.8}
+.world-dust-title{fill:#e7d3b3;letter-spacing:.18em;opacity:.88;paint-order:stroke;stroke:rgba(14,10,6,.7);stroke-width:.6px}
+.world-dust-sub{fill:#9d8a70;letter-spacing:.12em;opacity:.85}
+.world-dust-track{fill:rgba(231,211,179,.14)}
+.world-dust-fill{fill:#d9a85f;filter:drop-shadow(0 0 4px rgba(217,168,95,.55))}
+.world-dust-label:hover .world-dust-title{opacity:1}

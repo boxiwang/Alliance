@@ -9,11 +9,12 @@ import { handlePlayerApi, sharedClaims, sharedCommandRoute, sharedCutover, share
 import { defaultN } from "../src/lib/numbers";
 import {
   advanceSharedWorld, applySharedCommand, createSharedWorld, joinSharedWorld, nextSharedEventAt, openQuadrants, openSharedQuadrant,
-  playerSlice, rebuildSharedWorld, searchShared, setSharedHome, sharedClusters, sharedHasPlayer, sharedView, type SearchKind, type SharedWorldState,
+  clusterTargets, playerSlice, rebalanceSharedEcology, rebuildSharedWorld, searchShared, setSharedHome, sharedClusters, sharedHasPlayer, sharedView,
+  type SearchKind, type SharedWorldState,
 } from "../src/lib/shared-world";
 import type { WorldAuthoritySession } from "../src/lib/world-authority";
 import { STORE_PREFIX, assembleShared, chunkDelta, sharedChunks } from "../src/lib/shared-store";
-import { DORMANT_MAX_CORE, assignOuterRingCoord, clampViewRect, dormantCandidates, quadrantOfCoord, spawnQuadrant, type ViewRect, type WorldCoord } from "./world-coords";
+import { DORMANT_MAX_CORE, QUADRANT_CAPACITY, assignOuterRingCoord, clampViewRect, dormantCandidates, quadrantOfCoord, spawnQuadrant, type ViewRect, type WorldCoord } from "./world-coords";
 import { projectGameJson } from "./economy";
 import { capacity } from "../src/lib/game";
 
@@ -170,6 +171,7 @@ type SocketAttachment = { pid: string; name: string; sessionId: string; windowSt
 type PublicPlayerRow = Omit<PlayerRow, "coords"> & { coords: WorldCoord | null };
 const VIEW_MIN_INTERVAL_MS = 250;
 const VIEW_MAX_CITIES = 600;
+const VIEW_TARGET_BUDGET = 400; // above this a view gets clusters instead of planets
 const publicPlayer = (player: PlayerRow): PublicPlayerRow => ({ ...player, coords: null });
 const inView = (rect: ViewRect | undefined, coord: WorldCoord | null | undefined): boolean =>
   !!rect && !!coord && coord.x >= rect.x0 && coord.x <= rect.x1 && coord.y >= rect.y0 && coord.y <= rect.y1;
@@ -273,6 +275,8 @@ export class WorldRoom {
     }
     if (!loaded) { await this.saveShared(createSharedWorld(Date.now(), defaultN())); return this.shared!; }
     if (loaded.world.config.width !== Number(defaultN().world?.state?.width)) loaded = await this.migrateMapSize(loaded);
+    // numbers.json density changes (e.g. fewer planets) apply to the live world on load.
+    if (rebalanceSharedEcology(loaded, Date.now(), defaultN())) await this.saveShared(loaded);
     this.shared = loaded;
     return loaded;
   }
@@ -318,6 +322,7 @@ export class WorldRoom {
     if (pick.opens !== null) {
       const open = async () => { const current = await this.loadShared(); await this.saveShared(openSharedQuadrant(current, pick.opens!, Date.now(), defaultN())); };
       if (inLock) await open(); else await this.locked(open);
+      await this.sendQuadrants(null, players);
     }
     return assignOuterRingCoord(placed.map((player) => player.coords), Math.random, pick.quadrant);
   }
@@ -628,6 +633,7 @@ export class WorldRoom {
     const marches = allMarches.filter((m) => m.arriveAt > Date.now() && (m.attacker === pid || m.defender === pid));
     const roster = Object.values(players).map((player) => player.id === pid ? player : publicPlayer(player));
     ws.send(JSON.stringify({ type: "snapshot", you: pid, players: roster, chat, dms, reports, marches }));
+    await this.sendQuadrants(ws, players);
     this.sendPlayerUpdate(players[pid], ws);
     // Tell everyone about any ghosts we just cleared (or others revived).
     for (const id of flipped) if (id !== pid) this.sendPlayerUpdate(players[id]);
@@ -793,7 +799,27 @@ export class WorldRoom {
     // Shared world: public targets in view + which player's fleet occupies them (no march paths).
     const shared = (await this.hasShared()) ? await this.loadShared() : undefined;
     const view = shared ? sharedView(shared, rect) : null;
-    try { ws.send(JSON.stringify({ type: "view_players", rect, players: visible, ...(view ? { targets: view.targets, occupiers: view.occupiers } : {}) })); } catch {}
+    // Dense Field views: the client draws clusters there anyway, so send the aggregate
+    // (a few KB) instead of every planet (hundreds of KB and most of this message's CPU).
+    const dense = !!view && view.targets.length > VIEW_TARGET_BUDGET;
+    const cell = 2 ** Math.round(Math.log2(Math.max(16, (rect.x1 - rect.x0) / 10)));
+    const payload = !view ? {} : dense ? { clusters: clusterTargets(view.targets, cell) } : { targets: view.targets, occupiers: view.occupiers };
+    try { ws.send(JSON.stringify({ type: "view_players", rect, players: visible, ...payload })); } catch {}
+  }
+
+  // Map 2048: which quadrants are open and how full each is (drives the Dust labels).
+  async sendQuadrants(ws: WebSocket | null, players?: Record<string, PlayerRow>) {
+    if (!(await this.hasShared())) return;
+    const shared = await this.loadShared();
+    const roster = players ?? ((await this.state.storage.get<Record<string, PlayerRow>>("players")) || {});
+    const counts = [0, 0, 0, 0];
+    for (const player of Object.values(roster)) if (player.coordVersion === COORD_VERSION && player.coords) counts[quadrantOfCoord(player.coords)] += 1;
+    const message = JSON.stringify({ type: "quadrants", open: openQuadrants(shared), counts, capacity: QUADRANT_CAPACITY });
+    if (ws) { try { ws.send(message); } catch {} } else this.broadcastRaw(message);
+  }
+
+  broadcastRaw(message: string) {
+    for (const socket of this.state.getWebSockets()) { try { socket.send(message); } catch {} }
   }
 
   // Nearest free target of a kind/level from the player's home (Star Map Search).

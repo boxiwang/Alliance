@@ -22,6 +22,8 @@ type Props = {
   /** Graphics tier: low = clean scaffold; medium + nebula/parallax/micro stars;
    *  high + anti-tiling nebula detail and dust; ultra + a living (drifting, twinkling) sky. */
   tier?: "low" | "medium" | "high" | "ultra";
+  /** Map 2048: quadrants not open yet (0 NW, 1 NE, 2 SW, 3 SE) — drawn as "the Dust". */
+  sealedQuadrants?: number[];
 };
 
 // Deep-zoom nebula detail + dust, computed per pixel on the GPU from WORLD
@@ -122,7 +124,10 @@ export default function WorldBackdropLayer(props: Props) {
     let drawNow: (() => void) | null = null;
     // Texture tiles are generated once, after the first paint (≈20ms, idle), then
     // the base layer repaints with them. Patterns are world-anchored below.
-    let textures: { teal: CanvasPattern; violet: CanvasPattern } | null = null;
+    let textures: { teal: CanvasPattern; violet: CanvasPattern; dust: CanvasPattern } | null = null;
+    // "The Dust" (sealed quadrants) is composed off-screen so its inner edges can be feathered.
+    const dustCanvas = document.createElement("canvas");
+    const dctx = dustCanvas.getContext("2d");
     // GPU nebula (Enhanced / Full-Spectrum), created lazily the first time it is needed.
     const glCanvas = glRef.current;
     let gl: WebGLRenderingContext | null = null, glFailed = false, glU: Record<string, WebGLUniformLocation | null> = {};
@@ -147,8 +152,9 @@ export default function WorldBackdropLayer(props: Props) {
       if ((propsRef.current.tier ?? "high") === "low") return;
       const teal = makeNoiseTile(256, 4663, [70, 170, 200], { base: 3, octaves: 5, lo: .46, hi: .86, alpha: .16 });
       const violet = makeNoiseTile(256, 9001, [150, 96, 230], { base: 3, octaves: 5, lo: .5, hi: .9, alpha: .15 });
-      const tp = ctx.createPattern(teal, "repeat"), vp = ctx.createPattern(violet, "repeat");
-      if (tp && vp) { textures = { teal: tp, violet: vp }; dirtyRef.current = true; }
+      const dust = makeNoiseTile(256, 7771, [150, 116, 82], { base: 2, octaves: 5, lo: .3, hi: .86, alpha: .3 });
+      const tp = ctx.createPattern(teal, "repeat"), vp = ctx.createPattern(violet, "repeat"), dp = dctx?.createPattern(dust, "repeat");
+      if (tp && vp && dp) { textures = { teal: tp, violet: vp, dust: dp }; dirtyRef.current = true; }
     }, 60);
     const resize = () => {
       const nextDpr = Math.max(1, Math.min(propsRef.current.dprCap || 2, window.devicePixelRatio || 1));
@@ -157,7 +163,7 @@ export default function WorldBackdropLayer(props: Props) {
       // size change, and repaint in the same frame (observer callbacks run before paint).
       if (nextW === cw && nextH === ch && nextDpr === dpr) return;
       dpr = nextDpr; cw = nextW; ch = nextH;
-      for (const c of [canvas, starCanvas]) { c.width = Math.round(cw * dpr); c.height = Math.round(ch * dpr); }
+      for (const c of [canvas, starCanvas, dustCanvas]) { c.width = Math.round(cw * dpr); c.height = Math.round(ch * dpr); }
       if (glCanvas) { glCanvas.width = Math.max(1, Math.round(cw * glScale())); glCanvas.height = Math.max(1, Math.round(ch * glScale())); }
       dirtyRef.current = true;
       drawNow?.();
@@ -220,6 +226,13 @@ export default function WorldBackdropLayer(props: Props) {
           }
           sctx!.fill();
         }
+        // Stars barely show through the Dust.
+        const sealedStars = p.sealedQuadrants ?? [];
+        if (sealedStars.length) {
+          sctx!.globalCompositeOperation = "destination-out"; sctx!.fillStyle = "rgba(0,0,0,.8)";
+          for (const q of sealedStars) sctx!.fillRect(X(q % 2 ? W / 2 : 0), Y(q >= 2 ? H / 2 : 0), (W / 2) * s, (H / 2) * s);
+          sctx!.globalCompositeOperation = "source-over";
+        }
       }
       if (baseDirty || (p.animateStars && now - lastStarsAt >= starInterval)) { lastStarsAt = now; drawStars(now); }
       if (!baseDirty) return;
@@ -257,8 +270,14 @@ export default function WorldBackdropLayer(props: Props) {
           // Nebula colour follows depth into the map: teal at the rim, violet near the Wormhole.
           const vcx = vp.x + vp.width / 2, vcy = vp.y + vp.height / 2;
           const inner = Math.max(0, Math.min(1, 1 - Math.hypot(vcx - p.center.x, vcy - p.center.y) / p.worldRadius));
-          layer(textures.teal, 256, 150, .82, 1 - inner * .75, 0, .6);
-          layer(textures.violet, 256, 190, .78, .25 + inner * .75, 23, .45);
+          // Zoomed out past the 512-tile span (map 2048), 150-unit tiles would repeat a dozen
+          // times across the screen: crossfade to macro tiles (rotated, incommensurate sizes).
+          const far = Math.max(0, Math.min(1, (1.1 - p.zoom) / .6));
+          const macro = far * far * (3 - 2 * far);
+          layer(textures.teal, 256, 150, .82, (1 - inner * .75) * (1 - macro), 0, .6);
+          layer(textures.violet, 256, 190, .78, (.25 + inner * .75) * (1 - macro), 23, .45);
+          layer(textures.teal, 256, 920, .9, (1 - inner * .75) * macro, 37, .6);
+          layer(textures.violet, 256, 1170, .88, (.25 + inner * .75) * macro, 61, .45);
           ctx.globalAlpha = 1;
         }
         // Depth darkening: from afar the gas reads as colour; up close space is mostly
@@ -361,6 +380,52 @@ export default function WorldBackdropLayer(props: Props) {
       const arm = rr + 8 * s;
       ctx.beginPath(); ctx.moveTo(cx - arm, cy); ctx.lineTo(cx + arm, cy); ctx.moveTo(cx, cy - arm); ctx.lineTo(cx, cy + arm); ctx.stroke();
       ctx.globalAlpha = 1;
+
+      // "The Dust" (naming bible: world.fog): sealed quadrants sit under drifting dust that
+      // thins out toward open land instead of ending at a hard edge.
+      const sealed = p.sealedQuadrants ?? [];
+      if (sealed.length && dctx) {
+        dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        dctx.globalCompositeOperation = "source-over";
+        dctx.clearRect(0, 0, cw, ch);
+        const hx = W / 2, hy = H / 2, feather = Math.max(24, 110 * s);
+        const rectOf = (q: number) => { const x0 = X(q % 2 ? hx : 0), y0 = Y(q >= 2 ? hy : 0); return { x0, y0, x1: x0 + hx * s, y1: y0 + hy * s }; };
+        const dustDrift = alive ? now / 1000 * .9 : 0;
+        for (const q of sealed) {
+          const r = rectOf(q);
+          dctx.save(); dctx.beginPath(); dctx.rect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0); dctx.clip();
+          dctx.fillStyle = "rgba(20,15,11,.84)"; dctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+          if (textures) {
+            for (const [tileWorld, rot, alpha, flow] of [[260, 11, .85, 1], [640, 47, .65, .55]] as const) {
+              const k = (tileWorld * s) / 256;
+              textures.dust.setTransform(new DOMMatrix().translateSelf(ox - (vp.x - dustDrift * flow) * s, oy - (vp.y - dustDrift * flow * .3) * s).rotateSelf(rot).scaleSelf(k, k));
+              dctx.globalAlpha = alpha; dctx.fillStyle = textures.dust; dctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+            }
+            dctx.globalAlpha = 1;
+          }
+          dctx.restore();
+        }
+        // Feather the edges that face open land (erase a gradient band on the dust side).
+        dctx.globalCompositeOperation = "destination-out";
+        for (const q of sealed) {
+          const r = rectOf(q);
+          const side = q ^ 1, below = q ^ 2;
+          if (!sealed.includes(side)) {
+            const edge = q % 2 ? r.x0 : r.x1, inward = q % 2 ? feather : -feather;
+            const g = dctx.createLinearGradient(edge, 0, edge + inward, 0);
+            g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(1, "rgba(0,0,0,0)");
+            dctx.fillStyle = g; dctx.fillRect(Math.min(edge, edge + inward), r.y0, Math.abs(inward), r.y1 - r.y0);
+          }
+          if (!sealed.includes(below)) {
+            const edge = q >= 2 ? r.y0 : r.y1, inward = q >= 2 ? feather : -feather;
+            const g = dctx.createLinearGradient(0, edge, 0, edge + inward);
+            g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(1, "rgba(0,0,0,0)");
+            dctx.fillStyle = g; dctx.fillRect(r.x0, Math.min(edge, edge + inward), r.x1 - r.x0, Math.abs(inward));
+          }
+        }
+        dctx.globalCompositeOperation = "source-over";
+        ctx.drawImage(dustCanvas, 0, 0, cw, ch);
+      }
     };
     drawNow = () => { cancelAnimationFrame(raf); draw(performance.now()); };
     draw(performance.now());

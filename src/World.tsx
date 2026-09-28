@@ -83,6 +83,9 @@ export const WORLD_MAX_ZOOM = 16;
 export const WORLD_TACTICAL_ZOOM = 3;
 /** Most target markers one screen may draw before the Field view switches to clusters. */
 const TARGET_MARKER_BUDGET = 320;
+/** Quadrant opening order (NW, NE, SE, SW) and its sector numerals for the Dust labels. */
+const SECTOR_ORDER = [0, 1, 3, 2];
+const SECTOR_NUMERALS = ["I", "II", "III", "IV"];
 const WORLD_PAN_OVERSCAN = 1.65;
 
 /** Rival civilizations only resolve inside the Tactical sensor envelope. */
@@ -611,6 +614,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [viewTargets, setViewTargets] = useState<Record<string, WorldEntity>>({});
   const [viewOccupiers, setViewOccupiers] = useState<Record<string, string>>({});
   const [serverClusters, setServerClusters] = useState<SignalCluster[] | null>(null);
+  // Dense Field view: the server sent an aggregate instead of every planet.
+  const [serverFieldClusters, setServerFieldClusters] = useState<SignalCluster[] | null>(null);
+  const [quadrantInfo, setQuadrantInfo] = useState<{ open: number[]; counts: number[]; capacity: number } | null>(null);
   const searchReplyRef = useRef<((result: { total: number; target: unknown | null }) => void) | null>(null);
   const [remoteSelectedId, setRemoteSelectedId] = useState<string | null>(null);
   // My own spawn coordinate, owned by the server (shared map). Once known, the
@@ -642,7 +648,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     rt.handlers.onViewPlayers = (rect, list, shared) => {
       const fresh = keep(list);
       setRemotePlayers((cur) => [...cur.filter((x) => !rectHas(rect, x.coords) && !fresh.some((p) => p.id === x.id)), ...fresh]);
-      if (shared) {
+      if (shared?.clusters) { setServerFieldClusters(shared.clusters); return; }
+      if (shared?.targets) {
+        setServerFieldClusters(null);
         const targets = shared.targets as WorldEntity[];
         setViewTargets((cur) => {
           const next: Record<string, WorldEntity> = {};
@@ -650,10 +658,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           for (const entity of targets) next[entity.id] = entity;
           return next;
         });
-        setViewOccupiers((cur) => ({ ...cur, ...shared.occupiers }));
+        setViewOccupiers((cur) => ({ ...cur, ...(shared.occupiers ?? {}) }));
       }
     };
     rt.handlers.onViewClusters = (clusters) => setServerClusters(clusters);
+    rt.handlers.onQuadrants = (info) => setQuadrantInfo(info);
     rt.handlers.onSearchResult = (result) => searchReplyRef.current?.(result);
     rt.handlers.onScoutResult = (_target, name, _coords, snapshot) => { setScoutingId(null); setScoutIntel({ name, snapshot }); };
     rt.handlers.onMarch = (m) => setMarches((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m]);
@@ -1149,15 +1158,16 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     }
     return count;
   }, [strategicZoom, filteredTargets, viewX, viewY, viewport.width, viewport.height]);
-  const denseField = !strategicZoom && visibleTargetCount > TARGET_MARKER_BUDGET;
+  const denseField = !strategicZoom && (!!serverFieldClusters || visibleTargetCount > TARGET_MARKER_BUDGET);
   const fieldClusters = useMemo(() => {
     if (!denseField) return null;
+    if (serverFieldClusters) return serverFieldClusters.filter((cluster) => layers[cluster.kind]);
     // Power-of-two cells so clusters do not re-shuffle on every zoom tick.
     const cell = 2 ** Math.round(Math.log2(Math.max(16, viewport.width / 8)));
     const pad = viewport.width * .6;
     return clusterWorldSignals(filteredTargets.filter((entity) => entity.position.x >= viewX - pad && entity.position.x <= viewX + viewport.width + pad
       && entity.position.y >= viewY - pad && entity.position.y <= viewY + viewport.height + pad), cell);
-  }, [denseField, filteredTargets, viewX, viewY, viewport.width, viewport.height]);
+  }, [denseField, serverFieldClusters, layers, filteredTargets, viewX, viewY, viewport.width, viewport.height]);
   const mapClusters = useMemo(() => (strategicZoom || fieldClusters) ? (fieldClusters ?? signalClusters).map((cluster) => <g key={cluster.id} transform={`translate(${cluster.position.x} ${cluster.position.y}) scale(${markerScale * 1.1 * Math.max(1, 1 / zoom)}) translate(${-cluster.position.x} ${-cluster.position.y})`} className={`world-cluster ${cluster.kind}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setCamera(cluster.position); setZoom((value) => Math.max(1.8, Math.min(WORLD_MAX_ZOOM, value * 1.8))); }}>
     <circle cx={cluster.position.x} cy={cluster.position.y} r="6.5" /><circle cx={cluster.position.x} cy={cluster.position.y} r="3.7" /><text x={cluster.position.x} y={cluster.position.y + 1.3}>{cluster.count}</text>
   </g>) : null, [strategicZoom, fieldClusters, signalClusters, markerScale, zoom]);
@@ -1692,15 +1702,32 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         <div className="world-coordinate-jump"><button type="button" className={`world-warp-open ${warpOpen ? "active" : ""}`} aria-expanded={warpOpen} onClick={() => (warpOpen ? setWarpOpen(false) : openWarp())}>WARP</button></div>
         <div className="world-coordinate world-coordinate-x">X {Math.round(Math.max(0, viewX)).toString().padStart(3, "0")} — {Math.round(Math.min(world.config.width, viewX + viewport.width)).toString().padStart(3, "0")}</div>
         <div className="world-coordinate world-coordinate-y">Y {Math.round(Math.max(0, viewY)).toString().padStart(3, "0")} — {Math.round(Math.min(world.config.height, viewY + viewport.height)).toString().padStart(3, "0")}</div>
-        <WorldBackdropLayer viewportRef={liveViewportRef} worldWidth={world.config.width} worldHeight={world.config.height} center={center} worldRadius={worldRadius} reserveRadius={world.config.circleReserveRadius} zoom={zoom} dprCap={quality.dprCap} animateStars={quality.bgAnimate} calm={CALM_MAP} tier={quality.tier} />
+        <WorldBackdropLayer sealedQuadrants={sealedQuadrants} viewportRef={liveViewportRef} worldWidth={world.config.width} worldHeight={world.config.height} center={center} worldRadius={worldRadius} reserveRadius={world.config.circleReserveRadius} zoom={zoom} dprCap={quality.dprCap} animateStars={quality.bgAnimate} calm={CALM_MAP} tier={quality.tier} />
         <svg ref={svgRef} className="world-map world-map-v2 world-map-pan-plane" viewBox={renderViewBox} style={{ transform: `translate3d(0,0,0) scale(${WORLD_PAN_OVERSCAN})` }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerCancel} >
           {mapScaffold}
           {sealedQuadrants.map((quadrant) => {
-            const cx = world.config.width / 2, cy = world.config.height / 2;
-            const x = quadrant % 2 ? cx : 0, y = quadrant >= 2 ? cy : 0;
-            return <g key={`sealed-${quadrant}`} className="world-sealed" pointerEvents="none">
-              <rect x={x} y={y} width={cx} height={cy} />
-              <text x={x + cx / 2} y={y + cy / 2} style={{ fontSize: 13 * worldPerPx }}>SEALED SECTOR · OPENS AS THE STATE GROWS</text>
+            // "The Dust" (naming bible world.fog): an unlisted sector that goes live when the
+            // one before it fills. The dust itself is drawn by WorldBackdropLayer.
+            const hx = world.config.width / 2, hy = world.config.height / 2;
+            const x = (quadrant % 2 ? hx : 0) + hx / 2, y = (quadrant >= 2 ? hy : 0) + hy / 2;
+            const order = SECTOR_ORDER.indexOf(quadrant);
+            const gate = SECTOR_ORDER[order - 1];
+            const gateCount = quadrantInfo?.counts[gate] ?? 0, cap = quadrantInfo?.capacity ?? 256;
+            const listsNext = world.config.openQuadrants?.includes(gate);
+            const u = worldPerPx;
+            return <g key={`sealed-${quadrant}`} className="world-dust-label" onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => setResultNotice({ title: `The Dust · Sector ${SECTOR_NUMERALS[order]}`, good: false,
+                detail: listsNext
+                  ? `Scanners return nothing but dust. When Sector ${SECTOR_NUMERALS[order - 1]} fills (${gateCount}/${cap} civilizations), the dust settles and Sector ${SECTOR_NUMERALS[order]} goes live.`
+                  : `Deep dust. Sector ${SECTOR_NUMERALS[order]} lists after Sector ${SECTOR_NUMERALS[order - 1]} goes live and fills.` })}>
+              <text x={x} y={y - 22 * u} className="world-dust-kicker" style={{ fontSize: 10 * u }}>THE DUST</text>
+              <text x={x} y={y} className="world-dust-title" style={{ fontSize: 22 * u }}>SECTOR {SECTOR_NUMERALS[order]} · UNLISTED</text>
+              <text x={x} y={y + 22 * u} className="world-dust-sub" style={{ fontSize: 10 * u }}>{listsNext ? `Goes live when Sector ${SECTOR_NUMERALS[order - 1]} reaches ${cap} civilizations` : `Lists after Sector ${SECTOR_NUMERALS[order - 1]}`}</text>
+              {listsNext && <g>
+                <rect x={x - 110 * u} y={y + 36 * u} width={220 * u} height={4 * u} rx={2 * u} className="world-dust-track" />
+                <rect x={x - 110 * u} y={y + 36 * u} width={220 * u * Math.min(1, gateCount / cap)} height={4 * u} rx={2 * u} className="world-dust-fill" />
+                <text x={x} y={y + 56 * u} className="world-dust-sub" style={{ fontSize: 9 * u }}>SECTOR {SECTOR_NUMERALS[order - 1]} · {gateCount} / {cap}</text>
+              </g>}
             </g>;
           })}
           {gpuFallback && mapMarches.map((march) => <MarchLine key={march.id} march={march} now={now} zoom={zoom} quality={quality} signature={world.players[march.playerId]?.cosmetics?.marchSignature ?? null} />)}

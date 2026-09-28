@@ -65,9 +65,30 @@ function population(world: HeadlessWorld, numbers: any): { resources: number; mo
   return { resources, monsters };
 }
 
-/** Top the public ecology up to the population the current player count calls for. */
+function spreadOrder(id: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < id.length; index += 1) hash = Math.imul(hash ^ id.charCodeAt(index), 16777619) >>> 0;
+  return hash;
+}
+
+/**
+ * Bring the public ecology to the population the rules call for: add targets when short,
+ * and when the density was lowered, retire surplus targets that nobody is using (an
+ * evenly spread, deterministic subset). Mutates `world`; returns it.
+ */
 export function topUpEcology(world: HeadlessWorld, now: number, numbers: any): HeadlessWorld {
   const want = population(world, numbers);
+  const trim = (kind: "resource" | "monster", keep: number) => {
+    const all = Object.values(world.entities).filter((entity) => entity.kind === kind);
+    if (all.length <= keep) return;
+    const idle = all.filter((entity) => entity.kind === "resource"
+      ? entity.state === "available" && !entity.occupiedByMarchId
+      : entity.kind === "monster" && entity.state === "alive" && !entity.engagedByMarchId);
+    idle.sort((a, b) => spreadOrder(a.id) - spreadOrder(b.id));
+    for (const entity of idle.slice(0, all.length - keep)) delete world.entities[entity.id];
+  };
+  trim("resource", want.resources);
+  trim("monster", want.monsters);
   const entities = Object.values(world.entities);
   const resources = entities.filter((entity) => entity.kind === "resource").length;
   const monsters = entities.filter((entity) => entity.kind === "monster").length;
@@ -319,6 +340,26 @@ export function searchShared(state: SharedWorldState, playerId: string, kind: Se
 }
 
 export type SharedCluster = { id: string; kind: "resource" | "monster"; position: Point; count: number };
+
+/** Clusters of an explicit target list (dense Field views sent as aggregates). */
+export function clusterTargets(targets: WorldEntity[], cellSize: number): SharedCluster[] {
+  const buckets = new Map<string, { kind: "resource" | "monster"; x: number; y: number; count: number }>();
+  for (const entity of targets) {
+    if (entity.kind !== "resource" && entity.kind !== "monster") continue;
+    const id = `${entity.kind}:${Math.floor(entity.position.x / cellSize)}:${Math.floor(entity.position.y / cellSize)}`;
+    const bucket = buckets.get(id) || { kind: entity.kind, x: 0, y: 0, count: 0 };
+    bucket.x += entity.position.x; bucket.y += entity.position.y; bucket.count += 1; buckets.set(id, bucket);
+  }
+  return Array.from(buckets, ([id, bucket]) => ({ id, kind: bucket.kind, position: { x: bucket.x / bucket.count, y: bucket.y / bucket.count }, count: bucket.count }));
+}
+
+/** Re-apply the ecology rules to a loaded world (density changed in numbers.json). */
+export function rebalanceSharedEcology(state: SharedWorldState, now: number, numbers: any): boolean {
+  const count = () => Object.values(state.world.entities).filter((entity) => entity.kind === "resource" || entity.kind === "monster").length;
+  const before = count();
+  mutateInPlace(() => topUpEcology(state.world, now, numbers));
+  return count() !== before;
+}
 
 /** Strategic-zoom aggregate of live public targets (no player data), same shape as the Star Map clusters. */
 export function sharedClusters(state: SharedWorldState, cellSize = 72 * state.world.config.width / 512): SharedCluster[] {

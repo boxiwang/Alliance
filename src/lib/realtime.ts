@@ -33,8 +33,9 @@ type Handlers = {
   onDM?: (key: string, msg: LiveChat) => void;
   onPlayer?: (player: PresenceCity) => void;
   onPlayerRemoved?: (id: string) => void;
-  onViewPlayers?: (rect: ViewRect, players: PresenceCity[], shared?: { targets: unknown[]; occupiers: Record<string, string> }) => void;
+  onViewPlayers?: (rect: ViewRect, players: PresenceCity[], shared?: { targets?: unknown[]; occupiers?: Record<string, string>; clusters?: { id: string; kind: "resource" | "monster"; position: { x: number; y: number }; count: number }[] }) => void;
   onViewClusters?: (clusters: { id: string; kind: "resource" | "monster"; position: { x: number; y: number }; count: number }[]) => void;
+  onQuadrants?: (info: { open: number[]; counts: number[]; capacity: number }) => void;
   onSearchResult?: (result: { kind: string; level: number; index: number; total: number; target: unknown | null }) => void;
   onStatus?: (connected: boolean) => void;
   onReport?: (report: ServerReport) => void;
@@ -75,9 +76,11 @@ export class RealtimeClient {
       else if (d.type === "dm") this.handlers.onDM?.(d.key, d.msg);
       else if (d.type === "player") this.handlers.onPlayer?.(d.player);
       else if (d.type === "player_removed") this.handlers.onPlayerRemoved?.(d.id);
-      else if (d.type === "view_players") this.handlers.onViewPlayers?.(d.rect, d.players || [], Array.isArray(d.targets) ? { targets: d.targets, occupiers: d.occupiers || {} } : undefined);
+      else if (d.type === "view_players") this.handlers.onViewPlayers?.(d.rect, d.players || [],
+        Array.isArray(d.targets) ? { targets: d.targets, occupiers: d.occupiers || {} } : Array.isArray(d.clusters) ? { clusters: d.clusters } : undefined);
       else if (d.type === "view_clusters") this.handlers.onViewClusters?.(d.clusters || []);
       else if (d.type === "search_result") this.handlers.onSearchResult?.(d);
+      else if (d.type === "quadrants") this.handlers.onQuadrants?.(d);
       else if (d.type === "report") this.handlers.onReport?.(d.report);
       else if (d.type === "scout_result") this.handlers.onScoutResult?.(d.target, d.name, d.coords || null, d.snapshot);
       else if (d.type === "march") this.handlers.onMarch?.(d.march);
