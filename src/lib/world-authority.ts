@@ -131,22 +131,27 @@ function updateMetadata(session: WorldAuthoritySession, game: GameState, numbers
     * (Number(numbers.global?.march?.capacityFractionOfMaxTroops) || 1)));
 }
 
+// Bounded history, kept per player so one busy player never evicts another's reports
+// in the shared world (docs/SHARED-ECOLOGY.md).
 function compactSession(session: WorldAuthoritySession): void {
   const world = session.world;
   if (world.feed.length > 200) world.feed.splice(0, world.feed.length - 200);
-  const reportIds = Object.values(world.reports)
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 120)
-    .map((report) => report.id);
-  const keptReports = new Set(reportIds);
-  Object.keys(world.reports).forEach((id) => { if (!keptReports.has(id)) delete world.reports[id]; });
+  const keptReports = new Set<string>();
   Object.values(world.players).forEach((player) => {
-    player.reportIds = player.reportIds.filter((id) => keptReports.has(id)).slice(-120);
+    player.reportIds = player.reportIds.filter((id) => world.reports[id]).slice(-120);
+    player.reportIds.forEach((id) => keptReports.add(id));
   });
-  const completed = Object.values(world.marches)
+  Object.keys(world.reports).forEach((id) => { if (!keptReports.has(id)) delete world.reports[id]; });
+  const finished = Object.values(world.marches)
     .filter((march) => ["completed", "failed", "recalled"].includes(march.state))
-    .sort((a, b) => b.completedAt - a.completedAt)
-    .slice(40);
+    .sort((a, b) => b.completedAt - a.completedAt);
+  const keptPerPlayer = new Map<string, number>();
+  const completed = finished.filter((march) => {
+    const kept = keptPerPlayer.get(march.playerId) || 0;
+    keptPerPlayer.set(march.playerId, kept + 1);
+    return kept >= 40;
+  });
+  world.scheduledEvents = world.scheduledEvents.filter((event) => !event.processedAt);
   const removedMarches = new Set(completed.map((march) => march.id));
   removedMarches.forEach((id) => { delete world.marches[id]; });
   Object.entries(world.dispatchKeys).forEach(([key, marchId]) => {

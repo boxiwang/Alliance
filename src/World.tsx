@@ -10,7 +10,7 @@ import { getN } from "./lib/numbers";
 import { compact } from "./lib/format";
 import { gmFillTroops, hasLocalGm } from "./lib/gm";
 import type {
-  CityEntity, HeadlessMarch, MonsterEntity, Point, ResourceEntity, WorldReport,
+  CityEntity, HeadlessMarch, MonsterEntity, Point, ResourceEntity, WorldEntity, WorldReport,
 } from "./lib/world-engine";
 import { ISSUED_WORLD_COSMETICS, distance, energyAt, isInsidePlayableWorld, isScoutReportActive, scoutReportExpiresAt, worldCenter, worldPlayableRadius, relocateCity, nearestWarpPoint, warpBlockReason, warpReadiness, WARP_RULES, worldResourceMaxLevel, worldRogueMaxLevel, zoneForPoint } from "./lib/world-engine";
 import { carryCapacity, resolveCombat } from "./lib/expedition";
@@ -539,6 +539,13 @@ function reportCopy(report: WorldReport, world: LocalWorldSession["world"], now:
     return { title: `Scout report: ${target}`, detail: `In-city ${compact(displayTroops(snapshot.garrison ?? 0))} troops${mightPart} · est. loot ${compact(displayResource(snapshot.estimatedLoot ?? 0))}.`, good };
   }
   if (report.action === "gather") {
+    // Shared ecology: a latecomer attacks the fleet holding the planet (docs/SHARED-ECOLOGY.md).
+    const losses = (value: unknown) => { const l = value as { wounded?: number; dead?: number } | undefined; return `${compact(displayTroops(Number(l?.wounded ?? 0)))} wounded · ${compact(displayTroops(Number(l?.dead ?? 0)))} dead`; };
+    if (report.outcome === "gather_won") return { title: `Seized ${target}`, detail: `Drove off the occupying fleet · ${losses(report.payload.attackerLosses)}.`, good: true };
+    if (report.outcome === "gather_repelled") return { title: `Repelled at ${target}`, detail: `The occupying fleet held · ${losses(report.payload.attackerLosses)}.`, good: false };
+    if (report.outcome === "gather_lost") return { title: `Driven off ${target}`, detail: `A rival fleet took the planet · kept ${compact(displayResource(Number(report.payload.keptCargo ?? 0)))} · ${losses(report.payload.holderLosses)}.`, good: false };
+    if (report.outcome === "gather_defended") return { title: `Held ${target}`, detail: `Beat off a rival fleet · ${losses(report.payload.holderLosses)}.`, good: true };
+    if (report.outcome === "held_by_ally") return { title: `${target} is held by an ally`, detail: "Your fleet turned back.", good: false };
     return { title: report.outcome === "target_unavailable" ? `${target} was claimed first` : `Gathering at ${target}`, detail: report.outcome === "gathering_completed" ? `${compact(displayResource(Number(report.payload.hauled ?? 0)))} supplies loaded for return.` : report.outcome.split("_").join(" "), good };
   }
   const wounded = Number(report.payload.wounded ?? (report.payload.attackerLosses as any)?.wounded ?? 0);
@@ -591,6 +598,13 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // scouting/attacking real players is the next milestone (server-side combat).
   const [remotePlayers, setRemotePlayers] = useState<MapCity[]>([]);
   const [rtEpoch, setRtEpoch] = useState(0); // bumps on every (re)connect snapshot → resend the map view
+  // Shared world (authority v2, docs/SHARED-ECOLOGY.md): public targets arrive per map view;
+  // own city, marches and reports come in the server slice. Others' fleets are known only
+  // as "who occupies this planet" — never their paths (their homes stay private).
+  const [viewTargets, setViewTargets] = useState<Record<string, WorldEntity>>({});
+  const [viewOccupiers, setViewOccupiers] = useState<Record<string, string>>({});
+  const [serverClusters, setServerClusters] = useState<SignalCluster[] | null>(null);
+  const searchReplyRef = useRef<((result: { total: number; target: unknown | null }) => void) | null>(null);
   const [remoteSelectedId, setRemoteSelectedId] = useState<string | null>(null);
   // My own spawn coordinate, owned by the server (shared map). Once known, the
   // home city is moved here so "where I see my home" == "where others see me".
@@ -618,10 +632,22 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       setRemotePlayers((cur) => { const i = cur.findIndex((x) => x.id === p.id); if (i < 0) return [...cur, p]; const next = cur.slice(); next[i] = p; return next; });
     };
     rt.handlers.onPlayerRemoved = (id) => setRemotePlayers((cur) => cur.filter((x) => x.id !== id));
-    rt.handlers.onViewPlayers = (rect, list) => {
+    rt.handlers.onViewPlayers = (rect, list, shared) => {
       const fresh = keep(list);
       setRemotePlayers((cur) => [...cur.filter((x) => !rectHas(rect, x.coords) && !fresh.some((p) => p.id === x.id)), ...fresh]);
+      if (shared) {
+        const targets = shared.targets as WorldEntity[];
+        setViewTargets((cur) => {
+          const next: Record<string, WorldEntity> = {};
+          for (const [id, entity] of Object.entries(cur)) if (!rectHas(rect, entity.position)) next[id] = entity;
+          for (const entity of targets) next[entity.id] = entity;
+          return next;
+        });
+        setViewOccupiers((cur) => ({ ...cur, ...shared.occupiers }));
+      }
     };
+    rt.handlers.onViewClusters = (clusters) => setServerClusters(clusters);
+    rt.handlers.onSearchResult = (result) => searchReplyRef.current?.(result);
     rt.handlers.onScoutResult = (_target, name, _coords, snapshot) => { setScoutingId(null); setScoutIntel({ name, snapshot }); };
     rt.handlers.onMarch = (m) => setMarches((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m]);
     rt.handlers.onMarchDone = (id) => setMarches((cur) => cur.filter((x) => x.id !== id));
@@ -790,7 +816,23 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [searchKind, setSearchKind] = useState<SearchTab>("monster");
   const [searchLevels, setSearchLevels] = useState<Record<SearchKind, number>>({ monster: 0, cash: 1, oil: 1, power: 1 });
   const [searchResult, setSearchResult] = useState<{ key: string; index: number; total: number; targetId: string } | null>(null);
-  const world = session.world;
+  const sharedMode = authorityVersion >= 2;
+  const world = useMemo(() => {
+    if (!sharedMode) return session.world;
+    const entities: Record<string, WorldEntity> = { ...viewTargets };
+    for (const [id, entity] of Object.entries(session.world.entities)) {
+      const seen = entities[id];
+      if (!seen || entity.revision >= seen.revision) entities[id] = entity;
+    }
+    return { ...session.world, entities };
+  }, [sharedMode, session.world, viewTargets]);
+  // Occupation lookups also know other players' occupying fleets (owner only).
+  const occupationMarches = useMemo(() => {
+    if (!sharedMode) return world.marches;
+    const marches: Record<string, Pick<HeadlessMarch, "playerId">> = {};
+    for (const [marchId, playerId] of Object.entries(viewOccupiers)) marches[marchId] = { playerId };
+    return { ...marches, ...world.marches };
+  }, [sharedMode, world.marches, viewOccupiers]);
   const viewGame = useMemo(() => project(game, now), [game, now]);
   const targets = useMemo(() => Object.values(world.entities).filter((entity): entity is SelectableEntity => entity.kind === "resource" || entity.kind === "monster" || (entity.kind === "city" && entity.ownerId !== session.playerId)), [world.entities, session.playerId]);
   const detailZoom = zoom >= WORLD_TACTICAL_ZOOM;
@@ -969,7 +1011,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const nearbySignals = useMemo(() => filteredTargets.filter((target) => target.kind !== "city")
     .sort((left, right) => distance(playerCity.position, left.position) - distance(playerCity.position, right.position))
     .slice(0, 3), [filteredTargets, playerCity.position.x, playerCity.position.y]);
-  const signalClusters = useMemo(() => clusterWorldSignals(filteredTargets, 72), [filteredTargets]);
+  const signalClusters = useMemo(() => sharedMode && serverClusters
+    ? serverClusters.filter((cluster) => layers[cluster.kind])
+    : clusterWorldSignals(filteredTargets, 72), [sharedMode, serverClusters, layers, filteredTargets]);
   const bookmarkedTargets = bookmarks.map((id) => targets.find((target) => target.id === id)).filter((target): target is SelectableEntity => !!target);
   const scoutIntelTtlMs = world.config.scoutIntelTtlSec * 1000;
   const scoutedTargetIds = useMemo(() => new Set(player.reportIds.map((id) => world.reports[id]).filter((report): report is WorldReport => !!report && isScoutReportActive(report, now, scoutIntelTtlMs)).map((report) => report.targetId)), [now, player.reportIds, scoutIntelTtlMs, world.reports]);
@@ -978,7 +1022,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const selectedVerified = !!selected && (selected.kind === "resource" || scoutedTargetIds.has(selected.id));
   const selectedIntelRemainingSec = selectedScoutReport ? Math.max(0, Math.ceil((scoutReportExpiresAt(selectedScoutReport, scoutIntelTtlMs) - now) / 1000)) : 0;
   const selectedOccupation = selected?.kind === "resource"
-    ? resourceOccupationDisposition(selected, world.marches, world.players, session.playerId, profile.faction)
+    ? resourceOccupationDisposition(selected, occupationMarches, world.players, session.playerId, profile.faction)
     : "neutral";
   const zoomLabel = strategicZoom ? "STRATEGIC" : detailZoom ? "TACTICAL" : "FIELD";
   const renderStressCount = gm
@@ -1093,7 +1137,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       .sort((a, b) => (a.id === selectedId ? 1 : 0) - (b.id === selectedId ? 1 : 0))
       .map((entity) => {
         const color = entityColor(entity); const unavailable = (entity.kind === "resource" && entity.state !== "available") || (entity.kind === "monster" && entity.state !== "alive"); const selectedTarget = selectedId === entity.id; const verified = entity.kind === "resource" || scoutedTargetIds.has(entity.id);
-        const occupation = entity.kind === "resource" ? resourceOccupationDisposition(entity, world.marches, world.players, session.playerId, profile.faction) : "neutral";
+        const occupation = entity.kind === "resource" ? resourceOccupationDisposition(entity, occupationMarches, world.players, session.playerId, profile.faction) : "neutral";
         const publicCosmetics = entity.kind === "city" ? world.players[entity.ownerId]?.cosmetics || ISSUED_WORLD_COSMETICS : null;
         const targetScale = CALM_MAP && entity.kind !== "city" ? calmTargetScale : markerScale;
         const outOfReach = entity.kind === "monster" && entity.level > nextRogueLevel;
@@ -1123,6 +1167,13 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // Ask the server for the rival cities in view (with a margin so small pans reuse it).
   // Rival cities only render past Strategic zoom, so no request is made there.
   const lastViewRef = useRef<ViewRect | null>(null);
+  useEffect(() => {
+    if (!sharedMode || !strategicZoom) return;
+    const ask = () => rtRef.current?.sendView({ x0: 0, y0: 0, x1: 0, y1: 0 }, true);
+    ask();
+    const timer = window.setInterval(ask, 30_000);
+    return () => window.clearInterval(timer);
+  }, [sharedMode, strategicZoom, rtEpoch]);
   useEffect(() => {
     lastViewRef.current = null;
   }, [rtEpoch]);
@@ -1177,6 +1228,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   }
   function commitServer(result: GameCommandResponse) {
     if (!result.world || !result.game) return;
+    if (result.authorityVersion && result.authorityVersion !== authorityRef.current) {
+      authorityRef.current = result.authorityVersion; setAuthorityVersion(result.authorityVersion);
+    }
     const nextSession = result.world as LocalWorldSession;
     const nextGame = result.game as GameState;
     const ids = nextSession.world.players[nextSession.playerId]?.reportIds || [];
@@ -1315,10 +1369,28 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   function runSearch() {
     if (searchKind === "coord") { viewCoordinates(); return; }
     const label = SEARCH_KINDS.find((kind) => kind.id === searchKind)!.label;
+    if (sharedMode && rtRef.current) {
+      const index = searchResult?.key === searchKey ? searchResult.index + 1 : 0;
+      const kind = searchKind, level = searchLevel, key = searchKey;
+      searchReplyRef.current = (result) => {
+        searchReplyRef.current = null;
+        const target = result.target as WorldEntity | null;
+        if (!target || !result.total) {
+          if (kind === "monster" && level === nextRogueLevel) { setSearchResult(null); void findNextRogue(); return; }
+          setSearchResult(null); setMessage(`No free L${level} ${label} signal found. Try another level.`); return;
+        }
+        setViewTargets((cur) => ({ ...cur, [target.id]: target }));
+        setSearchResult({ key, index: index % result.total, total: result.total, targetId: target.id });
+        setSelectedId(target.id); setHomeSelected(false); setRemoteSelectedId(null); setSelection(emptySelection()); setTileMark(null);
+        setCamera({ ...target.position }); setZoom((value) => Math.max(value, 3.2)); setMessage(""); playSelectSfx();
+      };
+      rtRef.current.sendSearch(kind, level, index);
+      return;
+    }
     const candidates = targets.filter((entity) => searchKind === "monster"
       ? entity.kind === "monster" && entity.state === "alive" && entity.level === searchLevel
       : entity.kind === "resource" && entity.resource === searchKind && entity.state === "available" && entity.level === searchLevel
-        && resourceOccupationDisposition(entity, world.marches, world.players, session.playerId, profile.faction) === "neutral")
+        && resourceOccupationDisposition(entity, occupationMarches, world.players, session.playerId, profile.faction) === "neutral")
       .sort((left, right) => distance(playerCity.position, left.position) - distance(playerCity.position, right.position));
     if (!candidates.length) {
       // Nothing charted at the next Rogue tier: fall back to the server Deep Scan.

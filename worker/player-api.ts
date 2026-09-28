@@ -17,13 +17,37 @@ import { DAILY_SUPPLY, SHOP_OFFER_BY_ID, SHOP_OFFERS, TOPUP_PACKS } from "../src
 import { gameStateBelongsToPlayer, projectGameJson } from "./economy";
 import { applyCommand } from "./commands";
 import { applySpeedup, speedupCompatible, type SpeedupTarget } from "../src/lib/speedups";
-import { BUILDING_ORDER, TROOP_ORDER, type BKey, type TroopKey } from "../src/lib/game";
+import { BUILDING_ORDER, TROOP_ORDER, type BKey, type GameState, type TroopKey } from "../src/lib/game";
 import { defaultN } from "../src/lib/numbers";
 import {
   applyWorldAuthorityCommand, isWorldAuthoritySession,
   type WorldAuthorityCommand, type WorldAuthoritySession,
 } from "../src/lib/world-authority";
 import { removeSimulatedCities, simulatedCityCount } from "../src/lib/world-engine";
+import { retirePrivateWorld, type SharedCarryOver } from "../src/lib/shared-world";
+
+/**
+ * The WorldRoom's shared world as seen by the D1 command pipeline (docs/SHARED-ECOLOGY.md).
+ * `apply` works on a pending copy; `commit` makes it real only after D1 accepted the
+ * matching game_json write, so the world and the economy never diverge. `discard` is a
+ * no-op after `commit`.
+ */
+export interface SharedWorldPort {
+  has(playerId: string): boolean;
+  join(playerId: string, game: GameState, carry: SharedCarryOver | undefined, now: number): Promise<void>;
+  apply(playerId: string, game: GameState, command: WorldAuthorityCommand, now: number): {
+    game: GameState; ok: boolean; reason?: string; session: WorldAuthoritySession; position?: { x: number; y: number };
+    targetId?: string | null; spawned?: boolean;
+  };
+  commit(): Promise<void>;
+  discard(): void;
+}
+
+const WORLD_COMMANDS = new Set(["world.advance", "world.dispatch", "world.recall", "world.scan", "world.warp"]);
+
+function worldRoom(env: BackendEnv): DurableObjectStub | null {
+  return env.WORLD_ROOM ? env.WORLD_ROOM.get(env.WORLD_ROOM.idFromName("frontier-1")) : null;
+}
 
 export interface BackendEnv {
   DB: D1Database;
@@ -327,6 +351,75 @@ async function shopDailyClaim(request: Request, env: BackendEnv, claims: Session
 
 const WARP_ATTEMPTS_PER_MINUTE = 10;
 
+// ---- Shared world entry points (called by the WorldRoom, inside its world lock) ----
+
+type AuthorityRow = { revision: number; game_json: string | null; world_json: string | null; economy_authority_version: number; updated_at: number };
+const loadAuthorityRow = (env: BackendEnv, playerId: string) => env.DB.prepare(
+  "SELECT revision, game_json, world_json, economy_authority_version, updated_at FROM player_state WHERE player_id = ?",
+).bind(playerId).first<AuthorityRow>();
+
+export async function sharedClaims(request: Request, env: BackendEnv): Promise<SessionClaims | null> {
+  return authClaims(request, env);
+}
+
+/**
+ * One-time move of an authority player into the shared world: their private world is
+ * settled (fleets home, cargo delivered), progress carries over, and economy authority
+ * becomes version 2. The private world_json is kept untouched as a rollback copy.
+ * Returns an error response, or null when the player is in the shared world.
+ */
+export async function sharedCutover(env: BackendEnv, playerId: string, port: SharedWorldPort): Promise<Response | null> {
+  if (port.has(playerId)) return null;
+  const row = await loadAuthorityRow(env, playerId);
+  if (!row?.economy_authority_version) return response({ error: "authority_disabled" }, 409);
+  const now = Date.now();
+  const numbers = defaultN();
+  const projected = projectGameJson(row.game_json, now);
+  if (!projected) return response({ error: "no_state" }, 409);
+  let game: GameState = projected;
+  let carry: SharedCarryOver | undefined;
+  if (row.economy_authority_version === 1) {
+    let session: unknown = null;
+    try { session = row.world_json ? JSON.parse(row.world_json) : null; } catch {}
+    if (isWorldAuthoritySession(session, playerId)) ({ game, carry } = retirePrivateWorld(session, projected, now, numbers));
+  }
+  await port.join(playerId, game, carry, now);
+  const write = await env.DB.prepare(`UPDATE player_state SET game_json = ?, economy_authority_version = 2, revision = revision + 1, updated_at = ?
+    WHERE player_id = ? AND revision = ?`).bind(JSON.stringify(game), now, playerId, row.revision).run();
+  if (!write.meta.changes) { port.discard(); return response({ error: "revision_conflict" }, 409); }
+  await port.commit();
+  await env.DB.prepare(`INSERT INTO account_audit_log (id, player_id, action, metadata_json, created_at) VALUES (?, ?, 'shared_world_cutover', ?, ?)`)
+    .bind(crypto.randomUUID(), playerId, JSON.stringify({ fromVersion: row.economy_authority_version }), now).run().catch(() => {});
+  return null;
+}
+
+export async function sharedCommandRoute(request: Request, env: BackendEnv, claims: SessionClaims, port: SharedWorldPort): Promise<Response> {
+  return commandRoute(request, env, claims, port);
+}
+
+/** GET /game for shared-world players: sync deliveries into game_json, return the player's slice. */
+export async function sharedSyncRoute(env: BackendEnv, claims: SessionClaims, port: SharedWorldPort): Promise<Response> {
+  try {
+    const row = await loadAuthorityRow(env, claims.sub);
+    const now = Date.now();
+    const state = projectGameJson(row?.game_json, now);
+    if (!row || !state) return response({ error: "no_state" }, 409);
+    const applied = port.apply(claims.sub, state, { type: "world.advance", args: {} }, now);
+    if (!applied.ok) return response({ game: state, world: null, revision: row.revision, authorityVersion: row.economy_authority_version, updatedAt: row.updated_at });
+    const pick = (game: GameState) => JSON.stringify([game.troops, game.woundedTroops, game.wounded, game.res]);
+    let revision = row.revision;
+    if (pick(applied.game) !== pick(state)) {
+      const write = await env.DB.prepare(`UPDATE player_state SET game_json = ?, revision = revision + 1, updated_at = ?
+        WHERE player_id = ? AND revision = ?`).bind(JSON.stringify(applied.game), now, claims.sub, row.revision).run();
+      // Lost a race with an economy command: keep the world as it was; the next read retries.
+      if (!write.meta.changes) return response({ game: state, world: null, revision: row.revision, authorityVersion: row.economy_authority_version, updatedAt: row.updated_at });
+      revision += 1;
+    }
+    await port.commit();
+    return response({ game: applied.game, world: applied.session, revision, authorityVersion: row.economy_authority_version, updatedAt: now });
+  } finally { port.discard(); }
+}
+
 // GM ops: world roster and map-slot release (docs/BETA-P0.md P0-2 ghost cleanup).
 async function gmWorld(request: Request, env: BackendEnv, claims: SessionClaims, pathname: string): Promise<Response> {
   if (claims.role !== "gm") return response({ error: "gm_required" }, 403);
@@ -627,9 +720,14 @@ async function stateRoute(request: Request, env: BackendEnv, claims: SessionClai
 // Step 1 (docs/ECONOMY-SERVER.md): serve the player's own authoritative state,
 // projected to now with the shared engine. Read-only — the client still writes
 // locally + mirrors for now; this lets us confirm server/client parity.
-async function gameRoute(env: BackendEnv, claims: SessionClaims): Promise<Response> {
+async function gameRoute(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
   const row = await env.DB.prepare("SELECT revision, game_json, world_json, economy_authority_version, updated_at FROM player_state WHERE player_id = ?")
     .bind(claims.sub).first<{ revision: number; game_json: string | null; world_json: string | null; economy_authority_version: number; updated_at: number }>();
+  // Authority players read through the shared world (deliveries land in game_json there).
+  const room = worldRoom(env);
+  if (room && (row?.economy_authority_version ?? 0) >= 1) {
+    return room.fetch("https://world.internal/world/sync", { headers: { authorization: request.headers.get("authorization") || "" } });
+  }
   const game = projectGameJson(row?.game_json, Date.now());
   let world: unknown = null;
   try { world = row?.world_json ? JSON.parse(row.world_json) : null; } catch {}
@@ -736,7 +834,11 @@ async function replayCommand(env: BackendEnv, claims: SessionClaims, idempotency
 // Step 2: apply one authoritative game command. Load → project → shared reducer
 // → save under the revision lock → return the new state. A rejected command is a
 // 200 with the current state + reason so the client can reconcile (not an error).
-async function commandRoute(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+async function commandRoute(request: Request, env: BackendEnv, claims: SessionClaims, port?: SharedWorldPort): Promise<Response> {
+  try { return await commandRouteInner(request, env, claims, port); } finally { port?.discard(); }
+}
+
+async function commandRouteInner(request: Request, env: BackendEnv, claims: SessionClaims, port?: SharedWorldPort): Promise<Response> {
   const data = await body(request);
   const type = String(data?.type || "");
   const args = (data?.args && typeof data.args === "object") ? data.args as Record<string, unknown> : {};
@@ -749,6 +851,14 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
   const row = await env.DB.prepare("SELECT revision, game_json, world_json, economy_authority_version FROM player_state WHERE player_id = ?")
     .bind(claims.sub).first<{ revision: number; game_json: string | null; world_json: string | null; economy_authority_version: number }>();
   if (!row?.economy_authority_version) return response({ error: "authority_disabled" }, 409);
+  // World commands run inside the WorldRoom's shared world (it performs the one-time
+  // cutover from the private world, then calls back into this route with a port).
+  const room = worldRoom(env);
+  if (!port && WORLD_COMMANDS.has(type) && room) {
+    return room.fetch("https://world.internal/world/command", {
+      method: "POST", headers: { authorization: request.headers.get("authorization") || "", "content-type": "application/json" }, body: JSON.stringify(data),
+    });
+  }
   const now = Date.now();
   const state = projectGameJson(row?.game_json, now);
   const revision = row?.revision ?? 0;
@@ -763,11 +873,13 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
   const isWorldCommand = type === "world.advance" || type === "world.dispatch" || type === "world.recall" || type === "world.scan" || type === "world.warp";
   let warpReservation: { coord: { x: number; y: number }; previous: { x: number; y: number } | null } | null = null;
   if (isWorldCommand) {
-    if (!world) return response({ error: "world_authority_disabled" }, 409);
-    // The shared WorldRoom owns real-player coordinates (spawn, warp, dormant respawn).
-    const home = await sharedWorldCoord(env, claims.sub);
-    const homeCity = world.world.entities[world.world.players[world.playerId]?.cityId];
-    if (home && homeCity?.kind === "city" && (homeCity.position.x !== home.x || homeCity.position.y !== home.y)) homeCity.position = home;
+    if (!world && !port) return response({ error: "world_authority_disabled" }, 409);
+    if (world && !port) {
+      // Private world (pre-cutover): the shared WorldRoom owns real-player coordinates.
+      const home = await sharedWorldCoord(env, claims.sub);
+      const homeCity = world.world.entities[world.world.players[world.playerId]?.cityId];
+      if (home && homeCity?.kind === "city" && (homeCity.position.x !== home.x || homeCity.position.y !== home.y)) homeCity.position = home;
+    }
     let command: WorldAuthorityCommand;
     if (type === "world.dispatch") {
       const action = String(args.action || "");
@@ -795,11 +907,18 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
         .bind(claims.sub, now - 60_000).first<{ n: number }>()
       : null;
     if (recentWarps && recentWarps.n >= WARP_ATTEMPTS_PER_MINUTE) {
-      result = { state, ok: false, reason: "rate_limited", world };
+      result = { state, ok: false, reason: "rate_limited", world: world ?? undefined };
     } else if (warpItemId && (!warpBalance || warpBalance.quantity < 1)) {
-      result = { state, ok: false, reason: "no_warp_item", world };
+      result = { state, ok: false, reason: "no_warp_item", world: world ?? undefined };
+    } else if (port) {
+      const applied = port.apply(claims.sub, state, command, now);
+      result = {
+        state: applied.game, ok: applied.ok, reason: applied.reason, world: applied.session,
+        extra: { targetId: applied.targetId, spawned: applied.spawned, position: applied.position },
+      };
+      if (warpItemId && applied.ok && applied.position) inventoryItemId = warpItemId;
     } else {
-      const applied = applyWorldAuthorityCommand(world, state, command, now, defaultN());
+      const applied = applyWorldAuthorityCommand(world!, state, command, now, defaultN());
       result = {
         state: applied.game, ok: applied.ok, reason: applied.reason, world: applied.session,
         extra: { targetId: applied.targetId, spawned: applied.spawned, position: applied.position },
@@ -808,7 +927,7 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
         // The shared WorldRoom is the coordinate authority for real players: reserve first.
         const minSpacing = Number(defaultN().world?.warp?.minCitySpacing) || 6;
         const reserved = await reserveWorldCoord(env, claims.sub, applied.position, minSpacing);
-        if (!reserved.ok) result = { state, ok: false, reason: reserved.error || "warp_rejected", world };
+        if (!reserved.ok) result = { state, ok: false, reason: reserved.error || "warp_rejected", world: world ?? undefined };
         else { inventoryItemId = warpItemId; warpReservation = { coord: applied.position, previous: reserved.previous ?? null }; }
       }
     }
@@ -831,7 +950,8 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
   const reason = result.ok ? null : result.reason || "rejected";
   const resultRevision = result.ok ? revision + 1 : revision;
   const encoded = JSON.stringify(result.state);
-  const encodedWorld = result.world ? JSON.stringify(result.world) : row.world_json;
+  // Shared-world players keep their retired private world untouched as a rollback copy.
+  const encodedWorld = port ? null : result.world ? JSON.stringify(result.world) : row.world_json;
   if (encoded.length > 250_000) return response({ error: "state_too_large" }, 413);
   if (encodedWorld && encodedWorld.length > WORLD_STATE_BYTES) return response({ error: "world_state_too_large" }, 413);
   const commandId = crypto.randomUUID();
@@ -886,6 +1006,7 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
         env.DB.prepare("DELETE FROM command_transaction_guards WHERE id IN (?, ?)").bind(`${guardId}:inventory`, `${guardId}:state`),
       );
       await env.DB.batch(statements);
+      if (port) await port.commit();
     }
   } catch (error) {
     // The D1 commit lost: give the shared coordinate back before replying.
@@ -901,7 +1022,8 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
     : null;
   return response({
     ok: result.ok, reason: reason || undefined, game: result.ok ? result.state : state,
-    world: result.ok ? result.world || world : world, revision: resultRevision,
+    world: port ? result.world : result.ok ? result.world || world : world, revision: resultRevision,
+    authorityVersion: port ? 2 : row.economy_authority_version,
     inventory: inventory || undefined, ...(result.ok ? result.extra : {}),
   });
 }
@@ -921,7 +1043,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (pathname === "/feedback") return submitFeedback(request, env, claims);
   if (request.method === "POST" && pathname === "/events") return storeEvents(request, env, claims);
   if ((request.method === "GET" || request.method === "PUT") && pathname === "/state") return stateRoute(request, env, claims);
-  if (request.method === "GET" && pathname === "/game") return gameRoute(env, claims);
+  if (request.method === "GET" && pathname === "/game") return gameRoute(request, env, claims);
   if (request.method === "POST" && pathname === "/game/authority/enable") return enableGameAuthority(request, env, claims);
   if (request.method === "POST" && pathname === "/command") return commandRoute(request, env, claims);
   if (pathname === "/inventory") return inventory(request, env, claims);

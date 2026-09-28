@@ -31,7 +31,9 @@ type Handlers = {
   onDM?: (key: string, msg: LiveChat) => void;
   onPlayer?: (player: PresenceCity) => void;
   onPlayerRemoved?: (id: string) => void;
-  onViewPlayers?: (rect: ViewRect, players: PresenceCity[]) => void;
+  onViewPlayers?: (rect: ViewRect, players: PresenceCity[], shared?: { targets: unknown[]; occupiers: Record<string, string> }) => void;
+  onViewClusters?: (clusters: { id: string; kind: "resource" | "monster"; position: { x: number; y: number }; count: number }[]) => void;
+  onSearchResult?: (result: { kind: string; level: number; index: number; total: number; target: unknown | null }) => void;
   onStatus?: (connected: boolean) => void;
   onReport?: (report: ServerReport) => void;
   onScoutResult?: (target: string, name: string, coords: { x: number; y: number } | null, snapshot: ScoutSnapshot) => void;
@@ -71,7 +73,9 @@ export class RealtimeClient {
       else if (d.type === "dm") this.handlers.onDM?.(d.key, d.msg);
       else if (d.type === "player") this.handlers.onPlayer?.(d.player);
       else if (d.type === "player_removed") this.handlers.onPlayerRemoved?.(d.id);
-      else if (d.type === "view_players") this.handlers.onViewPlayers?.(d.rect, d.players || []);
+      else if (d.type === "view_players") this.handlers.onViewPlayers?.(d.rect, d.players || [], Array.isArray(d.targets) ? { targets: d.targets, occupiers: d.occupiers || {} } : undefined);
+      else if (d.type === "view_clusters") this.handlers.onViewClusters?.(d.clusters || []);
+      else if (d.type === "search_result") this.handlers.onSearchResult?.(d);
       else if (d.type === "report") this.handlers.onReport?.(d.report);
       else if (d.type === "scout_result") this.handlers.onScoutResult?.(d.target, d.name, d.coords || null, d.snapshot);
       else if (d.type === "march") this.handlers.onMarch?.(d.march);
@@ -103,9 +107,11 @@ export class RealtimeClient {
   sendScout(to: string) { this.send({ type: "scout", to }); }
   sendMarch(to: string) { this.send({ type: "march", to }); }
   // Map view query: never queued (a stale view is useless); resent after reconnect.
-  sendView(rect: ViewRect) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) { try { this.ws.send(JSON.stringify({ type: "view", rect })); } catch {} }
+  sendView(rect: ViewRect, strategic = false) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) { try { this.ws.send(JSON.stringify({ type: "view", rect, strategic })); } catch {} }
   }
+  // Shared-world Search: nearest free target of a kind/level from home; `index` walks outward.
+  sendSearch(kind: string, level: number, index: number) { this.send({ type: "search", kind, level, index }); }
   sendPresence(p: { name?: string; might?: number; keepLevel?: number; faction?: string | null; cosmetics?: unknown }) {
     this.send({ type: "presence", ...p });
   }

@@ -5,7 +5,13 @@
 // stay in a hibernatable Durable Object for low-latency coordination.
 
 import { verifySession } from "./auth";
-import { handlePlayerApi, type BackendEnv } from "./player-api";
+import { handlePlayerApi, sharedClaims, sharedCommandRoute, sharedCutover, sharedSyncRoute, type BackendEnv, type SharedWorldPort } from "./player-api";
+import { defaultN } from "../src/lib/numbers";
+import {
+  advanceSharedWorld, applySharedCommand, createSharedWorld, joinSharedWorld, nextSharedEventAt, playerSlice, searchShared,
+  setSharedHome, sharedClusters, sharedHasPlayer, sharedView, type SearchKind, type SharedWorldState,
+} from "../src/lib/shared-world";
+import type { WorldAuthoritySession } from "../src/lib/world-authority";
 import { DORMANT_MAX_CORE, assignOuterRingCoord, clampViewRect, dormantCandidates, type ViewRect, type WorldCoord } from "./world-coords";
 import { projectGameJson } from "./economy";
 import { capacity } from "../src/lib/game";
@@ -207,10 +213,133 @@ function finiteInteger(value: unknown, min: number, max: number): number | null 
   return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.floor(number))) : null;
 }
 
+const SHARED_CHUNK_CHARS = 500_000; // DO storage values are capped at 2 MiB
+const WARP_SPACING = 6;
+
 export class WorldRoom {
   state: DurableObjectState;
   env: Env;
+  // The one shared engine world (docs/SHARED-ECOLOGY.md), cached in memory.
+  shared?: SharedWorldState;
+  // Serializes shared-world work: D1 awaits would otherwise let requests interleave.
+  chain: Promise<unknown> = Promise.resolve();
   constructor(state: DurableObjectState, env: Env) { this.state = state; this.env = env; }
+
+  locked<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(fn, fn);
+    this.chain = run.catch(() => undefined);
+    return run;
+  }
+
+  async loadShared(): Promise<SharedWorldState> {
+    if (this.shared) return this.shared;
+    const count = (await this.state.storage.get<number>("sw:count")) || 0;
+    if (count > 0) {
+      const keys = Array.from({ length: count }, (_, index) => `sw:${index}`);
+      const parts = await this.state.storage.get<string>(keys);
+      try { this.shared = JSON.parse(keys.map((key) => parts.get(key) || "").join("")) as SharedWorldState; } catch { this.shared = undefined; }
+    }
+    if (!this.shared) await this.saveShared(createSharedWorld(Date.now(), defaultN()));
+    return this.shared!;
+  }
+
+  async saveShared(next: SharedWorldState) {
+    const json = JSON.stringify(next);
+    const count = Math.max(1, Math.ceil(json.length / SHARED_CHUNK_CHARS));
+    const previous = (await this.state.storage.get<number>("sw:count")) || 0;
+    const entries: Record<string, unknown> = { "sw:count": count };
+    for (let index = 0; index < count; index += 1) entries[`sw:${index}`] = json.slice(index * SHARED_CHUNK_CHARS, (index + 1) * SHARED_CHUNK_CHARS);
+    await this.state.storage.put(entries);
+    if (previous > count) await this.state.storage.delete(Array.from({ length: previous - count }, (_, index) => `sw:${count + index}`));
+    this.shared = next;
+  }
+
+  sessionSlice(state: SharedWorldState, playerId: string): WorldAuthoritySession {
+    // version 7 = the client LocalWorldSession version, so it never re-runs private-world migrations on a slice.
+    return { version: 7, address: playerId, playerId, world: playerSlice(state, playerId)!, syncedGame: state.synced[playerId], createdAt: 0, migratedLegacyAt: 0 };
+  }
+
+  async coordFor(playerId: string): Promise<WorldCoord> {
+    const key = `coord:v${COORD_VERSION}:${playerId}`;
+    const existing = await this.state.storage.get<WorldCoord>(key);
+    if (existing) return existing;
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    const coord = assignOuterRingCoord(Object.values(players).filter((player) => player.coordVersion === COORD_VERSION).map((player) => player.coords));
+    await this.state.storage.put(key, coord);
+    return coord;
+  }
+
+  async moveCoord(playerId: string, coord: WorldCoord) {
+    await this.state.storage.put(`coord:v${COORD_VERSION}:${playerId}`, coord);
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    if (players[playerId]) {
+      players[playerId].coords = coord;
+      await this.state.storage.put("players", players);
+      this.sendPlayerUpdate(players[playerId]);
+    }
+  }
+
+  // A pending view of the shared world for one D1 transaction (see SharedWorldPort).
+  async makePort(): Promise<SharedWorldPort> {
+    const numbers = defaultN();
+    const telegraph = (await this.state.storage.get<MarchRow[]>("marches")) || [];
+    const roster = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    let pending: SharedWorldState | null = null;
+    let warpTo: { playerId: string; coord: WorldCoord } | null = null;
+    let done = false;
+    const base = () => pending ?? this.shared!;
+    return {
+      has: (playerId) => sharedHasPlayer(base(), playerId),
+      join: async (playerId, game, carry, now) => {
+        const coord = await this.coordFor(playerId);
+        pending = joinSharedWorld(base(), { playerId, coord, game, carry, now, numbers });
+      },
+      apply: (playerId, game, command, now) => {
+        const fail = (reason: string) => ({ game, ok: false, reason, session: this.sessionSlice(base(), playerId) });
+        if (command.type === "world.warp") {
+          const live = telegraph.filter((march) => march.arriveAt > now);
+          if (live.some((march) => march.defender === playerId)) return fail("under_attack");
+          if (live.some((march) => march.attacker === playerId)) return fail("fleets_away");
+        }
+        const result = applySharedCommand(base(), playerId, game, command, now, numbers);
+        if (command.type === "world.warp" && result.ok && result.position) {
+          // Cities not yet in the shared world still hold their roster slot.
+          const target = result.position;
+          const clash = Object.values(roster).some((player) => player.id !== playerId && player.coords && !result.state.world.players[player.id]
+            && Math.hypot(player.coords.x - target.x, player.coords.y - target.y) < WARP_SPACING);
+          if (clash) return fail("too_close_city");
+          warpTo = { playerId, coord: target };
+        }
+        pending = result.state;
+        return {
+          game: result.game, ok: result.ok, reason: result.reason, position: result.position, targetId: result.targetId, spawned: result.spawned,
+          session: this.sessionSlice(result.state, playerId),
+        };
+      },
+      commit: async () => {
+        if (done) return;
+        done = true;
+        if (pending) await this.saveShared(pending);
+        if (warpTo) await this.moveCoord(warpTo.playerId, warpTo.coord);
+        await this.scheduleAlarm();
+      },
+      discard: () => { if (!done) { done = true; pending = null; warpTo = null; } },
+    };
+  }
+
+  // /world/command and /world/sync: cutover once, then run through the D1 pipeline.
+  async worldRoute(req: Request, kind: "command" | "sync"): Promise<Response> {
+    const claims = await sharedClaims(req, this.env);
+    if (!claims) return Response.json({ error: "unauthorized" }, { status: 401 });
+    return this.locked(async () => {
+      await this.loadShared();
+      const cut = await sharedCutover(this.env, claims.sub, await this.makePort());
+      if (cut) return cut;
+      return kind === "command"
+        ? sharedCommandRoute(req, this.env, claims, await this.makePort())
+        : sharedSyncRoute(this.env, claims, await this.makePort());
+    });
+  }
 
   async fetch(req: Request): Promise<Response> {
     const url = new URL(req.url);
@@ -221,6 +350,8 @@ export class WorldRoom {
       return Response.json({ coord: coord || null });
     }
     if (url.pathname === "/relocate" && req.method === "POST") return this.relocate(req);
+    if (url.pathname === "/world/command" && req.method === "POST") return this.worldRoute(req, "command");
+    if (url.pathname === "/world/sync") return this.worldRoute(req, "sync");
     if (url.pathname === "/roster") return this.roster();
     if (url.pathname === "/release" && req.method === "POST") return this.release(req);
     const pid = (req.headers.get("x-alliance-player") || "").slice(0, 64);
@@ -361,6 +492,14 @@ export class WorldRoom {
     } else {
       players[pid].name = name; players[pid].coords = coord; players[pid].coordVersion = COORD_VERSION; players[pid].lastSeen = Date.now();
     }
+    const home = coord;
+    await this.locked(async () => {
+      if (!(await this.state.storage.get<number>("sw:count"))) return;
+      const shared = await this.loadShared();
+      if (!sharedHasPlayer(shared, pid)) return;
+      const moved = setSharedHome(shared, pid, home);
+      if (moved !== shared) await this.saveShared(moved);
+    });
     // This socket is already accepted, so liveIds() includes it; this both marks
     // the joiner online and clears any stale ghosts from earlier dead sockets.
     const flipped = this.reconcileOnline(players);
@@ -407,12 +546,13 @@ export class WorldRoom {
     if (!pid) return;
     const now = Date.now();
     // Map view queries are throttled on their own and do not count against chat.
-    if (data?.type === "view") { await this.handleView(ws, att as SocketAttachment, data.rect, now); return; }
+    if (data?.type === "view") { await this.handleView(ws, att as SocketAttachment, data.rect, now, !!data.strategic); return; }
     if (!att.windowStart || now - att.windowStart >= 10_000) { att.windowStart = now; att.messageCount = 0; }
     att.messageCount = (att.messageCount || 0) + 1;
     ws.serializeAttachment(att);
     if (att.messageCount > 25) { ws.close(1008, "rate limit"); return; }
 
+    if (data.type === "search") { await this.handleSearch(ws, pid, data); return; }
     if (data.type === "chat") {
       const text = String(data.text || "").slice(0, 500).trim();
       if (!text) return;
@@ -481,7 +621,7 @@ export class WorldRoom {
       await this.pushReport(to, { id: crypto.randomUUID(), kind: "incoming", ts: departAt, by: pid, byName: attacker.name, payload: { arriveAt, etaSec, armyTotal, attackerCoords: attacker.coords } });
       this.sendToPlayer(pid, { type: "march", march });
       this.sendToPlayer(to, { type: "march", march });
-      await this.scheduleMarchAlarm();
+      await this.scheduleAlarm();
     } else if (data.type === "presence") {
       const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
       const p = players[pid]; if (!p) return;
@@ -532,17 +672,40 @@ export class WorldRoom {
   }
 
   // A viewer's map rect → the cities (with coordinates) inside it, capped.
-  async handleView(ws: WebSocket, att: SocketAttachment, raw: unknown, now: number) {
+  async handleView(ws: WebSocket, att: SocketAttachment, raw: unknown, now: number, strategic = false) {
     if (att.viewAt && now - att.viewAt < VIEW_MIN_INTERVAL_MS) return;
+    att.viewAt = now;
+    // Strategic zoom: only the public target aggregate (no players, no coordinates of cities).
+    if (strategic) {
+      ws.serializeAttachment(att);
+      if (!(await this.state.storage.get<number>("sw:count"))) return;
+      const shared = await this.loadShared();
+      try { ws.send(JSON.stringify({ type: "view_clusters", clusters: sharedClusters(shared) })); } catch {}
+      return;
+    }
     const rect = clampViewRect(raw);
     if (!rect) return;
-    att.view = rect; att.viewAt = now;
+    att.view = rect;
     ws.serializeAttachment(att);
     const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
     const visible = Object.values(players)
       .filter((player) => player.id !== att.pid && player.coordVersion === COORD_VERSION && inView(rect, player.coords))
       .slice(0, VIEW_MAX_CITIES);
-    try { ws.send(JSON.stringify({ type: "view_players", rect, players: visible })); } catch {}
+    // Shared world: public targets in view + which player's fleet occupies them (no march paths).
+    const shared = (await this.state.storage.get<number>("sw:count")) ? await this.loadShared() : undefined;
+    const view = shared ? sharedView(shared, rect) : null;
+    try { ws.send(JSON.stringify({ type: "view_players", rect, players: visible, ...(view ? { targets: view.targets, occupiers: view.occupiers } : {}) })); } catch {}
+  }
+
+  // Nearest free target of a kind/level from the player's home (Star Map Search).
+  async handleSearch(ws: WebSocket, pid: string, data: any) {
+    const kind = String(data.kind || "") as SearchKind;
+    if (!["monster", "cash", "oil", "power"].includes(kind)) return;
+    const level = Math.max(1, Math.floor(Number(data.level) || 1));
+    const index = Math.max(0, Math.floor(Number(data.index) || 0));
+    const shared = (await this.state.storage.get<number>("sw:count")) ? await this.loadShared() : undefined;
+    const found = shared ? searchShared(shared, pid, kind, level, index) : { target: null, total: 0 };
+    try { ws.send(JSON.stringify({ type: "search_result", kind, level, index, total: found.total, target: found.target })); } catch {}
   }
 
   // Presence update: full row (with coordinates) only to the player themself and to
@@ -579,13 +742,14 @@ export class WorldRoom {
     this.sendToPlayer(pid, { type: "report", report });
   }
 
-  // Wake at the next march arrival.
-  async scheduleMarchAlarm() {
+  // Wake at the next telegraph arrival or shared-world event, whichever is first.
+  async scheduleAlarm() {
     const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
-    if (!marches.length) return;
-    const next = Math.min(...marches.map((m) => m.arriveAt));
+    const shared = this.shared ?? ((await this.state.storage.get<number>("sw:count")) ? await this.loadShared() : undefined);
+    const next = Math.min(...marches.map((m) => m.arriveAt), shared ? nextSharedEventAt(shared) ?? Infinity : Infinity);
+    if (!Number.isFinite(next)) return;
     const current = await this.state.storage.getAlarm();
-    if (current === null || next < current) await this.state.storage.setAlarm(next);
+    if (current === null || next < current || current < Date.now()) await this.state.storage.setAlarm(Math.max(next, Date.now() + 50));
   }
 
   // Fired when a march arrives. Phase 2: telegraph only — notify both sides that
@@ -602,6 +766,13 @@ export class WorldRoom {
       this.sendToPlayer(m.defender, { type: "march_done", id: m.id });
     }
     if (due.length) await this.state.storage.put("marches", remaining);
-    if (remaining.length) await this.state.storage.setAlarm(Math.min(...remaining.map((m) => m.arriveAt)));
+    // Shared world: resolve every due arrival, gather, return and respawn, owners online or not.
+    await this.locked(async () => {
+      if (!(await this.state.storage.get<number>("sw:count"))) return;
+      const shared = await this.loadShared();
+      const nextEvent = nextSharedEventAt(shared);
+      if (nextEvent !== null && nextEvent <= now) await this.saveShared(advanceSharedWorld(shared, now, defaultN()));
+    });
+    await this.scheduleAlarm();
   }
 }

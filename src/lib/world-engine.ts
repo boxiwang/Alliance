@@ -1374,12 +1374,21 @@ function arriveScout(world: HeadlessWorld, march: HeadlessMarch, target: CityEnt
 }
 
 function arriveGather(world: HeadlessWorld, march: HeadlessMarch, target: ResourceEntity, at: number, numbers: any): void {
+  const holder = target.state === "occupied" && target.occupiedByMarchId ? world.marches[target.occupiedByMarchId] : undefined;
+  if (holder && holder.state === "gathering" && holder.playerId !== march.playerId) {
+    contestGather(world, march, holder, target, at, numbers);
+    return;
+  }
   if (target.state !== "available") {
     march.outcome = "target_unavailable";
     report(world, march, "arrival", march.outcome, at, { targetState: target.state });
     scheduleReturn(world, march, at);
     return;
   }
+  startGathering(world, march, target, at, numbers);
+}
+
+function startGathering(world: HeadlessWorld, march: HeadlessMarch, target: ResourceEntity, at: number, numbers: any): void {
   target.state = "occupied"; target.occupiedByMarchId = march.id; target.revision += 1;
   const player = world.players[march.playerId];
   const tuned = effectiveNumbers(player, march.commanderSnapshot, numbers);
@@ -1390,6 +1399,100 @@ function arriveGather(world: HeadlessWorld, march: HeadlessMarch, target: Resour
   march.outcome = "gathering";
   schedule(world, "gather_complete", march.id, march.workUntil);
   report(world, march, "arrival", "gathering_started", at, { resource: target.resource, reserved: result.hauled, completesAt: march.workUntil });
+}
+
+function hospitalFree(world: HeadlessWorld, player: HeadlessPlayer, tuned: any): number {
+  const home = world.entities[player.cityId];
+  const level = home?.kind === "city" ? home.hospitalLevel : 1;
+  return (Number(tuned.buildings?.["building.hospital"]?.levels?.[String(level)]?.woundedCapacity) || 0)
+    + (Number(tuned.global?.accountModifiers?.hospitalCapacityBonus) || 0)
+    + (Number(tuned.runtimeAccountModifiers?.hospitalCapacityBonus) || 0)
+    - Math.max(0, player.wounded);
+}
+
+/**
+ * COMBAT.md v3 §6 wounded/dead split of one side's knocked-out troops in PvP: a side
+ * below Core 10 loses nobody (uncapped Hospital); otherwise the defender sends 90% and
+ * the attacker 35% to the Hospital (capped by free beds) and the rest die.
+ */
+export function pvpCasualtySplit(knockedOut: number, side: "attacker" | "defender", coreLevel: number, freeBeds: number, numbers: any = getN()): { wounded: number; dead: number } {
+  const total = Math.max(0, Math.round(knockedOut));
+  const combat = numbers?.global?.combat ?? {};
+  const noDeathBelow = Number(combat.pvpNoDeathBelowCore) || 10;
+  if (coreLevel < noDeathBelow) return { wounded: total, dead: 0 };
+  const ratio = side === "defender"
+    ? (Number.isFinite(Number(combat.pvpDefenderWoundedRatio)) ? Number(combat.pvpDefenderWoundedRatio) : .9)
+    : (Number.isFinite(Number(combat.pvpAttackerWoundedRatio)) ? Number(combat.pvpAttackerWoundedRatio) : .35);
+  const wounded = Math.max(0, Math.min(Math.floor(total * ratio), Math.floor(freeBeds)));
+  return { wounded, dead: total - wounded };
+}
+
+/**
+ * A fleet lands on a planet another player's fleet is gathering: it attacks the holder
+ * (docs/SHARED-ECOLOGY.md). Same alliance → no fight, it returns. The winner holds the
+ * planet; a dislodged holder returns with what it had gathered so far. Uses the v1
+ * resolver until COMBAT.md v3 lands, with v3 casualty splits.
+ */
+function contestGather(world: HeadlessWorld, march: HeadlessMarch, holder: HeadlessMarch, target: ResourceEntity, at: number, numbers: any): void {
+  const attacker = world.players[march.playerId];
+  const defender = world.players[holder.playerId];
+  if (attacker?.allianceId && attacker.allianceId === defender?.allianceId) {
+    march.outcome = "held_by_ally";
+    report(world, march, "arrival", march.outcome, at, { holderId: holder.playerId });
+    scheduleReturn(world, march, at);
+    return;
+  }
+  const tuned = effectiveNumbers(attacker, march.commanderSnapshot, numbers);
+  const defenderTuned = defender ? effectiveNumbers(defender, holder.commanderSnapshot, numbers) : tuned;
+  const attackerHome = world.entities[attacker.cityId] as CityEntity;
+  const defenderHome = defender ? world.entities[defender.cityId] as CityEntity : undefined;
+  const combat = resolveCombat({ troops: march.force }, {
+    kind: "rival", keepLevel: 0, wallLevel: 0, hospitalLevel: defenderHome?.hospitalLevel ?? 1,
+    troops: holder.force, resources: {}, troopDefenseBonus: 0,
+    accountModifiers: defender?.accountModifiers, currentWounded: defender?.wounded,
+  }, tuned, Number.MAX_SAFE_INTEGER);
+  const knockedAttacker = combat.attackerLosses.wounded + combat.attackerLosses.dead;
+  const knockedDefender = combat.defenderLosses.wounded + combat.defenderLosses.dead;
+  const attackerSplit = pvpCasualtySplit(knockedAttacker, "attacker", attackerHome?.townhallLevel ?? 1, hospitalFree(world, attacker, tuned), numbers);
+  const defenderSplit = defender
+    ? pvpCasualtySplit(knockedDefender, "defender", defenderHome?.townhallLevel ?? 1, hospitalFree(world, defender, defenderTuned), numbers)
+    : { wounded: 0, dead: knockedDefender };
+  const hit = (side: HeadlessMarch, split: { wounded: number; dead: number }) => {
+    const casualties = applyCombatCasualties(side.force, split.wounded, split.dead);
+    side.force = casualties.troops;
+    changeTroops(side.woundedTroops, casualties.woundedTroops, 1);
+    side.wounded += split.wounded; side.dead += split.dead;
+  };
+  hit(march, attackerSplit);
+  hit(holder, defenderSplit);
+  const payload = { resource: target.resource, attackerId: march.playerId, holderId: holder.playerId, attackerLosses: attackerSplit, holderLosses: defenderSplit };
+  if (combat.win) {
+    // The holder keeps what it had gathered so far and heads home.
+    const holderCapacity = carryCapacity({ troops: holder.force }, defenderTuned);
+    const span = Math.max(1, holder.workUntil - holder.arriveAt);
+    const gathered = Math.floor(Math.min(holderCapacity, target.amount) * Math.max(0, Math.min(1, (at - holder.arriveAt) / span)));
+    holder.cargo[target.resource] = (holder.cargo[target.resource] ?? 0) + gathered;
+    target.amount = Math.max(0, target.amount - gathered);
+    target.occupiedByMarchId = null; target.state = "available"; target.revision += 1;
+    holder.outcome = "dislodged";
+    opponentReport(world, holder.playerId, march, "gather_lost", at, { ...payload, keptCargo: gathered });
+    scheduleReturn(world, holder, at);
+    report(world, march, "arrival", "gather_won", at, payload);
+    if (target.amount <= 0) {
+      target.state = "depleted";
+      target.respawnAt = targetRespawnAt(world, "resource", target.id, target.revision, at);
+      schedule(world, "resource_respawn", target.id, target.respawnAt);
+      march.outcome = "target_unavailable";
+      scheduleReturn(world, march, at);
+      return;
+    }
+    startGathering(world, march, target, at, numbers);
+    return;
+  }
+  march.outcome = "gather_repelled";
+  report(world, march, "arrival", march.outcome, at, payload);
+  opponentReport(world, holder.playerId, march, "gather_defended", at, payload);
+  scheduleReturn(world, march, at);
 }
 
 function arriveMonster(world: HeadlessWorld, march: HeadlessMarch, target: MonsterEntity, at: number, numbers: any): void {
@@ -1584,6 +1687,23 @@ export function recallMarch(source: HeadlessWorld, marchId: string, playerId: st
   march.state = "returning"; march.outcome = "recalled"; march.returnStartedAt = now; march.returnAt = now + elapsed;
   schedule(world, "march_return", march.id, march.returnAt);
   addFeed(world, now, "march_recalled", march.targetId, playerId, { marchId, returnAt: march.returnAt });
+  return world;
+}
+
+/**
+ * Brings every fleet of `playerId` home immediately: outbound/gathering fleets are
+ * recalled (targets released) and all returning fleets deliver troops, wounded and
+ * cargo now. Used when a private world is retired for the shared world.
+ */
+export function settlePlayerMarches(source: HeadlessWorld, playerId: string, now = Date.now(), numbers: any = getN()): HeadlessWorld {
+  let world = source;
+  Object.values(source.marches)
+    .filter((march) => march.playerId === playerId && ["outbound", "gathering"].includes(march.state))
+    .forEach((march) => { world = recallMarch(world, march.id, playerId, now, numbers); });
+  world = world === source ? clone(source) : world;
+  Object.values(world.marches)
+    .filter((march) => march.playerId === playerId && march.state === "returning")
+    .forEach((march) => processReturn(world, march, now));
   return world;
 }
 

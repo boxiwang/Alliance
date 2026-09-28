@@ -426,9 +426,61 @@ describe("headless world — march authority and feedback", () => {
     expect(far.ok).toBe(true);
     if (!far.ok) return;
     world = advanceHeadlessWorld(far.world, far.march.arriveAt);
+    // Shared ecology: the latecomer attacks the holder; an even force is repelled.
     expect(world.marches[near.march.id].state).toBe("gathering");
-    expect(world.marches[far.march.id].outcome).toBe("target_unavailable");
+    expect(world.marches[far.march.id].outcome).toBe("gather_repelled");
     expect(world.marches[far.march.id].reportIds.length).toBeGreaterThan(0);
+    expect(world.players.near.reportIds.some((id) => world.reports[id].outcome === "gather_defended")).toBe(true);
+  });
+
+  it("lets a stronger latecomer dislodge the holder, who keeps what it gathered so far", () => {
+    let world = populateWorld(initHeadlessWorld("state-contest", 1000), 1, 0, 1000);
+    world = spawnPlayers(world, [
+      { id: "holder", townhallLevel: 12, troops: { army: { "1": 84 }, navy: {}, air: {} } },
+      { id: "raider", townhallLevel: 12, troops: { army: {}, navy: {}, air: { "5": 400 } } },
+    ], 1000);
+    const node = firstEntity(world, "resource");
+    node.level = 1; node.capacity = 100000; node.amount = 100000;
+    (world.entities[world.players.holder.cityId] as any).position = { x: node.position.x + 1, y: node.position.y };
+    (world.entities[world.players.raider.cityId] as any).position = { x: node.position.x + 12, y: node.position.y };
+    const held = dispatchMarch(world, { playerId: "holder", targetId: node.id, action: "gather", force: { army: { "1": 84 }, navy: {}, air: {} }, idempotencyKey: "h" }, 2000);
+    expect(held.ok).toBe(true);
+    if (!held.ok) return;
+    const raid = dispatchMarch(held.world, { playerId: "raider", targetId: node.id, action: "gather", force: { army: {}, navy: {}, air: { "5": 400 } }, idempotencyKey: "r" }, 2000);
+    expect(raid.ok).toBe(true);
+    if (!raid.ok) return;
+    world = advanceHeadlessWorld(raid.world, raid.march.arriveAt);
+    const holder = world.marches[held.march.id], raider = world.marches[raid.march.id];
+    expect(holder.outcome).toBe("dislodged");
+    expect(holder.state).toBe("returning");
+    expect((holder.cargo[node.resource] ?? 0)).toBeGreaterThan(0);
+    expect(raider.state).toBe("gathering");
+    expect((world.entities[node.id] as ResourceEntity).occupiedByMarchId).toBe(raider.id);
+    // Holder (defender, Core 12): at most 90% of its knocked-out troops reach the Hospital.
+    const knocked = holder.dead + holder.wounded;
+    expect(knocked).toBeGreaterThan(0);
+    expect(holder.wounded).toBeLessThanOrEqual(Math.floor(knocked * .9));
+    expect(holder.dead).toBeGreaterThanOrEqual(knocked - Math.floor(knocked * .9));
+  });
+
+  it("never kills troops of a side below Core 10 in a contest", () => {
+    let world = populateWorld(initHeadlessWorld("state-contest-young", 1000), 1, 0, 1000);
+    world = spawnPlayers(world, [
+      { id: "young", townhallLevel: 5, troops: { army: { "1": 84 }, navy: {}, air: {} } },
+      { id: "raider", townhallLevel: 12, troops: { army: {}, navy: {}, air: { "5": 400 } } },
+    ], 1000);
+    const node = firstEntity(world, "resource");
+    node.level = 1; node.capacity = 100000; node.amount = 100000;
+    (world.entities[world.players.young.cityId] as any).position = { x: node.position.x + 1, y: node.position.y };
+    (world.entities[world.players.raider.cityId] as any).position = { x: node.position.x + 12, y: node.position.y };
+    const held = dispatchMarch(world, { playerId: "young", targetId: node.id, action: "gather", force: { army: { "1": 84 }, navy: {}, air: {} }, idempotencyKey: "y" }, 2000);
+    if (!held.ok) throw new Error("dispatch");
+    const raid = dispatchMarch(held.world, { playerId: "raider", targetId: node.id, action: "gather", force: { army: {}, navy: {}, air: { "5": 400 } }, idempotencyKey: "r" }, 2000);
+    if (!raid.ok) throw new Error("dispatch");
+    world = advanceHeadlessWorld(raid.world, raid.march.arriveAt);
+    const young = world.marches[held.march.id];
+    expect(young.wounded).toBeGreaterThan(0);
+    expect(young.dead).toBe(0);
   });
 
   it("rejects only removable excess load and lets the minimum discrete fleet clear a node", () => {

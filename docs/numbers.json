@@ -29,6 +29,9 @@
         "navy": "air"
       },
       "counterBonusAtk": 0.1,
+      "pvpDefenderWoundedRatio": 0.9,
+      "pvpAttackerWoundedRatio": 0.35,
+      "pvpNoDeathBelowCore": 10,
       "counterNote": "X beats Y: air>army, army>navy, navy>air. Winner arm gets +counterBonusAtk attack vs the arm it beats."
     },
     "might": {
@@ -4873,8 +4876,8 @@
       "monsterRespawnSec": 600,
       "resourceRespawnMinSec": 300,
       "resourceRespawnMaxSec": 900,
-      "monsterRespawnMinSec": 180,
-      "monsterRespawnMaxSec": 600,
+      "monsterRespawnMinSec": 120,
+      "monsterRespawnMaxSec": 300,
       "burnDurationSec": 1800
     },
     "energy": {

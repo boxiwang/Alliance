@@ -19,14 +19,17 @@ real players never resolve. Players see each other but effectively play alone.
 | P0-2 No fake cities | ✅ built locally — `localNpcCities` = 0; `removeSimulatedCities` strips old saves on load (client), on every server world command and in `GET /game`; fleets flying at a removed city are recalled. Ghost cleanup = Admin → Live Ops → World roster (GM). |
 | P0-3 Offline on map | ✅ built locally — no `online` filter; `WorldRoom.retireDormant` (hourly, on join) releases Core ≤ 5 / 14-day slots, D1 untouched; returning players respawn on the outer ring with a "relocated" System report; server world commands re-sync the home city to the shared coordinate. Needs a worker deploy to verify. |
 | P0-4 Location privacy | ✅ built locally — snapshot/presence carry other players' coords only for cities inside the viewer's map view (`view` query, ≤ 420 tiles/axis, 250 ms throttle, ≤ 600 cities); scout results carry no coords; incoming/battle reports carry `attackerCoords` → "LOCATE ATTACKER" in System and a clickable inbound banner on the Star Map; `world.warp` limited to 10 attempts/minute (`rate_limited`), rejected attempts spend nothing. |
-| P0-1, P0-5, P0-7 | not started |
+| P0-1 Shared world | ✅ built + verified locally, not deployed — see `docs/SHARED-ECOLOGY.md` (latecomer attacks the holder, Rogue respawn 2–5 min, v3 casualty split `pvpCasualtySplit`) |
+| P0-5, P0-7 | not started |
 
 ## P0 items
 
 ### P0-1 Shared world
 Resource planets and Rogues move into the server's shared world (`WorldRoom`):
 spawn, occupation, depletion and respawn happen once for everyone. One planet can be
-occupied by one fleet at a time; everyone sees the same Rogue.
+occupied by one fleet at a time; everyone sees the same Rogue. Architecture and the
+shared-world rules (gather contention = latecomer attacks the occupier, Rogue respawn
+2–5 min, public Deep Scan Rogues, per-player unlock progress): `docs/SHARED-ECOLOGY.md`.
 
 ### P0-2 No fake cities
 Remove the per-client NPC cities (`world.population.localNpcCities`, currently 47) —

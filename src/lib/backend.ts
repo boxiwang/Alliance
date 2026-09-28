@@ -1,7 +1,17 @@
 import type { Eip1193Provider } from "../global";
 
-export const BACKEND_HTTP = "https://alliance-realtime.blockwick.workers.dev";
-export const BACKEND_WS = "wss://alliance-realtime.blockwick.workers.dev/ws";
+// Dev only: localStorage["alliance:dev-backend"] = "http://127.0.0.1:8799" points the
+// client at a local `wrangler dev` worker. Production builds always use the live worker.
+function devBackendOverride(): string | undefined {
+  if (!import.meta.env?.DEV) return undefined;
+  try {
+    const value = localStorage.getItem("alliance:dev-backend") || "";
+    return /^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(value) ? value : undefined;
+  } catch { return undefined; }
+}
+const BACKEND_OVERRIDE = devBackendOverride();
+export const BACKEND_HTTP = BACKEND_OVERRIDE || "https://alliance-realtime.blockwick.workers.dev";
+export const BACKEND_WS = `${BACKEND_HTTP.replace(/^http/, "ws")}/ws`;
 
 export type BackendPlayer = {
   id: string;
@@ -316,7 +326,9 @@ export async function ensureGameAuthority(address: string, game: unknown, world:
   if (!current || current.authorityVersion > 0) return current;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      return await enableGameAuthority(address, game, world, current.revision);
+      const enabled = await enableGameAuthority(address, game, world, current.revision);
+      // The next read moves the new authority player into the shared world (cutover).
+      return (await fetchServerGame(address).catch(() => null)) || enabled;
     } catch (error) {
       if (!(error instanceof Error) || error.message !== "revision_conflict") throw error;
       current = await fetchServerGame(address);
@@ -332,13 +344,13 @@ export async function ensureGameAuthority(address: string, game: unknown, world:
  * state + a reason (rejected). The idempotency key belongs to the caller so the
  * exact same command can be retried after an uncertain network response.
  */
-export type GameCommandResponse = { ok: boolean; reason?: string; game: unknown; world: unknown; revision: number; replayed: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean; position?: { x: number; y: number } };
+export type GameCommandResponse = { ok: boolean; reason?: string; game: unknown; world: unknown; revision: number; replayed: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean; position?: { x: number; y: number }; authorityVersion?: number };
 
 export async function sendGameCommand(address: string, type: string, args: Record<string, unknown>, idempotencyKey: string): Promise<GameCommandResponse> {
   const session = loadBackendSession(address);
   if (!session) throw new Error("session_required");
-  const res = await post<{ ok?: boolean; reason?: string; game?: unknown; world?: unknown; revision?: number; replayed?: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean; position?: { x: number; y: number } }>("/command", { type, args, idempotencyKey }, session.token);
-  return { ok: !!res.ok, reason: res.reason, game: res.game ?? null, world: res.world ?? null, revision: Number(res.revision) || 0, replayed: !!res.replayed, inventory: res.inventory, targetId: res.targetId, spawned: res.spawned, position: res.position };
+  const res = await post<{ ok?: boolean; reason?: string; game?: unknown; world?: unknown; revision?: number; replayed?: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean; position?: { x: number; y: number }; authorityVersion?: number }>("/command", { type, args, idempotencyKey }, session.token);
+  return { ok: !!res.ok, reason: res.reason, game: res.game ?? null, world: res.world ?? null, revision: Number(res.revision) || 0, replayed: !!res.replayed, inventory: res.inventory, targetId: res.targetId, spawned: res.spawned, position: res.position, authorityVersion: res.authorityVersion };
 }
 
 /**
