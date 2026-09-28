@@ -36,7 +36,7 @@ import {
   type ChatSignalId, type MarchSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
 } from "./lib/player-account";
 import { playSfx, SFX_STARMAP_SELECT, SFX_STARMAP_SELECT_VOLUME } from "./lib/sfx";
-import { RealtimeClient, type PresenceCity, type ScoutSnapshot, type LiveMarch, type ViewRect } from "./lib/realtime";
+import { RealtimeClient, type PresenceCity, type ScoutSnapshot, type LiveMarch, type ServerReport, type ViewRect } from "./lib/realtime";
 
 // A rival city we are allowed to place: the server sent its coordinates because it
 // is inside our current map view (location privacy, docs/BETA-P0.md P0-4).
@@ -616,18 +616,26 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [serverFieldClusters, setServerFieldClusters] = useState<SignalCluster[] | null>(null);
   const searchReplyRef = useRef<((result: { total: number; target: unknown | null }) => void) | null>(null);
   const [remoteSelectedId, setRemoteSelectedId] = useState<string | null>(null);
+  const [cardHint, setCardHint] = useState<string | null>(null);
   // My own spawn coordinate, owned by the server (shared map). Once known, the
   // home city is moved here so "where I see my home" == "where others see me".
   const [serverHomeCoord, setServerHomeCoord] = useState<Point | null>(null);
-  const [scoutIntel, setScoutIntel] = useState<{ name: string; snapshot: ScoutSnapshot } | null>(null);
+  // Recon on other commanders from server "recon" reports; the commander card shows it
+  // expanded until the intel expires (numbers.json march.scoutIntelTtlSeconds).
+  const [recon, setRecon] = useState<Record<string, ReconIntel>>({});
   const [scoutingId, setScoutingId] = useState<string | null>(null);
+  // Disabled buttons swallow mouseleave; clear the hint whenever the card or scan state changes.
+  useEffect(() => { setCardHint(null); }, [remoteSelectedId, scoutingId]);
   const [marches, setMarches] = useState<LiveMarch[]>([]);
   const rtRef = useRef<RealtimeClient | null>(null);
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
     rtRef.current = rt;
     const keep = (list: PresenceCity[]) => list.filter((p): p is MapCity => p.id !== address && hasCoords(p));
-    rt.handlers.onSnapshot = (_you, players, _chat, _dms, _reports, snapMarches) => {
+    rt.handlers.onSnapshot = (_you, players, _chat, _dms, reports, snapMarches) => {
+      const known: Record<string, ReconIntel> = {};
+      for (const report of reports || []) { const entry = reconFromReport(report); if (entry) known[entry[0]] = entry[1]; }
+      setRecon(known);
       setRemotePlayers(keep(players));
       setRtEpoch((value) => value + 1);
       setMarches(snapMarches || []);
@@ -660,13 +668,19 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     };
     rt.handlers.onViewClusters = (clusters) => setServerClusters(clusters);
     rt.handlers.onSearchResult = (result) => searchReplyRef.current?.(result);
-    rt.handlers.onScoutResult = (_target, name, _coords, snapshot) => { setScoutingId(null); setScoutIntel({ name, snapshot }); };
-    rt.handlers.onMarch = (m) => setMarches((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m]);
+    rt.handlers.onMarch = (m) => {
+      if (m.kind === "scout") setScoutingId(null);
+      setMarches((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m]);
+    };
     rt.handlers.onMarchDone = (id) => setMarches((cur) => cur.filter((x) => x.id !== id));
     rt.handlers.onMarchRejected = (reason) => setResultNotice({ title: "March blocked", detail: reason === "shielded" ? "That city is shielded — it can't be attacked." : reason === "no_troops" ? "You have no troops to send." : "March was rejected.", good: false });
     // Live alarms (also filed to Comms > System).
     rt.handlers.onReport = (report) => {
-      if (report.kind === "scouted") setResultNotice({ title: "You were scouted", detail: `${report.byName || "A commander"} scanned your city.`, good: false });
+      const entry = reconFromReport(report);
+      if (entry) {
+        setRecon((current) => ({ ...current, [entry[0]]: entry[1] }));
+        setResultNotice({ title: "Recon complete", detail: `Intel on ${entry[1].name} is on their card for ${Math.round((entry[1].expiresAt - report.ts) / 60_000)} min.`, good: true });
+      } else if (report.kind === "scouted") setResultNotice({ title: "You were scouted", detail: `${report.byName || "A commander"} scanned your city.`, good: false });
       else if (report.kind === "incoming") setResultNotice({ title: "⚔ Incoming attack", detail: `${report.byName || "A commander"} is marching on you — ETA ${Math.round(Number(report.payload?.etaSec) || 0)}s.`, good: false });
       else if (report.kind === "battle") setResultNotice({ title: "Battle report", detail: String(report.payload?.summary || "A battle resolved."), good: false });
       else if (report.kind === "relocated") setResultNotice({ title: "Welcome back", detail: String(report.payload?.summary || "Your city moved to a new sector."), good: true });
@@ -1467,7 +1481,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   }, [searchOpen]);
   // ---- Warp (city relocation) ----
   const warpDestination = tileMark ? { x: tileMark.x + .5, y: tileMark.y + .5 } : null;
-  const inboundAttack = marches.some((march) => march.defender === address && march.arriveAt > now);
+  const inboundAttack = marches.some((march) => march.defender === address && march.kind !== "scout" && march.arriveAt > now);
   const warpNotReady = inboundAttack ? "under_attack" : warpReadiness(world, session.playerId);
   const warpDestinationBlock = warpDestination ? warpBlockReason(world, session.playerId, warpDestination, N) : null;
   function refreshWarpCounts() {
@@ -1649,12 +1663,13 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         {marches.length > 0 && <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 7, display: "flex", flexDirection: "column", gap: 5, maxWidth: 300 }}>
           {marches.slice(0, 4).map((m) => {
             const incoming = m.defender === address;
+            const scout = m.kind === "scout";
             const eta = Math.max(0, Math.round((m.arriveAt - now) / 1000));
             const col = incoming ? "#ff6f85" : "#f3c46b";
             // Incoming: click to find the attacker's city (retaliation locate, docs/COMBAT.md §9).
             return <div key={m.id} role={incoming ? "button" : undefined} aria-label={incoming ? `Locate ${m.attackerName || "attacker"}` : undefined} onClick={incoming ? () => { setCamera({ ...m.from }); setZoom((value) => Math.max(value, 2.1)); setTileMark({ x: Math.floor(m.from.x), y: Math.floor(m.from.y) }); } : undefined} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 11px", borderRadius: 9, border: `1px solid ${col}66`, background: "linear-gradient(160deg,rgba(14,10,16,.94),rgba(9,7,12,.96))", boxShadow: "0 6px 18px rgba(0,0,0,.35)", cursor: incoming ? "pointer" : undefined }}>
-              <span style={{ font: "700 12px var(--hud)", color: col }}>{incoming ? "⚔" : "➤"}</span>
-              <span style={{ font: "600 10px var(--sans)", color: "#dbe2f3", flex: 1 }}>{incoming ? `${m.attackerName || "Enemy"} → YOU` : `You → ${m.defenderName || "Target"}`} · {m.armyTotal.toLocaleString()}</span>
+              <span style={{ font: "700 12px var(--hud)", color: scout ? "#7ff0c4" : col }}>{incoming ? "⚔" : scout ? "◎" : "➤"}</span>
+              <span style={{ font: "600 10px var(--sans)", color: "#dbe2f3", flex: 1 }}>{incoming ? `${m.attackerName || "Enemy"} → YOU · ${m.armyTotal.toLocaleString()}` : scout ? `Scout → ${m.defenderName || "Target"}` : `You → ${m.defenderName || "Target"} · ${m.armyTotal.toLocaleString()}`}</span>
               <span style={{ font: "700 10px var(--mono)", color: col }}>{eta > 0 ? `${Math.floor(eta / 60)}:${String(eta % 60).padStart(2, "0")}` : "IMPACT"}</span>
             </div>;
           })}
@@ -1805,7 +1820,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           const sigil = /^[a-z0-9-]{1,24}$/.test(String(remoteSelected.avatar || "")) ? remoteSelected.avatar : "genesis";
           const cosmetics = remoteSelected.cosmetics as { chatSignal?: ChatSignalId | null; cardFrame?: string } | null;
           const frame = /^[a-z0-9-]{1,24}$/.test(String(cosmetics?.cardFrame || "")) ? cosmetics!.cardFrame : "standard";
-          const scanning = scoutingId === remoteSelected.id;
+          const launching = scoutingId === remoteSelected.id;
+          const scoutFlight = marches.find((m) => m.kind === "scout" && m.attacker === address && m.defender === remoteSelected.id && m.arriveAt > now);
+          const intel = recon[remoteSelected.id];
+          const intelLeftMs = intel ? intel.expiresAt - now : 0;
+          const snap = intelLeftMs > 0 ? intel.snapshot : null;
           return <WorldAnchor svgRef={svgRef} point={remoteSelected.coords} className="commander-card" data-frame={frame} style={{ "--commander": col } as CSSProperties}>
             <button className="commander-card-close" aria-label="Close commander card" onClick={() => setRemoteSelectedId(null)}>×</button>
             <header>
@@ -1818,37 +1837,28 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
                 <small>CORE {remoteSelected.keepLevel || 1}</small>
               </div>
             </header>
+            {snap && <section className="commander-card-recon" aria-label="Recon intel">
+              <header><small>RECON</small><em>{intelLeftMs >= 60_000 ? `${Math.ceil(intelLeftMs / 60_000)}M LEFT` : "<1M LEFT"}</em></header>
+              <div className="commander-card-might"><small>MIGHT</small><b>{compact(snap.might)}</b></div>
+              <dl>
+                <div><dt>ARMY</dt><dd>{compact(snap.troops.army)}</dd></div><div><dt>NAVY</dt><dd>{compact(snap.troops.navy)}</dd></div><div><dt>AIR</dt><dd>{compact(snap.troops.air)}</dd></div>
+                <div><dt>WALL</dt><dd>Lv.{snap.wallLevel}</dd></div><div><dt>WOUNDED</dt><dd>{compact(snap.wounded)}</dd></div><div><dt>SHIELD</dt><dd className={snap.shielded ? "on" : undefined}>{snap.shielded ? "ON" : "OFF"}</dd></div>
+              </dl>
+              <small className="commander-card-loot-title">UNPROTECTED LOOT</small>
+              <dl className="loot">
+                <div><dt>CASH</dt><dd>{compact(snap.resources.cash)}</dd></div><div><dt>OIL</dt><dd>{compact(snap.resources.oil)}</dd></div><div><dt>POWER</dt><dd>{compact(snap.resources.power)}</dd></div>
+              </dl>
+            </section>}
             <div className="commander-card-actions">
-              <button className="scout" disabled={scanning} title="Reveal Might, troops and loot. They will see the scout."
-                onClick={() => { setScoutingId(remoteSelected.id); setScoutIntel(null); rtRef.current?.sendScout(remoteSelected.id); }}>{scanning ? "SCANNING…" : "◎ SCOUT"}</button>
-              <button className="attack" title="Launch an attack. They will see it coming."
+              <button className="scout" disabled={launching || !!scoutFlight} onMouseEnter={() => setCardHint("Reveals Might, troops and loot · they will see the scout")} onMouseLeave={() => setCardHint(null)}
+                onClick={() => { setScoutingId(remoteSelected.id); rtRef.current?.sendScout(remoteSelected.id); }}>{scoutFlight ? `◎ EN ROUTE · ${clockLeft(scoutFlight.arriveAt - now)}` : launching ? "LAUNCHING…" : snap ? "◎ RESCOUT" : "◎ SCOUT"}</button>
+              <button className="attack" onMouseEnter={() => setCardHint("They will see your fleet coming")} onMouseLeave={() => setCardHint(null)}
                 onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>⚔ ATTACK</button>
               <button className="quiet" onClick={() => { queueDirectMessage(address, { id: remoteSelected.id, name: remoteSelected.name || "Commander" }); onMessages(); }}>✉ MESSAGE</button>
               <button className="quiet" onClick={() => { queueCommsShare(address, createCommanderShare(remoteSelected)); onMessages(); }}>⇪ SHARE</button>
             </div>
+            {cardHint && <p className="commander-card-hint">{cardHint}</p>}
           </WorldAnchor>;
-        })()}
-        {scoutIntel && (() => {
-          const s = scoutIntel.snapshot;
-          const tileStyle: CSSProperties = { background: "rgba(255,255,255,.03)", border: "1px solid rgba(120,160,190,.14)", borderRadius: 7, padding: "5px 7px" };
-          const Tile = ({ k, v, tone = "#cfe6f2" }: { k: string; v: string; tone?: string }) => <div style={tileStyle}><div style={{ font: "700 6px var(--mono)", letterSpacing: ".1em", color: "#567689" }}>{k}</div><div style={{ font: "700 11px var(--mono)", color: tone }}>{v}</div></div>;
-          return <div style={{ position: "absolute", left: 14, top: 52, width: 236, padding: "12px 13px", borderRadius: 12, border: "1px solid rgba(67,242,161,.4)", background: "linear-gradient(160deg,rgba(9,20,18,.97),rgba(6,14,12,.98))", boxShadow: "0 14px 34px rgba(0,0,0,.42)", zIndex: 7 }}>
-            <button aria-label="Close intel" onClick={() => setScoutIntel(null)} style={{ position: "absolute", right: 8, top: 7, width: 20, height: 20, borderRadius: 6, border: "1px solid rgba(120,160,190,.25)", background: "transparent", color: "#7f9bad", cursor: "pointer", lineHeight: 1 }}>×</button>
-            <div style={{ font: "700 7px var(--mono)", letterSpacing: ".16em", color: "#57b98f" }}>▤ RECON ENVELOPE</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "3px 0 9px" }}><b style={{ font: "700 13px var(--hud)", color: "#eaf4fa" }}>{scoutIntel.name || "Commander"}</b>{s.shielded && <span style={{ font: "700 6.5px var(--mono)", letterSpacing: ".08em", padding: "2px 6px", borderRadius: 10, background: "rgba(67,242,161,.14)", color: "var(--teal)", border: "1px solid rgba(67,242,161,.4)" }}>SHIELDED</span>}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 6 }}>
-              <Tile k="ARMY" v={compact(s.troops.army)} /><Tile k="NAVY" v={compact(s.troops.navy)} /><Tile k="AIR" v={compact(s.troops.air)} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 6 }}>
-              <Tile k="CORE" v={`Lv.${s.keepLevel}`} /><Tile k="WALL" v={`Lv.${s.wallLevel}`} />
-              <Tile k="MIGHT" v={compact(s.might)} /><Tile k="WOUNDED" v={compact(s.wounded)} />
-            </div>
-            <div style={{ margin: "7px 0 4px", font: "700 6px var(--mono)", letterSpacing: ".13em", color: "#5f8974" }}>UNSAFE RESOURCES</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-              <Tile k="CASH" v={compact(s.resources.cash)} tone="#7fe6b6" /><Tile k="OIL" v={compact(s.resources.oil)} tone="#ffcf8f" /><Tile k="POWER" v={compact(s.resources.power)} tone="#9ad7ff" />
-            </div>
-            <div style={{ marginTop: 8, font: "600 7.5px var(--mono)", letterSpacing: ".05em", color: "#4f7a68" }}>Warehouse reserves excluded · recon decays.</div>
-          </div>;
         })()}
         <div className="world-map-legend"><button className={layers.city ? "active" : ""} onClick={() => toggleLayer("city")}><i className="city" />{detailZoom ? "CIVILIZATIONS" : "CIV SIGNALS · TAC LOCK"}</button><button className={layers.resource ? "active" : ""} onClick={() => toggleLayer("resource")}><i className="resource" />PLANETS</button><button className={layers.monster ? "active" : ""} onClick={() => toggleLayer("monster")}><i className="hostile" />ROGUES</button><span><i className="march" />FLEETS</span></div>
         <div className="world-map-hint">FRONTIER I · ROGUE L1–{rogueMaxLevel} · {world.config.width}×{world.config.height} · {Object.keys(world.players).length}/{world.config.maxPlayers} CIVILIZATIONS{renderStressCount ? ` · ${renderStressCount.toLocaleString()} FX PROBES` : ""}{strikeStressCount ? ` · ${strikeStressCount} STRIKES` : ""}</div>
@@ -2032,4 +2042,18 @@ function WorldAnchor({ svgRef, point, className, style, children, ...rest }: {
     return () => cancelAnimationFrame(frame);
   }, [svgRef, point.x, point.y]);
   return <div ref={ref} className={className} style={style} {...rest}>{children}</div>;
+}
+
+type ReconIntel = { name: string; snapshot: ScoutSnapshot; at: number; expiresAt: number };
+/** A server "recon" report → [targetId, intel] (the snapshot taken when the scout arrived). */
+function reconFromReport(report: ServerReport): [string, ReconIntel] | null {
+  if (report.kind !== "recon") return null;
+  const payload = report.payload as { targetId?: unknown; snapshot?: unknown; expiresAt?: unknown } | undefined;
+  if (!payload || typeof payload.targetId !== "string" || !payload.snapshot || !Number.isFinite(payload.expiresAt)) return null;
+  return [payload.targetId, { name: report.byName || "Commander", snapshot: payload.snapshot as ScoutSnapshot, at: report.ts, expiresAt: Number(payload.expiresAt) }];
+}
+
+function clockLeft(ms: number): string {
+  const sec = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 }

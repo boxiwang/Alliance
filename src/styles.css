@@ -1641,7 +1641,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 /* Commander card (rival city) — Kingshot-style lord card, no coordinates, Might scan-gated */
 /* Commander card — anchored beside the planet (WorldAnchor). Surface and edge are variables
    so a card-frame cosmetic can restyle them via [data-frame]. */
-.commander-card{--card-surface:linear-gradient(160deg,rgba(10,20,36,.97),rgba(6,12,22,.97));--card-edge:color-mix(in srgb,var(--commander) 42%,transparent);position:absolute;left:0;top:0;z-index:6;width:236px;padding:12px 12px 11px;border:1px solid var(--card-edge);border-radius:12px;background:var(--card-surface);box-shadow:0 14px 34px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.25);color:#cfe6f2;will-change:transform;animation:commander-card-in .16s ease-out}
+.commander-card{--card-surface:linear-gradient(160deg,rgba(10,20,36,.97),rgba(6,12,22,.97));--card-edge:color-mix(in srgb,var(--commander) 42%,transparent);position:absolute;left:0;top:0;z-index:6;width:256px;padding:12px 12px 11px;border:1px solid var(--card-edge);border-radius:12px;background:var(--card-surface);box-shadow:0 14px 34px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.25);color:#cfe6f2;will-change:transform;animation:commander-card-in .16s ease-out}
 .commander-card:before{content:"";position:absolute;top:calc(var(--notch-y,30px) - 6px);width:10px;height:10px;border:1px solid var(--card-edge);background:rgb(9,18,32);transform:rotate(45deg)}
 .commander-card[data-side="right"]:before{left:-6px;border-top:0;border-right:0}
 .commander-card[data-side="left"]:before{right:-6px;border-bottom:0;border-left:0}
@@ -1651,11 +1651,24 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .commander-card-avatar{position:relative;flex:none}
 .commander-card-sigil{display:block;width:42px!important;height:42px!important;pointer-events:none;box-shadow:0 0 16px color-mix(in srgb,var(--commander) 30%,transparent)}
 .commander-card-avatar>em{position:absolute;right:-5px;bottom:-4px;min-width:17px;height:17px;padding:0 4px;display:grid;place-items:center;border:1px solid color-mix(in srgb,var(--commander) 55%,#0a1422);border-radius:9px;background:#0a1626;color:#eaf6ff;font:800 9px var(--hud);font-style:normal}
-.commander-card header>div{min-width:0}
+.commander-card header>div{flex:1;min-width:0}
 .commander-card header b{display:flex;align-items:baseline;gap:4px;min-width:0;color:#eef7fb;font:700 14px var(--hud);white-space:nowrap}
 .commander-card header b>i{flex:none;color:color-mix(in srgb,var(--commander) 80%,#cfe6f2);font-style:normal}
-.commander-card header b .name-signal-text{overflow:hidden;text-overflow:ellipsis}
+.commander-card header b .name-signal{flex:0 1 auto;min-width:0;max-width:100%}.commander-card header b .name-signal-text{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
 .commander-card header small{display:block;margin-top:3px;color:color-mix(in srgb,var(--commander) 55%,#7f9bad);font:700 8px var(--mono);letter-spacing:.14em}
+/* Expanded card while recon is valid; collapses back when the intel expires. */
+.commander-card-recon{margin:0 0 10px;padding:9px 10px 10px;border:1px solid rgba(67,242,161,.26);border-radius:9px;background:linear-gradient(160deg,rgba(67,242,161,.07),rgba(67,242,161,.02));animation:commander-card-in .2s ease-out}
+.commander-card-recon>header{display:flex;align-items:center;gap:6px;margin:0 0 6px;padding:0;border:0}
+.commander-card-recon>header small{color:#5fae8c;font:700 7.5px var(--mono);letter-spacing:.16em}
+.commander-card-recon>header span{padding:1px 6px;border:1px solid rgba(67,242,161,.4);border-radius:9px;color:#43f2a1;font:700 6.5px var(--mono);letter-spacing:.08em}
+.commander-card-recon>header em{margin-left:auto;color:#5f8974;font:700 7.5px var(--mono);font-style:normal;letter-spacing:.06em}
+.commander-card-might{display:flex;align-items:baseline;gap:8px;margin:0 0 8px}.commander-card-might small{color:#6f9c88;font:700 7.5px var(--mono);letter-spacing:.12em}.commander-card-might b{color:#effff7;font:750 18px var(--hud)}
+.commander-card-recon dl{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:0}
+.commander-card-recon dl>div{padding:4px 6px;border:1px solid rgba(120,160,190,.13);border-radius:6px;background:rgba(255,255,255,.025)}
+.commander-card-recon dt{color:#5a7a8c;font:700 6px var(--mono);letter-spacing:.1em}
+.commander-card-recon dd{margin:1px 0 0;color:#d6ebf5;font:700 10px var(--mono)}
+.commander-card-loot-title{display:block;margin:8px 0 4px;color:#6f8f7c;font:700 6.5px var(--mono);letter-spacing:.13em}
+.commander-card-recon dl.loot dd{color:#f1dfae}.commander-card-recon dd.on{color:#43f2a1}
 .commander-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .commander-card-actions button{padding:8px 4px;border:1px solid rgba(120,160,190,.3);border-radius:7px;background:rgba(12,26,44,.92);color:#dcecf6;font:700 8.5px var(--hud);letter-spacing:.08em;cursor:pointer}
 .commander-card-actions button:hover:not(:disabled){border-color:rgba(160,205,235,.5);background:rgba(18,36,60,.95)}
@@ -1663,6 +1676,8 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .commander-card-actions button.attack:hover{border-color:rgba(255,130,150,.8);background:rgba(78,20,36,.7)}
 .commander-card-actions button.quiet{padding:6px 4px;border-color:rgba(120,160,190,.16);background:transparent;color:#8fb0c4;font-size:8px}
 .commander-card-actions button:disabled{opacity:.55;cursor:default}
+/* In-game hover hint (no native title tooltips on the card). */
+.commander-card-hint{position:absolute;left:0;right:0;top:calc(100% + 6px);margin:0;padding:6px 9px;border:1px solid rgba(120,160,190,.22);border-radius:8px;background:rgba(7,14,26,.95);color:#9fbccd;font:600 8px var(--mono);letter-spacing:.05em;pointer-events:none;animation:commander-card-in .12s ease-out}
 .comms-intel-card.commander .comms-intel-commander{display:flex;align-items:center;gap:9px}
 .comms-intel-card.commander .command-sigil{flex:none;width:34px!important;height:34px!important;pointer-events:none}
 /* Map 2048: "the Dust" — unlisted sectors (labels; the dust is drawn on the backdrop) */

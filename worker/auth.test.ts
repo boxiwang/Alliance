@@ -6,8 +6,10 @@ describe("backend sessions", () => {
     const token = await issueSession("test-secret", { sub: "player-1", method: "guest", role: "player" }, 60);
     expect((await verifySession("test-secret", token))?.sub).toBe("player-1");
     expect(await verifySession("wrong-secret", token)).toBeNull();
-    // Always change the last character (replacing it with "x" was a no-op when it already was "x").
-    const tampered = `${token.slice(0, -1)}${token.endsWith("x") ? "y" : "x"}`;
+    // Change the signature's FIRST character: the last base64url character can differ only in
+    // padding bits (e.g. "x" -> "y") and still decode to the same signature.
+    const dot = token.lastIndexOf(".") + 1;
+    const tampered = `${token.slice(0, dot)}${token[dot] === "A" ? "B" : "A"}${token.slice(dot + 1)}`;
     expect(await verifySession("test-secret", tampered)).toBeNull();
   });
 

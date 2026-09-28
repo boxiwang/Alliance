@@ -170,4 +170,3 @@ export function takeDirectMessage(address: string, now = Date.now()): { id: stri
   if (!Number.isFinite(value.requestedAt) || now - Number(value.requestedAt) > 5 * 60 * 1000) return null;
   return { id: value.id, name: typeof value.name === "string" ? value.name : "Commander" };
 }
-

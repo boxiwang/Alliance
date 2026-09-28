@@ -13,7 +13,7 @@ import {
   type SearchKind, type SharedWorldState,
 } from "../src/lib/shared-world";
 import type { WorldAuthoritySession } from "../src/lib/world-authority";
-import type { WorldEntity } from "../src/lib/world-engine";
+import { worldEngineConfig, type WorldEntity } from "../src/lib/world-engine";
 import { STORE_PREFIX, assembleShared, chunkDelta, clustersFromChunk, sectorKeysForRect, sharedChunks, targetsFromSectorChunks } from "../src/lib/shared-store";
 import { DORMANT_MAX_CORE, QUADRANT_CAPACITY, assignOuterRingCoord, clampViewRect, dormantCandidates, quadrantOfCoord, spawnQuadrant, type ViewRect, type WorldCoord } from "./world-coords";
 import { projectGameJson } from "./economy";
@@ -100,7 +100,7 @@ type ChatRow = { id: string; pid: string; name: string; text: string; ts: number
 
 // Server-authoritative per-player combat/intel reports (scouted / incoming /
 // battle). Delivered on join (offline players see them on return) and live.
-type ServerReport = { id: string; kind: "scouted" | "incoming" | "battle" | "relocated"; ts: number; by?: string; byName?: string; payload?: Record<string, unknown> };
+type ServerReport = { id: string; kind: "scouted" | "incoming" | "battle" | "relocated" | "recon"; ts: number; by?: string; byName?: string; payload?: Record<string, unknown> };
 
 // Returning dormant players respawn on a random outer-ring slot (see dormantCandidates).
 const DORMANT_SWEEP_EVERY_MS = 60 * 60 * 1000;
@@ -112,9 +112,20 @@ const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v)
 type MarchRow = {
   id: string; attacker: string; attackerName: string; defender: string; defenderName: string;
   from: WorldCoord; to: WorldCoord; departAt: number; arriveAt: number; armyTotal: number;
+  /** "scout": a recon fleet — only the sender sees it; the target is alerted on arrival. */
+  kind?: "scout";
 };
 const MARCH_SPEED = 8;        // world units per second
 const MARCH_MIN_MS = 20_000;  // floor so even neighbours take a moment
+const SCOUT_MIN_MS = 10_000;
+
+/** Recon flight time: the real march pace (s/tile) divided by the scout speed multiplier. */
+function scoutTravelMs(from: WorldCoord, to: WorldCoord): number {
+  const numbers = defaultN();
+  const perTile = worldEngineConfig(numbers).travelSecondsPerTile;
+  const multiplier = Math.max(1, Number(numbers.global?.march?.scoutSpeedMultiplier) || 3);
+  return Math.max(SCOUT_MIN_MS, Math.round(Math.hypot(to.x - from.x, to.y - from.y) * perTile / multiplier * 1000));
+}
 
 function armyTotalOf(gameJson: string | null | undefined): number {
   const game: any = projectGameJson(gameJson, Date.now());
@@ -397,7 +408,7 @@ export class WorldRoom {
         const fail = (reason: string) => ({ game, ok: false, reason, session: this.sessionSlice(base(), playerId) });
         if (command.type === "world.warp") {
           const live = telegraph.filter((march) => march.arriveAt > now);
-          if (live.some((march) => march.defender === playerId)) return fail("under_attack");
+          if (live.some((march) => march.defender === playerId && march.kind !== "scout")) return fail("under_attack");
           if (live.some((march) => march.attacker === playerId)) return fail("fleets_away");
         }
         const result = applySharedCommand(base(), playerId, game, command, now, numbers);
@@ -488,7 +499,7 @@ export class WorldRoom {
       const now = Date.now();
       const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
       const live = marches.filter((march) => march.arriveAt > now);
-      if (live.some((march) => march.defender === pid)) return Response.json({ ok: false, error: "under_attack" }, { status: 409 });
+      if (live.some((march) => march.defender === pid && march.kind !== "scout")) return Response.json({ ok: false, error: "under_attack" }, { status: 409 });
       if (live.some((march) => march.attacker === pid)) return Response.json({ ok: false, error: "fleets_away" }, { status: 409 });
       const spacing = Math.max(1, Number(body.minSpacing) || 6);
       const clash = Object.values(players).some((player) => player.id !== pid && player.coordVersion === COORD_VERSION && player.coords
@@ -631,7 +642,7 @@ export class WorldRoom {
     }
     const reports = (await this.state.storage.get<ServerReport[]>(`reports:${pid}`)) || [];
     const allMarches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
-    const marches = allMarches.filter((m) => m.arriveAt > Date.now() && (m.attacker === pid || m.defender === pid));
+    const marches = allMarches.filter((m) => m.arriveAt > Date.now() && (m.attacker === pid || (m.defender === pid && m.kind !== "scout")));
     const roster = Object.values(players).map((player) => player.id === pid ? player : publicPlayer(player));
     ws.send(JSON.stringify({ type: "snapshot", you: pid, players: roster, chat, dms, reports, marches }));
     await this.sendQuadrants(ws, players);
@@ -688,15 +699,26 @@ export class WorldRoom {
         if (a === pid || a === to) { try { sock.send(payload); } catch {} }
       }
     } else if (data.type === "scout") {
+      // Recon is a fleet: it flies at scoutSpeedMultiplier × march pace; the intel is taken
+      // on arrival (alarm), filed to the sender's System as a "recon" report, and the target
+      // is alerted then. Only the sender sees the scout in flight.
       const to = String(data.to || "").slice(0, 64);
       if (!to || to === pid) return;
       const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
-      if (!players[to]) return; // unknown target
-      const row = await this.env.DB.prepare("SELECT game_json FROM player_state WHERE player_id = ?").bind(to).first<{ game_json: string | null }>();
-      const snapshot = buildScoutSnapshot(players[to], row?.game_json);
-      this.sendToPlayer(pid, { type: "scout_result", target: to, name: players[to].name, snapshot });
-      // Alert the target they were scouted (persisted → seen even if offline now).
-      await this.pushReport(to, { id: crypto.randomUUID(), kind: "scouted", ts: Date.now(), by: pid, byName: players[pid]?.name || "A commander" });
+      const scouter = players[pid], target = players[to];
+      if (!scouter?.coords || !target?.coords) return;
+      const now = Date.now();
+      const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
+      const enRoute = marches.find((m) => m.kind === "scout" && m.attacker === pid && m.defender === to && m.arriveAt > now);
+      if (enRoute) { this.sendToPlayer(pid, { type: "march", march: enRoute }); return; }
+      const march: MarchRow = {
+        id: crypto.randomUUID(), kind: "scout", attacker: pid, attackerName: scouter.name, defender: to, defenderName: target.name,
+        from: scouter.coords, to: target.coords, departAt: now, arriveAt: now + scoutTravelMs(scouter.coords, target.coords), armyTotal: 0,
+      };
+      marches.push(march);
+      await this.state.storage.put("marches", marches);
+      this.sendToPlayer(pid, { type: "march", march });
+      await this.scheduleAlarm();
     } else if (data.type === "march") {
       const to = String(data.to || "").slice(0, 64);
       if (!to || to === pid) return;
@@ -896,7 +918,19 @@ export class WorldRoom {
     const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
     const due = marches.filter((m) => m.arriveAt <= now);
     const remaining = marches.filter((m) => m.arriveAt > now);
+    const roster = due.some((m) => m.kind === "scout") ? (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {} : {};
     for (const m of due) {
+      if (m.kind === "scout") {
+        this.sendToPlayer(m.attacker, { type: "march_done", id: m.id });
+        const target = roster[m.defender];
+        if (!target) continue; // the target left the world while the scout flew
+        const row = await this.env.DB.prepare("SELECT game_json FROM player_state WHERE player_id = ?").bind(m.defender).first<{ game_json: string | null }>();
+        const snapshot = buildScoutSnapshot(target, row?.game_json);
+        const expiresAt = now + worldEngineConfig(defaultN()).scoutIntelTtlSec * 1000;
+        await this.pushReport(m.attacker, { id: crypto.randomUUID(), kind: "recon", ts: now, by: m.defender, byName: target.name, payload: { targetId: m.defender, snapshot, expiresAt } });
+        await this.pushReport(m.defender, { id: crypto.randomUUID(), kind: "scouted", ts: now, by: m.attacker, byName: m.attackerName });
+        continue;
+      }
       await this.pushReport(m.defender, { id: crypto.randomUUID(), kind: "battle", ts: now, by: m.attacker, byName: m.attackerName, payload: { attackerCoords: m.from, summary: `${m.attackerName}'s army reached your city (${m.armyTotal.toLocaleString()} troops). Battle resolution arrives with the next build.` } });
       await this.pushReport(m.attacker, { id: crypto.randomUUID(), kind: "battle", ts: now, by: m.defender, byName: m.defenderName, payload: { summary: `Your army reached ${m.defenderName}. Battle resolution arrives with the next build; troops return home.` } });
       this.sendToPlayer(m.attacker, { type: "march_done", id: m.id });

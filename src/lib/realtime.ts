@@ -16,7 +16,7 @@ export type ViewRect = { x0: number; y0: number; x1: number; y1: number };
 export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown; signal?: string | null };
 
 // Server-authoritative combat/intel report (scouted / incoming / battle).
-export type ServerReport = { id: string; kind: "scouted" | "incoming" | "battle" | "relocated"; ts: number; by?: string; byName?: string; payload?: Record<string, unknown> };
+export type ServerReport = { id: string; kind: "scouted" | "incoming" | "battle" | "relocated" | "recon"; ts: number; by?: string; byName?: string; payload?: Record<string, unknown> };
 export type ScoutSnapshot = {
   keepLevel: number; might: number; faction: string | null; wounded: number; wallLevel: number; shielded: boolean;
   troops: { army: number; navy: number; air: number };
@@ -25,6 +25,8 @@ export type ScoutSnapshot = {
 export type LiveMarch = {
   id: string; attacker: string; attackerName: string; defender: string; defenderName: string;
   from: { x: number; y: number }; to: { x: number; y: number }; departAt: number; arriveAt: number; armyTotal: number;
+  /** "scout": your recon fleet (only the sender receives it). */
+  kind?: "scout";
 };
 
 type Handlers = {

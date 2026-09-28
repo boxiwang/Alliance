@@ -202,6 +202,12 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       const c = r.payload?.attackerCoords as { x?: unknown; y?: unknown } | undefined;
       const at = c && Number.isFinite(Number(c.x)) && Number.isFinite(Number(c.y)) ? { x: Number(c.x), y: Number(c.y) } : undefined;
       if (r.kind === "scouted") return { sys: "sec" as const, tag: "RECON", t, b: `${r.byName || "A commander"} scouted your city.` };
+      if (r.kind === "recon") {
+        const snapshot = r.payload?.snapshot as { might?: unknown } | undefined;
+        const expiresAt = Number(r.payload?.expiresAt);
+        const left = Number.isFinite(expiresAt) ? Math.max(0, Math.ceil((expiresAt - Date.now()) / 60_000)) : 0;
+        return { sys: "sec" as const, tag: "RECON", t, b: `Scout reached ${r.byName || "the target"} · Might ${compact(Number(snapshot?.might) || 0)}. ${left > 0 ? `Full intel on their Star Map card for ${left} min.` : "Intel expired."}` };
+      }
       if (r.kind === "incoming") return { sys: "mil" as const, tag: "INBOUND", t, b: `${r.byName || "A commander"}'s army is marching on you.`, at };
       if (r.kind === "relocated") return { sys: "sec" as const, tag: "RELOCATED", t, b: String(r.payload?.summary || "Your city moved to a new sector.") };
       return { sys: "mil" as const, tag: "BATTLE", t, b: String(r.payload?.summary || "Battle resolved."), at };
