@@ -153,3 +153,21 @@ export function takeWorldFocus(address: string): PendingWorldFocus | null {
   if (!value || !validPoint(value.position) || (value.targetId !== null && typeof value.targetId !== "string") || !Number.isFinite(value.requestedAt)) return null;
   return value as PendingWorldFocus;
 }
+
+// ---- Open a direct line from another screen (e.g. the Star Map commander card) ----
+const dmKey = (address: string) => `ruglands:open-dm:${address.toLowerCase()}`;
+
+/** Ask the Messages screen to open a DM with this commander when it mounts. */
+export function queueDirectMessage(address: string, target: { id: string; name: string }, requestedAt = Date.now()): void {
+  writeJson(dmKey(address), { id: target.id, name: target.name, requestedAt });
+}
+
+/** The queued DM target (consumed), if it was requested in the last few minutes. */
+export function takeDirectMessage(address: string, now = Date.now()): { id: string; name: string } | null {
+  const value = readJson(dmKey(address)) as { id?: unknown; name?: unknown; requestedAt?: unknown } | null;
+  try { localStorage.removeItem(dmKey(address)); } catch {}
+  if (!value || typeof value.id !== "string" || !value.id) return null;
+  if (!Number.isFinite(value.requestedAt) || now - Number(value.requestedAt) > 5 * 60 * 1000) return null;
+  return { id: value.id, name: typeof value.name === "string" ? value.name : "Commander" };
+}
+

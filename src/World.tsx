@@ -45,7 +45,7 @@ const hasCoords = (p: PresenceCity): p is MapCity => !!p.coords && Number.isFini
 const VIEW_MAX_SPAN = 420; // matches worker/world-coords.ts
 const rectHas = (rect: ViewRect, c: { x: number; y: number }) => c.x >= rect.x0 && c.x <= rect.x1 && c.y >= rect.y0 && c.y <= rect.y1;
 import { radiantCrownSvgPath } from "./planet-halo-shared";
-import { createCommanderShare, createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
+import { createCommanderShare, createCoordinateShare, createScoutIntelShare, queueCommsShare, queueDirectMessage, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
 import { ensureGameAuthority, sendGameCommand, type GameCommandResponse, loadInventory } from "./lib/backend";
 
@@ -1821,7 +1821,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
               <button disabled={scoutingId === remoteSelected.id} onClick={() => { setScoutingId(remoteSelected.id); setScoutIntel(null); rtRef.current?.sendScout(remoteSelected.id); }}>{scoutingId === remoteSelected.id ? "SCANNING…" : "◎ SCOUT"}</button>
               <button className="attack" onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>⚔ ATTACK</button>
               <button onClick={() => { queueCommsShare(address, createCommanderShare(remoteSelected)); onMessages(); }}>⇪ SHARE</button>
-              <button onClick={onMessages}>✉ MESSAGE</button>
+              <button onClick={() => { queueDirectMessage(address, { id: remoteSelected.id, name: remoteSelected.name || "Commander" }); onMessages(); }}>✉ MESSAGE</button>
             </div>
             <p>Scouting and attacks alert the target.</p>
           </div>;

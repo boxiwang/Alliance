@@ -15,7 +15,7 @@ import NameSignal from "./NameSignal";
 import { loadCosmeticVault, type ChatSignalId } from "./lib/player-account";
 import { loadPlayerAccount } from "./lib/player-account";
 import { refreshLocalCommsIntel, saveLocalComms, type LocalCommsMessage } from "./lib/comms-local";
-import { clearQueuedCommsShare, loadQueuedCommsShare, queueWorldFocus, sharedIntelIsActive, type SharedWorldIntel } from "./lib/shared-intel";
+import { clearQueuedCommsShare, loadQueuedCommsShare, queueWorldFocus, sharedIntelIsActive, takeDirectMessage, type SharedWorldIntel } from "./lib/shared-intel";
 import { playerSystemReports } from "./lib/world-reports";
 import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME, SFX_SUBTAB_SWITCH, SFX_SUBTAB_SWITCH_VOLUME } from "./lib/sfx";
 import { trackEvents } from "./lib/backend";
@@ -133,6 +133,12 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   function playSubtabSfx() {
     if (account.soundEnabled) playSfx(SFX_SUBTAB_SWITCH, SFX_SUBTAB_SWITCH_VOLUME * account.sfxVolume);
   }
+  // Arrived from another screen to talk to someone (e.g. the Star Map commander card).
+  useEffect(() => {
+    const target = takeDirectMessage(address);
+    if (target) openDM(target.id, target.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address]);
   function openDM(id: string, name: string) {
     if (!id || id === address) return;
     playChannelSfx();
