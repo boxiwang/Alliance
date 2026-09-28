@@ -325,6 +325,8 @@ async function shopDailyClaim(request: Request, env: BackendEnv, claims: Session
   return response({ claimedAt: now, inventory });
 }
 
+const WARP_ATTEMPTS_PER_MINUTE = 10;
+
 // GM ops: world roster and map-slot release (docs/BETA-P0.md P0-2 ghost cleanup).
 async function gmWorld(request: Request, env: BackendEnv, claims: SessionClaims, pathname: string): Promise<Response> {
   if (claims.role !== "gm") return response({ error: "gm_required" }, 403);
@@ -786,7 +788,15 @@ async function commandRoute(request: Request, env: BackendEnv, claims: SessionCl
     const warpBalance = warpItemId
       ? await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?").bind(claims.sub, warpItemId).first<{ quantity: number }>()
       : null;
-    if (warpItemId && (!warpBalance || warpBalance.quantity < 1)) {
+    // Anti-probing (docs/BETA-P0.md P0-4): at most WARP_ATTEMPTS_PER_MINUTE warp
+    // attempts per player; rejected attempts never spend the item.
+    const recentWarps = type === "world.warp"
+      ? await env.DB.prepare("SELECT COUNT(*) AS n FROM game_commands WHERE player_id = ? AND command_type = 'world.warp' AND created_at > ?")
+        .bind(claims.sub, now - 60_000).first<{ n: number }>()
+      : null;
+    if (recentWarps && recentWarps.n >= WARP_ATTEMPTS_PER_MINUTE) {
+      result = { state, ok: false, reason: "rate_limited", world };
+    } else if (warpItemId && (!warpBalance || warpBalance.quantity < 1)) {
       result = { state, ok: false, reason: "no_warp_item", world };
     } else {
       const applied = applyWorldAuthorityCommand(world, state, command, now, defaultN());

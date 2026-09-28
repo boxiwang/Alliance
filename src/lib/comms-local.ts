@@ -12,6 +12,8 @@ export type LocalCommsMessage = {
   t?: string;
   b?: string;
   tag?: string;
+  /** System report: where the attacker's city was (retaliation locate, docs/COMBAT.md §9). */
+  at?: { x: number; y: number };
   own?: boolean;
   pin?: string;
   spam?: number;

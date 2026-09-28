@@ -35,7 +35,14 @@ import {
   type ChatSignalId, type MarchSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
 } from "./lib/player-account";
 import { playSfx, SFX_STARMAP_SELECT, SFX_STARMAP_SELECT_VOLUME } from "./lib/sfx";
-import { RealtimeClient, type PresenceCity, type ScoutSnapshot, type LiveMarch } from "./lib/realtime";
+import { RealtimeClient, type PresenceCity, type ScoutSnapshot, type LiveMarch, type ViewRect } from "./lib/realtime";
+
+// A rival city we are allowed to place: the server sent its coordinates because it
+// is inside our current map view (location privacy, docs/BETA-P0.md P0-4).
+type MapCity = PresenceCity & { coords: { x: number; y: number } };
+const hasCoords = (p: PresenceCity): p is MapCity => !!p.coords && Number.isFinite(p.coords.x) && Number.isFinite(p.coords.y);
+const VIEW_MAX_SPAN = 420; // matches worker/world-coords.ts
+const rectHas = (rect: ViewRect, c: { x: number; y: number }) => c.x >= rect.x0 && c.x <= rect.x1 && c.y >= rect.y0 && c.y <= rect.y1;
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCoordinateShare, createScoutIntelShare, queueCommsShare, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
@@ -442,7 +449,7 @@ const ERROR_COPY: Record<string, string> = {
   outside_frontier: "That spot is outside the Frontier.", reserve_zone: "The Wormhole reserve cannot be settled.",
   too_close_city: `Too close to another commander — keep ${WARP_RULES.minCitySpacing} tiles apart.`, tile_occupied: "A planet or Rogue already occupies that spot.",
   no_space: "No safe sector found. Try again.", no_warp_item: "You have no Warp item of that type left.",
-  under_attack: "An attack is inbound — you cannot warp now.", world_unreachable: "Warp link failed. Try again.", warp_rejected: "The warp was rejected.",
+  under_attack: "An attack is inbound — you cannot warp now.", rate_limited: "Too many warp attempts. Wait a minute and try again.", world_unreachable: "Warp link failed. Try again.", warp_rejected: "The warp was rejected.",
 };
 
 function fmtDuration(seconds: number): string {
@@ -582,7 +589,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // Shared star map: other real commanders from the realtime presence roster.
   // Read-only for now — you can see them, open their card and message them;
   // scouting/attacking real players is the next milestone (server-side combat).
-  const [remotePlayers, setRemotePlayers] = useState<PresenceCity[]>([]);
+  const [remotePlayers, setRemotePlayers] = useState<MapCity[]>([]);
+  const [rtEpoch, setRtEpoch] = useState(0); // bumps on every (re)connect snapshot → resend the map view
   const [remoteSelectedId, setRemoteSelectedId] = useState<string | null>(null);
   // My own spawn coordinate, owned by the server (shared map). Once known, the
   // home city is moved here so "where I see my home" == "where others see me".
@@ -594,18 +602,26 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
     rtRef.current = rt;
-    const keep = (list: PresenceCity[]) => list.filter((p) => p.id !== address && p.coords);
+    const keep = (list: PresenceCity[]) => list.filter((p): p is MapCity => p.id !== address && hasCoords(p));
     rt.handlers.onSnapshot = (_you, players, _chat, _dms, _reports, snapMarches) => {
       setRemotePlayers(keep(players));
+      setRtEpoch((value) => value + 1);
       setMarches(snapMarches || []);
       const mine = players.find((p) => p.id === address)?.coords;
       if (mine && Number.isFinite(mine.x) && Number.isFinite(mine.y)) setServerHomeCoord({ x: mine.x, y: mine.y });
     };
     rt.handlers.onPlayer = (p) => {
-      if (p.id === address || !p.coords) return;
+      if (p.id === address) return;
+      // No coordinates = outside our view (or it warped away): drop it from the map.
+      const id = p.id;
+      if (!hasCoords(p)) { setRemotePlayers((cur) => cur.filter((x) => x.id !== id)); return; }
       setRemotePlayers((cur) => { const i = cur.findIndex((x) => x.id === p.id); if (i < 0) return [...cur, p]; const next = cur.slice(); next[i] = p; return next; });
     };
     rt.handlers.onPlayerRemoved = (id) => setRemotePlayers((cur) => cur.filter((x) => x.id !== id));
+    rt.handlers.onViewPlayers = (rect, list) => {
+      const fresh = keep(list);
+      setRemotePlayers((cur) => [...cur.filter((x) => !rectHas(rect, x.coords) && !fresh.some((p) => p.id === x.id)), ...fresh]);
+    };
     rt.handlers.onScoutResult = (_target, name, _coords, snapshot) => { setScoutingId(null); setScoutIntel({ name, snapshot }); };
     rt.handlers.onMarch = (m) => setMarches((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m]);
     rt.handlers.onMarchDone = (id) => setMarches((cur) => cur.filter((x) => x.id !== id));
@@ -1104,6 +1120,28 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
 
   // Other real commanders overlaid on the shared map (read-only). Culled to the
   // viewport and only shown once you're zoomed past strategic, same as targets.
+  // Ask the server for the rival cities in view (with a margin so small pans reuse it).
+  // Rival cities only render past Strategic zoom, so no request is made there.
+  const lastViewRef = useRef<ViewRect | null>(null);
+  useEffect(() => {
+    lastViewRef.current = null;
+  }, [rtEpoch]);
+  useEffect(() => {
+    if (strategicZoom) return;
+    const pad = 30, spare = 40;
+    const want = { x0: viewX - pad, y0: viewY - pad, x1: viewX + viewport.width + pad, y1: viewY + viewport.height + pad };
+    const last = lastViewRef.current;
+    if (last && want.x0 >= last.x0 && want.y0 >= last.y0 && want.x1 <= last.x1 && want.y1 <= last.y1) return;
+    const timer = window.setTimeout(() => {
+      // The server serves at most VIEW_MAX_SPAN tiles per axis; spend what is left on the margin.
+      const sx = Math.max(0, Math.min(spare, (VIEW_MAX_SPAN - (want.x1 - want.x0)) / 2));
+      const sy = Math.max(0, Math.min(spare, (VIEW_MAX_SPAN - (want.y1 - want.y0)) / 2));
+      const rect = { x0: Math.floor(want.x0 - sx), y0: Math.floor(want.y0 - sy), x1: Math.ceil(want.x1 + sx), y1: Math.ceil(want.y1 + sy) };
+      lastViewRef.current = rect;
+      rtRef.current?.sendView(rect);
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [strategicZoom, viewX, viewY, viewport.width, viewport.height, rtEpoch]);
   const mapRemotePlayers = useMemo(() => {
     if (strategicZoom) return null;
     const pad = 30;
@@ -1485,7 +1523,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             const incoming = m.defender === address;
             const eta = Math.max(0, Math.round((m.arriveAt - now) / 1000));
             const col = incoming ? "#ff6f85" : "#f3c46b";
-            return <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 11px", borderRadius: 9, border: `1px solid ${col}66`, background: "linear-gradient(160deg,rgba(14,10,16,.94),rgba(9,7,12,.96))", boxShadow: "0 6px 18px rgba(0,0,0,.35)" }}>
+            // Incoming: click to find the attacker's city (retaliation locate, docs/COMBAT.md §9).
+            return <div key={m.id} role={incoming ? "button" : undefined} aria-label={incoming ? `Locate ${m.attackerName || "attacker"}` : undefined} onClick={incoming ? () => { setCamera({ ...m.from }); setZoom((value) => Math.max(value, 2.1)); setTileMark({ x: Math.floor(m.from.x), y: Math.floor(m.from.y) }); } : undefined} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 11px", borderRadius: 9, border: `1px solid ${col}66`, background: "linear-gradient(160deg,rgba(14,10,16,.94),rgba(9,7,12,.96))", boxShadow: "0 6px 18px rgba(0,0,0,.35)", cursor: incoming ? "pointer" : undefined }}>
               <span style={{ font: "700 12px var(--hud)", color: col }}>{incoming ? "⚔" : "➤"}</span>
               <span style={{ font: "600 10px var(--sans)", color: "#dbe2f3", flex: 1 }}>{incoming ? `${m.attackerName || "Enemy"} → YOU` : `You → ${m.defenderName || "Target"}`} · {m.armyTotal.toLocaleString()}</span>
               <span style={{ font: "700 10px var(--mono)", color: col }}>{eta > 0 ? `${Math.floor(eta / 60)}:${String(eta % 60).padStart(2, "0")}` : "IMPACT"}</span>

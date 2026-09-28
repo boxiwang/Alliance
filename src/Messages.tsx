@@ -188,15 +188,17 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   // Falls back to the seeded sample lines only when a fresh account has none.
   const systemReports = useMemo(() => {
     const lines = playerSystemReports(stored, stored?.playerId ?? "");
-    const local = lines.map(({ sys, tag, t, b }) => ({ sys, tag, t, b }));
+    const local = lines.map(({ sys, tag, t, b }) => ({ sys, tag, t, b } as ChatMessage));
     // Server-authoritative PvP reports (scouted / incoming / battle) from the
     // shared world, newest first, merged into the System channel.
     const server = [...serverReports].reverse().map((r) => {
       const t = new Date(r.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+      const c = r.payload?.attackerCoords as { x?: unknown; y?: unknown } | undefined;
+      const at = c && Number.isFinite(Number(c.x)) && Number.isFinite(Number(c.y)) ? { x: Number(c.x), y: Number(c.y) } : undefined;
       if (r.kind === "scouted") return { sys: "sec" as const, tag: "RECON", t, b: `${r.byName || "A commander"} scouted your city.` };
-      if (r.kind === "incoming") return { sys: "mil" as const, tag: "INBOUND", t, b: `${r.byName || "A commander"}'s army is marching on you.` };
+      if (r.kind === "incoming") return { sys: "mil" as const, tag: "INBOUND", t, b: `${r.byName || "A commander"}'s army is marching on you.`, at };
       if (r.kind === "relocated") return { sys: "sec" as const, tag: "RELOCATED", t, b: String(r.payload?.summary || "Your city moved to a new sector.") };
-      return { sys: "mil" as const, tag: "BATTLE", t, b: String(r.payload?.summary || "Battle resolved.") };
+      return { sys: "mil" as const, tag: "BATTLE", t, b: String(r.payload?.summary || "Battle resolved."), at };
     });
     return [...server, ...local];
   }, [stored, clock, serverReports]);
@@ -367,7 +369,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
               {onlineCount === 0 && Object.keys(dmThreads).length === 0 && <div className="spam">No commanders online yet — invite a friend with Quick Play and they'll show up here.</div>}
             </div>
           : <div className="stream" ref={streamRef}>
-              {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} reducedMotion={account.reducedMotion} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} />)}
+              {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} reducedMotion={account.reducedMotion} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} onLocate={(at) => { queueWorldFocus(address, null, at); onWorld(); }} />)}
               {messages.length === 0 && <div className="spam">{dmWith ? "No messages yet — say hi." : isCosmos ? "Be the first to signal the frontier." : "No messages yet."}</div>}
             </div>}
 
@@ -396,10 +398,10 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   </section>;
 }
 
-function MessageRow({ m, now, ownChatSignal, reducedMotion, onInspect, onOpenWorld }: { m: ChatMessage; now: number; ownChatSignal: ChatSignalId | null; reducedMotion: boolean; onInspect: (name: string) => void; onOpenWorld: (share: SharedWorldIntel) => void }) {
+function MessageRow({ m, now, ownChatSignal, reducedMotion, onInspect, onOpenWorld, onLocate }: { m: ChatMessage; now: number; ownChatSignal: ChatSignalId | null; reducedMotion: boolean; onInspect: (name: string) => void; onOpenWorld: (share: SharedWorldIntel) => void; onLocate: (at: { x: number; y: number }) => void }) {
   if (m.pin) return <div className="pinned"><b>PINNED</b><span>{m.pin}</span></div>;
   if (m.spam) return <div className="spam"><b>[{m.f}] {m.a}</b> sent the same message {m.spam}× · collapsed</div>;
-  if (m.sys) return <div className={`logrow ${m.sys}`}><span className="lg-tag">{m.tag}</span><span className="lg-b">{m.b}</span><span className="lg-t">{m.t}</span></div>;
+  if (m.sys) return <div className={`logrow ${m.sys}`}><span className="lg-tag">{m.tag}</span><span className="lg-b">{m.b}{m.at && <button className="lg-locate" onClick={() => onLocate(m.at!)}>LOCATE ATTACKER ▸</button>}</span><span className="lg-t">{m.t}</span></div>;
   return <div className={`msg ${m.own ? "own" : ""}`}>
     <div className="av" style={m.own ? undefined : { color: fcol(m.f) }}>{(m.a ?? "?").slice(0, 1)}</div>
     <div className="bd">

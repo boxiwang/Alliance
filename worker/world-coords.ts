@@ -74,3 +74,24 @@ export function dormantCandidates<T extends { id: string; lastSeen?: number; kee
   return players.filter((player) => !live.has(player.id)
     && now - (player.lastSeen || 0) >= DORMANT_AFTER_MS && (player.keepLevel || 1) <= DORMANT_MAX_CORE);
 }
+
+// Location privacy (docs/BETA-P0.md P0-4): a client may only ask for the cities in
+// one map view at a time — a Field-zoom viewport plus margin, in tiles.
+export type ViewRect = { x0: number; y0: number; x1: number; y1: number };
+export const VIEW_MAX_SPAN = 420;
+
+export function clampViewRect(raw: unknown): ViewRect | null {
+  const r = raw as Partial<ViewRect> | null;
+  const values = [r?.x0, r?.y0, r?.x1, r?.y1].map(Number);
+  if (!r || values.some((value) => !Number.isFinite(value))) return null;
+  let [x0, y0, x1, y1] = values;
+  if (x1 < x0) [x0, x1] = [x1, x0];
+  if (y1 < y0) [y0, y1] = [y1, y0];
+  const shrink = (lo: number, hi: number): [number, number] => {
+    if (hi - lo <= VIEW_MAX_SPAN) return [lo, hi];
+    const mid = (lo + hi) / 2;
+    return [mid - VIEW_MAX_SPAN / 2, mid + VIEW_MAX_SPAN / 2];
+  };
+  [x0, x1] = shrink(x0, x1); [y0, y1] = shrink(y0, y1);
+  return { x0, y0, x1, y1 };
+}

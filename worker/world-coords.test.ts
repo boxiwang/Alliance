@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DORMANT_AFTER_MS, assignOuterRingCoord, dormantCandidates, outerRingSlots, WORLD_COORD_LIMITS } from "./world-coords";
+import { DORMANT_AFTER_MS, VIEW_MAX_SPAN, assignOuterRingCoord, clampViewRect, dormantCandidates, outerRingSlots, WORLD_COORD_LIMITS } from "./world-coords";
 
 describe("shared-world outer-ring coordinates", () => {
   it("fills the outer ring before stepping inward", () => {
@@ -48,5 +48,17 @@ describe("dormant map cleanup", () => {
       { id: "small-online", lastSeen: stale, keepLevel: 1 },
     ];
     expect(dormantCandidates(players, new Set(["small-online"]), now).map((player) => player.id)).toEqual(["small-stale", "no-presence"]);
+  });
+});
+
+describe("map view rect (location privacy)", () => {
+  it("normalizes, rejects junk and caps the span around the centre", () => {
+    expect(clampViewRect({ x0: 50, y0: 40, x1: 10, y1: 20 })).toEqual({ x0: 10, y0: 20, x1: 50, y1: 40 });
+    expect(clampViewRect({ x0: 0, y0: 0, x1: "a", y1: 5 })).toBeNull();
+    expect(clampViewRect(null)).toBeNull();
+    const wide = clampViewRect({ x0: 0, y0: 100, x1: 512, y1: 120 })!;
+    expect(wide.x1 - wide.x0).toBe(VIEW_MAX_SPAN);
+    expect((wide.x0 + wide.x1) / 2).toBe(256);
+    expect(wide.y1 - wide.y0).toBe(20);
   });
 });

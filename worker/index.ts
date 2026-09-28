@@ -6,7 +6,7 @@
 
 import { verifySession } from "./auth";
 import { handlePlayerApi, type BackendEnv } from "./player-api";
-import { DORMANT_MAX_CORE, assignOuterRingCoord, dormantCandidates, type WorldCoord } from "./world-coords";
+import { DORMANT_MAX_CORE, assignOuterRingCoord, clampViewRect, dormantCandidates, type ViewRect, type WorldCoord } from "./world-coords";
 import { projectGameJson } from "./economy";
 import { capacity } from "../src/lib/game";
 
@@ -155,7 +155,17 @@ function chatSignalOf(player?: PlayerRow): string | null {
   const cos = player?.cosmetics as { chatSignal?: string } | null | undefined;
   return cos && typeof cos.chatSignal === "string" ? cos.chatSignal : null;
 }
-type SocketAttachment = { pid: string; name: string; sessionId: string; windowStart: number; messageCount: number };
+type SocketAttachment = { pid: string; name: string; sessionId: string; windowStart: number; messageCount: number; view?: ViewRect; viewAt?: number };
+
+// Location privacy (docs/BETA-P0.md P0-4): other players' coordinates are only sent
+// for cities inside the viewer's current map view, never as a full roster.
+type PublicPlayerRow = Omit<PlayerRow, "coords"> & { coords: WorldCoord | null };
+const VIEW_MIN_INTERVAL_MS = 250;
+const VIEW_MAX_CITIES = 600;
+const publicPlayer = (player: PlayerRow): PublicPlayerRow => ({ ...player, coords: null });
+const inView = (rect: ViewRect | undefined, coord: WorldCoord | null | undefined): boolean =>
+  !!rect && !!coord && coord.x >= rect.x0 && coord.x <= rect.x1 && coord.y >= rect.y0 && coord.y <= rect.y1;
+
 
 function prune(arr: ChatRow[]): ChatRow[] {
   const cut = Date.now() - RETAIN_MS;
@@ -254,7 +264,7 @@ export class WorldRoom {
     if (players[pid]) {
       players[pid].coords = coord;
       await this.state.storage.put("players", players);
-      this.broadcast({ type: "player", player: players[pid] });
+      this.sendPlayerUpdate(players[pid]);
     }
     return Response.json({ ok: true, coord, previous });
   }
@@ -379,10 +389,11 @@ export class WorldRoom {
     const reports = (await this.state.storage.get<ServerReport[]>(`reports:${pid}`)) || [];
     const allMarches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
     const marches = allMarches.filter((m) => m.arriveAt > Date.now() && (m.attacker === pid || m.defender === pid));
-    ws.send(JSON.stringify({ type: "snapshot", you: pid, players: Object.values(players), chat, dms, reports, marches }));
-    this.broadcast({ type: "player", player: players[pid] }, ws);
+    const roster = Object.values(players).map((player) => player.id === pid ? player : publicPlayer(player));
+    ws.send(JSON.stringify({ type: "snapshot", you: pid, players: roster, chat, dms, reports, marches }));
+    this.sendPlayerUpdate(players[pid], ws);
     // Tell everyone about any ghosts we just cleared (or others revived).
-    for (const id of flipped) if (id !== pid) this.broadcast({ type: "player", player: players[id] });
+    for (const id of flipped) if (id !== pid) this.sendPlayerUpdate(players[id]);
     for (const id of retired) this.broadcast({ type: "player_removed", id });
   }
 
@@ -395,6 +406,8 @@ export class WorldRoom {
     const pid = att.pid;
     if (!pid) return;
     const now = Date.now();
+    // Map view queries are throttled on their own and do not count against chat.
+    if (data?.type === "view") { await this.handleView(ws, att as SocketAttachment, data.rect, now); return; }
     if (!att.windowStart || now - att.windowStart >= 10_000) { att.windowStart = now; att.messageCount = 0; }
     att.messageCount = (att.messageCount || 0) + 1;
     ws.serializeAttachment(att);
@@ -436,7 +449,7 @@ export class WorldRoom {
       if (!players[to]) return; // unknown target
       const row = await this.env.DB.prepare("SELECT game_json FROM player_state WHERE player_id = ?").bind(to).first<{ game_json: string | null }>();
       const snapshot = buildScoutSnapshot(players[to], row?.game_json);
-      this.sendToPlayer(pid, { type: "scout_result", target: to, name: players[to].name, coords: players[to].coords, snapshot });
+      this.sendToPlayer(pid, { type: "scout_result", target: to, name: players[to].name, snapshot });
       // Alert the target they were scouted (persisted → seen even if offline now).
       await this.pushReport(to, { id: crypto.randomUUID(), kind: "scouted", ts: Date.now(), by: pid, byName: players[pid]?.name || "A commander" });
     } else if (data.type === "march") {
@@ -465,7 +478,7 @@ export class WorldRoom {
       await this.state.storage.put("marches", marches);
       // Warn the defender (System + live), tell the attacker it launched, show both the march.
       const etaSec = Math.round((arriveAt - departAt) / 1000);
-      await this.pushReport(to, { id: crypto.randomUUID(), kind: "incoming", ts: departAt, by: pid, byName: attacker.name, payload: { arriveAt, etaSec, armyTotal } });
+      await this.pushReport(to, { id: crypto.randomUUID(), kind: "incoming", ts: departAt, by: pid, byName: attacker.name, payload: { arriveAt, etaSec, armyTotal, attackerCoords: attacker.coords } });
       this.sendToPlayer(pid, { type: "march", march });
       this.sendToPlayer(to, { type: "march", march });
       await this.scheduleMarchAlarm();
@@ -484,7 +497,7 @@ export class WorldRoom {
       else if (typeof data.faction === "string") p.faction = data.faction.replace(/[^a-z0-9_$.-]/gi, "").slice(0, 24) || null;
       p.online = true; p.lastSeen = Date.now();
       await this.state.storage.put("players", players);
-      this.broadcast({ type: "player", player: p });
+      this.sendPlayerUpdate(p);
     }
   }
 
@@ -504,7 +517,7 @@ export class WorldRoom {
     if (players[pid] && players[pid].online !== stillOnline) {
       players[pid].online = stillOnline; players[pid].lastSeen = Date.now();
       await this.state.storage.put("players", players);
-      this.broadcast({ type: "player", player: players[pid] });
+      this.sendPlayerUpdate(players[pid]);
     }
   }
 
@@ -515,6 +528,33 @@ export class WorldRoom {
     for (const ws of this.state.getWebSockets()) {
       if (ws === except) continue;
       try { ws.send(s); } catch {}
+    }
+  }
+
+  // A viewer's map rect → the cities (with coordinates) inside it, capped.
+  async handleView(ws: WebSocket, att: SocketAttachment, raw: unknown, now: number) {
+    if (att.viewAt && now - att.viewAt < VIEW_MIN_INTERVAL_MS) return;
+    const rect = clampViewRect(raw);
+    if (!rect) return;
+    att.view = rect; att.viewAt = now;
+    ws.serializeAttachment(att);
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    const visible = Object.values(players)
+      .filter((player) => player.id !== att.pid && player.coordVersion === COORD_VERSION && inView(rect, player.coords))
+      .slice(0, VIEW_MAX_CITIES);
+    try { ws.send(JSON.stringify({ type: "view_players", rect, players: visible })); } catch {}
+  }
+
+  // Presence update: full row (with coordinates) only to the player themself and to
+  // sockets whose current view contains the city; everyone else gets it without coords.
+  sendPlayerUpdate(player: PlayerRow | undefined, except?: WebSocket) {
+    if (!player) return;
+    const full = JSON.stringify({ type: "player", player });
+    const masked = JSON.stringify({ type: "player", player: publicPlayer(player) });
+    for (const ws of this.state.getWebSockets()) {
+      if (ws === except) continue;
+      const a = (ws.deserializeAttachment() || {}) as Partial<SocketAttachment>;
+      try { ws.send(a.pid === player.id || inView(a.view, player.coords) ? full : masked); } catch {}
     }
   }
 
@@ -556,7 +596,7 @@ export class WorldRoom {
     const due = marches.filter((m) => m.arriveAt <= now);
     const remaining = marches.filter((m) => m.arriveAt > now);
     for (const m of due) {
-      await this.pushReport(m.defender, { id: crypto.randomUUID(), kind: "battle", ts: now, by: m.attacker, byName: m.attackerName, payload: { summary: `${m.attackerName}'s army reached your city (${m.armyTotal.toLocaleString()} troops). Battle resolution arrives with the next build.` } });
+      await this.pushReport(m.defender, { id: crypto.randomUUID(), kind: "battle", ts: now, by: m.attacker, byName: m.attackerName, payload: { attackerCoords: m.from, summary: `${m.attackerName}'s army reached your city (${m.armyTotal.toLocaleString()} troops). Battle resolution arrives with the next build.` } });
       await this.pushReport(m.attacker, { id: crypto.randomUUID(), kind: "battle", ts: now, by: m.defender, byName: m.defenderName, payload: { summary: `Your army reached ${m.defenderName}. Battle resolution arrives with the next build; troops return home.` } });
       this.sendToPlayer(m.attacker, { type: "march_done", id: m.id });
       this.sendToPlayer(m.defender, { type: "march_done", id: m.id });

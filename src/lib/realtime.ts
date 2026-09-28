@@ -5,10 +5,12 @@
 import { BACKEND_WS, loadBackendSession } from "./backend";
 
 export type PresenceCity = {
-  id: string; name: string; coords: { x: number; y: number };
+  // Other players' coordinates arrive only for cities inside your current map view.
+  id: string; name: string; coords: { x: number; y: number } | null;
   might: number; keepLevel: number; faction: string | null;
   cosmetics: unknown; online: boolean; lastSeen: number;
 };
+export type ViewRect = { x0: number; y0: number; x1: number; y1: number };
 export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown; signal?: string | null };
 
 // Server-authoritative combat/intel report (scouted / incoming / battle).
@@ -29,6 +31,7 @@ type Handlers = {
   onDM?: (key: string, msg: LiveChat) => void;
   onPlayer?: (player: PresenceCity) => void;
   onPlayerRemoved?: (id: string) => void;
+  onViewPlayers?: (rect: ViewRect, players: PresenceCity[]) => void;
   onStatus?: (connected: boolean) => void;
   onReport?: (report: ServerReport) => void;
   onScoutResult?: (target: string, name: string, coords: { x: number; y: number } | null, snapshot: ScoutSnapshot) => void;
@@ -68,6 +71,7 @@ export class RealtimeClient {
       else if (d.type === "dm") this.handlers.onDM?.(d.key, d.msg);
       else if (d.type === "player") this.handlers.onPlayer?.(d.player);
       else if (d.type === "player_removed") this.handlers.onPlayerRemoved?.(d.id);
+      else if (d.type === "view_players") this.handlers.onViewPlayers?.(d.rect, d.players || []);
       else if (d.type === "report") this.handlers.onReport?.(d.report);
       else if (d.type === "scout_result") this.handlers.onScoutResult?.(d.target, d.name, d.coords || null, d.snapshot);
       else if (d.type === "march") this.handlers.onMarch?.(d.march);
@@ -98,6 +102,10 @@ export class RealtimeClient {
   sendDM(to: string, text: string) { this.send({ type: "dm", to, text }); }
   sendScout(to: string) { this.send({ type: "scout", to }); }
   sendMarch(to: string) { this.send({ type: "march", to }); }
+  // Map view query: never queued (a stale view is useless); resent after reconnect.
+  sendView(rect: ViewRect) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) { try { this.ws.send(JSON.stringify({ type: "view", rect })); } catch {} }
+  }
   sendPresence(p: { name?: string; might?: number; keepLevel?: number; faction?: string | null; cosmetics?: unknown }) {
     this.send({ type: "presence", ...p });
   }
