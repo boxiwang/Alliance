@@ -52,6 +52,18 @@ void main(){
   gl_FragColor=vec4(col*a,a);
 }`;
 
+const TAU = Math.PI * 2;
+/** Screen-space arc of each quadrant (y grows downward): 0 NW, 1 NE, 2 SW, 3 SE. */
+const QUADRANT_ARC: [number, number][] = [[Math.PI, Math.PI * 1.5], [Math.PI * 1.5, TAU], [Math.PI * .5, Math.PI], [0, Math.PI * .5]];
+
+/** Annular sector (ring slice) path between radii rIn..rOut and angles a0..a1. */
+function wedgePath(context: CanvasRenderingContext2D, cx: number, cy: number, rIn: number, rOut: number, a0: number, a1: number): void {
+  context.beginPath();
+  context.arc(cx, cy, rOut, a0, a1);
+  context.arc(cx, cy, Math.max(0, rIn), a1, a0, true);
+  context.closePath();
+}
+
 /** Deterministic hash → [0,1) for a world cell, so procedural stars never tile. */
 function hash2(ix: number, iy: number, salt: number): number {
   let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(salt, 2246822519);
@@ -229,8 +241,11 @@ export default function WorldBackdropLayer(props: Props) {
         // Stars barely show through the Dust.
         const sealedStars = p.sealedQuadrants ?? [];
         if (sealedStars.length) {
-          sctx!.globalCompositeOperation = "destination-out"; sctx!.fillStyle = "rgba(0,0,0,.8)";
-          for (const q of sealedStars) sctx!.fillRect(X(q % 2 ? W / 2 : 0), Y(q >= 2 ? H / 2 : 0), (W / 2) * s, (H / 2) * s);
+          sctx!.globalCompositeOperation = "destination-out"; sctx!.fillStyle = "rgba(0,0,0,.75)";
+          for (const q of sealedStars) {
+            const [a0, a1] = QUADRANT_ARC[q];
+            wedgePath(sctx!, X(c.x), Y(c.y), p.reserveRadius * s + 60 * s, p.worldRadius * s, a0, a1); sctx!.fill();
+          }
           sctx!.globalCompositeOperation = "source-over";
         }
       }
@@ -381,48 +396,55 @@ export default function WorldBackdropLayer(props: Props) {
       ctx.beginPath(); ctx.moveTo(cx - arm, cy); ctx.lineTo(cx + arm, cy); ctx.moveTo(cx, cy - arm); ctx.lineTo(cx, cy + arm); ctx.stroke();
       ctx.globalAlpha = 1;
 
-      // "The Dust" (naming bible: world.fog): sealed quadrants sit under drifting dust that
-      // thins out toward open land instead of ending at a hard edge.
+      // "The Dust" (naming bible: world.fog): each sealed quadrant is a wedge of the round
+      // Frontier (reserve ring to rim) under drifting dust that thins out toward open land,
+      // the Wormhole and the rim instead of ending at hard edges.
       const sealed = p.sealedQuadrants ?? [];
       if (sealed.length && dctx) {
         dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         dctx.globalCompositeOperation = "source-over";
         dctx.clearRect(0, 0, cw, ch);
-        const hx = W / 2, hy = H / 2, feather = Math.max(24, 110 * s);
-        const rectOf = (q: number) => { const x0 = X(q % 2 ? hx : 0), y0 = Y(q >= 2 ? hy : 0); return { x0, y0, x1: x0 + hx * s, y1: y0 + hy * s }; };
+        const ccx = X(p.center.x), ccy = Y(p.center.y);
+        const rOut = p.worldRadius * s, rIn = p.reserveRadius * s, feather = Math.max(40, 220 * s);
         const dustDrift = alive ? now / 1000 * .9 : 0;
         for (const q of sealed) {
-          const r = rectOf(q);
-          dctx.save(); dctx.beginPath(); dctx.rect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0); dctx.clip();
-          dctx.fillStyle = "rgba(20,15,11,.84)"; dctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+          const [a0, a1] = QUADRANT_ARC[q];
+          dctx.save();
+          wedgePath(dctx, ccx, ccy, rIn, rOut, a0, a1); dctx.clip();
+          dctx.fillStyle = "rgba(20,15,11,.84)"; dctx.fillRect(0, 0, cw, ch);
           if (textures) {
             for (const [tileWorld, rot, alpha, flow] of [[260, 11, .85, 1], [640, 47, .65, .55]] as const) {
               const k = (tileWorld * s) / 256;
               textures.dust.setTransform(new DOMMatrix().translateSelf(ox - (vp.x - dustDrift * flow) * s, oy - (vp.y - dustDrift * flow * .3) * s).rotateSelf(rot).scaleSelf(k, k));
-              dctx.globalAlpha = alpha; dctx.fillStyle = textures.dust; dctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+              dctx.globalAlpha = alpha; dctx.fillStyle = textures.dust; dctx.fillRect(0, 0, cw, ch);
             }
             dctx.globalAlpha = 1;
           }
           dctx.restore();
         }
-        // Feather the edges that face open land (erase a gradient band on the dust side).
+        // Erase soft bands: along radial edges that face open quadrants, the rim and the reserve.
         dctx.globalCompositeOperation = "destination-out";
+        const band = (x0: number, y0: number, x1: number, y1: number) => {
+          const g = dctx.createLinearGradient(x0, y0, x1, y1);
+          g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(.55, "rgba(0,0,0,.45)"); g.addColorStop(1, "rgba(0,0,0,0)");
+          return g;
+        };
         for (const q of sealed) {
-          const r = rectOf(q);
-          const side = q ^ 1, below = q ^ 2;
-          if (!sealed.includes(side)) {
-            const edge = q % 2 ? r.x0 : r.x1, inward = q % 2 ? feather : -feather;
-            const g = dctx.createLinearGradient(edge, 0, edge + inward, 0);
-            g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(1, "rgba(0,0,0,0)");
-            dctx.fillStyle = g; dctx.fillRect(Math.min(edge, edge + inward), r.y0, Math.abs(inward), r.y1 - r.y0);
-          }
-          if (!sealed.includes(below)) {
-            const edge = q >= 2 ? r.y0 : r.y1, inward = q >= 2 ? feather : -feather;
-            const g = dctx.createLinearGradient(0, edge, 0, edge + inward);
-            g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(1, "rgba(0,0,0,0)");
-            dctx.fillStyle = g; dctx.fillRect(r.x0, Math.min(edge, edge + inward), r.x1 - r.x0, Math.abs(inward));
-          }
+          const [a0, a1] = QUADRANT_ARC[q];
+          const before = QUADRANT_ARC.findIndex(([, end]) => Math.abs((end % TAU) - (a0 % TAU)) < 1e-6);
+          const after = QUADRANT_ARC.findIndex(([begin]) => Math.abs((begin % TAU) - (a1 % TAU)) < 1e-6);
+          dctx.save();
+          wedgePath(dctx, ccx, ccy, rIn, rOut, a0, a1); dctx.clip();
+          if (!sealed.includes(before)) { const nx = Math.cos(a0 + Math.PI / 2), ny = Math.sin(a0 + Math.PI / 2); dctx.fillStyle = band(ccx, ccy, ccx + nx * feather, ccy + ny * feather); dctx.fillRect(0, 0, cw, ch); }
+          if (!sealed.includes(after)) { const nx = Math.cos(a1 - Math.PI / 2), ny = Math.sin(a1 - Math.PI / 2); dctx.fillStyle = band(ccx, ccy, ccx + nx * feather, ccy + ny * feather); dctx.fillRect(0, 0, cw, ch); }
+          dctx.restore();
         }
+        const rim = dctx.createRadialGradient(ccx, ccy, Math.max(0, rOut - feather * .7), ccx, ccy, rOut);
+        rim.addColorStop(0, "rgba(0,0,0,0)"); rim.addColorStop(1, "rgba(0,0,0,1)");
+        dctx.fillStyle = rim; dctx.fillRect(0, 0, cw, ch);
+        const core = dctx.createRadialGradient(ccx, ccy, rIn, ccx, ccy, rIn + feather * .6);
+        core.addColorStop(0, "rgba(0,0,0,1)"); core.addColorStop(1, "rgba(0,0,0,0)");
+        dctx.fillStyle = core; dctx.fillRect(0, 0, cw, ch);
         dctx.globalCompositeOperation = "source-over";
         ctx.drawImage(dustCanvas, 0, 0, cw, ch);
       }

@@ -1233,7 +1233,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const pad = 30, spare = 40;
     const want = { x0: viewX - pad, y0: viewY - pad, x1: viewX + viewport.width + pad, y1: viewY + viewport.height + pad };
     const last = lastViewRef.current;
-    if (last && want.x0 >= last.x0 && want.y0 >= last.y0 && want.x1 <= last.x1 && want.y1 <= last.y1) return;
+    // Reuse the last answer only while it still fits the view at a similar scale: after a
+    // zoom-in the last answer may have been clusters, and planets are needed now.
+    const area = (rect: ViewRect) => (rect.x1 - rect.x0) * (rect.y1 - rect.y0);
+    if (last && want.x0 >= last.x0 && want.y0 >= last.y0 && want.x1 <= last.x1 && want.y1 <= last.y1 && area(want) > area(last) * .35) return;
     const timer = window.setTimeout(() => {
       // The server serves at most VIEW_MAX_SPAN tiles per axis; spend what is left on the margin.
       const sx = Math.max(0, Math.min(spare, (VIEW_MAX_SPAN - (want.x1 - want.x0)) / 2));
@@ -1264,7 +1267,6 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         return <g key={`rp-${p.id}`} transform={`translate(${cx} ${cy}) scale(${markerScale}) translate(${-cx} ${-cy})`} className={`world-remote-player ${sel ? "selected" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setRemoteSelectedId(p.id); setSelectedId(null); setHomeSelected(false); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
           {/* Planet skin and name plate ignore the pointer, so the city needs its own hit area. */}
           <circle cx={cx} cy={cy} r={bodyR + 3} className="world-remote-hit" />
-          {sel && <circle cx={cx} cy={cy} r={bodyR + 3.6} fill="none" stroke={col} strokeWidth={0.8} opacity={0.9} />}
           {halo && <WorldHaloFx cx={cx} cy={cy} r={bodyR} halo={halo} half="back" />}
           {orbit && <WorldOrbitFx cx={cx} cy={cy} r={bodyR} orbit={orbit} half="back" />}
           <WorldPlanetFx cx={cx} cy={cy} r={bodyR} skin={skin} />
@@ -1708,8 +1710,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           {sealedQuadrants.map((quadrant) => {
             // "The Dust" (naming bible world.fog): an unlisted sector that goes live when the
             // one before it fills. The dust itself is drawn by WorldBackdropLayer.
-            const hx = world.config.width / 2, hy = world.config.height / 2;
-            const x = (quadrant % 2 ? hx : 0) + hx / 2, y = (quadrant >= 2 ? hy : 0) + hy / 2;
+            // Centre of the quadrant's slice of the round Frontier (screen y grows downward).
+            const arcMid = [Math.PI * 1.25, Math.PI * 1.75, Math.PI * .75, Math.PI * .25][quadrant];
+            const labelRadius = world.config.circleReserveRadius + (worldRadius - world.config.circleReserveRadius) * .55;
+            const x = center.x + Math.cos(arcMid) * labelRadius, y = center.y + Math.sin(arcMid) * labelRadius;
             const order = SECTOR_ORDER.indexOf(quadrant);
             const gate = SECTOR_ORDER[order - 1];
             const gateCount = quadrantInfo?.counts[gate] ?? 0, cap = quadrantInfo?.capacity ?? 256;
@@ -1780,6 +1784,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
               every zoom. Resources/rogues keep the base SVG lock-ring. */}
           {selected?.kind === "city" && <CelestialLock key={`lock-${selected.id}`} position={selected.position} radius={selectionRadius(false, true)} worldPerPx={worldPerPx} />}
           {homeSelected && <CelestialLock position={playerCity.position} radius={selectionRadius(true, false)} worldPerPx={worldPerPx} own />}
+          {remoteSelected && !strategicZoom && <CelestialLock key={`lock-rp-${remoteSelected.id}`} position={remoteSelected.coords} tone="rival"
+            radius={(detailZoom ? 7.2 : 4.2) * markerScale / Math.max(.0001, worldPerPx) + 8} worldPerPx={worldPerPx} />}
           <g className="world-wormhole-caption" transform={`translate(${center.x} ${center.y}) scale(${worldPerPx})`}>
             <text y={-worldWormholeRadius(zoom) * 1.7 - 22} className="world-circle-label">WORMHOLE</text>
             <text y={-worldWormholeRadius(zoom) * 1.7 - 8} className="world-circle-sub">GRAVITY ANCHOR · FRONTIER I</text>
