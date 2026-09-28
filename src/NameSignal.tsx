@@ -99,6 +99,11 @@ export default function NameSignal({
       const textWidth = Math.max(1, width - padX * 2);
       const centerY = height / 2;
       context.clearRect(0, 0, width, height);
+      // Keep every effect on the name's own line: without this the canvas bleed (padY above
+      // and below) drew rings and the Void Whisper hole across the first letters of the
+      // neighbouring lines.
+      context.save();
+      context.beginPath(); context.rect(0, padY - 3, width, height - padY * 2 + 6); context.clip();
       context.globalCompositeOperation = "lighter";
 
       if (id === "void-whisper") {
@@ -166,6 +171,7 @@ export default function NameSignal({
           radialEllipse(centerX, centerY, textWidth * .60, 1.7, "255,251,240", .55 * light);
         }
       }
+      context.restore();
     };
     raf = requestAnimationFrame(frame);
     return () => {
