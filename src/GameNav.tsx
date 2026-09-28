@@ -218,6 +218,8 @@ function DualClock() {
   const dayFraction = (now.getUTCHours() * 60 + now.getUTCMinutes()) / 1440;
   const circumference = 2 * Math.PI * 10.5;
   const angle = dayFraction * Math.PI * 2 - Math.PI / 2;
+  // Local time sits on the same 24-hour ring: the gap between the beads is the offset.
+  const localAngle = ((now.getHours() * 60 + now.getMinutes()) / 1440) * Math.PI * 2 - Math.PI / 2;
   const offsetHours = -now.getTimezoneOffset() / 60;
   const offset = offsetHours === 0 ? "UTC" : `UTC${offsetHours > 0 ? "+" : "−"}${Math.abs(offsetHours)}`;
   return (
@@ -225,13 +227,13 @@ function DualClock() {
       <svg className="command-clock-dial" viewBox="0 0 28 28" aria-hidden="true">
         <circle className="track" cx="14" cy="14" r="10.5" />
         <circle className="arc" cx="14" cy="14" r="10.5" strokeDasharray={`${dayFraction * circumference} ${circumference}`} transform="rotate(-90 14 14)" />
+        <circle className="bead local" cx={14 + Math.cos(localAngle) * 10.5} cy={14 + Math.sin(localAngle) * 10.5} r="1.4" />
         <circle className="bead" cx={14 + Math.cos(angle) * 10.5} cy={14 + Math.sin(angle) * 10.5} r="1.7" />
         <circle className="core" cx="14" cy="14" r="2.2" />
       </svg>
       <div className="command-clock-read">
-        <small>SERVER · UTC</small>
-        <b>{hh}<i>:</i>{mm}</b>
-        <em>LOCAL {clock.local}<span>{offset}</span></em>
+        <div className="utc"><small>UTC</small><b>{hh}<i>:</i>{mm}</b></div>
+        <div className="local"><small>LOCAL</small><strong>{clock.local}</strong><span>{offset}</span></div>
       </div>
     </div>
   );
