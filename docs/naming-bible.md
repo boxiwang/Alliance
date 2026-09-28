@@ -101,6 +101,8 @@
 | `item.recover` | Consumable: recover/heal after a loss | **Copium** | cope = heal |
 | `sys.lock` | Conviction / coin-locking mechanism | **bury your bag in the Crypt** | crypt = crypt-o pun; buried bags = HODL |
 | `sys.lock_output` | What locking produces (war-score input) | **Conviction** | already perfect degen vocab |
+| `res.stamina` | Regenerating points spent on Star Map hunts (code/config key: `energy`) | **Stamina** | was "Energy" — renamed 2026-09-28 so it is not confused with Power |
+| `troops.ready` | Healthy troops in the city, not marching, not wounded (code: `totalTroops`) | **Troops** (nav: "READY IN CITY") | was "Standing" — read as unclear, renamed 2026-09-28 |
 
 ## 8 · Map Features
 

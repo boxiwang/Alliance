@@ -593,10 +593,10 @@ function WorldWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: 
           <NumberSetting {...p(["world", "lifecycle", "monsterRespawnMaxSec"])} label="Rogue respawn maximum" help="Random refill window ends here." suffix="seconds" />
           <NumberSetting {...p(["world", "lifecycle", "burnDurationSec"])} label="City burn duration" help="Recovery window after a successful raid." suffix="seconds" />
         </RuleGroup>
-        <RuleGroup icon="⚡" title="Energy" description="Limits repeat monster attacks without blocking scouting, gathering or PvP.">
-          <NumberSetting {...p(["world", "energy", "cap"])} label="Energy cap" help="Maximum stored Energy." />
-          <NumberSetting {...p(["world", "energy", "regenSecPerPoint"])} label="Regeneration / point" help="Time required to recover one Energy." suffix="seconds" />
-          <NumberSetting {...p(["world", "energy", "monsterAttackCost"])} label="Monster attack cost" help="Energy spent when a hunt is dispatched." />
+        <RuleGroup icon="♥" title="Stamina" description="Limits repeat monster attacks without blocking scouting, gathering or PvP.">
+          <NumberSetting {...p(["world", "energy", "cap"])} label="Stamina cap" help="Maximum stored Stamina." />
+          <NumberSetting {...p(["world", "energy", "regenSecPerPoint"])} label="Regeneration / point" help="Time required to recover one Stamina." suffix="seconds" />
+          <NumberSetting {...p(["world", "energy", "monsterAttackCost"])} label="Monster attack cost" help="Stamina spent when a hunt is dispatched." />
         </RuleGroup>
         <RuleGroup icon="🔥" title="City raids" description="Wall damage and beginner safety. Buildings and permanent progress are never destroyed.">
           <NumberSetting {...p(["world", "cityCombat", "baseWallIntegrity"])} label="Wall integrity" help="Burn/relocation health, separate from Wall defensive power." />

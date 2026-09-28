@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Profile } from "./lib/profile";
 import { RES, RES_ORDER, ResKey, BKey, displayResource, displayTroops } from "./lib/game";
 import { compact, formatDualClock } from "./lib/format";
@@ -6,6 +6,7 @@ import BuildingGlyph from "./BuildingGlyph";
 import NameSignal from "./NameSignal";
 import { TITLE_SEALS, loadCosmeticVault, loadPlayerAccount } from "./lib/player-account";
 import { loadShopAccount } from "./lib/backend";
+import { worldEngineConfig } from "./lib/world-engine";
 
 const RESOURCE_COLOR: Record<ResKey, string> = {
   cash: "#43f2a1",
@@ -18,7 +19,7 @@ const RESOURCE_GAIN_DELAY: Record<ResKey, number> = { cash: 1000, oil: 2700, pow
 export default function GameNav({
   view, profile, townhallLevel, location, resources,
   incomePerHour, resourceCap,
-  energy, energyCap, activeFleets, fleetCap, standing, wounded, might, credits, unread = 0, onAlliance, onCity, onWorld, onMessages, onShop = () => {}, onCredits, onProfile,
+  stamina, staminaCap, troops, wounded, might, credits, unread = 0, onAlliance, onCity, onWorld, onMessages, onShop = () => {}, onCredits, onProfile,
 }: {
   view: "alliance" | "city" | "world" | "messages" | "shop" | "profile";
   profile: Profile;
@@ -27,11 +28,9 @@ export default function GameNav({
   resources: Record<ResKey, number>;
   incomePerHour?: Record<ResKey, number>;
   resourceCap?: number;
-  energy: number;
-  energyCap: number;
-  activeFleets: number;
-  fleetCap: number;
-  standing: number;
+  stamina: number;
+  staminaCap: number;
+  troops: number;
   wounded: number;
   might: number;
   credits?: number;
@@ -147,10 +146,11 @@ export default function GameNav({
             </div>
           );
         })}
-        <CommandMetric label="Energy" value={`${Math.floor(energy)}/${energyCap}`} tone="#aa82ff" />
-        <CommandMetric label="Fleets" value={`${activeFleets}/${fleetCap}`} tone="#38d9ff" />
-        <CommandMetric label="Standing" value={compact(displayTroops(standing))} tone="#43f2a1" />
-        <CommandMetric label="Wounded" value={compact(displayTroops(wounded))} tone="#ff7188" />
+        {/* Same icon + title + amount grammar as the resources. Fleets live in Operations. */}
+        <CommandMetric glyph={METRIC_GLYPH.stamina} label="Stamina" value={`${Math.floor(stamina)}/${staminaCap}`}
+          note={stamina >= staminaCap ? "FULL" : `+${compact(3600 / worldEngineConfig().energyRegenSec)}/H`} tone="#aa82ff" />
+        <CommandMetric glyph={METRIC_GLYPH.troops} label="Troops" value={compact(displayTroops(troops))} note="READY IN CITY" tone="#43f2a1" />
+        <CommandMetric glyph={METRIC_GLYPH.wounded} label="Wounded" value={compact(displayTroops(wounded))} note={wounded > 0 ? "IN HOSPITAL" : "NONE"} tone="#ff7188" />
         <button type="button" className={`command-credits${view === "shop" ? " shop-active" : ""}${creditPulse ? " bump" : ""}`} aria-label="Open Credits exchange" onClick={onCredits || onShop}><span>◇</span><div><small>{view === "shop" ? "CREDITS // AVAILABLE" : "CREDITS"}</small><b>{compact(displayedCredits)}</b></div><strong>{view === "shop" ? "+ TOP UP" : "＋"}</strong></button>
       </div>
     </nav>
@@ -275,10 +275,23 @@ function DualClock() {
   );
 }
 
-function CommandMetric({ label, value, tone }: { label: string; value: string; tone: string }) {
+const METRIC_GLYPH = {
+  // Stamina: a pulse line (Power already owns the lightning bolt).
+  stamina: <path d="M3 12h4l2.5-6 5 12 2.5-6h4" />,
+  // Troops: rank chevrons.
+  troops: <path d="m5 11 7-5 7 5M5 17l7-5 7 5" />,
+  wounded: <path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6V3Z" />,
+};
+
+function CommandMetric({ glyph, label, value, note, tone }: { glyph: ReactNode; label: string; value: string; note: string; tone: string }) {
   return (
-    <div className="command-metric" style={{ "--resource": tone } as CSSProperties}>
-      <small>{label}</small><b>{value}</b>
+    <div className="command-resource command-metric-stat" style={{ "--resource": tone } as CSSProperties}>
+      <span className="command-resource-icon"><svg className="building-glyph" viewBox="0 0 24 24" aria-hidden="true">{glyph}</svg></span>
+      <div className="command-resource-value">
+        <small>{label}</small>
+        <b>{value}</b>
+        <span className="command-resource-rate">{note}</span>
+      </div>
     </div>
   );
 }

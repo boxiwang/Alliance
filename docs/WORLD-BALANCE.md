@@ -28,7 +28,7 @@ split evenly across the three arms. This is a stable balancing ruler, not a forc
 - An equal-progression city attacker has a 45–50% ratio. Baseline is 47%, so defense wins unless
   the attacker brings better composition, more troops or future hero/research advantages.
 - A typical 20-tile round trip takes 2–10 minutes; baseline is 4 minutes.
-- Regeneration supports 8–30 monster attacks per day; baseline is 24, with 10 stored at full Energy.
+- Regeneration supports 8–30 monster attacks per day; baseline is 24, with 10 stored at full Stamina.
 
 ## Why v0.7 changed the old values
 
@@ -51,7 +51,7 @@ The explicit tables hold the reference behavior across progression; the v0.10 ex
 | Rogue reward / mapped planet | 20–24% |
 | Equal city attacker ratio, TH5–30 | 47.0% |
 | Typical 20-tile round trip | 240s |
-| Energy-regenerated hunts/day | 24 |
+| Stamina-regenerated hunts/day | 24 |
 
 These are transparent MVP defaults, not claims that balance is finished. Real playtests should
 change the target bands first when the desired experience changes, then tune explicit rows until

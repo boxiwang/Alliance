@@ -242,7 +242,7 @@ export function simulateWorldBalance(numbers: any): WorldBalanceReport {
   const minDaily = Number(targets.dailyEnergyAttacksMin) || 8;
   const maxDaily = Number(targets.dailyEnergyAttacksMax) || 30;
   if (regeneratedMonsterAttacksPerDay < minDaily || regeneratedMonsterAttacksPerDay > maxDaily) {
-    issues.push({ severity: "warning", code: "energy.attacksPerDay", message: `Energy regenerates ${regeneratedMonsterAttacksPerDay.toFixed(1)} monster attacks/day; target ${minDaily}–${maxDaily}.` });
+    issues.push({ severity: "warning", code: "energy.attacksPerDay", message: `Stamina regenerates ${regeneratedMonsterAttacksPerDay.toFixed(1)} monster attacks/day; target ${minDaily}–${maxDaily}.` });
   }
 
   return {
@@ -285,7 +285,7 @@ export function worldBalanceSummary(report: WorldBalanceReport): string {
     ].join("  ")),
     "",
     `Typical 20-tile round trip: ${report.economy.typicalRoundTripSeconds.toFixed(0)}s`,
-    `Energy: ${report.economy.initialMonsterAttacksAtFullEnergy} attacks from full, ${report.economy.regeneratedMonsterAttacksPerDay.toFixed(1)} regenerated/day`,
+    `Stamina: ${report.economy.initialMonsterAttacksAtFullEnergy} attacks from full, ${report.economy.regeneratedMonsterAttacksPerDay.toFixed(1)} regenerated/day`,
     `Population @ 50/500/1000: ${[report.economy.populationAt50, report.economy.populationAt500, report.economy.populationAt1000].map((value) => `${value.resources} fields + ${value.monsters} monsters`).join(" · ")}`,
     "",
     report.issues.length ? `Issues (${report.issues.length})` : "Issues (0)",

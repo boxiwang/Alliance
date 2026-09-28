@@ -49,7 +49,7 @@ export const MVP_ITEMS: readonly MvpItem[] = [
   { id: "resource.cash.small", name: "Cash Reserve", category: "resource", rarity: "common", status: "planned", description: "Adds a protected bundle of Cash." },
   { id: "resource.oil.small", name: "Oil Reserve", category: "resource", rarity: "common", status: "planned", description: "Adds a protected bundle of Oil." },
   { id: "resource.power.small", name: "Power Reserve", category: "resource", rarity: "common", status: "planned", description: "Adds a protected bundle of Power." },
-  { id: "energy.cell.10", name: "Energy Cell", category: "energy", rarity: "common", status: "planned", description: "Restores 10 Star Map energy." },
+  { id: "energy.cell.10", name: "Stamina Cell", category: "energy", rarity: "common", status: "planned", description: "Restores 10 Stamina." },
   { id: "war.shield.8h", name: "Peace Shield 8h", category: "war", rarity: "rare", status: "planned", description: "Stops hostile attacks against your city for 8 hours." },
   { id: "war.relocator.random", name: "Drift Jump", category: "war", rarity: "common", status: "active", description: "Relocates your city to a random valid sector." },
   { id: "war.relocator.advanced", name: "Precision Jump", category: "war", rarity: "epic", status: "active", description: "Relocates your city to a chosen valid coordinate." },

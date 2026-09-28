@@ -90,8 +90,8 @@ export default function Alliance({ address, profile, holdings = [], onProfileCha
   function assist() { const result = helpAll(profile); refresh(result.helped ? `Helped ${result.helped} members · +${result.rewarded} contribution.` : result.reason || "No members need help right now."); }
 
   const nav = <GameNav view="alliance" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
-    resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} energy={energy} energyCap={energyCap} activeFleets={activeFleets} fleetCap={worldPlayer?.marchSlots ?? worldMarchSlots(game)}
-    standing={totalTroops(game)} wounded={game.wounded} might={mightBreakdown(game).total}
+    resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} stamina={energy} staminaCap={energyCap}
+    troops={totalTroops(game)} wounded={game.wounded} might={mightBreakdown(game).total}
     onAlliance={() => setView("home")} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onShop={onShop} onProfile={onProfile} />;
 
   if (!alliance) {

@@ -19,7 +19,7 @@ Implemented:
 - Population targets scale at three resource planets and one rogue planet per active civilization,
   with 240/120 young-State floors; each complete local resource cycle includes Cash, Oil and Power.
 - Account troop reservation, two march slots, per-march capacity, travel timing and recall.
-- Gather contention, Energy-gated sequential monsters, scouting and asynchronous city combat.
+- Gather contention, Stamina-gated sequential monsters, scouting and asynchronous city combat.
 - Arrival reports, defender reports and return delivery reports; idempotent dispatch commands.
 - Two nullable hero slots plus immutable modifier/effect and balance-version snapshots on every march.
 - Batched deterministic event catch-up; the test suite advances 10,000 events in a 1,000-player State.
@@ -36,7 +36,7 @@ Local integration:
 Still intentionally separate:
 
 - Shared persistence, authenticated commands and cross-process locking require the future server-authority slice.
-- Balance values are provisional; target density, power, rewards, burn damage and Energy pacing need playtests.
+- Balance values are provisional; target density, power, rewards, burn damage and Stamina pacing need playtests.
 
 The first deterministic balance pass is recorded in `docs/WORLD-BALANCE.md`. Run
 `npm run balance:world` to reproduce it; the Admin **World** page uses the same scenarios.
@@ -56,7 +56,7 @@ The first deterministic balance pass is recorded in `docs/WORLD-BALANCE.md`. Run
 1. Spawn and discover nearby targets.
 2. Dispatch actual account troops through a limited march queue.
 3. Gather a resource field; reserve it on arrival; deplete and respawn it elsewhere.
-4. Spend Energy to attack a monster; defeat and respawn it elsewhere.
+4. Spend Stamina to attack a monster; defeat and respawn it elsewhere.
 5. Scout or attack a city; apply shield, casualties, loot, Wall damage, burning and relocation.
 6. Emit arrival-time battle reports and return-time delivery reports.
 

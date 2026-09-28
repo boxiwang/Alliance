@@ -136,7 +136,7 @@ The canonical catalog lives in `src/lib/mvp-items.ts` and is shared by the Worke
 | Universal speedups | 5m, 1h, 3h | — |
 | Specialist speedups | Construction, Research, Training and Healing in 5m/1h | — |
 | Resource packs | — | Cash, Oil and Power reserves |
-| Star Map energy | — | 10-energy cell |
+| Stamina | — | 10-Stamina cell |
 | War utility | — | 8h shield, random and precision relocators |
 | Identity and relics | — | Rename Signal, standard Relic Key |
 

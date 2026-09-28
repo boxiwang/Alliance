@@ -562,8 +562,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     <section className="town">
       <CosmicBackdrop address={address} />
       <GameNav view="city" profile={profile} townhallLevel={view.buildings.keep.lvl} location={worldStatus.location}
-        resources={view.res} incomePerHour={rate} resourceCap={capacity(view)} energy={worldStatus.energy} energyCap={worldStatus.energyCap}
-        activeFleets={worldStatus.activeFleets} fleetCap={worldStatus.fleetCap} standing={troopsTotal} wounded={view.wounded}
+        resources={view.res} incomePerHour={rate} resourceCap={capacity(view)} stamina={worldStatus.energy} staminaCap={worldStatus.energyCap} troops={troopsTotal} wounded={view.wounded}
         might={mightScore.total} onAlliance={onAlliance} onCity={() => {}} onWorld={onWorld} onMessages={onMessages} onShop={onShop} onProfile={onProfile} />
 
 

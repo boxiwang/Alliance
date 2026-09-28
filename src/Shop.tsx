@@ -126,8 +126,7 @@ export default function Shop({ address, profile, onAlliance, onCity, onWorld, on
   return <section className="shop-page">
     <CosmicBackdrop address={address} />
     <GameNav view="shop" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
-      resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} energy={energy} energyCap={world?.world.config.energyCap ?? 100}
-      activeFleets={activeFleets} fleetCap={player?.marchSlots ?? worldMarchSlots(game)} standing={totalTroops(game)} wounded={game.wounded}
+      resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} stamina={energy} staminaCap={world?.world.config.energyCap ?? 100} troops={totalTroops(game)} wounded={game.wounded}
       might={mightBreakdown(game).total} credits={balance} onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={onMessages}
       onShop={() => {}} onCredits={() => setDialog({ kind: "topup", selected: TOPUP_PACKS[2].id })} onProfile={onProfile} />
 

@@ -418,8 +418,7 @@ export default function ProfileScreen({
     <CosmicBackdrop address={address} />
     <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="profile" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
-      resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} energy={player ? energyAt(player, now, world!.world.config) : 100} energyCap={world?.world.config.energyCap ?? 100}
-      activeFleets={activeFleets} fleetCap={player?.marchSlots ?? worldMarchSlots(game)} standing={totalTroops(game)} wounded={game.wounded}
+      resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} stamina={player ? energyAt(player, now, world!.world.config) : 100} staminaCap={world?.world.config.energyCap ?? 100} troops={totalTroops(game)} wounded={game.wounded}
       might={mightBreakdown(game).total} credits={account.credits} onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onShop={onShop} onProfile={() => {}} />
 
     {signal && <div className="profile-signal" role="status">{signal}</div>}

@@ -65,7 +65,7 @@ Overdrive, never an infinite source of tradable materials.
 
 ### Resource tiers
 - **Cash/Oil/Power** — city build, research, train, heal.
-- **World Energy** — map actions & anomaly events.
+- **Stamina** — map actions & anomaly events.
 - **Warp Reserve** — remove build/research/train/heal time.
 - **Scrap / Relic Dust** — craft & upgrade.
 - **Cipher** — reforge & commander skills.
@@ -74,7 +74,7 @@ Overdrive, never an infinite source of tradable materials.
 
 ### High-tier material sources (server-wide new supply)
 40–45% high-level Rogue & Expedition · 25–30% Cosmo Anomaly · 15–20% alliance ops & world boss ·
-~10% season milestones & first-time achievements · daily tasks ≈ zero (daily gives Energy / Deep
+~10% season milestones & first-time achievements · daily tasks ≈ zero (daily gives Stamina / Deep
 Scan charges / access to high-tier content, not the materials themselves).
 
 ### Drains
