@@ -1603,7 +1603,9 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .command-clock-read b{font:750 18px var(--hud);letter-spacing:.02em;color:#dff7ff;text-shadow:0 0 18px rgba(56,217,255,.22)}
 .command-clock-read b i{font-style:normal;margin:0 1px;animation:command-clock-colon 2s ease-in-out infinite}
 .command-clock-read strong{font:700 13px var(--hud);letter-spacing:.03em;color:#f1e3cf}
-.command-clock-read .local span{padding:1px 4px;border:1px solid rgba(201,160,113,.3);border-radius:3px;color:#b3977a;font:600 7px var(--mono);letter-spacing:.08em}
+.command-clock-read .local{align-items:center}
+.command-clock-read .local small,.command-clock-read .local strong{line-height:13px}
+.command-clock-read .local span{display:inline-flex;align-items:center;height:13px;padding:0 4px;border:1px solid rgba(201,160,113,.3);border-radius:3px;color:#b3977a;font:600 7px/1 var(--mono);letter-spacing:.08em}
 .command-clock-dial .bead.local{fill:#f0b56a;filter:drop-shadow(0 0 3px rgba(240,181,106,.8))}
 @keyframes command-clock-colon{0%,100%{opacity:1}50%{opacity:.25}}
 @media(prefers-reduced-motion:reduce){.command-clock-read b i{animation:none}}
