@@ -11,6 +11,23 @@
 
 ---
 
+## Commander Card frames — cosmetic 名片框
+
+**Idea (owner, 2026-09-28):** the card other players see when they tap your planet on the
+Star Map gets a customizable background and frame, sold as a cosmetic (like planet skins
+and Name Signals).
+
+**Hook already in place** — `WorldAnchor` renders `.commander-card[data-frame]`; the card's
+surface and edge are CSS variables (`--card-surface`, `--card-edge`). A frame item only
+needs to set `cosmetics.cardFrame` on presence and add one `[data-frame="…"]` style block.
+
+**Gotchas** — must stay readable over any map background; animated frames respect Reduced
+Motion; the frame is identity only (no stats), same as other cosmetics.
+
+**When** — with the next cosmetics drop (P2).
+
+---
+
 ## Meme-token bounty — "Warrants" (escrow) 悬赏令
 
 **Idea (owner, 2026-09-11):** an alliance can post a bounty on a target and lock the

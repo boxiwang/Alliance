@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { Profile } from "./lib/profile";
 import {
@@ -1797,34 +1797,36 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         {gpuFallback && voidSkinEquipped && <VoidPlanetOverlay svgRef={svgRef} home={playerCity.position} zoom={zoom} strategic={strategicZoom} onActiveChange={setVoidShaderActive} />}
         {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
         {remoteSelected && (() => {
-          // Commander card (Kingshot-style lord card, our rules): sigil, alliance tag + name,
-          // Core. Might stays hidden until you scout — which alerts the target. No coordinates.
+          // Commander card: sits beside the selected planet and follows it while the map
+          // pans/zooms. Identity only (sigil, alliance tag, name, Core) — no coordinates,
+          // no Might (Scout reveals it). `data-frame` is the slot for a future card-frame
+          // cosmetic (docs/IDEAS.md).
           const col = REMOTE_FACTION_COLOR[String(remoteSelected.faction || "")] || "#7cc0ff";
-          const tag = remoteSelected.faction ? `[${remoteSelected.faction}] ` : "";
           const sigil = /^[a-z0-9-]{1,24}$/.test(String(remoteSelected.avatar || "")) ? remoteSelected.avatar : "genesis";
-          const skin = (remoteSelected.cosmetics as { planetBody?: string } | null)?.planetBody;
-          return <div className="commander-card" style={{ "--commander": col } as CSSProperties}>
+          const cosmetics = remoteSelected.cosmetics as { chatSignal?: ChatSignalId | null; cardFrame?: string } | null;
+          const frame = /^[a-z0-9-]{1,24}$/.test(String(cosmetics?.cardFrame || "")) ? cosmetics!.cardFrame : "standard";
+          const scanning = scoutingId === remoteSelected.id;
+          return <WorldAnchor svgRef={svgRef} point={remoteSelected.coords} className="commander-card" data-frame={frame} style={{ "--commander": col } as CSSProperties}>
             <button className="commander-card-close" aria-label="Close commander card" onClick={() => setRemoteSelectedId(null)}>×</button>
             <header>
-              <span className={`command-sigil command-sigil-${sigil} commander-card-sigil`}><i /></span>
+              <span className="commander-card-avatar">
+                <span className={`command-sigil command-sigil-${sigil} commander-card-sigil`}><i /></span>
+                <em aria-label={`Core ${remoteSelected.keepLevel || 1}`}>{remoteSelected.keepLevel || 1}</em>
+              </span>
               <div>
-                <small>COMMANDER</small>
-                <b>{tag}<NameSignal key={remoteSelected.id} signal={(remoteSelected.cosmetics as { chatSignal?: ChatSignalId | null } | null)?.chatSignal ?? null}>{remoteSelected.name || "Commander"}</NameSignal></b>
-                <em>CORE {remoteSelected.keepLevel || 1}{skin ? ` · ${skin.split("-").join(" ").toUpperCase()}` : ""}</em>
+                <b>{remoteSelected.faction ? <i>[{remoteSelected.faction}]</i> : null}<NameSignal key={remoteSelected.id} signal={cosmetics?.chatSignal ?? null}>{remoteSelected.name || "Commander"}</NameSignal></b>
+                <small>CORE {remoteSelected.keepLevel || 1}</small>
               </div>
             </header>
-            <dl>
-              <div><dt>ALLIANCE</dt><dd>{remoteSelected.faction ? `$${remoteSelected.faction}` : "No alliance"}</dd></div>
-              <div><dt>MIGHT</dt><dd className="locked">🔒 Scout to reveal</dd></div>
-            </dl>
             <div className="commander-card-actions">
-              <button disabled={scoutingId === remoteSelected.id} onClick={() => { setScoutingId(remoteSelected.id); setScoutIntel(null); rtRef.current?.sendScout(remoteSelected.id); }}>{scoutingId === remoteSelected.id ? "SCANNING…" : "◎ SCOUT"}</button>
-              <button className="attack" onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>⚔ ATTACK</button>
-              <button onClick={() => { queueCommsShare(address, createCommanderShare(remoteSelected)); onMessages(); }}>⇪ SHARE</button>
-              <button onClick={() => { queueDirectMessage(address, { id: remoteSelected.id, name: remoteSelected.name || "Commander" }); onMessages(); }}>✉ MESSAGE</button>
+              <button className="scout" disabled={scanning} title="Reveal Might, troops and loot. They will see the scout."
+                onClick={() => { setScoutingId(remoteSelected.id); setScoutIntel(null); rtRef.current?.sendScout(remoteSelected.id); }}>{scanning ? "SCANNING…" : "◎ SCOUT"}</button>
+              <button className="attack" title="Launch an attack. They will see it coming."
+                onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>⚔ ATTACK</button>
+              <button className="quiet" onClick={() => { queueDirectMessage(address, { id: remoteSelected.id, name: remoteSelected.name || "Commander" }); onMessages(); }}>✉ MESSAGE</button>
+              <button className="quiet" onClick={() => { queueCommsShare(address, createCommanderShare(remoteSelected)); onMessages(); }}>⇪ SHARE</button>
             </div>
-            <p>Scouting and attacks alert the target.</p>
-          </div>;
+          </WorldAnchor>;
         })()}
         {scoutIntel && (() => {
           const s = scoutIntel.snapshot;
@@ -1996,4 +1998,38 @@ function FleetKite({ x, y }: { x: number; y: number }) {
     <path d={`M ${x - 2.25} ${y + 1.15} Q ${x} ${y + 3.45} ${x + 2.25} ${y + 1.15}`} className="world-march-engine" />
     <circle cx={x} cy={y - 2.05} r="1.12" className="world-march-hull-light" />
   </g>;
+}
+
+/** Keeps an HTML panel beside a world point while the map pans and zooms: reads the live
+ *  SVG transform every frame (drag pans bypass React state), prefers the right side and
+ *  flips left near the edge, clamped inside the map frame. */
+function WorldAnchor({ svgRef, point, className, style, children, ...rest }: {
+  svgRef: RefObject<SVGSVGElement>; point: { x: number; y: number }; className: string; style?: CSSProperties; children: ReactNode; "data-frame"?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    let frame = 0;
+    const place = () => {
+      const el = ref.current, svg = svgRef.current, parent = el?.offsetParent as HTMLElement | null;
+      const ctm = svg?.getScreenCTM();
+      if (el && svg && parent && ctm) {
+        const probe = svg.createSVGPoint(); probe.x = point.x; probe.y = point.y;
+        const screen = probe.matrixTransform(ctm);
+        const box = parent.getBoundingClientRect();
+        const x = screen.x - box.left, y = screen.y - box.top;
+        const w = el.offsetWidth, h = el.offsetHeight, gap = 34, pad = 10;
+        const right = x + gap + w <= box.width - pad;
+        const left = right ? x + gap : Math.max(pad, x - gap - w);
+        const top = Math.max(pad, Math.min(box.height - h - pad, y - 30));
+        el.style.transform = `translate3d(${Math.round(left)}px,${Math.round(top)}px,0)`;
+        el.dataset.side = right ? "right" : "left";
+        el.style.setProperty("--notch-y", `${Math.round(Math.max(14, Math.min(h - 14, y - top)))}px`);
+        el.style.visibility = x < -60 || y < -60 || x > box.width + 60 || y > box.height + 60 ? "hidden" : "visible";
+      }
+      frame = requestAnimationFrame(place);
+    };
+    place();
+    return () => cancelAnimationFrame(frame);
+  }, [svgRef, point.x, point.y]);
+  return <div ref={ref} className={className} style={style} {...rest}>{children}</div>;
 }
