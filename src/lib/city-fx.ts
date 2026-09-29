@@ -126,15 +126,15 @@ export function mountCityFx(map: HTMLDivElement, core: HTMLButtonElement, cv: HT
     if(shieldOn&&!shieldWasOn)shieldLitAt=T;shieldWasOn=shieldOn;
     const litWave=shieldOn&&!still?Math.max(0,Math.min(1.4,(T-shieldLitAt)/1.1)):2,hexColor=shieldOn?'#6aaeff':'#62789a';
     ctx.save();const R=c.r+34;ctx.beginPath();ctx.arc(c.x,c.y,R,0,Math.PI*2);ctx.clip();
-    const band=still?0:(T*.5)%2-.5;ctx.strokeStyle=hexColor;ctx.lineWidth=shieldOn?1:.8;const hs=11,hw=hs*Math.sqrt(3);
+    const band=still?0:(T*.5)%2-.5;ctx.strokeStyle=hexColor;ctx.lineWidth=shieldOn?1.15:.8;const hs=11,hw=hs*Math.sqrt(3);
     for(let row=-8;row<=8;row++)for(let col=-8;col<=8;col++){const hx=c.x+col*hw+(row&1?hw/2:0),hy=c.y+row*hs*1.5,dd=Math.hypot(hx-c.x,hy-c.y)/R;if(dd>1.05||dd<(c.r+4)/R)continue;const sweep=still?0:Math.max(0,1-Math.abs((hy-c.y)/R-band*1.4)*3);
       const wave=litWave<=1.3?Math.max(0,1-Math.abs(dd-litWave)*4.5):0;
-      const base=shieldOn?(.16+.42*Math.pow(dd,2.2)):(.05+.22*Math.pow(dd,3));
+      const base=shieldOn?(.184+.483*Math.pow(dd,2.2)):(.05+.22*Math.pow(dd,3)); // shield-on +15% (owner)
       ctx.globalAlpha=Math.min(1,base*(1+sweep*(shieldOn?1.6:2.2))+wave*.9);ctx.beginPath();for(let k=0;k<6;k++){const a=Math.PI/6+k*Math.PI/3;ctx.lineTo(hx+Math.cos(a)*hs*.92,hy+Math.sin(a)*hs*.92)}ctx.closePath();ctx.stroke();
       if(shieldOn&&wave>.35){ctx.fillStyle=hexColor;ctx.globalAlpha=wave*.16;ctx.fill()}}
     ctx.restore();
-    if(shieldOn){ctx.shadowColor='#4f96ff';ctx.shadowBlur=quality.blur?12:0}
-    ctx.globalAlpha=shieldOn?.8:.35;ctx.strokeStyle=hexColor;ctx.lineWidth=shieldOn?1.4:1;ctx.beginPath();ctx.arc(c.x,c.y,R,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;
+    if(shieldOn){ctx.shadowColor='#4f96ff';ctx.shadowBlur=quality.blur?14:0}
+    ctx.globalAlpha=shieldOn?.92:.35;ctx.strokeStyle=hexColor;ctx.lineWidth=shieldOn?1.6:1;ctx.beginPath();ctx.arc(c.x,c.y,R,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;
 
     // core upgrade progress ring
     const coreQueue=view.buildings.keep,coreTotal=(coreQueue.durationSec||0)*1000;
