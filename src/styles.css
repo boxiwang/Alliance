@@ -1861,11 +1861,13 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .gm-actions .gm-reset{border-color:rgba(229,89,61,.5);color:#f0a08e;background:rgba(229,89,61,.08)}
 .gm-actions .gm-switch.on{border-color:rgba(67,242,161,.6);background:rgba(67,242,161,.12);color:#9ff7d4}
 /* Buff bar above the nav: only present while a buff is active. */
-.command-buffs{display:flex;flex-wrap:wrap;gap:6px;padding:6px 10px 0}
-.command-buff{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 6px;border:1px solid rgba(106,174,255,.45);border-radius:10px;background:linear-gradient(100deg,rgba(79,150,255,.16),rgba(79,150,255,.04));box-shadow:0 0 12px rgba(79,150,255,.12)}
-.command-buff svg{width:12px;height:12px;fill:rgba(106,174,255,.35);stroke:#9cc8ff;stroke-width:1.3}
-.command-buff b{color:#cfe3ff;font:750 8px var(--hud);letter-spacing:.14em}
-.command-buff em{color:#eaf3ff;font:700 10px var(--mono);font-style:normal}
+.command-buffs{display:flex;flex-wrap:wrap;gap:8px;padding:8px 12px 2px}
+.command-buff{display:inline-flex;align-items:center;gap:8px;padding:5px 13px 5px 9px;border:1px solid rgba(120,184,255,.75);border-radius:999px;background:linear-gradient(100deg,rgba(79,150,255,.3),rgba(79,150,255,.08));box-shadow:0 0 18px rgba(79,150,255,.3),inset 0 0 10px rgba(79,150,255,.15);animation:command-buff-in .9s ease-out}
+.command-buff svg{width:16px;height:16px;fill:rgba(106,174,255,.45);stroke:#cfe3ff;stroke-width:1.4;filter:drop-shadow(0 0 4px rgba(106,174,255,.8))}
+.command-buff b{color:#e2eeff;font:800 10px var(--hud);letter-spacing:.16em}
+.command-buff em{color:#ffffff;font:700 13px var(--mono);font-style:normal;text-shadow:0 0 8px rgba(106,174,255,.6)}
+@keyframes command-buff-in{0%{opacity:0;transform:translateY(-4px);box-shadow:0 0 0 rgba(79,150,255,0)}40%{opacity:1;box-shadow:0 0 28px rgba(79,150,255,.7)}100%{transform:none}}
+@media(prefers-reduced-motion:reduce){.command-buff{animation:none}}
 /* Commander card: public shield status; ATTACK is off while it holds. */
 .commander-card-shield{display:inline-flex;align-items:center;gap:4px;margin-left:8px;color:#9cc8ff}
 .shield-glyph{width:11px;height:11px;flex:none;fill:rgba(106,174,255,.35);stroke:#9cc8ff;stroke-width:1.3;vertical-align:-1px}
