@@ -1753,3 +1753,5 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world-city-coord-tab{pointer-events:none}
 .world-city-coord-tab path{fill:rgba(3,17,29,.88);stroke:rgba(56,217,255,.34);stroke-width:.35}
 .world-city-coord-tab text{font:600 2.65px var(--mono);fill:#7fcfe2;letter-spacing:.04em}
+/* A relayed commander card whose recon has run out. */
+.commander-card-expired{margin:0 0 10px;padding:7px 0 0;border-top:1px solid rgba(120,160,190,.14);color:#6c7f8c;font:700 8px var(--mono);letter-spacing:.16em}

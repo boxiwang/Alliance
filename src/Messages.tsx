@@ -486,7 +486,7 @@ function SharedIntelCard({ share, now, onOpen, compactView = false }: { share: S
       role={compactView ? undefined : "button"} tabIndex={compactView ? undefined : 0}
       onClick={compactView ? undefined : onOpen} onKeyDown={compactView ? undefined : (event) => { if (event.key === "Enter") onOpen(); }}>
       <CommanderCardView id={share.playerId} name={share.name} faction={share.faction} avatar={share.avatar} coreLevel={share.coreLevel}
-        signal={share.signal as ChatSignalId | null | undefined} recon={share.recon} now={now}>
+        signal={share.signal as ChatSignalId | null | undefined} recon={share.recon} now={now} markExpired>
         <footer>{compactView
           ? <span>{reconLive ? "READY TO SEND · WITH RECON" : "READY TO SEND"}</span>
           : <span>{share.position ? "LOCATE ON STAR MAP ▸" : "MESSAGE ▸"}</span>}</footer>
