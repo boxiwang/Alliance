@@ -241,10 +241,11 @@ export async function grantGmInventory(address: string): Promise<InventoryBalanc
   return (await post<{ inventory: InventoryBalance[] }>("/inventory/grant-alpha", { idempotencyKey: crypto.randomUUID() }, session.token)).inventory;
 }
 
-export async function updatePlayerName(address: string, name: string): Promise<{ displayName: string; lastRenamedAt?: number; nextFreeRenameAt: number }> {
+export async function updatePlayerName(address: string, name: string, useItem = false): Promise<{ displayName: string; lastRenamedAt?: number; nextFreeRenameAt: number }> {
   const session = loadBackendSession(address);
   if (!session) throw new Error("session_required");
-  const result = await post<{ displayName: string; lastRenamedAt?: number; nextFreeRenameAt: number }>("/profile/name", { name }, session.token);
+  // useItem: spend a Rename Signal when the free rename is on cooldown.
+  const result = await post<{ displayName: string; lastRenamedAt?: number; nextFreeRenameAt: number }>("/profile/name", { name, useItem }, session.token);
   const updated = { ...session, player: { ...session.player, displayName: result.displayName } };
   saveBackendSession(updated);
   return result;
@@ -344,13 +345,14 @@ export async function ensureGameAuthority(address: string, game: unknown, world:
  * state + a reason (rejected). The idempotency key belongs to the caller so the
  * exact same command can be retried after an uncertain network response.
  */
-export type GameCommandResponse = { ok: boolean; reason?: string; game: unknown; world: unknown; revision: number; replayed: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean; position?: { x: number; y: number }; authorityVersion?: number };
+export type ItemEffectResult = { shieldUntil?: number; stamina?: number; marchBoostUntil?: number };
+export type GameCommandResponse = { ok: boolean; reason?: string; game: unknown; world: unknown; revision: number; replayed: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean; position?: { x: number; y: number }; authorityVersion?: number; loot?: Record<string, number>; effect?: ItemEffectResult };
 
 export async function sendGameCommand(address: string, type: string, args: Record<string, unknown>, idempotencyKey: string): Promise<GameCommandResponse> {
   const session = loadBackendSession(address);
   if (!session) throw new Error("session_required");
-  const res = await post<{ ok?: boolean; reason?: string; game?: unknown; world?: unknown; revision?: number; replayed?: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean; position?: { x: number; y: number }; authorityVersion?: number }>("/command", { type, args, idempotencyKey }, session.token);
-  return { ok: !!res.ok, reason: res.reason, game: res.game ?? null, world: res.world ?? null, revision: Number(res.revision) || 0, replayed: !!res.replayed, inventory: res.inventory, targetId: res.targetId, spawned: res.spawned, position: res.position, authorityVersion: res.authorityVersion };
+  const res = await post<{ ok?: boolean; reason?: string; game?: unknown; world?: unknown; revision?: number; replayed?: boolean; inventory?: { itemId: string; quantity: number }; targetId?: string; spawned?: boolean; position?: { x: number; y: number }; authorityVersion?: number; loot?: Record<string, number>; effect?: ItemEffectResult }>("/command", { type, args, idempotencyKey }, session.token);
+  return { ok: !!res.ok, reason: res.reason, game: res.game ?? null, world: res.world ?? null, revision: Number(res.revision) || 0, replayed: !!res.replayed, inventory: res.inventory, targetId: res.targetId, spawned: res.spawned, position: res.position, authorityVersion: res.authorityVersion, loot: res.loot, effect: res.effect };
 }
 
 /**

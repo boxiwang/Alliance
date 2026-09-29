@@ -22,19 +22,35 @@ export function ownShieldUntil(address: string): number {
   try { return Math.max(0, Number(localStorage.getItem(shieldKey(address)) || 0)); } catch { return 0; }
 }
 
-export type ActiveBuff = { id: "shield"; label: string; endsAt: number | null; permanent: boolean; note?: string };
+const marchKey = (address: string) => `ruglands:own-march-boost:${address.toLowerCase()}`;
+
+/** Remember a March Boost expiry (the item result; the Star Map sync also carries it). */
+export function rememberOwnMarchBoost(address: string, until: number | undefined): void {
+  try { localStorage.setItem(marchKey(address), String(Math.max(0, Number(until) || 0))); } catch { return; }
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(BUFFS_CHANGED_EVENT));
+}
+
+function ownMarchBoostUntil(address: string): number {
+  try { return Math.max(0, Number(localStorage.getItem(marchKey(address)) || 0)); } catch { return 0; }
+}
+
+export type ActiveBuff = { id: "shield" | "march"; label: string; endsAt: number | null; permanent: boolean; note?: string };
 
 export function activeBuffs(address: string, coreLevel: number, now: number, numbers: any): ActiveBuff[] {
   const session = loadLocalWorldSession(address);
   const cityId = session?.world.players[session.playerId]?.cityId;
   const city = cityId ? session?.world.entities[cityId] : null;
   const home = city?.kind === "city" ? city : null;
+  const buffs: ActiveBuff[] = [];
   // A shield item counts even after you attacked; attacking only ends the Core auto-shield.
   const until = Math.max(ownShieldUntil(address), home?.shieldUntil ?? 0);
-  if (until > now) return [{ id: "shield", label: "SHIELD", endsAt: until, permanent: until - now > PERMANENT_AFTER_MS }];
   const protectedUntil = Number(numbers?.global?.shield?.protectedUntilKeepLevel) || 0;
-  if (!home?.hasAttacked && coreLevel < protectedUntil) return [{ id: "shield", label: "SHIELD", endsAt: null, permanent: false, note: `UNTIL CORE ${protectedUntil}` }];
-  return [];
+  if (until > now) buffs.push({ id: "shield", label: "SHIELD", endsAt: until, permanent: until - now > PERMANENT_AFTER_MS });
+  else if (!home?.hasAttacked && coreLevel < protectedUntil) buffs.push({ id: "shield", label: "SHIELD", endsAt: null, permanent: false, note: `UNTIL CORE ${protectedUntil}` });
+  const me = session?.world.players[session.playerId];
+  const marchUntil = Math.max(ownMarchBoostUntil(address), me?.marchBoostUntil ?? 0);
+  if (marchUntil > now) buffs.push({ id: "march", label: "MARCH +25%", endsAt: marchUntil, permanent: false });
+  return buffs;
 }
 
 /** 7:42:10 under a day, then 2d 4h; the GM permanent shield reads as ∞. */

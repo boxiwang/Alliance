@@ -12,7 +12,7 @@ import {
   type PlayerRole,
   type SessionClaims,
 } from "./auth";
-import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS } from "../src/lib/mvp-items";
+import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS, rollChest } from "../src/lib/mvp-items";
 import { DAILY_SUPPLY, SHOP_OFFER_BY_ID, SHOP_OFFERS, TOPUP_PACKS } from "../src/lib/shop-catalog";
 import { gameStateBelongsToPlayer, projectGameJson } from "./economy";
 import { applyCommand } from "./commands";
@@ -645,13 +645,26 @@ async function renamePlayer(request: Request, env: BackendEnv, claims: SessionCl
   if (player.name_key === candidate.key) return response({ displayName: player.display_name, nextFreeRenameAt: player.last_renamed_at ? player.last_renamed_at + FREE_RENAME_MS : 0 });
   const now = Date.now();
   const nextFreeRenameAt = (player.last_renamed_at || 0) + FREE_RENAME_MS;
-  if (claims.role !== "gm" && player.last_renamed_at && now < nextFreeRenameAt) return response({ error: "rename_cooldown", nextFreeRenameAt }, 429);
+  const onCooldown = claims.role !== "gm" && !!player.last_renamed_at && now < nextFreeRenameAt;
+  // A Rename Signal skips the cooldown; it is spent in the same batch as the rename.
+  const useSignal = onCooldown && data?.useItem === true;
+  if (onCooldown && !useSignal) return response({ error: "rename_cooldown", nextFreeRenameAt }, 429);
+  if (useSignal) {
+    const owned = await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = 'identity.rename'").bind(claims.sub).first<{ quantity: number }>();
+    if (!owned || owned.quantity < 1) return response({ error: "insufficient_inventory" }, 409);
+  }
   try {
     await env.DB.batch([
       env.DB.prepare("UPDATE players SET display_name = ?, name_key = ?, last_renamed_at = ?, last_seen_at = ? WHERE id = ?")
         .bind(candidate.name, candidate.key, now, now, claims.sub),
       env.DB.prepare(`INSERT INTO account_audit_log (id, player_id, action, actor_player_id, metadata_json, created_at)
-        VALUES (?, ?, 'profile.rename', ?, ?, ?)`).bind(crypto.randomUUID(), claims.sub, claims.sub, JSON.stringify({ from: player.display_name, to: candidate.name }), now),
+        VALUES (?, ?, 'profile.rename', ?, ?, ?)`).bind(crypto.randomUUID(), claims.sub, claims.sub, JSON.stringify({ from: player.display_name, to: candidate.name, signal: useSignal }), now),
+      ...(useSignal ? [
+        env.DB.prepare("UPDATE inventory_balances SET quantity = quantity - 1, updated_at = ? WHERE player_id = ? AND item_id = 'identity.rename' AND quantity >= 1").bind(now, claims.sub),
+        env.DB.prepare(`INSERT INTO inventory_transactions (id, player_id, item_id, delta, balance_after, reason, idempotency_key, status, metadata_json, created_at, committed_at)
+          VALUES (?, ?, 'identity.rename', -1, (SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = 'identity.rename'), 'item_used', ?, 'committed', '{}', ?, ?)`)
+          .bind(crypto.randomUUID(), claims.sub, claims.sub, `rename:${claims.sub}:${now}`, now, now),
+      ] : []),
     ]);
   } catch (error) {
     if (String(error).toLowerCase().includes("unique")) return response({ error: "name_taken" }, 409);
@@ -877,6 +890,8 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
   let inventoryItemId: string | null = null;
   let inventoryQuantity = 1;
   let scoutLaunch: { target: string; cost: number } | null = null;
+  let itemGrants: Record<string, number> | null = null;
+  let worldEffect: { shieldHours?: number; stamina?: number; marchBonus?: number; marchMinutes?: number } | null = null;
   let result: { state: typeof state; ok: boolean; reason?: string; world?: WorldAuthoritySession; extra?: Record<string, unknown> };
   const isWorldCommand = type === "world.advance" || type === "world.dispatch" || type === "world.recall" || type === "world.scan" || type === "world.warp";
   let warpReservation: { coord: { x: number; y: number }; previous: { x: number; y: number } | null } | null = null;
@@ -953,6 +968,29 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
         ? { state: applied.state, ok: true }
         : { state, ok: false, reason: "That operation has already finished" };
       if (result.ok) { inventoryItemId = itemId; inventoryQuantity = quantity; }
+    }
+  } else if (type === "item.use") {
+    // Non-speedup items from the Warehouse (docs/ITEMS.md). Speedups use speedup.use; warp
+    // jumps are spent by world.warp; the Rename Signal is spent by /profile/name.
+    const itemId = String(args.itemId || "");
+    const item = MVP_ITEM_BY_ID.get(itemId);
+    const effect = item?.status === "active" ? item.effect : undefined;
+    const quantity = Math.max(1, Math.min(effect?.kind === "chest" ? 20 : 99, Math.floor(Number(args.quantity) || 1)));
+    if (!item || !effect) result = { state, ok: false, reason: "invalid_item" };
+    else if (effect.kind === "warp" || effect.kind === "rename") result = { state, ok: false, reason: "use_elsewhere" };
+    else {
+      inventoryItemId = itemId; inventoryQuantity = quantity;
+      if (effect.kind === "resource") {
+        result = { state: { ...state, res: { ...state.res, [effect.resource]: (state.res[effect.resource] || 0) + effect.amount * quantity } }, ok: true };
+      } else if (effect.kind === "chest") {
+        itemGrants = rollChest(effect.table, quantity);
+        result = { state, ok: true, extra: { loot: itemGrants } };
+      } else {
+        worldEffect = effect.kind === "shield" ? { shieldHours: effect.hours * quantity }
+          : effect.kind === "stamina" ? { stamina: effect.amount * quantity }
+            : { marchBonus: effect.bonus, marchMinutes: effect.minutes * quantity };
+        result = { state, ok: true };
+      }
     }
   } else if (type === "world.scout_player") {
     // Paid scout on another commander (numbers.json global.march.scoutCost): the WorldRoom
@@ -1032,6 +1070,18 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
             'item_used', ?, ?, 'committed', '{}', ?, ?)`)
           .bind(inventoryTransactionId, claims.sub, inventoryItemId, -inventoryQuantity, claims.sub, inventoryItemId, commandId, `command:${idempotencyKey}`, now, now));
       }
+      // Chest loot lands in the same transaction as the chest being spent.
+      for (const [grantId, grantQuantity] of Object.entries(itemGrants ?? {})) {
+        statements.push(
+          env.DB.prepare(`INSERT INTO inventory_balances (player_id, item_id, quantity, updated_at) VALUES (?, ?, ?, ?)
+            ON CONFLICT(player_id, item_id) DO UPDATE SET quantity = inventory_balances.quantity + excluded.quantity, updated_at = excluded.updated_at`)
+            .bind(claims.sub, grantId, grantQuantity, now),
+          env.DB.prepare(`INSERT INTO inventory_transactions
+            (id, player_id, item_id, delta, balance_after, reason, reference_id, idempotency_key, status, metadata_json, created_at, committed_at)
+            VALUES (?, ?, ?, ?, (SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?), 'chest_opened', ?, ?, 'committed', '{}', ?, ?)`)
+            .bind(crypto.randomUUID(), claims.sub, grantId, grantQuantity, claims.sub, grantId, commandId, `command:${idempotencyKey}:${grantId}`, now, now),
+        );
+      }
       statements.push(
         env.DB.prepare("UPDATE game_commands SET result_game_json = NULL WHERE id = ?").bind(commandId),
         env.DB.prepare("DELETE FROM command_transaction_guards WHERE id IN (?, ?)").bind(`${guardId}:inventory`, `${guardId}:state`),
@@ -1046,6 +1096,24 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
     if (racedReplay) return racedReplay;
     if (error instanceof Error && error.message.includes("insufficient_inventory")) return response({ error: "insufficient_inventory" }, 409);
     return response({ error: "revision_conflict" }, 409);
+  }
+  if (result.ok && worldEffect && inventoryItemId) {
+    // The item is paid; apply its world effect. If the room refuses, give the items back.
+    const room = worldRoom(env);
+    const applied: { ok?: boolean; error?: string } = room
+      ? await room.fetch("https://world.internal/player-effect", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ player: claims.sub, ...worldEffect }) })
+        .then((res) => res.json() as Promise<{ ok?: boolean; error?: string }>).catch(() => ({ ok: false, error: "world_unreachable" }))
+      : { ok: false, error: "world_unreachable" };
+    if (!applied.ok) {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE inventory_balances SET quantity = quantity + ?, updated_at = ? WHERE player_id = ? AND item_id = ?").bind(inventoryQuantity, Date.now(), claims.sub, inventoryItemId),
+        env.DB.prepare(`INSERT INTO inventory_transactions (id, player_id, item_id, delta, balance_after, reason, idempotency_key, status, metadata_json, created_at, committed_at)
+          VALUES (?, ?, ?, ?, (SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?), 'item_refunded', ?, 'committed', '{}', ?, ?)`)
+          .bind(crypto.randomUUID(), claims.sub, inventoryItemId, inventoryQuantity, claims.sub, inventoryItemId, `command:${idempotencyKey}:refund`, Date.now(), Date.now()),
+      ]);
+      return response({ ok: false, reason: applied.error || "effect_rejected", game: result.state, revision: resultRevision, authorityVersion: row.economy_authority_version });
+    }
+    result.extra = { ...(result.extra ?? {}), effect: applied };
   }
   if (result.ok && scoutLaunch) {
     // The Oil is paid; launch the fleet. If the room refuses (a race), give the Oil back.

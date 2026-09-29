@@ -13,7 +13,7 @@ import {
   type SearchKind, type SharedWorldState,
 } from "../src/lib/shared-world";
 import type { WorldAuthoritySession } from "../src/lib/world-authority";
-import { worldEngineConfig, type WorldEntity } from "../src/lib/world-engine";
+import { energyAt, worldEngineConfig, type WorldEntity } from "../src/lib/world-engine";
 import { shieldActive } from "../src/lib/shield";
 import { STORE_PREFIX, assembleShared, chunkDelta, clustersFromChunk, sectorKeysForRect, sharedChunks, targetsFromSectorChunks } from "../src/lib/shared-store";
 import { DORMANT_MAX_CORE, QUADRANT_CAPACITY, assignOuterRingCoord, clampViewRect, dormantCandidates, quadrantOfCoord, spawnQuadrant, type ViewRect, type WorldCoord } from "./world-coords";
@@ -509,6 +509,7 @@ export class WorldRoom {
     if (url.pathname === "/roster") return this.roster();
     if (url.pathname === "/release" && req.method === "POST") return this.release(req);
     if (url.pathname === "/grant-shield" && req.method === "POST") return this.grantShield(req);
+    if (url.pathname === "/player-effect" && req.method === "POST") return this.playerEffect(req);
     if (url.pathname === "/scout-quote" && req.method === "POST") return this.scoutOrder(req, false);
     if (url.pathname === "/scout-launch" && req.method === "POST") return this.scoutOrder(req, true);
     const pid = (req.headers.get("x-alliance-player") || "").slice(0, 64);
@@ -612,6 +613,50 @@ export class WorldRoom {
     this.sendToPlayer(pid, { type: "march", march });
     await this.scheduleAlarm();
     return Response.json({ ok: true, march });
+  }
+
+  /** Item effects that live in the world (from /command item.use, after the item is paid):
+   *  shield hours (public roster + city), Stamina (may exceed the cap), March Boost. */
+  async playerEffect(req: Request): Promise<Response> {
+    let body: { player?: unknown; shieldHours?: unknown; stamina?: unknown; marchBonus?: unknown; marchMinutes?: unknown } = {};
+    try { body = await req.json(); } catch {}
+    const pid = String(body.player || "").slice(0, 64).toLowerCase();
+    const shieldHours = Math.max(0, Math.min(24 * 30, Number(body.shieldHours) || 0));
+    const stamina = Math.max(0, Math.min(10_000, Math.floor(Number(body.stamina) || 0)));
+    const marchBonus = Math.max(0, Math.min(1, Number(body.marchBonus) || 0));
+    const marchMinutes = Math.max(0, Math.min(24 * 60 * 7, Number(body.marchMinutes) || 0));
+    const now = Date.now();
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    if (!players[pid]) return Response.json({ ok: false, error: "not_in_world" });
+    const out: { ok: boolean; error?: string; shieldUntil?: number; stamina?: number; marchBoostUntil?: number } = { ok: true };
+    if (shieldHours) {
+      players[pid].shieldUntil = Math.max(now, players[pid].shieldUntil || 0) + shieldHours * 3_600_000;
+      out.shieldUntil = players[pid].shieldUntil;
+      await this.state.storage.put("players", players);
+    }
+    await this.locked(async () => {
+      if (!(await this.hasShared())) { if (stamina || marchBonus) { out.ok = false; out.error = "not_in_world"; } return; }
+      const shared = await this.loadShared();
+      const player = shared.world.players[pid];
+      const cityId = player?.cityId;
+      const city = cityId ? shared.world.entities[cityId] : null;
+      if ((stamina || marchBonus) && !player) { out.ok = false; out.error = "not_in_world"; return; }
+      if (shieldHours && city?.kind === "city") city.shieldUntil = Math.max(city.shieldUntil || 0, out.shieldUntil || 0);
+      if (player && stamina) {
+        player.energyStored = energyAt(player, now, shared.world.config) + stamina;
+        player.energyUpdatedAt = now;
+        out.stamina = player.energyStored;
+      }
+      if (player && marchBonus && marchMinutes) {
+        const running = (player.marchBoostUntil ?? 0) > now;
+        player.marchBoostBonus = running ? Math.max(player.marchBoostBonus ?? 0, marchBonus) : marchBonus;
+        player.marchBoostUntil = Math.max(now, player.marchBoostUntil ?? 0) + marchMinutes * 60_000;
+        out.marchBoostUntil = player.marchBoostUntil;
+      }
+      await this.saveShared(shared);
+    });
+    if (shieldHours) this.sendPlayerUpdate(players[pid]);
+    return Response.json(out);
   }
 
   /** Give Oil back to a server-economy player (scout target gone). Revision-guarded, retried. */

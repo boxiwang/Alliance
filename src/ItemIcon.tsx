@@ -7,7 +7,7 @@ import { speedupIconPath, type MvpItem } from "./lib/mvp-items";
 const ACCENT: Record<string, string> = {
   "resource.cash": "#43f2a1", "resource.oil": "#ffb454", "resource.power": "#38d9ff",
   energy: "#aa82ff", "war.shield": "#6aaeff", "war.relocator.random": "#38d9ff", "war.relocator.advanced": "#ffd27a",
-  identity: "#9fc4d8", relic: "#d99bff",
+  identity: "#9fc4d8", relic: "#d99bff", "boost.march": "#7ff0c4", chest: "#ffc15a",
 };
 
 function accentFor(id: string): string {
@@ -49,11 +49,31 @@ function glyph(id: string, color: string) {
     <path d="M86 164c18-4 24-40 42-40 12 0 6 22 18 22 8 0 12-10 24-10" {...stroke} />
     <path d="m150 84 20 20-44 44-24 4 4-24Z" {...stroke} strokeWidth={6} />
   </>;
+  if (id.startsWith("boost.march")) return <>
+    <path d="M78 92 114 128 78 164M122 92 158 128 122 164" {...stroke} strokeWidth={9} />
+    <path d="M166 104h14M170 128h14M166 152h14" {...stroke} strokeWidth={5} strokeOpacity={.5} />
+  </>;
+  if (id.startsWith("chest.")) return <>
+    <path d="M76 112h104v56H76Z" {...stroke} />
+    <path d="M76 112c0-22 18-32 52-32s52 10 52 32" {...stroke} />
+    <path d="M76 124h104M128 116v24" {...stroke} strokeWidth={5} />
+    <rect x="120" y="126" width="16" height="16" rx="3" fill={color} />
+  </>;
   if (id.startsWith("relic.")) return <>
     <circle cx="104" cy="112" r="22" {...stroke} />
     <path d="M120 128 172 180M150 158l12-12M162 170l10-10" {...stroke} />
   </>;
   return <circle cx="128" cy="128" r="30" {...stroke} />;
+}
+
+/** Small size/duration tag under the glyph, so sibling items read apart at a glance. */
+function iconTag(id: string): string | null {
+  const size = { small: "1M", medium: "10M", large: "100M" }[id.split(".").pop() || ""];
+  if (id.startsWith("resource.") && size) return size;
+  const tail = id.split(".").pop() || "";
+  if (id.startsWith("energy.cell.")) return `+${tail}`;
+  if (id.startsWith("war.shield.") || id.startsWith("boost.march.")) return tail.toUpperCase();
+  return null;
 }
 
 export default function ItemIcon({ item, className }: { item: Pick<MvpItem, "id" | "category" | "speedupQueue">; className?: string }) {
@@ -71,5 +91,6 @@ export default function ItemIcon({ item, className }: { item: Pick<MvpItem, "id"
     <path d="M27 82V57l30-30h50M149 27h35l45 45v33M229 155v42l-31 31h-48M107 228H58l-31-31v-24" fill="none" stroke={color} strokeOpacity=".7" strokeWidth="3" />
     <path d="M36 46h30M46 36v30M220 190v19l-11 11h-19" fill="none" stroke={color} strokeWidth="2" strokeOpacity=".58" />
     <g filter={`url(#item-glow-${uid})`}>{glyph(item.id, color)}</g>
+    {iconTag(item.id) && <text x="128" y="216" textAnchor="middle" fill="#eaf6ff" fontFamily="Chakra Petch, IBM Plex Mono, ui-monospace, monospace" fontSize="30" fontWeight="700" letterSpacing="1">{iconTag(item.id)}</text>}
   </svg>;
 }

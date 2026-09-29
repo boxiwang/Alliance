@@ -28,7 +28,7 @@ import { compact } from "./lib/format";
 import { clearLocalWorldSession, loadLocalWorldSession, openLocalWorldSession } from "./lib/world-adapter";
 import { energyAt } from "./lib/world-engine";
 import { shieldActive } from "./lib/shield";
-import { ownShieldUntil, rememberOwnShield } from "./lib/buffs";
+import { ownShieldUntil, rememberOwnMarchBoost, rememberOwnShield } from "./lib/buffs";
 import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
 import BuildingGlyph from "./BuildingGlyph";
@@ -168,6 +168,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [speedupTarget, setSpeedupTarget] = useState("");
   const [warehouseItemId, setWarehouseItemId] = useState("");
   const [warehouseCategory, setWarehouseCategory] = useState<WarehouseCategory | null>(null);
+  const [warehouseCount, setWarehouseCount] = useState(1);
+  const [chestLoot, setChestLoot] = useState<Record<string, number> | null>(null);
   // Speedup order dialog. itemId/quantity null = auto-pick (lib/speedup-pick.ts).
   const [pendingSpeedup, setPendingSpeedup] = useState<{ target: SpeedupTarget; itemId: string | null; quantity: number | null } | null>(null);
   const [inventoryBusy, setInventoryBusy] = useState(false);
@@ -473,6 +475,28 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     finally { setInventoryBusy(false); }
   }
 
+  /** Use a non-speedup item from the Warehouse (server item.use; docs/ITEMS.md). */
+  async function useItem(itemId: string, quantity: number) {
+    const item = MVP_ITEM_BY_ID.get(itemId);
+    if (!item?.effect || inventoryBusy) return;
+    setInventoryBusy(true);
+    try {
+      const result = await sendGameCommand(address, "item.use", { itemId, quantity }, `item:${crypto.randomUUID()}`);
+      if (result.game) { setGame(result.game as GameState); saveGame(result.game as GameState); }
+      if (!result.ok) { setMsg(ITEM_ERROR_COPY[result.reason || ""] || "That item could not be used."); return; }
+      if (result.effect?.shieldUntil) rememberOwnShield(address, result.effect.shieldUntil);
+      if (result.effect?.marchBoostUntil) rememberOwnMarchBoost(address, result.effect.marchBoostUntil);
+      if (item.effect.kind === "chest") setChestLoot(result.loot || {});
+      else setMsg(`${quantity > 1 ? `${quantity}× ` : ""}${item.name} used.`);
+      setWarehouseCount(1);
+    } catch {
+      setMsg("That item could not be used. Try again.");
+    } finally {
+      setInventoryBusy(false);
+      void loadInventory(address).then(setInventory).catch(() => {});
+    }
+  }
+
   /** GM: permanent shield on / item shield off on your own city (testing). */
   async function gmShieldToggle(on: boolean) {
     const session = loadBackendSession(address);
@@ -634,7 +658,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="inv-grid-title"><b>{meta.label.toUpperCase()}</b><span>{shown.length ? `${itemCount(shown.reduce((sum, entry) => sum + entry.quantity, 0))} ITEMS` : ""}</span></div>
           {shown.length ? <div className="inv-grid">
             {shown.map(({ item, quantity }) => <button key={item.id} type="button" className={`inv-slot rarity-${item.rarity}${selected?.item.id === item.id ? " selected" : ""}`}
-              aria-pressed={selected?.item.id === item.id} aria-label={`${item.name}, ${quantity} owned`} onClick={() => setWarehouseItemId(item.id)}>
+              aria-pressed={selected?.item.id === item.id} aria-label={`${item.name}, ${quantity} owned`} onClick={() => { setWarehouseItemId(item.id); setWarehouseCount(1); }}>
               <ItemIcon item={item} />
               <span className="mono">{itemCount(quantity)}</span>
             </button>)}
@@ -655,10 +679,32 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
               <button type="button" disabled={!compatible || inventoryBusy || commandBusy} onClick={() => selectedSpeedupTarget && requestSpeedupUse(selected.item.id, selectedSpeedupTarget)}>
                 {!speedupTargets.length ? "NO ACTIVE QUEUE" : !compatible ? "WRONG QUEUE" : "USE"}
               </button>
-            </div> : selected.item.id.startsWith("war.relocator") ? <div className="inv-use">
+            </div> : selected.item.effect?.kind === "warp" ? <div className="inv-use">
               <button type="button" onClick={onWorld}>WARP ON THE STAR MAP ▸</button>
               <small>Open WARP on the Star Map and pick a spot; the jump uses this item.</small>
-            </div> : <div className="inv-use"><button type="button" disabled>USE · COMING SOON</button></div>}
+            </div> : selected.item.effect?.kind === "rename" ? <div className="inv-use">
+              <button type="button" onClick={onProfile}>RENAME IN PROFILE ▸</button>
+              <small>Change your name in Profile; while the free rename is on cooldown, this Signal is used.</small>
+            </div> : selected.item.effect ? (() => {
+              // Resource crates, chests, Stamina, shields, March Boosts: pick a count and use.
+              const max = Math.min(selected.quantity, selected.item.effect.kind === "chest" ? 20 : 99);
+              const count = Math.max(1, Math.min(max, warehouseCount));
+              return <div className="inv-use">
+                <div className="inv-count">
+                  <span>USE</span>
+                  <div className="speedup-order-qty">
+                    <button type="button" aria-label="Fewer" disabled={count <= 1} onClick={() => setWarehouseCount(count - 1)}>−</button>
+                    <b className="mono">{count}</b>
+                    <button type="button" aria-label="More" disabled={count >= max} onClick={() => setWarehouseCount(count + 1)}>+</button>
+                  </div>
+                  <button type="button" className="inv-max" disabled={count >= max} onClick={() => setWarehouseCount(max)}>MAX</button>
+                </div>
+                <button type="button" disabled={inventoryBusy || commandBusy || authorityVersion <= 0} onClick={() => void useItem(selected.item.id, count)}>
+                  {selected.item.effect.kind === "chest" ? `OPEN ${count > 1 ? `${count} ` : ""}→` : `USE ${count > 1 ? `${count} ` : ""}→`}
+                </button>
+                {authorityVersion <= 0 && <small>Connect the server economy to use items.</small>}
+              </div>;
+            })() : null}
           </> : <div className="inv-detail-empty">Select an item to see what it does.</div>}
           <details className="warehouse-upgrade"><summary>WAREHOUSE UPGRADE</summary>{renderBuildingUpgrade("storage")}</details>
         </aside>
@@ -849,6 +895,19 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         )}
       </div>
       <MiniComms address={address} profile={profile} onOpenMessages={onMessages} onReport={handleCityReport} onMarch={handleCityMarch} onMarchDone={handleCityMarchDone} onMarchSnapshot={handleCityMarchSnapshot} onSelf={handleSelf} />
+      {chestLoot && <div className="speedup-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setChestLoot(null); }}>
+        <section className="speedup-confirm chest-result" role="dialog" aria-modal="true" aria-label="Chest opened">
+          <header><span>SUPPLY CHEST · OPENED</span><button type="button" aria-label="Close" onClick={() => setChestLoot(null)}>×</button></header>
+          <div className="chest-loot">
+            {Object.entries(chestLoot).map(([itemId, quantity]) => {
+              const item = MVP_ITEM_BY_ID.get(itemId);
+              return item ? <div key={itemId} className={`inv-slot rarity-${item.rarity}`} title={item.name}><ItemIcon item={item} /><span className="mono">×{itemCount(quantity)}</span></div> : null;
+            })}
+          </div>
+          <p>{Object.entries(chestLoot).map(([itemId, quantity]) => `${quantity}× ${MVP_ITEM_BY_ID.get(itemId)?.name ?? itemId}`).join(" · ")}</p>
+          <footer><button className="confirm" type="button" onClick={() => setChestLoot(null)}>COLLECT</button></footer>
+        </section>
+      </div>}
       {pendingSpeedup && (() => {
         // Speedup order: auto-picked item and count (lib/speedup-pick.ts); change the item
         // and the count re-fills; after each use the next pick is made from the new time left.
@@ -1436,3 +1495,12 @@ function ResearchRing({ value, max, large = false }: { value: number; max: numbe
 function itemCount(n: number): string {
   return n < 10_000 ? Math.floor(n).toLocaleString("en-US") : compact(n);
 }
+
+const ITEM_ERROR_COPY: Record<string, string> = {
+  insufficient_inventory: "You don't have that many.",
+  not_in_world: "Your city isn't on the Star Map yet — open the Star Map once, then try again.",
+  world_unreachable: "The Star Map link dropped. Try again.",
+  use_elsewhere: "Use this item from its own screen.",
+  invalid_item: "That item can't be used yet.",
+  authority_disabled: "Connect the server economy to use items.",
+};

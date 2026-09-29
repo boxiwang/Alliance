@@ -1,5 +1,15 @@
-export type ItemCategory = "speedup" | "resource" | "energy" | "war" | "identity" | "relic";
+export type ItemCategory = "speedup" | "resource" | "energy" | "war" | "boost" | "identity" | "chest" | "relic";
 export type SpeedupQueue = "universal" | "construction" | "research" | "training" | "healing";
+
+/** What using an item does (server-applied; docs/ITEMS.md). */
+export type ItemEffect =
+  | { kind: "resource"; resource: "cash" | "oil" | "power"; amount: number }
+  | { kind: "stamina"; amount: number }
+  | { kind: "shield"; hours: number }
+  | { kind: "march_boost"; bonus: number; minutes: number }
+  | { kind: "warp"; mode: "random" | "precision" }
+  | { kind: "rename" }
+  | { kind: "chest"; table: string };
 
 export type MvpItem = {
   id: string;
@@ -10,6 +20,7 @@ export type MvpItem = {
   description: string;
   speedupSeconds?: number;
   speedupQueue?: SpeedupQueue;
+  effect?: ItemEffect;
 };
 
 export const SPEEDUP_DURATIONS = [
@@ -36,6 +47,13 @@ const speedup = (id: string, name: string, seconds: number, queue: SpeedupQueue,
   description: `Reduces ${queue === "universal" ? "any active" : `an active ${queue}`} timer by ${seconds >= 3600 ? `${seconds / 3600} hour${seconds === 3600 ? "" : "s"}` : `${seconds / 60} minutes`}.`,
 });
 
+const RESOURCE_NAME = { cash: "Cash", oil: "Oil", power: "Power" } as const;
+const RESOURCE_CRATES = [
+  { size: "small", label: "1M", amount: 1_000, rarity: "common" },
+  { size: "medium", label: "10M", amount: 10_000, rarity: "uncommon" },
+  { size: "large", label: "100M", amount: 100_000, rarity: "rare" },
+] as const satisfies readonly { size: string; label: string; amount: number; rarity: MvpItem["rarity"] }[];
+
 /** One shared catalog is imported by both the Worker and the game client. */
 export const MVP_ITEMS: readonly MvpItem[] = [
   ...SPEEDUP_QUEUES.flatMap((queue) => SPEEDUP_DURATIONS.map((duration) => speedup(
@@ -46,16 +64,62 @@ export const MVP_ITEMS: readonly MvpItem[] = [
     duration.rarity,
   ))),
 
-  { id: "resource.cash.small", name: "Cash Reserve", category: "resource", rarity: "common", status: "planned", description: "Adds a protected bundle of Cash." },
-  { id: "resource.oil.small", name: "Oil Reserve", category: "resource", rarity: "common", status: "planned", description: "Adds a protected bundle of Oil." },
-  { id: "resource.power.small", name: "Power Reserve", category: "resource", rarity: "common", status: "planned", description: "Adds a protected bundle of Power." },
-  { id: "energy.cell.10", name: "Stamina Cell", category: "energy", rarity: "common", status: "planned", description: "Restores 10 Stamina." },
-  { id: "war.shield.8h", name: "Peace Shield 8h", category: "war", rarity: "rare", status: "planned", description: "Stops hostile attacks against your city for 8 hours." },
-  { id: "war.relocator.random", name: "Drift Jump", category: "war", rarity: "common", status: "active", description: "Relocates your city to a random valid sector." },
-  { id: "war.relocator.advanced", name: "Precision Jump", category: "war", rarity: "epic", status: "active", description: "Relocates your city to a chosen valid coordinate." },
-  { id: "identity.rename", name: "Rename Signal", category: "identity", rarity: "rare", status: "planned", description: "Changes your unique commander name without waiting for the free rename window." },
+  // Resource crates (internal units; the game shows x1000: 1K -> 1M).
+  ...(["cash", "oil", "power"] as const).flatMap((resource) => RESOURCE_CRATES.map((crate) => ({
+    id: `resource.${resource}.${crate.size}`,
+    name: `${crate.label} ${RESOURCE_NAME[resource]} Crate`,
+    category: "resource" as const, rarity: crate.rarity, status: "active" as const,
+    description: `Adds ${crate.label} ${RESOURCE_NAME[resource]} to your city.`,
+    effect: { kind: "resource" as const, resource, amount: crate.amount },
+  }))),
+  { id: "energy.cell.10", name: "Stamina Cell", category: "energy", rarity: "common", status: "active", description: "Restores 10 Stamina (can go above the cap).", effect: { kind: "stamina", amount: 10 } },
+  { id: "energy.cell.50", name: "Stamina Pack", category: "energy", rarity: "rare", status: "active", description: "Restores 50 Stamina (can go above the cap).", effect: { kind: "stamina", amount: 50 } },
+  { id: "war.shield.8h", name: "Peace Shield 8h", category: "war", rarity: "rare", status: "active", description: "Your city can't be attacked for 8 hours (extends a running shield).", effect: { kind: "shield", hours: 8 } },
+  { id: "war.shield.24h", name: "Peace Shield 24h", category: "war", rarity: "epic", status: "active", description: "Your city can't be attacked for 24 hours (extends a running shield).", effect: { kind: "shield", hours: 24 } },
+  { id: "boost.march.1h", name: "March Boost 1h", category: "boost", rarity: "uncommon", status: "active", description: "Fleets you send travel 25% faster for 1 hour.", effect: { kind: "march_boost", bonus: .25, minutes: 60 } },
+  { id: "boost.march.8h", name: "March Boost 8h", category: "boost", rarity: "epic", status: "active", description: "Fleets you send travel 25% faster for 8 hours.", effect: { kind: "march_boost", bonus: .25, minutes: 480 } },
+  { id: "war.relocator.random", name: "Drift Jump", category: "war", rarity: "common", status: "active", description: "Relocates your city to a random valid sector.", effect: { kind: "warp", mode: "random" } },
+  { id: "war.relocator.advanced", name: "Precision Jump", category: "war", rarity: "epic", status: "active", description: "Relocates your city to a chosen valid coordinate.", effect: { kind: "warp", mode: "precision" } },
+  { id: "identity.rename", name: "Rename Signal", category: "identity", rarity: "rare", status: "active", description: "Change your commander name now, without waiting for the free rename window.", effect: { kind: "rename" } },
+  { id: "chest.supply", name: "Supply Chest", category: "chest", rarity: "uncommon", status: "active", description: "Opens into 3 rewards: speedups, resource crates, Stamina — sometimes a Peace Shield.", effect: { kind: "chest", table: "supply" } },
+  // Not in the MVP: nothing to open yet.
   { id: "relic.key.standard", name: "Relic Key", category: "relic", rarity: "rare", status: "planned", description: "Opens one standard Relic cache." },
 ] as const;
+
+/** Chest loot (weighted, rolled on the server for each chest opened). */
+export const CHEST_TABLES: Record<string, { rolls: number; entries: { itemId: string; quantity: number; weight: number }[] }> = {
+  supply: {
+    rolls: 3,
+    entries: [
+      { itemId: "speedup.universal.5m", quantity: 3, weight: 26 },
+      { itemId: "speedup.universal.1h", quantity: 1, weight: 10 },
+      { itemId: "speedup.construction.1h", quantity: 1, weight: 8 },
+      { itemId: "speedup.training.1h", quantity: 1, weight: 8 },
+      { itemId: "resource.cash.small", quantity: 2, weight: 14 },
+      { itemId: "resource.oil.small", quantity: 2, weight: 12 },
+      { itemId: "resource.power.small", quantity: 2, weight: 12 },
+      { itemId: "energy.cell.10", quantity: 1, weight: 7 },
+      { itemId: "boost.march.1h", quantity: 1, weight: 2 },
+      { itemId: "war.shield.8h", quantity: 1, weight: 1 },
+    ],
+  },
+};
+
+/** Roll a chest table `count` times; `random` returns [0, 1). */
+export function rollChest(table: string, count: number, random: () => number = Math.random): Record<string, number> {
+  const loot = CHEST_TABLES[table];
+  const out: Record<string, number> = {};
+  if (!loot) return out;
+  const total = loot.entries.reduce((sum, entry) => sum + entry.weight, 0);
+  for (let chest = 0; chest < count; chest += 1) {
+    for (let roll = 0; roll < loot.rolls; roll += 1) {
+      let pick = random() * total;
+      const entry = loot.entries.find((candidate) => (pick -= candidate.weight) < 0) ?? loot.entries[loot.entries.length - 1];
+      out[entry.itemId] = (out[entry.itemId] || 0) + entry.quantity;
+    }
+  }
+  return out;
+}
 
 export const MVP_ITEM_BY_ID = new Map(MVP_ITEMS.map((item) => [item.id, item]));
 
@@ -98,7 +162,7 @@ export const WAREHOUSE_CATEGORIES: readonly { id: WarehouseCategory; label: stri
 export function warehouseCategoryOf(item: Pick<MvpItem, "id" | "category">): WarehouseCategory {
   if (item.category === "speedup") return "speedups";
   if (item.category === "resource" || item.category === "energy") return "resources";
-  if (item.id.startsWith("war.shield")) return "boosts";
+  if (item.category === "boost" || item.id.startsWith("war.shield")) return "boosts";
   return "other";
 }
 

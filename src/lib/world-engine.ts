@@ -235,6 +235,9 @@ export interface HeadlessPlayer {
   resources: ResourceWallet;
   energyStored: number;
   energyUpdatedAt: number;
+  /** March Boost item: extra march speed (e.g. .25) until this time. */
+  marchBoostUntil?: number;
+  marchBoostBonus?: number;
   highestMonsterDefeated: number;
   /** Per-level safety valve state: scanning L2 never consumes the L3 scan. */
   deepScanCooldowns: Record<string, number>;
@@ -1119,6 +1122,8 @@ export function advanceTargetLifecycle(source: HeadlessWorld, now = Date.now()):
 }
 
 export function energyAt(player: HeadlessPlayer, now: number, config: WorldEngineConfig): number {
+  // Stamina items can push the store above the cap; it then stays there (no regen) until spent.
+  if (player.energyStored >= config.energyCap) return player.energyStored;
   const recovered = Math.floor(Math.max(0, now - player.energyUpdatedAt) / (config.energyRegenSec * 1000));
   return Math.min(config.energyCap, player.energyStored + recovered);
 }
@@ -1336,7 +1341,8 @@ export function dispatchMarch(
   home.garrison = clone(player.troops);
   const globalModifiers = numbers.global?.accountModifiers ?? {};
   const speed = 1 + (Number(globalModifiers.marchSpeedBonus) || 0)
-    + player.accountModifiers.marchSpeedBonus + commander.modifiers.marchSpeedBonus;
+    + player.accountModifiers.marchSpeedBonus + commander.modifiers.marchSpeedBonus
+    + ((player.marchBoostUntil ?? 0) > now ? (player.marchBoostBonus ?? 0) : 0); // March Boost item
   // A scout is an unarmed recon fleet: it carries no troops and travels much faster than a
   // combat march (both ways), so a player can check a rival's garrison and decide quickly.
   const scoutMultiplier = input.action === "scout" ? Math.max(1, Number(numbers.global?.march?.scoutSpeedMultiplier) || 3) : 1;

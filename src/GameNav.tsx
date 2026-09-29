@@ -256,7 +256,9 @@ function BuffBar({ address, coreLevel }: { address: string; coreLevel: number })
   if (!buffs.length) return null;
   return <div className="command-buffs" aria-label="Active buffs">
     {buffs.map((buff) => <span key={buff.id} className={`command-buff buff-${buff.id}`}>
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 13.5 3.6v4c0 3.3-2.3 5.5-5.5 6.9-3.2-1.4-5.5-3.6-5.5-6.9v-4Z" /></svg>
+      <svg viewBox="0 0 16 16" aria-hidden="true">{buff.id === "march"
+        ? <path d="M3 3.5 7.5 8 3 12.5M8.5 3.5 13 8l-4.5 4.5" style={{ fill: "none" }} />
+        : <path d="M8 1.5 13.5 3.6v4c0 3.3-2.3 5.5-5.5 6.9-3.2-1.4-5.5-3.6-5.5-6.9v-4Z" />}</svg>
       <b>{buff.label}</b>
       <em className="mono">{buffTimeLeft(buff, now)}</em>
     </span>)}

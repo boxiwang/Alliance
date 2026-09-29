@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import CosmicBackdrop from "./CosmicBackdrop";
 import GameNav from "./GameNav";
 import MarchSignaturePreview from "./MarchSignaturePreview";
@@ -10,7 +10,7 @@ import { CursorGlyph } from "./GameCursor";
 import { playSfx, SFX_SUBTAB_SWITCH, SFX_SUBTAB_SWITCH_VOLUME } from "./lib/sfx";
 import { detectAutoTier, GRAPHICS_TIER_HINT, GRAPHICS_TIER_LABEL, type GraphicsTier } from "./lib/graphics-tier";
 import { canRenameForFree, nextFreeRenameAt, normalizeUsername, usernameLength, type Profile } from "./lib/profile";
-import { updatePlayerName } from "./lib/backend";
+import { loadInventory, updatePlayerName } from "./lib/backend";
 import { hasLocalGm } from "./lib/gm";
 import { capacity, mightBreakdown, prodPerHour, project, totalTroops, worldMarchSlots } from "./lib/game";
 import { initGame, loadGame } from "./lib/gamestore";
@@ -144,6 +144,13 @@ export default function ProfileScreen({
   const [previewCursor, setPreviewCursor] = useState<GameCursorId>(() => GAME_CURSORS.some((cursor) => cursor.id === requestedCursor) ? requestedCursor! : vault.equipped.cursor || GAME_CURSORS[0].id);
   const [editing, setEditing] = useState(false);
   const [callsign, setCallsign] = useState(profile.name);
+  // Rename Signals owned (Warehouse item): rename during the free-rename cooldown.
+  const [renameSignals, setRenameSignals] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void loadInventory(address).then((items) => { if (live) setRenameSignals(items.find((entry) => entry.itemId === "identity.rename")?.quantity ?? 0); }).catch(() => {});
+    return () => { live = false; };
+  }, [address]);
   const [motto, setMotto] = useState(profile.motto || "THE FRONTIER REMEMBERS.");
   const [avatarId, setAvatarId] = useState(profile.avatarId || "genesis");
   const [signal, setSignal] = useState("");
@@ -198,17 +205,21 @@ export default function ProfileScreen({
       flash("NAME SIGNAL MUST HOLD 3–24 GLYPHS");
       return;
     }
-    if (nameChanged && !hasLocalGm(address) && !canRenameForFree(profile, now)) {
-      flash("RENAME RELIC REQUIRED");
+    // Free rename on cooldown: a Rename Signal (Warehouse item) renames now instead.
+    const needsSignal = nameChanged && !hasLocalGm(address) && !canRenameForFree(profile, now);
+    if (needsSignal && renameSignals <= 0) {
+      flash("RENAME SIGNAL REQUIRED");
       return;
     }
+    if (needsSignal && !window.confirm(`Use 1 Rename Signal to change your name to "${nextName}" now?`)) return;
     let serverRename: Awaited<ReturnType<typeof updatePlayerName>> | null = null;
     if (nameChanged) {
       try {
-        serverRename = await updatePlayerName(address, nextName);
+        serverRename = await updatePlayerName(address, nextName, needsSignal);
+        if (needsSignal) setRenameSignals((count) => Math.max(0, count - 1));
       } catch (error) {
         const reason = error instanceof Error ? error.message : "";
-        flash(reason === "name_taken" ? "NAME ALREADY CLAIMED" : reason === "rename_cooldown" ? "FREE RENAME NOT READY" : reason === "invalid_name" ? "USE LETTERS, NUMBERS, . _ OR -" : "NAME CHANGE FAILED");
+        flash(reason === "name_taken" ? "NAME ALREADY CLAIMED" : reason === "rename_cooldown" ? "FREE RENAME NOT READY" : reason === "insufficient_inventory" ? "RENAME SIGNAL REQUIRED" : reason === "invalid_name" ? "USE LETTERS, NUMBERS, . _ OR -" : "NAME CHANGE FAILED");
         return;
       }
     }
@@ -393,7 +404,8 @@ export default function ProfileScreen({
   const socialTotal = CHAT_SIGNALS.length + TITLE_SEALS.length;
   const freeRenameReady = canRenameForFree(profile, now);
   const renameReadyAt = nextFreeRenameAt(profile);
-  const renameWindow = freeRenameReady ? "FREE RENAME // READY" : `FREE RENAME // ${new Intl.DateTimeFormat(account.language, { month: "short", day: "numeric", year: "numeric" }).format(renameReadyAt)}`;
+  const renameWindow = (freeRenameReady ? "FREE RENAME // READY" : `FREE RENAME // ${new Intl.DateTimeFormat(account.language, { month: "short", day: "numeric", year: "numeric" }).format(renameReadyAt)}`)
+    + (!freeRenameReady && renameSignals > 0 ? ` · RENAME SIGNAL ×${renameSignals}` : "");
   const pledgeFading = !!account.alliancePledge?.graceEndsAt && Date.parse(account.alliancePledge.graceEndsAt) > now;
   const pledgeExpired = !!account.alliancePledge?.graceEndsAt && Date.parse(account.alliancePledge.graceEndsAt) <= now;
   const pledgeState = account.alliancePledge ? (pledgeFading ? "PLEDGE FADING" : pledgeExpired ? "PLEDGE LOST" : "GATE OPEN") : "NO PLEDGE RECORDED";

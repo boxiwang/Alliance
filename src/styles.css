@@ -1878,3 +1878,14 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 /* Scout button on the commander card: its Oil price under the label. */
 .commander-card-actions .commander-card-cost{display:block;margin-top:2px;color:#ffb454;font:700 7px var(--mono);letter-spacing:.08em;opacity:.85}
 .commander-card-actions button:disabled .commander-card-cost{color:#8a6a3a}
+/* Warehouse: count stepper for usable items; chest-opened dialog. */
+.inv-count{display:flex;align-items:center;gap:8px}.inv-count>span{color:#6f8ca0;font:700 7.5px var(--mono);letter-spacing:.14em}
+.inv-count .inv-max{padding:6px 9px;border:1px solid rgba(92,129,171,.3);border-radius:7px;background:transparent;color:#9fb5c4;font:700 8px var(--hud);letter-spacing:.1em;cursor:pointer}
+.inv-count .inv-max:disabled{opacity:.4;cursor:default}
+.chest-result .chest-loot{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:16px}
+.chest-result .chest-loot .inv-slot{cursor:default;animation:chest-pop .45s ease-out both}
+.chest-result .chest-loot .inv-slot:nth-child(2){animation-delay:.08s}.chest-result .chest-loot .inv-slot:nth-child(3){animation-delay:.16s}.chest-result .chest-loot .inv-slot:nth-child(n+4){animation-delay:.24s}
+@keyframes chest-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.chest-result .chest-loot .inv-slot{animation:none}}
+.command-buff.buff-march{border-color:rgba(127,240,196,.7);background:linear-gradient(100deg,rgba(67,242,161,.24),rgba(67,242,161,.06));box-shadow:0 0 16px rgba(67,242,161,.25)}
+.command-buff.buff-march svg{stroke:#bff7de}
