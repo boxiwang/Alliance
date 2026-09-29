@@ -1790,6 +1790,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
               every zoom. Resources/rogues keep the base SVG lock-ring. */}
           {selected?.kind === "city" && <CelestialLock key={`lock-${selected.id}`} position={selected.position} radius={selectionRadius(false, true)} worldPerPx={worldPerPx} />}
           {homeSelected && <CelestialLock position={playerCity.position} radius={selectionRadius(true, false)} worldPerPx={worldPerPx} own />}
+          {marches.filter((m) => m.kind === "scout" && m.attacker === address && m.arriveAt > now).map((m) => <ScoutTrail key={m.id} march={m} scale={markerScale} />)}
           {remoteSelected && !strategicZoom && <CelestialLock key={`lock-rp-${remoteSelected.id}`} position={remoteSelected.coords} tone="rival"
             radius={(detailZoom ? 7.2 : 4.2) * markerScale / Math.max(.0001, worldPerPx) + 8} worldPerPx={worldPerPx} />}
           <g className="world-wormhole-caption" transform={`translate(${center.x} ${center.y}) scale(${worldPerPx})`}>
@@ -1837,18 +1838,16 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
                 <small>CORE {remoteSelected.keepLevel || 1}</small>
               </div>
             </header>
-            {snap && <section className="commander-card-recon" aria-label="Recon intel">
-              <header><small>RECON</small><em>{intelLeftMs >= 60_000 ? `${Math.ceil(intelLeftMs / 60_000)}M LEFT` : "<1M LEFT"}</em></header>
-              <div className="commander-card-might"><small>MIGHT</small><b>{compact(snap.might)}</b></div>
+            {snap && <div className="commander-card-intel" aria-label="Recon intel">
+              <div className="commander-card-intel-head"><small>MIGHT</small><b>{compact(snap.might)}</b><em>INTEL · {intelLeftMs >= 60_000 ? `${Math.ceil(intelLeftMs / 60_000)}M` : "<1M"}</em></div>
               <dl>
                 <div><dt>ARMY</dt><dd>{compact(snap.troops.army)}</dd></div><div><dt>NAVY</dt><dd>{compact(snap.troops.navy)}</dd></div><div><dt>AIR</dt><dd>{compact(snap.troops.air)}</dd></div>
-                <div><dt>WALL</dt><dd>Lv.{snap.wallLevel}</dd></div><div><dt>WOUNDED</dt><dd>{compact(snap.wounded)}</dd></div><div><dt>SHIELD</dt><dd className={snap.shielded ? "on" : undefined}>{snap.shielded ? "ON" : "OFF"}</dd></div>
+                <div><dt>WALL</dt><dd>Lv.{snap.wallLevel}</dd></div><div><dt>WOUNDED</dt><dd>{compact(snap.wounded)}</dd></div><div><dt>SHIELD</dt><dd>{snap.shielded ? "ON" : "OFF"}</dd></div>
               </dl>
-              <small className="commander-card-loot-title">UNPROTECTED LOOT</small>
-              <dl className="loot">
-                <div><dt>CASH</dt><dd>{compact(snap.resources.cash)}</dd></div><div><dt>OIL</dt><dd>{compact(snap.resources.oil)}</dd></div><div><dt>POWER</dt><dd>{compact(snap.resources.power)}</dd></div>
+              <dl className="commander-card-loot">
+                {(["cash", "oil", "power"] as const).map((key) => <div key={key}><dt>{key.toUpperCase()}</dt><dd style={{ color: RESOURCE_COLORS[key] }}>{compact(snap.resources[key])}</dd></div>)}
               </dl>
-            </section>}
+            </div>}
             <div className="commander-card-actions">
               <button className="scout" disabled={launching || !!scoutFlight} onMouseEnter={() => setCardHint("Reveals Might, troops and loot · they will see the scout")} onMouseLeave={() => setCardHint(null)}
                 onClick={() => { setScoutingId(remoteSelected.id); rtRef.current?.sendScout(remoteSelected.id); }}>{scoutFlight ? `◎ EN ROUTE · ${clockLeft(scoutFlight.arriveAt - now)}` : launching ? "LAUNCHING…" : snap ? "◎ RESCOUT" : "◎ SCOUT"}</button>
@@ -2056,4 +2055,26 @@ function reconFromReport(report: ServerReport): [string, ReconIntel] | null {
 function clockLeft(ms: number): string {
   const sec = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+}
+
+/** Your recon fleet in flight: a faint dashed route and one small dot gliding to the target
+ *  (deliberately plain — no march FX). Position comes from the server times, so a page
+ *  opened mid-flight shows the scout where it really is. */
+function ScoutTrail({ march, scale }: { march: LiveMarch; scale: number }) {
+  const dotRef = useRef<SVGCircleElement>(null);
+  useEffect(() => {
+    let frame = 0;
+    const span = Math.max(1, march.arriveAt - march.departAt);
+    const step = () => {
+      const t = Math.min(1, Math.max(0, (Date.now() - march.departAt) / span));
+      dotRef.current?.setAttribute("transform", `translate(${march.from.x + (march.to.x - march.from.x) * t} ${march.from.y + (march.to.y - march.from.y) * t})`);
+      if (t < 1) frame = requestAnimationFrame(step);
+    };
+    step();
+    return () => cancelAnimationFrame(frame);
+  }, [march]);
+  return <g className="world-scout-trail" pointerEvents="none">
+    <line x1={march.from.x} y1={march.from.y} x2={march.to.x} y2={march.to.y} vectorEffect="non-scaling-stroke" />
+    <circle ref={dotRef} r={3 * scale} cx={0} cy={0} transform={`translate(${march.from.x} ${march.from.y})`} />
+  </g>;
 }

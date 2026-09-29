@@ -1656,19 +1656,16 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .commander-card header b>i{flex:none;color:color-mix(in srgb,var(--commander) 80%,#cfe6f2);font-style:normal}
 .commander-card header b .name-signal{flex:0 1 auto;min-width:0;max-width:100%}.commander-card header b .name-signal-text{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
 .commander-card header small{display:block;margin-top:3px;color:color-mix(in srgb,var(--commander) 55%,#7f9bad);font:700 8px var(--mono);letter-spacing:.14em}
-/* Expanded card while recon is valid; collapses back when the intel expires. */
-.commander-card-recon{margin:0 0 10px;padding:9px 10px 10px;border:1px solid rgba(67,242,161,.26);border-radius:9px;background:linear-gradient(160deg,rgba(67,242,161,.07),rgba(67,242,161,.02));animation:commander-card-in .2s ease-out}
-.commander-card-recon>header{display:flex;align-items:center;gap:6px;margin:0 0 6px;padding:0;border:0}
-.commander-card-recon>header small{color:#5fae8c;font:700 7.5px var(--mono);letter-spacing:.16em}
-.commander-card-recon>header span{padding:1px 6px;border:1px solid rgba(67,242,161,.4);border-radius:9px;color:#43f2a1;font:700 6.5px var(--mono);letter-spacing:.08em}
-.commander-card-recon>header em{margin-left:auto;color:#5f8974;font:700 7.5px var(--mono);font-style:normal;letter-spacing:.06em}
-.commander-card-might{display:flex;align-items:baseline;gap:8px;margin:0 0 8px}.commander-card-might small{color:#6f9c88;font:700 7.5px var(--mono);letter-spacing:.12em}.commander-card-might b{color:#effff7;font:750 18px var(--hud)}
-.commander-card-recon dl{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:0}
-.commander-card-recon dl>div{padding:4px 6px;border:1px solid rgba(120,160,190,.13);border-radius:6px;background:rgba(255,255,255,.025)}
-.commander-card-recon dt{color:#5a7a8c;font:700 6px var(--mono);letter-spacing:.1em}
-.commander-card-recon dd{margin:1px 0 0;color:#d6ebf5;font:700 10px var(--mono)}
-.commander-card-loot-title{display:block;margin:8px 0 4px;color:#6f8f7c;font:700 6.5px var(--mono);letter-spacing:.13em}
-.commander-card-recon dl.loot dd{color:#f1dfae}.commander-card-recon dd.on{color:#43f2a1}
+/* Recon intel sits directly in the card (no inner panel) while valid; it disappears when
+   the intel expires. Same neutral palette as the card; only loot uses resource colours. */
+.commander-card-intel{margin:0 0 11px;padding:10px 0 0;border-top:1px solid rgba(120,160,190,.14);animation:commander-card-in .2s ease-out}
+.commander-card-intel-head{display:flex;align-items:baseline;gap:8px;margin:0 0 8px}
+.commander-card-intel-head small,.commander-card-intel dt{color:#5c8296;font:700 7px var(--mono);letter-spacing:.12em}
+.commander-card-intel-head b{color:#eef7fb;font:750 18px var(--hud)}
+.commander-card-intel-head em{margin-left:auto;color:#5c8296;font:700 7px var(--mono);font-style:normal;letter-spacing:.1em}
+.commander-card-intel dl{display:grid;grid-template-columns:repeat(3,1fr);gap:7px 8px;margin:0 0 9px}
+.commander-card-intel dd{margin:2px 0 0;color:#dcecf6;font:700 11px var(--hud)}
+.commander-card-intel dl.commander-card-loot{margin:0;padding-top:8px;border-top:1px dashed rgba(120,160,190,.12)}
 .commander-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .commander-card-actions button{padding:8px 4px;border:1px solid rgba(120,160,190,.3);border-radius:7px;background:rgba(12,26,44,.92);color:#dcecf6;font:700 8.5px var(--hud);letter-spacing:.08em;cursor:pointer}
 .commander-card-actions button:hover:not(:disabled){border-color:rgba(160,205,235,.5);background:rgba(18,36,60,.95)}
@@ -1713,3 +1710,10 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 @media(min-width:1061px) and (max-width:1180px){.command-resource{grid-template-columns:24px minmax(0,1fr);gap:6px;padding:9px 8px}.command-resource-icon{width:24px;height:24px}.command-resource-icon .building-glyph{width:13px;height:13px}.command-resource>div{gap:6px}.command-metric-stat .command-resource-value>b{font-size:13px}}
 @media(max-width:980px){.command-metric-stat .command-resource-value>b{font-size:12.5px}.command-metric-stat .command-resource-value>small,.command-metric-stat .command-resource-rate{overflow:hidden;text-overflow:ellipsis}}
 @media(min-width:981px) and (max-width:1060px){.command-resource-icon{display:none}.command-resource{grid-template-columns:minmax(0,1fr);padding:9px 10px}.command-metric-stat .command-resource-value>b{font-size:13px}}
+/* A share waiting for a chat: shown where there is no composer (Contacts, System). */
+.comms-pending-hint{position:relative;display:grid;gap:6px;margin:8px 12px;padding:8px 34px 8px 8px;border:1px dashed rgba(120,190,230,.3);border-radius:10px;background:rgba(10,22,38,.7)}.comms-pending-hint>span{color:#8fb0c4;font:600 9px var(--mono);letter-spacing:.04em}.comms-pending-hint .comms-share-remove{position:absolute;right:8px;top:8px}
+/* Scout in flight: dashed route + one gliding dot (no march FX). */
+.world-scout-trail line{stroke:#8ff3cf;stroke-opacity:.5;stroke-width:1.3;stroke-dasharray:3 6;animation:world-scout-dash 1.2s linear infinite}
+.world-scout-trail circle{fill:#d8fff0;filter:drop-shadow(0 0 3px rgba(127,240,196,.95))}
+@keyframes world-scout-dash{to{stroke-dashoffset:-9}}
+@media(prefers-reduced-motion:reduce){.world-scout-trail line{animation:none}}

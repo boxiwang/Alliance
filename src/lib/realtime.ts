@@ -110,7 +110,7 @@ export class RealtimeClient {
   }
 
   sendChat(text: string, intel?: unknown) { this.send({ type: "chat", text, ...(intel ? { intel } : {}) }); }
-  sendDM(to: string, text: string) { this.send({ type: "dm", to, text }); }
+  sendDM(to: string, text: string, intel?: unknown) { this.send({ type: "dm", to, text, ...(intel ? { intel } : {}) }); }
   sendScout(to: string) { this.send({ type: "scout", to }); }
   sendMarch(to: string) { this.send({ type: "march", to }); }
   // Map view query: never queued (a stale view is useless); resent after reconnect.

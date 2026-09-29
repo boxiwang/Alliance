@@ -154,6 +154,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       sig: (c.signal as ChatSignalId | null | undefined) ?? undefined,
       t: new Date(c.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
       b: c.text,
+      intel: (c.intel as SharedWorldIntel | undefined) || undefined,
     }));
   }, [dmWith, dmThreads, address]);
 
@@ -248,19 +249,10 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     // in view; also pin to the current bottom immediately for instant feedback.
     forceScrollRef.current = true;
     scrollToLatest();
-    // Private DM — send to the server, which delivers to both participants.
-    if (dmWith) {
-      if (!body) return;
-      rtRef.current?.sendDM(dmWith.id, body);
-      void trackEvents(address, [{ name: "chat.message_sent", page: "messages", properties: { channel: "dm" } }]).catch(() => {});
-      if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME * account.sfxVolume);
-      setDraft("");
-      return;
-    }
-    // Cosmos is the live shared channel — send to the server and let it echo back
-    // (no local copy, or it would double once the broadcast returns). A relayed
-    // coordinate/recon goes through as a text summary.
-    if (isCosmos) {
+    // Cosmos and DMs go through the server, which echoes back (no local copy, or it
+    // would double). A pending share stays attached across channel switches until it is
+    // sent — in whichever chat the player chooses — or removed.
+    if (dmWith || isCosmos) {
       let text = body;
       let intel: SharedWorldIntel | undefined;
       if (pendingShare?.kind === "commander") {
@@ -273,8 +265,10 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
         intel = pendingShare; // rides along so it renders as a clickable star-map card
       }
       if (!text) return;
-      rtRef.current?.sendChat(text, intel);
-      void trackEvents(address, [{ name: pendingShare ? "chat.intel_shared" : "chat.message_sent", page: "messages", properties: { channel: "cosmos", intelType: pendingShare?.kind || null } }]).catch(() => {});
+      if (dmWith) rtRef.current?.sendDM(dmWith.id, text, intel);
+      else rtRef.current?.sendChat(text, intel);
+      const channel = dmWith ? "dm" : "cosmos";
+      void trackEvents(address, [{ name: intel ? "chat.intel_shared" : "chat.message_sent", page: "messages", properties: { channel, intelType: intel?.kind || null } }]).catch(() => {});
       if (account.soundEnabled) playSfx(SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME * account.sfxVolume);
       setDraft(""); setPendingShare(null); clearQueuedCommsShare(address); setShareTrayOpen(false);
       return;
@@ -390,6 +384,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
               {messages.length === 0 && <div className="spam">{dmWith ? "No messages yet — say hi." : isCosmos ? "Be the first to signal the frontier." : "No messages yet."}</div>}
             </div>}
 
+        {pendingShare && (isSystem || active === "contacts") && <div className="comms-pending-hint"><SharedIntelCard share={pendingShare} now={now} onOpen={() => openSharedTarget(pendingShare)} compactView /><span>Open Cosmos or a direct chat to send this card.</span><button className="comms-share-remove" aria-label="Remove intelligence attachment" onClick={removePendingShare}>×</button></div>}
         {!isSystem && active !== "contacts" && <div className="compose">
           <div className="safety"><span><i>🚫</i> Links off</span></div>
           {shareTrayOpen && !pendingShare && <div className="comms-share-tray"><span><b>RELAY CHAMBER EMPTY</b><small>LOCK ANY SIGNAL IN THE STAR MAP TO RELAY ITS VECTOR OR LIVE RECON.</small></span><button onClick={onWorld}>OPEN STAR MAP ▸</button></div>}

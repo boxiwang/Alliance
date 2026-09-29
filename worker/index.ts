@@ -689,7 +689,8 @@ export class WorldRoom {
       const key = dmKey(pid, to);
       const dmsAll = (await this.state.storage.get<Record<string, ChatRow[]>>("dms")) || {};
       const arr = dmsAll[key] || [];
-      const msg: ChatRow = { id: crypto.randomUUID(), pid, to, name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null, signal: chatSignalOf(players[pid]) };
+      const intel = sanitizeIntel(data.intel);
+      const msg: ChatRow = { id: crypto.randomUUID(), pid, to, name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null, signal: chatSignalOf(players[pid]), ...(intel ? { intel } : {}) };
       arr.push(msg);
       dmsAll[key] = prune(arr);
       await this.state.storage.put("dms", dmsAll);
