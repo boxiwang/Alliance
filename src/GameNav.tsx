@@ -97,7 +97,6 @@ export default function GameNav({
   }, [visibleCredits]);
   return (
     <nav className="command-nav" aria-label="Game view and account status">
-      <BuffBar address={profile.address} coreLevel={townhallLevel} />
       <div className="command-nav-head">
         <div className="command-nav-left">
         {/* Identity = the way into Profile & settings (mainstream SLG: tap your avatar).
@@ -118,6 +117,8 @@ export default function GameNav({
         </button>
         {/* Server clock reads as an instrument beside the identity, not as a control. */}
         <DualClock />
+        {/* Active buffs sit beside the clock (nothing shown when none is active). */}
+        <BuffBar address={profile.address} coreLevel={townhallLevel} />
         </div>
         <div className="command-nav-controls">
           <div className="command-might"><small>MIGHT</small><b>{compact(might)}</b></div>
