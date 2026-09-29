@@ -29,7 +29,7 @@ function loadout(address: string): CosmeticLoadout {
 }
 
 export default function CityStarGrid({
-  address, name, view, now, selected, quality, marches, scouted, arrived, onSelect,
+  address, name, view, now, selected, quality, marches, scouted, arrived, shielded = false, onSelect,
 }: {
   address: string;
   name: string;
@@ -40,6 +40,8 @@ export default function CityStarGrid({
   marches: LiveMarch[];
   scouted: ServerReport | null;
   arrived: boolean;
+  /** Shield active (shared rule, lib/shield.ts): the core's hex lattice lights up. */
+  shielded?: boolean;
   onSelect: (building: BKey) => void;
 }) {
   const [equipped, setEquipped] = useState(() => loadout(address));
@@ -53,8 +55,8 @@ export default function CityStarGrid({
   const mapRef = useRef<HTMLDivElement>(null);
   const coreRef = useRef<HTMLButtonElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const stateRef = useRef({ view, marches, quality });
-  stateRef.current = { view, marches, quality };
+  const stateRef = useRef({ view, marches, quality, shielded });
+  stateRef.current = { view, marches, quality, shielded };
   useEffect(() => {
     if (!mapRef.current || !coreRef.current || !canvasRef.current) return;
     return mountCityFx(mapRef.current, coreRef.current, canvasRef.current, () => stateRef.current);

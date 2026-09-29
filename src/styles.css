@@ -1755,3 +1755,9 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world-city-coord-tab text{font:600 2.65px var(--mono);fill:#7fcfe2;letter-spacing:.04em}
 /* A relayed commander card whose recon has run out. */
 .commander-card-expired{margin:0 0 10px;padding:7px 0 0;border-top:1px solid rgba(120,160,190,.14);color:#6c7f8c;font:700 8px var(--mono);letter-spacing:.16em}
+/* Shield dome on the Star Map (hex lattice, shield blue — deeper than the cyan halo cosmetics). */
+.world-shield-dome .lattice{opacity:.5;animation:shield-dome-breathe 4.5s ease-in-out infinite}
+.world-shield-dome .rim{stroke:#cfe3ff;stroke-opacity:.55;stroke-width:1.1}
+.world-shield-dome .glint{fill:none;stroke:rgba(255,255,255,.4);stroke-width:2.2;stroke-linecap:round}
+@keyframes shield-dome-breathe{0%,100%{opacity:.4}50%{opacity:.68}}
+@media(prefers-reduced-motion:reduce){.world-shield-dome .lattice{animation:none}}

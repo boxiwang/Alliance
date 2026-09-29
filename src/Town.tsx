@@ -27,6 +27,7 @@ import { Profile } from "./lib/profile";
 import { compact } from "./lib/format";
 import { clearLocalWorldSession, loadLocalWorldSession, openLocalWorldSession } from "./lib/world-adapter";
 import { energyAt } from "./lib/world-engine";
+import { shieldActive } from "./lib/shield";
 import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
 import BuildingGlyph from "./BuildingGlyph";
@@ -315,7 +316,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const stored = loadLocalWorldSession(address);
     if (!stored) {
       const energyCap = Number(getN().world?.energy?.cap) || 100;
-      return { location: "RHCHAIN 4663 · HOME NOT YET CHARTED", energy: energyCap, energyCap, activeFleets: 0, fleetCap: worldMarchSlots(view) };
+      return { location: "RHCHAIN 4663 · HOME NOT YET CHARTED", energy: energyCap, energyCap, activeFleets: 0, fleetCap: worldMarchSlots(view),
+        shielded: shieldActive({ keepLevel: view.buildings.keep.lvl }, now, getN()) };
     }
     const player = stored.world.players[stored.playerId];
     const city = player ? stored.world.entities[player.cityId] : null;
@@ -327,6 +329,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       energyCap: stored.world.config.energyCap,
       activeFleets,
       fleetCap: player?.marchSlots ?? worldMarchSlots(view),
+      shielded: shieldActive({ keepLevel: view.buildings.keep.lvl, hasAttacked: city?.kind === "city" ? city.hasAttacked : false, shieldUntil: city?.kind === "city" ? city.shieldUntil : 0 }, now, getN()),
     };
   }, [address, now, view]);
 
@@ -686,7 +689,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         ? renderResearchCenter()
         : facilityInterior && facilityOpen === "storage"
           ? renderWarehouse()
-          : <CityStarGrid address={address} name={profile.name} view={view} now={now} selected={facilityOpen} quality={quality} marches={cityMarches} scouted={cityScouted} arrived={cityArrivedUntil > now} onSelect={openFacility} />}
+          : <CityStarGrid address={address} name={profile.name} view={view} now={now} selected={facilityOpen} quality={quality} marches={cityMarches} scouted={cityScouted} arrived={cityArrivedUntil > now} shielded={worldStatus.shielded} onSelect={openFacility} />}
 
         {facilityOpen ? (() => {
           const trainingType = TROOP_ORDER.find((type) => TRAINING_BUILDING[type] === facilityOpen);

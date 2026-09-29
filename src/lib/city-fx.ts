@@ -4,7 +4,7 @@ import { prodPerHour, type GameState, type BKey } from "./game";
 import type { LiveMarch } from "./realtime";
 import type { GraphicsQuality } from "./graphics-tier";
 
-export type CityFxState = { view: GameState; marches: LiveMarch[]; quality: GraphicsQuality };
+export type CityFxState = { view: GameState; marches: LiveMarch[]; quality: GraphicsQuality; shielded?: boolean };
 export const CITY_DISTRICTS = [
   {label:"ECONOMY",color:"#e8b24c",ids:["bank","oilwell","powerplant","storage"],q:-45,step:19},
   {label:"MILITARY",color:"#ff8a5c",ids:["armyCamp","navalBase","airfield"],q:45,step:24},
@@ -28,6 +28,7 @@ export function mountCityFx(map: HTMLDivElement, core: HTMLButtonElement, cv: HT
     {id:"powerplant",color:"#38d9ff",res:"power",offset:5.4}
   ];
   let W=0,H=0,dpr=1,G:any=null,raf=0,last=0,disposed=false;
+  let shieldWasOn=false,shieldLitAt=0;
   const t0=performance.now(),PHI=-7*Math.PI/180,cosP=Math.cos(PHI),sinP=Math.sin(PHI);
   function ell(e,t){const x=e.a*Math.cos(t),y=e.b*Math.sin(t);return[e.cx+x*cosP-y*sinP,e.cy+x*sinP+y*cosP];}
   function measure(){
@@ -63,7 +64,7 @@ export function mountCityFx(map: HTMLDivElement, core: HTMLButtonElement, cv: HT
 
   function frame(now){
     if(disposed||document.hidden)return;
-    const {view,marches,quality}=getState(),still=!quality.fallbackAnim||quality.tier==="low";
+    const state=getState(),{view,marches,quality}=state,still=!quality.fallbackAnim||quality.tier==="low";
     // Low/reduced-motion redraws only for data updates; high retains Claude's full geometry.
     const interval=still?500:1000/Math.min(30,quality.frameHz);
     if(now-last<interval){raf=requestAnimationFrame(frame);return;}last=now;
@@ -118,11 +119,22 @@ export function mountCityFx(map: HTMLDivElement, core: HTMLButtonElement, cv: HT
       for(let i=hits.length-1;i>=0;i--){const h=hits[i],a=(T-h.start)/.9;if(a>=1){hits.splice(i,1);continue}const r=c.r+3,sp=.18+a*.35;ctx.strokeStyle=h.color;ctx.globalAlpha=.8*(1-a);ctx.lineWidth=2.2*(1-a)+.6;ctx.shadowColor=h.color;ctx.shadowBlur=quality.blur?10:0;ctx.beginPath();ctx.arc(c.x,c.y,r,h.ang-sp,h.ang+sp);ctx.stroke();ctx.shadowBlur=0}
       ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 
-    // shield dome (hex lattice, shimmer band)
+    // shield dome (hex lattice, shimmer band). Idle: a faint slate lattice. Shield active
+    // (same rule as the Star Map dome): shield blue and lit, and each time it comes on (or the
+    // page opens with it on) a wave lights the cells from the core outwards.
+    const shieldOn=!!state.shielded;
+    if(shieldOn&&!shieldWasOn)shieldLitAt=T;shieldWasOn=shieldOn;
+    const litWave=shieldOn&&!still?Math.max(0,Math.min(1.4,(T-shieldLitAt)/1.1)):2,hexColor=shieldOn?'#6aaeff':'#62789a';
     ctx.save();const R=c.r+34;ctx.beginPath();ctx.arc(c.x,c.y,R,0,Math.PI*2);ctx.clip();
-    const band=still?0:(T*.5)%2-.5;ctx.strokeStyle='#8fb0ff';ctx.lineWidth=.8;const hs=11,hw=hs*Math.sqrt(3);
-    for(let row=-8;row<=8;row++)for(let col=-8;col<=8;col++){const hx=c.x+col*hw+(row&1?hw/2:0),hy=c.y+row*hs*1.5,dd=Math.hypot(hx-c.x,hy-c.y)/R;if(dd>1.05||dd<(c.r+4)/R)continue;const sweep=still?0:Math.max(0,1-Math.abs((hy-c.y)/R-band*1.4)*3);ctx.globalAlpha=(.05+.22*Math.pow(dd,3))*(1+sweep*2.2);ctx.beginPath();for(let k=0;k<6;k++){const a=Math.PI/6+k*Math.PI/3;ctx.lineTo(hx+Math.cos(a)*hs*.92,hy+Math.sin(a)*hs*.92)}ctx.closePath();ctx.stroke()}
-    ctx.restore();ctx.globalAlpha=.35;ctx.strokeStyle='#8fb0ff';ctx.lineWidth=1;ctx.beginPath();ctx.arc(c.x,c.y,R,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+    const band=still?0:(T*.5)%2-.5;ctx.strokeStyle=hexColor;ctx.lineWidth=shieldOn?1:.8;const hs=11,hw=hs*Math.sqrt(3);
+    for(let row=-8;row<=8;row++)for(let col=-8;col<=8;col++){const hx=c.x+col*hw+(row&1?hw/2:0),hy=c.y+row*hs*1.5,dd=Math.hypot(hx-c.x,hy-c.y)/R;if(dd>1.05||dd<(c.r+4)/R)continue;const sweep=still?0:Math.max(0,1-Math.abs((hy-c.y)/R-band*1.4)*3);
+      const wave=litWave<=1.3?Math.max(0,1-Math.abs(dd-litWave)*4.5):0;
+      const base=shieldOn?(.16+.42*Math.pow(dd,2.2)):(.05+.22*Math.pow(dd,3));
+      ctx.globalAlpha=Math.min(1,base*(1+sweep*(shieldOn?1.6:2.2))+wave*.9);ctx.beginPath();for(let k=0;k<6;k++){const a=Math.PI/6+k*Math.PI/3;ctx.lineTo(hx+Math.cos(a)*hs*.92,hy+Math.sin(a)*hs*.92)}ctx.closePath();ctx.stroke();
+      if(shieldOn&&wave>.35){ctx.fillStyle=hexColor;ctx.globalAlpha=wave*.16;ctx.fill()}}
+    ctx.restore();
+    if(shieldOn){ctx.shadowColor='#4f96ff';ctx.shadowBlur=quality.blur?12:0}
+    ctx.globalAlpha=shieldOn?.8:.35;ctx.strokeStyle=hexColor;ctx.lineWidth=shieldOn?1.4:1;ctx.beginPath();ctx.arc(c.x,c.y,R,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;
 
     // core upgrade progress ring
     const coreQueue=view.buildings.keep,coreTotal=(coreQueue.durationSec||0)*1000;

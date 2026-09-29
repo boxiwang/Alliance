@@ -22,6 +22,7 @@ import {
 import GameNav from "./GameNav";
 import NameSignal from "./NameSignal";
 import CommanderCardView from "./CommanderCardView";
+import { shieldActive } from "./lib/shield";
 import MiniComms from "./MiniComms";
 import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
@@ -531,7 +532,7 @@ export function marchMapProgress(march: HeadlessMarch, now: number): number {
 }
 function entityLevel(entity: SelectableEntity): number { return entity.kind === "city" ? entity.townhallLevel : entity.level; }
 function cityShielded(city: CityEntity, now: number, numbers: any): boolean {
-  return !city.hasAttacked && (city.shieldUntil > now || city.townhallLevel < (Number(numbers.global?.shield?.protectedUntilKeepLevel) || 0));
+  return shieldActive({ keepLevel: city.townhallLevel, hasAttacked: city.hasAttacked, shieldUntil: city.shieldUntil }, now, numbers);
 }
 function marchRemainingSec(march: HeadlessMarch, now: number): number {
   const end = march.state === "outbound" ? march.arriveAt : march.state === "gathering" ? march.workUntil : march.state === "returning" ? march.returnAt : now;
@@ -1307,6 +1308,14 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     }, urgent ? 0 : 120);
     return () => window.clearTimeout(timer);
   }, [strategicZoom, wantPlanets, viewX, viewY, viewport.width, viewport.height, rtEpoch]);
+  // Shield domes (hex lattice, outside halo + orbit; the selection lock wraps outside the dome).
+  // Other commanders: the public Core rule (their shield items arrive with P0-7).
+  const shieldDomes = strategicZoom ? null : <>
+    {cityShielded(playerCity, now, N) && <ShieldDome position={playerCity.position} radiusPx={worldVisualBodyRadius(zoom, true, homeSelected, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} own />}
+    {remotePlayers.filter((p) => p.coords.x >= viewX - 40 && p.coords.x <= viewX + viewport.width + 40 && p.coords.y >= viewY - 40 && p.coords.y <= viewY + viewport.height + 40
+      && shieldActive({ keepLevel: p.keepLevel || 1 }, now, N))
+      .map((p) => <ShieldDome key={`dome-${p.id}`} position={p.coords} radiusPx={worldVisualBodyRadius(zoom, false, p.id === remoteSelectedId, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} />)}
+  </>;
   const mapRemotePlayers = useMemo(() => {
     if (strategicZoom) return null;
     const pad = 30;
@@ -1800,6 +1809,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             radius={(CALM_MAP ? calmTargetRadiusPx : (detailZoom ? 7.2 : 4.2) * markerScale / Math.max(.0001, worldPerPx)) * SELECT_SCALE + 7}
             tone={selected.kind === "resource" ? selected.resource : selected.level > nextRogueLevel ? "locked" : "rogue"} />}
           {mapTargets}
+          {!gpuVisualsReady && <ShieldDefs />}
+          {!gpuVisualsReady && shieldDomes}
           {mapRemotePlayers}
           <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(null); setHomeSelected(true); setRemoteSelectedId(null); playSelectSfx(); }}>
             {strategicZoom && gpuFallback ? <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
@@ -1840,6 +1851,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           {/* Selection ring for cities: a full circle in screen-space with a
               constant thin stroke, wrapping outside the planet's cosmetics at
               every zoom. Resources/rogues keep the base SVG lock-ring. */}
+          <ShieldDefs />
+          {shieldDomes}
           {selected?.kind === "city" && <CelestialLock key={`lock-${selected.id}`} position={selected.position} radius={selectionRadius(false, true)} worldPerPx={worldPerPx} />}
           {homeSelected && <CelestialLock position={playerCity.position} radius={selectionRadius(true, false)} worldPerPx={worldPerPx} own />}
           {marches.filter((m) => m.kind === "scout" && m.attacker === address && m.arriveAt > now).map((m) => <ScoutTrail key={m.id} march={m} scale={markerScale} />)}
@@ -2119,4 +2132,27 @@ const VIEW_CACHE_MS = 10 * 60_000;
 function cachedView(address: string): ViewCache | null {
   const entry = VIEW_CACHE.get(address);
   return entry && Date.now() - entry.at < VIEW_CACHE_MS ? entry : null;
+}
+
+/** Shared <defs> for shield domes (one set per SVG layer). */
+function ShieldDefs() {
+  return <defs>
+    <radialGradient id="shield-dome-fill"><stop offset=".6" stopColor="#4f96ff" stopOpacity="0" /><stop offset=".9" stopColor="#4f96ff" stopOpacity=".16" /><stop offset="1" stopColor="#bcd8ff" stopOpacity=".38" /></radialGradient>
+    <radialGradient id="shield-dome-fade"><stop offset=".42" stopColor="#fff" stopOpacity="0" /><stop offset=".94" stopColor="#fff" stopOpacity=".9" /><stop offset="1" stopColor="#fff" stopOpacity="1" /></radialGradient>
+    <mask id="shield-dome-mask" maskContentUnits="objectBoundingBox"><rect width="1" height="1" fill="url(#shield-dome-fade)" /></mask>
+    <pattern id="shield-dome-hex" width="15.6" height="27" patternUnits="userSpaceOnUse">
+      <path d="M7.8 0 L15.6 4.5 L15.6 13.5 L7.8 18 L0 13.5 L0 4.5 Z M7.8 18 L7.8 27" fill="none" stroke="#8fc2ff" strokeWidth=".8" />
+    </pattern>
+  </defs>;
+}
+
+/** Hex-lattice shield dome around a planet, sized in screen px (constant look at any zoom). */
+function ShieldDome({ position, radiusPx, worldPerPx, own = false }: { position: Point; radiusPx: number; worldPerPx: number; own?: boolean }) {
+  const r = Math.max(8, radiusPx);
+  return <g className={`world-shield-dome ${own ? "own" : ""}`} transform={`translate(${position.x} ${position.y}) scale(${worldPerPx})`} pointerEvents="none">
+    <circle r={r} fill="url(#shield-dome-fill)" />
+    <circle className="lattice" r={r} fill="url(#shield-dome-hex)" mask="url(#shield-dome-mask)" />
+    <circle className="rim" r={r} fill="none" />
+    <path className="glint" d={`M ${-r * .7} ${-r * .45} A ${r * .88} ${r * .88} 0 0 1 ${-r * .1} ${-r * .84}`} />
+  </g>;
 }

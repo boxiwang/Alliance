@@ -197,6 +197,12 @@ Remove the existing `burning` / Wall-integrity / relocate logic in
 - **Weekly shield item:** every player (all levels) gets one **8-hour shield** each week
   (Monday 00:00 UTC), stockable, delivered by the Admin reward tool (`BETA-P0.md` P0-7).
 - Attacking while shielded **breaks the shield immediately**.
+- **How a shield looks (owner, 2026-09-28):** a shield-blue **hex-lattice dome** around the
+  planet on the Star Map (outside halo + orbit; the selection lock wraps outside the dome;
+  never a halo, which is a cosmetic). On the city page the core's hex lattice lights up
+  shield-blue, with a light-up wave from the core when the page opens or the shield comes
+  on; without a shield it stays a faint slate lattice. One rule for every view:
+  `src/lib/shield.ts`. Shield status is public (no scout needed).
 - **30-minute lockout:** after a battle you started resolves, you cannot raise a shield
   for 30 minutes; you also cannot raise one while an attack march of yours is outbound.
   Scouting is not an attack.
