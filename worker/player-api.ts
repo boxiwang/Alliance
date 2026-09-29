@@ -16,6 +16,7 @@ import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS } from "../src/lib/mvp-i
 import { DAILY_SUPPLY, SHOP_OFFER_BY_ID, SHOP_OFFERS, TOPUP_PACKS } from "../src/lib/shop-catalog";
 import { gameStateBelongsToPlayer, projectGameJson } from "./economy";
 import { applyCommand } from "./commands";
+import { scoutOilCost } from "../src/lib/scout-cost";
 import { gmFillResources, gmFillTroops, gmFinishQueues, gmMaxResearch, gmRaiseBuilding, gmRaiseTownhall, gmResetProgress } from "../src/lib/gm";
 import { applySpeedup, speedupCompatible, type SpeedupTarget } from "../src/lib/speedups";
 import { BUILDING_ORDER, TROOP_ORDER, type BKey, type GameState, type TroopKey } from "../src/lib/game";
@@ -434,7 +435,7 @@ async function gmWorld(request: Request, env: BackendEnv, claims: SessionClaims,
   const data = await body(request);
   const ids = Array.isArray(data?.ids) ? data.ids : [];
   if (pathname === "/gm/world/shield") {
-    const res = await room.fetch("https://world.internal/grant-shield", { method: "POST", body: JSON.stringify({ ids, hours: data?.hours }) });
+    const res = await room.fetch("https://world.internal/grant-shield", { method: "POST", body: JSON.stringify({ ids, hours: data?.hours, mode: data?.mode }) });
     return response(await res.json());
   }
   const res = await room.fetch("https://world.internal/release", { method: "POST", body: JSON.stringify({ ids }) });
@@ -875,6 +876,7 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
   } catch {}
   let inventoryItemId: string | null = null;
   let inventoryQuantity = 1;
+  let scoutLaunch: { target: string; cost: number } | null = null;
   let result: { state: typeof state; ok: boolean; reason?: string; world?: WorldAuthoritySession; extra?: Record<string, unknown> };
   const isWorldCommand = type === "world.advance" || type === "world.dispatch" || type === "world.recall" || type === "world.scan" || type === "world.warp";
   let warpReservation: { coord: { x: number; y: number }; previous: { x: number; y: number } | null } | null = null;
@@ -952,6 +954,24 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
         : { state, ok: false, reason: "That operation has already finished" };
       if (result.ok) { inventoryItemId = itemId; inventoryQuantity = quantity; }
     }
+  } else if (type === "world.scout_player") {
+    // Paid scout on another commander (numbers.json global.march.scoutCost): the WorldRoom
+    // quotes the distance, Oil is debited here with the save, then the fleet launches.
+    const target = String(args.target || "").slice(0, 64);
+    const room = worldRoom(env);
+    const quote: { ok?: boolean; error?: string; distance?: number } = room && target
+      ? await room.fetch("https://world.internal/scout-quote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ player: claims.sub, target }) })
+        .then((res) => res.json() as Promise<{ ok?: boolean; error?: string; distance?: number }>).catch(() => ({ ok: false, error: "world_unreachable" }))
+      : { ok: false, error: "invalid_target" };
+    if (!quote.ok) result = { state, ok: false, reason: quote.error || "scout_rejected" };
+    else {
+      const cost = scoutOilCost(state, Number(quote.distance) || 0, defaultN());
+      if ((state.res.oil || 0) < cost) result = { state, ok: false, reason: "not_enough_oil" };
+      else {
+        result = { state: { ...state, res: { ...state.res, oil: state.res.oil - cost } }, ok: true, extra: { scoutCost: cost } };
+        scoutLaunch = { target, cost };
+      }
+    }
   } else if (type.startsWith("gm.")) {
     // Server GM tools (the city page GM panel) on the GM's own account only.
     result = claims.role !== "gm" ? { state, ok: false, reason: "gm_required" } : gmCommand(state, type, args, claims.sub, now);
@@ -1026,6 +1046,20 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
     if (racedReplay) return racedReplay;
     if (error instanceof Error && error.message.includes("insufficient_inventory")) return response({ error: "insufficient_inventory" }, 409);
     return response({ error: "revision_conflict" }, 409);
+  }
+  if (result.ok && scoutLaunch) {
+    // The Oil is paid; launch the fleet. If the room refuses (a race), give the Oil back.
+    const room = worldRoom(env);
+    const launched = room
+      ? await room.fetch("https://world.internal/scout-launch", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ player: claims.sub, target: scoutLaunch.target, cost: scoutLaunch.cost }) })
+        .then((res) => res.json() as Promise<{ ok?: boolean; error?: string }>).catch(() => ({ ok: false, error: "world_unreachable" }))
+      : { ok: false, error: "world_unreachable" };
+    if (!launched.ok) {
+      const refunded = { ...result.state, res: { ...result.state.res, oil: result.state.res.oil + scoutLaunch.cost } };
+      await env.DB.prepare("UPDATE player_state SET game_json = ?, revision = revision + 1, updated_at = ? WHERE player_id = ? AND revision = ?")
+        .bind(JSON.stringify(refunded), Date.now(), claims.sub, resultRevision).run();
+      return response({ ok: false, reason: launched.error || "scout_rejected", game: refunded, revision: resultRevision + 1, authorityVersion: row.economy_authority_version });
+    }
   }
   const inventory = inventoryItemId
     ? await env.DB.prepare("SELECT item_id AS itemId, quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")

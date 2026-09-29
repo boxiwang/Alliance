@@ -38,7 +38,7 @@ import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAl
 import { loadPlayerAccount, savePlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME } from "./lib/sfx";
 import {
-  consumeInventoryItem, enableGameAuthority, ensureGameAuthority, fetchServerGame, gmGrantShield, grantGmCredits, grantGmInventory, loadBackendSession, loadInventory,
+  consumeInventoryItem, enableGameAuthority, ensureGameAuthority, fetchServerGame, gmSetShield, grantGmCredits, grantGmInventory, loadBackendSession, loadInventory,
   sendGameCommand, type GameCommandResponse, type InventoryBalance,
 } from "./lib/backend";
 import { MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath, WAREHOUSE_CATEGORIES, warehouseCategoryOf, warehouseSortKey, type WarehouseCategory } from "./lib/mvp-items";
@@ -469,15 +469,28 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     finally { setInventoryBusy(false); }
   }
 
-  async function gmShieldSelf() {
+  /** GM: permanent shield on / item shield off on your own city (testing). */
+  async function gmShieldToggle(on: boolean) {
     const session = loadBackendSession(address);
     if (!session) { setMsg("GM shield failed: sign in first."); return; }
     setInventoryBusy(true);
     try {
-      await gmGrantShield(session.token, [address], 8);
-      setMsg("GM: 8-hour shield on your city.");
+      const result = await gmSetShield(session.token, [address], on);
+      setServerShieldUntil(result.granted[0]?.shieldUntil ?? (on ? Number.MAX_SAFE_INTEGER : 0));
+      setMsg(on ? "GM: shield ON (until you turn it off)." : "GM: shield OFF.");
     } catch { setMsg("GM shield failed."); }
     finally { setInventoryBusy(false); }
+  }
+
+  /** GM preview alerts: toggle the test attack and the test scout alert. */
+  function gmToggleAttackAlert() {
+    if (cityMarchesRef.current.some((march) => march.id.startsWith("gm-raid-"))) {
+      replaceMarches(cityMarchesRef.current.filter((march) => !march.id.startsWith("gm-raid-")));
+      return;
+    }
+    const start = Date.now();
+    handleCityMarch({ id: "gm-raid-" + start, attacker: "gm-hostile", attackerName: "TEST FLEET", defender: cityPlayerId.current, defenderName: profile.name,
+      from: { x: 0, y: 0 }, to: { x: 0, y: 0 }, departAt: start, arriveAt: start + 15_000, armyTotal: 4200 });
   }
 
   /** GM tool: on a server-economy account it runs the matching server `gm.*` command
@@ -693,15 +706,23 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
             </div></div>
             <div className="gm-group"><small>MILITARY</small><div className="gm-actions">
               <button disabled={commandBusy} onClick={() => gmAct(gmFillTroops, "GM: every trained arm filled to capacity at its highest unlocked tier.", "gm.fill_troops")}>Fill troops</button>
-              <button disabled={inventoryBusy || authorityVersion <= 0} onClick={() => void gmShieldSelf()}>Shield 8h</button>
+              {(() => {
+                // Item shield (GM "on" = permanent). The Core < 10 rule may still shield you.
+                const itemShieldOn = serverShieldUntil > now;
+                return <button className={`gm-switch${itemShieldOn ? " on" : ""}`} aria-pressed={itemShieldOn} disabled={inventoryBusy || authorityVersion <= 0}
+                  onClick={() => void gmShieldToggle(!itemShieldOn)}>Shield {itemShieldOn ? "ON" : "OFF"}</button>;
+              })()}
             </div></div>
             <div className="gm-group"><small>PREVIEW</small><div className="gm-actions">
-              <button onClick={() => {
-                const start = Date.now();
-                handleCityMarch({ id: "gm-raid-" + start, attacker: "gm-hostile", attackerName: "TEST FLEET", defender: cityPlayerId.current, defenderName: profile.name,
-                  from: {x:0,y:0}, to: {x:0,y:0}, departAt: start, arriveAt: start + 15_000, armyTotal: 4200 });
-              }}>Attack alert</button>
-              <button onClick={() => handleCityReport({ id: "gm-scan-" + Date.now(), kind: "scouted", ts: Date.now(), byName: "TEST SCOUT" })}>Scout alert</button>
+              {(() => {
+                const attackOn = cityMarches.some((march) => march.id.startsWith("gm-raid-"));
+                const scoutOn = !!cityScouted && cityScouted.id.startsWith("gm-scan-");
+                return <>
+                  <button className={`gm-switch${attackOn ? " on" : ""}`} aria-pressed={attackOn} onClick={() => gmToggleAttackAlert()}>Attack alert {attackOn ? "ON" : "OFF"}</button>
+                  <button className={`gm-switch${scoutOn ? " on" : ""}`} aria-pressed={scoutOn}
+                    onClick={() => scoutOn ? setCityScouted(null) : handleCityReport({ id: "gm-scan-" + Date.now(), kind: "scouted", ts: Date.now(), byName: "TEST SCOUT" })}>Scout alert {scoutOn ? "ON" : "OFF"}</button>
+                </>;
+              })()}
               <button disabled={commandBusy} onClick={() => {
                 if (game.buildings.academy.lvl < 1) gmAct((state) => gmRaiseBuilding(state, "academy"), "GM: Research Institute built at Lv.1.", "gm.raise_building", { building: "academy" });
                 setFacilityOpen("academy");

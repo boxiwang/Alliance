@@ -208,6 +208,10 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       const c = r.payload?.attackerCoords as { x?: unknown; y?: unknown } | undefined;
       const at = c && Number.isFinite(Number(c.x)) && Number.isFinite(Number(c.y)) ? { x: Number(c.x), y: Number(c.y) } : undefined;
       if (r.kind === "scouted") return { sys: "sec" as const, tag: "RECON", t, b: `${r.byName || "A commander"} scouted your city.` };
+      if (r.kind === "recon" && r.payload?.failed) {
+        const refunded = Number(r.payload?.refunded) || 0;
+        return { sys: "sec" as const, tag: "RECON", t, b: `Scout lost ${r.byName || "the target"} — they left before it arrived.${refunded > 0 ? ` ${compact(displayResource(refunded))} Oil refunded.` : ""}` };
+      }
       if (r.kind === "recon") {
         const snapshot = r.payload?.snapshot as { might?: unknown } | undefined;
         const expiresAt = Number(r.payload?.expiresAt);

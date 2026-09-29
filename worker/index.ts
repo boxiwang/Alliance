@@ -117,10 +117,14 @@ type MarchRow = {
   from: WorldCoord; to: WorldCoord; departAt: number; arriveAt: number; armyTotal: number;
   /** "scout": a recon fleet — only the sender sees it; the target is alerted on arrival. */
   kind?: "scout";
+  /** Oil paid for this scout (refunded if the target is gone on arrival). */
+  cost?: number;
 };
 const MARCH_SPEED = 8;        // world units per second
 const MARCH_MIN_MS = 20_000;  // floor so even neighbours take a moment
 const SCOUT_MIN_MS = 10_000;
+/** GM "shield on" = permanent for testing (2100-01-01). */
+const PERMANENT_SHIELD_UNTIL = 4_102_444_800_000;
 
 /** Recon flight time: the real march pace (s/tile) divided by the scout speed multiplier. */
 function scoutTravelMs(from: WorldCoord, to: WorldCoord): number {
@@ -505,6 +509,8 @@ export class WorldRoom {
     if (url.pathname === "/roster") return this.roster();
     if (url.pathname === "/release" && req.method === "POST") return this.release(req);
     if (url.pathname === "/grant-shield" && req.method === "POST") return this.grantShield(req);
+    if (url.pathname === "/scout-quote" && req.method === "POST") return this.scoutOrder(req, false);
+    if (url.pathname === "/scout-launch" && req.method === "POST") return this.scoutOrder(req, true);
     const pid = (req.headers.get("x-alliance-player") || "").slice(0, 64);
     const name = (req.headers.get("x-alliance-name") || "Commander").slice(0, 24);
     const sessionId = (req.headers.get("x-alliance-session") || "").slice(0, 64);
@@ -581,20 +587,66 @@ export class WorldRoom {
     return Response.json({ released, skippedOnline: ids.filter((id) => live.has(id)) });
   }
 
-  /** GM: give players a shield for `hours` (extends a running one). Sets the public roster
-   *  field (dome for everyone, attack/scout gate) and the shared-world city (own session). */
+  /** Paid scout (from /command world.scout_player): quote = validate + distance; launch =
+   *  create the recon fleet after the Oil was debited. Only the sender sees it in flight. */
+  async scoutOrder(req: Request, launch: boolean): Promise<Response> {
+    let body: { player?: unknown; target?: unknown; cost?: unknown } = {};
+    try { body = await req.json(); } catch {}
+    const pid = String(body.player || "").slice(0, 64), to = String(body.target || "").slice(0, 64);
+    if (!pid || !to || pid === to) return Response.json({ ok: false, error: "invalid_target" });
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    const scouter = players[pid], target = players[to];
+    if (!scouter?.coords || !target?.coords) return Response.json({ ok: false, error: "target_unavailable" });
+    const now = Date.now();
+    const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
+    if (marches.some((m) => m.kind === "scout" && m.attacker === pid && m.defender === to && m.arriveAt > now)) return Response.json({ ok: false, error: "scout_en_route" });
+    const distance = Math.hypot(target.coords.x - scouter.coords.x, target.coords.y - scouter.coords.y);
+    if (!launch) return Response.json({ ok: true, distance });
+    const march: MarchRow = {
+      id: crypto.randomUUID(), kind: "scout", attacker: pid, attackerName: scouter.name, defender: to, defenderName: target.name,
+      from: scouter.coords, to: target.coords, departAt: now, arriveAt: now + scoutTravelMs(scouter.coords, target.coords), armyTotal: 0,
+      cost: Math.max(0, Math.floor(Number(body.cost) || 0)),
+    };
+    marches.push(march);
+    await this.state.storage.put("marches", marches);
+    this.sendToPlayer(pid, { type: "march", march });
+    await this.scheduleAlarm();
+    return Response.json({ ok: true, march });
+  }
+
+  /** Give Oil back to a server-economy player (scout target gone). Revision-guarded, retried. */
+  async refundOil(pid: string, amount: number): Promise<boolean> {
+    if (amount <= 0) return true;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const row = await this.env.DB.prepare("SELECT revision, game_json, economy_authority_version FROM player_state WHERE player_id = ?")
+        .bind(pid).first<{ revision: number; game_json: string | null; economy_authority_version: number }>();
+      if (!row?.economy_authority_version) return false;
+      const game: any = projectGameJson(row.game_json, Date.now());
+      if (!game) return false;
+      game.res.oil = (Number(game.res.oil) || 0) + amount;
+      const res = await this.env.DB.prepare("UPDATE player_state SET game_json = ?, revision = revision + 1, updated_at = ? WHERE player_id = ? AND revision = ?")
+        .bind(JSON.stringify(game), Date.now(), pid, row.revision).run();
+      if (res.meta.changes) return true;
+    }
+    return false;
+  }
+
+  /** GM: shield players. Default: `hours` (extends a running one). mode "on": permanent (GM
+   *  testing); mode "off": remove the item shield (the Core < 10 rule still applies). Sets the
+   *  public roster field (dome for everyone, attack/scout gate) and the shared-world city. */
   async grantShield(req: Request): Promise<Response> {
-    let body: { ids?: unknown; hours?: unknown } = {};
+    let body: { ids?: unknown; hours?: unknown; mode?: unknown } = {};
     try { body = await req.json(); } catch {}
     const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id).slice(0, 64)).slice(0, 500) : [];
     const hours = Math.max(1, Math.min(72, Math.floor(Number(body.hours) || 8)));
+    const mode = body.mode === "on" || body.mode === "off" ? body.mode : null;
     const now = Date.now();
     const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
     const granted: Array<{ id: string; shieldUntil: number }> = [];
     for (const id of ids) {
       const player = players[id];
       if (!player) continue;
-      player.shieldUntil = Math.max(now, player.shieldUntil || 0) + hours * 3_600_000;
+      player.shieldUntil = mode === "on" ? PERMANENT_SHIELD_UNTIL : mode === "off" ? 0 : Math.max(now, player.shieldUntil || 0) + hours * 3_600_000;
       granted.push({ id, shieldUntil: player.shieldUntil });
     }
     if (!granted.length) return Response.json({ granted });
@@ -605,7 +657,7 @@ export class WorldRoom {
       for (const { id, shieldUntil } of granted) {
         const cityId = shared.world.players[id]?.cityId;
         const city = cityId ? shared.world.entities[cityId] : null;
-        if (city?.kind === "city") city.shieldUntil = Math.max(city.shieldUntil || 0, shieldUntil);
+        if (city?.kind === "city") city.shieldUntil = mode === "off" ? 0 : Math.max(city.shieldUntil || 0, shieldUntil);
       }
       await this.saveShared(shared);
     });
@@ -803,26 +855,9 @@ export class WorldRoom {
       const favs = (await this.state.storage.get<string[]>(favKey)) || [];
       if (favs.includes(partner)) await this.state.storage.put(favKey, favs.filter((id) => id !== partner));
     } else if (data.type === "scout") {
-      // Recon is a fleet: it flies at scoutSpeedMultiplier × march pace; the intel is taken
-      // on arrival (alarm), filed to the sender's System as a "recon" report, and the target
-      // is alerted then. Only the sender sees the scout in flight.
-      const to = String(data.to || "").slice(0, 64);
-      if (!to || to === pid) return;
-      const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
-      const scouter = players[pid], target = players[to];
-      if (!scouter?.coords || !target?.coords) return;
-      const now = Date.now();
-      const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
-      const enRoute = marches.find((m) => m.kind === "scout" && m.attacker === pid && m.defender === to && m.arriveAt > now);
-      if (enRoute) { this.sendToPlayer(pid, { type: "march", march: enRoute }); return; }
-      const march: MarchRow = {
-        id: crypto.randomUUID(), kind: "scout", attacker: pid, attackerName: scouter.name, defender: to, defenderName: target.name,
-        from: scouter.coords, to: target.coords, departAt: now, arriveAt: now + scoutTravelMs(scouter.coords, target.coords), armyTotal: 0,
-      };
-      marches.push(march);
-      await this.state.storage.put("marches", marches);
-      this.sendToPlayer(pid, { type: "march", march });
-      await this.scheduleAlarm();
+      // Scouting is a paid order now (/command world.scout_player -> /scout-launch); an old
+      // client's free socket scout is ignored.
+      return;
     } else if (data.type === "march") {
       const to = String(data.to || "").slice(0, 64);
       if (!to || to === pid) return;
@@ -1027,7 +1062,12 @@ export class WorldRoom {
       if (m.kind === "scout") {
         this.sendToPlayer(m.attacker, { type: "march_done", id: m.id });
         const target = roster[m.defender];
-        if (!target) continue; // the target left the world while the scout flew
+        if (!target) {
+          // The target left the world while the scout flew: the Oil comes back.
+          const refunded = m.cost ? await this.refundOil(m.attacker, m.cost) : false;
+          await this.pushReport(m.attacker, { id: crypto.randomUUID(), kind: "recon", ts: now, by: m.defender, byName: m.defenderName, payload: { failed: true, refunded: refunded ? m.cost : 0 } });
+          continue;
+        }
         const row = await this.env.DB.prepare("SELECT game_json FROM player_state WHERE player_id = ?").bind(m.defender).first<{ game_json: string | null }>();
         const snapshot = buildScoutSnapshot(target, row?.game_json);
         const expiresAt = now + worldEngineConfig(defaultN()).scoutIntelTtlSec * 1000;

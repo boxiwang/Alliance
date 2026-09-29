@@ -46,4 +46,22 @@ describe.runIf(process.env.E2E_URL && process.env.E2E_AUTH_SECRET)("server GM to
     expect(building.data.game.buildings.academy.lvl).toBeGreaterThanOrEqual(1);
     expect((await command(gm, "gm.nope")).data.reason).toBe("Unknown GM command");
   }, 60_000);
+
+  it("turns a permanent shield on and off for the GM's own city", async () => {
+    const playerId = `0x${hex(40)}`;
+    const { data: auth } = await call("/auth/guest", null, { method: "POST", body: JSON.stringify({ guestId: `guest:${hex(24)}`, playerId }) });
+    // Join the room once so the city is on the roster.
+    const ws = new (WebSocket as any)(`${URL_BASE.replace(/^http/, "ws")}/ws?token=${encodeURIComponent(auth.token)}`, { headers: { origin: "http://localhost:5173" } }) as WebSocket;
+    await new Promise((resolve) => { ws.onopen = resolve; });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const gm = await issueSession(process.env.E2E_AUTH_SECRET!, { sub: auth.player.id, method: "guest", role: "gm" } as any, 600);
+    const shield = (mode: "on" | "off") => call("/gm/world/shield", gm, { method: "POST", body: JSON.stringify({ ids: [auth.player.id], mode }) });
+    const rosterShield = async () => ((await call("/gm/world/roster", gm)).data.players.find((p: any) => p.id === auth.player.id)?.shieldUntil ?? -1) as number;
+
+    expect((await shield("on")).data.granted[0].shieldUntil).toBeGreaterThan(Date.now() + 50 * 365 * 86_400_000);
+    expect(await rosterShield()).toBeGreaterThan(Date.now() + 50 * 365 * 86_400_000);
+    expect((await shield("off")).data.granted[0].shieldUntil).toBe(0);
+    expect(await rosterShield()).toBe(0);
+    ws.close();
+  }, 60_000);
 });

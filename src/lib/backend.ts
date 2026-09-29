@@ -388,3 +388,13 @@ export async function gmReleaseWorldPlayers(token: string, ids: string[]): Promi
 export async function gmGrantShield(token: string, ids: string[], hours: number): Promise<{ granted: Array<{ id: string; shieldUntil: number }> }> {
   return post("/gm/world/shield", { ids, hours }, token);
 }
+
+/** GM: permanent shield on / item shield off (testing). */
+export async function gmSetShield(token: string, ids: string[], on: boolean): Promise<{ granted: Array<{ id: string; shieldUntil: number }> }> {
+  return post("/gm/world/shield", { ids, mode: on ? "on" : "off" }, token);
+}
+
+/** Paid scout on another commander (Oil, numbers.json global.march.scoutCost). */
+export async function scoutCommander(address: string, target: string): Promise<GameCommandResponse> {
+  return sendGameCommand(address, "world.scout_player", { target }, `scout:${crypto.randomUUID()}`);
+}

@@ -49,7 +49,8 @@ const rectHas = (rect: ViewRect, c: { x: number; y: number }) => c.x >= rect.x0 
 import { radiantCrownSvgPath } from "./planet-halo-shared";
 import { createCommanderShare, createCoordinateShare, createScoutIntelShare, queueCommsShare, queueDirectMessage, takeWorldFocus } from "./lib/shared-intel";
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
-import { ensureGameAuthority, sendGameCommand, type GameCommandResponse, loadInventory } from "./lib/backend";
+import { ensureGameAuthority, scoutCommander, sendGameCommand, type GameCommandResponse, loadInventory } from "./lib/backend";
+import { scoutOilCost } from "./lib/scout-cost";
 
 type SelectableEntity = ResourceEntity | MonsterEntity | CityEntity;
 type WorldLayer = "resource" | "monster" | "city";
@@ -708,6 +709,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       if (entry) {
         setRecon((current) => ({ ...current, [entry[0]]: entry[1] }));
         setResultNotice({ title: "Recon complete", detail: `Intel on ${entry[1].name} is on their card for ${Math.round((entry[1].expiresAt - report.ts) / 60_000)} min.`, good: true });
+      } else if (report.kind === "recon" && report.payload?.failed) {
+        const refunded = Number(report.payload?.refunded) || 0;
+        setResultNotice({ title: "Scout lost the target", detail: `${report.byName || "The commander"} left before the scout arrived.${refunded > 0 ? ` ${compact(displayResource(refunded))} Oil refunded.` : ""}`, good: false });
       } else if (report.kind === "scouted") setResultNotice({ title: "You were scouted", detail: `${report.byName || "A commander"} scanned your city.`, good: false });
       else if (report.kind === "incoming") setResultNotice({ title: "⚔ Incoming attack", detail: `${report.byName || "A commander"} is marching on you — ETA ${Math.round(Number(report.payload?.etaSec) || 0)}s.`, good: false });
       else if (report.kind === "battle") setResultNotice({ title: "Battle report", detail: String(report.payload?.summary || "A battle resolved."), good: false });
@@ -1358,6 +1362,23 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   function commit(result: ReturnType<typeof advanceLocalWorldSession>) {
     sessionRef.current = result.session; setSession(result.session); setGame(result.game); gameRef.current = result.game; saveLocalWorldSession(result.session); saveGame(result.game);
   }
+  /** Paid scout on another commander: the server debits the Oil and launches the fleet (it
+   *  arrives here as a live march). Only the economy save changes, so only the game is taken. */
+  async function launchScout(target: { id: string; name?: string }) {
+    if (authorityVersion <= 0) { setResultNotice({ title: "Scout not sent", detail: "Scouting commanders needs the server economy.", good: false }); return; }
+    setScoutingId(target.id);
+    try {
+      const result = await scoutCommander(address, target.id);
+      if (result.game) { const next = result.game as GameState; gameRef.current = next; setGame(next); saveGame(next); }
+      if (!result.ok) {
+        setScoutingId(null);
+        setResultNotice({ title: "Scout not sent", detail: SCOUT_ERROR_COPY[result.reason || ""] || "The scout order was rejected.", good: false });
+      }
+    } catch {
+      setScoutingId(null);
+      setResultNotice({ title: "Scout not sent", detail: "The order did not reach the server. Try again.", good: false });
+    }
+  }
   function commitServer(result: GameCommandResponse) {
     if (!result.world || !result.game) return;
     if (result.authorityVersion && result.authorityVersion !== authorityRef.current) {
@@ -1886,6 +1907,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           const frame = /^[a-z0-9-]{1,24}$/.test(String(cosmetics?.cardFrame || "")) ? cosmetics!.cardFrame : "standard";
           const launching = scoutingId === remoteSelected.id;
           const scoutFlight = marches.find((m) => m.kind === "scout" && m.attacker === address && m.defender === remoteSelected.id && m.arriveAt > now);
+          const scoutCost = scoutOilCost(viewGame, distance(playerCity.position, remoteSelected.coords), N);
+          const canPayScout = (viewGame.res.oil || 0) >= scoutCost;
+          const scoutCostLabel = `${compact(displayResource(scoutCost))} OIL`;
           const intel = recon[remoteSelected.id];
           const intelLeftMs = intel ? intel.expiresAt - now : 0;
           const snap = intelLeftMs > 0 ? intel.snapshot : null;
@@ -1894,8 +1918,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             <CommanderCardView id={remoteSelected.id} name={remoteSelected.name || "Commander"} faction={remoteSelected.faction || null} avatar={remoteSelected.avatar}
               coreLevel={remoteSelected.keepLevel || 1} signal={cosmetics?.chatSignal} recon={intel} now={now}>
             <div className="commander-card-actions">
-              <button className="scout" disabled={launching || !!scoutFlight} onMouseEnter={() => setCardHint("Reveals Might, troops and loot · they will see the scout")} onMouseLeave={() => setCardHint(null)}
-                onClick={() => { setScoutingId(remoteSelected.id); rtRef.current?.sendScout(remoteSelected.id); }}>{scoutFlight ? `◎ EN ROUTE · ${clockLeft(scoutFlight.arriveAt - now)}` : launching ? "LAUNCHING…" : snap ? "◎ RESCOUT" : "◎ SCOUT"}</button>
+              <button className="scout" disabled={launching || !!scoutFlight || !canPayScout}
+                onMouseEnter={() => setCardHint(canPayScout ? `Costs ${scoutCostLabel} · reveals Might, troops and loot · they will see the scout` : `Needs ${scoutCostLabel} to launch a scout`)} onMouseLeave={() => setCardHint(null)}
+                onClick={() => void launchScout(remoteSelected)}>
+                {scoutFlight ? `◎ EN ROUTE · ${clockLeft(scoutFlight.arriveAt - now)}` : launching ? "LAUNCHING…" : <>{snap ? "◎ RESCOUT" : "◎ SCOUT"}<small className="commander-card-cost">{scoutCostLabel}</small></>}
+              </button>
               <button className="attack" onMouseEnter={() => setCardHint("They will see your fleet coming")} onMouseLeave={() => setCardHint(null)}
                 onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>⚔ ATTACK</button>
               <button className="quiet" onClick={() => { queueDirectMessage(address, { id: remoteSelected.id, name: remoteSelected.name || "Commander" }); onMessages(); }}>✉ MESSAGE</button>
@@ -2124,6 +2151,15 @@ function ScoutTrail({ march, scale }: { march: LiveMarch; scale: number }) {
     <circle ref={dotRef} r={3 * scale} cx={0} cy={0} transform={`translate(${march.from.x} ${march.from.y})`} />
   </g>;
 }
+
+const SCOUT_ERROR_COPY: Record<string, string> = {
+  not_enough_oil: "Not enough Oil for this scout.",
+  scout_en_route: "A scout is already on its way there.",
+  target_unavailable: "That commander is out of reach right now.",
+  invalid_target: "That commander is out of reach right now.",
+  world_unreachable: "The Star Map link dropped. Try again.",
+  authority_disabled: "Scouting commanders needs the server economy.",
+};
 
 /** The last Star Map view per player (module scope, survives page switches). */
 type ViewCache = { at: number; targets: Record<string, WorldEntity>; occupiers: Record<string, string>; clusters: SignalCluster[] | null; fieldClusters: SignalCluster[] | null; players: MapCity[] };

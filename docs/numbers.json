@@ -73,6 +73,14 @@
       "note": "sys.march_capacity — world-map phase",
       "marchQueueSlots": 2,
       "scoutSpeedMultiplier": 3,
+      "scoutCost": {
+        "resource": "oil",
+        "baseMinutes": 4,
+        "tilesPerExtraMinute": 150,
+        "maxMinutes": 12,
+        "minimum": 30,
+        "note": "Scouting a commander costs Oil = your Oil production per hour x minutes/60, minutes = baseMinutes + distance / tilesPerExtraMinute (capped at maxMinutes), never below minimum. Refunded in full if the target is gone when the scout arrives."
+      },
       "scoutIntelTtlSeconds": 3600,
       "singleMarchCapacityNote": "capacityFractionOfMaxTroops = fraction of standing army one march may take; marchQueueSlots = simultaneous marches (scout march also consumes a slot); scoutSpeedMultiplier = scout recon fleet travels this many times faster than a combat march; scoutIntelTtlSeconds = how long a successful recon snapshot remains readable."
     },

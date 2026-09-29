@@ -1859,3 +1859,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .gm-building-stepper button{border-left:0;border-radius:0 7px 7px 0}
 .gm-group.danger>small{color:#e08a7a}
 .gm-actions .gm-reset{border-color:rgba(229,89,61,.5);color:#f0a08e;background:rgba(229,89,61,.08)}
+.gm-actions .gm-switch.on{border-color:rgba(67,242,161,.6);background:rgba(67,242,161,.12);color:#9ff7d4}
+/* Scout button on the commander card: its Oil price under the label. */
+.commander-card-actions .commander-card-cost{display:block;margin-top:2px;color:#ffb454;font:700 7px var(--mono);letter-spacing:.08em;opacity:.85}
+.commander-card-actions button:disabled .commander-card-cost{color:#8a6a3a}

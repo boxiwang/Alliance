@@ -72,7 +72,8 @@ describe("Town troop training UI", () => {
     expect(html).toContain("Fill resources");
     expect(html).toContain("Credits +25K");
     expect(html).toContain("Fill troops");
-    expect(html).toContain("Shield 8h");
+    expect(html).toContain("Shield OFF");
+    expect(html).toContain("Scout alert OFF");
     expect(html).toContain("Finish queues");
     expect(html).toContain("Max research");
     expect(html).toContain("Open Research");
