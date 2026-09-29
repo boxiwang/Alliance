@@ -479,7 +479,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     if (!session) { setMsg("GM shield failed: sign in first."); return; }
     setInventoryBusy(true);
     try {
-      const result = await gmSetShield(session.token, [address], on);
+      const result = await gmSetShield(session.token, [session.player.id], on);
       const until = result.granted[0]?.shieldUntil ?? 0;
       setServerShieldUntil(until);
       rememberOwnShield(address, until);

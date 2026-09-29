@@ -29,11 +29,11 @@ export function activeBuffs(address: string, coreLevel: number, now: number, num
   const cityId = session?.world.players[session.playerId]?.cityId;
   const city = cityId ? session?.world.entities[cityId] : null;
   const home = city?.kind === "city" ? city : null;
-  if (home?.hasAttacked) return [];
+  // A shield item counts even after you attacked; attacking only ends the Core auto-shield.
   const until = Math.max(ownShieldUntil(address), home?.shieldUntil ?? 0);
   if (until > now) return [{ id: "shield", label: "SHIELD", endsAt: until, permanent: until - now > PERMANENT_AFTER_MS }];
   const protectedUntil = Number(numbers?.global?.shield?.protectedUntilKeepLevel) || 0;
-  if (coreLevel < protectedUntil) return [{ id: "shield", label: "SHIELD", endsAt: null, permanent: false, note: `UNTIL CORE ${protectedUntil}` }];
+  if (!home?.hasAttacked && coreLevel < protectedUntil) return [{ id: "shield", label: "SHIELD", endsAt: null, permanent: false, note: `UNTIL CORE ${protectedUntil}` }];
   return [];
 }
 

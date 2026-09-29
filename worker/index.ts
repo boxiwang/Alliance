@@ -637,7 +637,8 @@ export class WorldRoom {
   async grantShield(req: Request): Promise<Response> {
     let body: { ids?: unknown; hours?: unknown; mode?: unknown } = {};
     try { body = await req.json(); } catch {}
-    const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id).slice(0, 64)).slice(0, 500) : [];
+    // Roster keys are normalized (lower-case) player ids.
+    const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id).slice(0, 64).toLowerCase()).slice(0, 500) : [];
     const hours = Math.max(1, Math.min(72, Math.floor(Number(body.hours) || 8)));
     const mode = body.mode === "on" || body.mode === "off" ? body.mode : null;
     const now = Date.now();
