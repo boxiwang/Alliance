@@ -16,6 +16,7 @@ import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS } from "../src/lib/mvp-i
 import { DAILY_SUPPLY, SHOP_OFFER_BY_ID, SHOP_OFFERS, TOPUP_PACKS } from "../src/lib/shop-catalog";
 import { gameStateBelongsToPlayer, projectGameJson } from "./economy";
 import { applyCommand } from "./commands";
+import { gmFillResources, gmFillTroops, gmFinishQueues, gmMaxResearch, gmRaiseBuilding, gmRaiseTownhall, gmResetProgress } from "../src/lib/gm";
 import { applySpeedup, speedupCompatible, type SpeedupTarget } from "../src/lib/speedups";
 import { BUILDING_ORDER, TROOP_ORDER, type BKey, type GameState, type TroopKey } from "../src/lib/game";
 import { defaultN } from "../src/lib/numbers";
@@ -951,6 +952,9 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
         : { state, ok: false, reason: "That operation has already finished" };
       if (result.ok) { inventoryItemId = itemId; inventoryQuantity = quantity; }
     }
+  } else if (type.startsWith("gm.")) {
+    // Server GM tools (the city page GM panel) on the GM's own account only.
+    result = claims.role !== "gm" ? { state, ok: false, reason: "gm_required" } : gmCommand(state, type, args, claims.sub, now);
   } else {
     result = applyCommand(state, type, args);
   }
@@ -1063,4 +1067,21 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (pathname === "/shop/grant-alpha") return grantAlphaCredits(request, env, claims);
   if (pathname === "/gm/world/roster" || pathname === "/gm/world/release" || pathname === "/gm/world/shield") return gmWorld(request, env, claims, pathname);
   return response({ error: "method_not_allowed" }, 405);
+}
+
+function gmCommand(state: GameState, type: string, args: Record<string, unknown>, playerId: string, now: number): { state: GameState; ok: boolean; reason?: string } {
+  switch (type) {
+    case "gm.fill_resources": return { state: gmFillResources(state, now), ok: true };
+    case "gm.fill_troops": return { state: gmFillTroops(state, now), ok: true };
+    case "gm.finish_queues": return { state: gmFinishQueues(state, now), ok: true };
+    case "gm.max_research": return { state: gmMaxResearch(state, now), ok: true };
+    case "gm.raise_townhall": return { state: gmRaiseTownhall(state, now), ok: true };
+    case "gm.raise_building": {
+      const building = String(args.building || "") as BKey;
+      if (!BUILDING_ORDER.includes(building)) return { state, ok: false, reason: "Unknown building" };
+      return { state: gmRaiseBuilding(state, building, now), ok: true };
+    }
+    case "gm.reset": return { state: gmResetProgress(playerId, now), ok: true };
+    default: return { state, ok: false, reason: "Unknown GM command" };
+  }
 }

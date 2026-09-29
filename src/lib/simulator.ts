@@ -192,8 +192,8 @@ export function simulateProgression(numbers: any, options: SimulationOptions): S
     const nextEvent = Math.min(nextFinish, resourceReady);
     if (!Number.isFinite(nextEvent)) {
       deadlock = candidates.length > 0
-        ? `A required upgrade costs more than storage or has no producing resource at Townhall Lv.${levels["building.keep"]}.`
-        : `No valid upgrade path found at Townhall Lv.${levels["building.keep"]}.`;
+        ? `A required upgrade costs more than storage or has no producing resource at Core Lv.${levels["building.keep"]}.`
+        : `No valid upgrade path found at Core Lv.${levels["building.keep"]}.`;
       break;
     }
     const resourceIdle = running.length === 0 && resourceReady <= nextFinish;
@@ -201,7 +201,7 @@ export function simulateProgression(numbers: any, options: SimulationOptions): S
   }
 
   if (!deadlock && (levels["building.keep"] ?? 1) < options.targetLevel && iterations >= 100000) {
-    deadlock = `Simulation iteration limit reached at Townhall Lv.${levels["building.keep"]}.`;
+    deadlock = `Simulation iteration limit reached at Core Lv.${levels["building.keep"]}.`;
   }
 
   const totalHours = now;
@@ -578,12 +578,12 @@ export function simulatePersonalProgression(numbers: any, options: PersonalSimul
     if (researchWait) researchCandidates.forEach((candidate) => considerCost(candidate.row.cost ?? {}));
     const nextEvent = Math.min(...completionTimes, resourceReady);
     if (!Number.isFinite(nextEvent)) {
-      deadlock = `No funded build path remains at Townhall Lv.${levels["building.keep"] ?? 1}.`;
+      deadlock = `No funded build path remains at Core Lv.${levels["building.keep"] ?? 1}.`;
       break;
     }
     advance(nextEvent, { buildWait, researchWait, trainingWait });
   }
-  if (!deadlock && iterations >= 100000) deadlock = `Integrated simulation iteration limit reached at Townhall Lv.${levels["building.keep"] ?? 1}.`;
+  if (!deadlock && iterations >= 100000) deadlock = `Integrated simulation iteration limit reached at Core Lv.${levels["building.keep"] ?? 1}.`;
 
   const finalModifiers = researchModifiers();
   const byBranch = { development: 0, economy: 0, battle: 0 } as Record<string, number>;

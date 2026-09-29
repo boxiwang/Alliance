@@ -49,7 +49,7 @@ export interface GameState {
 
 // Display meta (labels are neutral placeholders — themed names come from the bible later).
 export const BUILDINGS: Record<BKey, { label: string; emoji: string; produces?: ResKey; trains?: TroopKey; blurb: string; upgradable: boolean }> = {
-  keep:       { label: "Townhall",            emoji: "🏰", blurb: "Gates everything, unlocks buildings. Shield lifts at L10.", upgradable: true },
+  keep:       { label: "Core",                emoji: "🏰", blurb: "Gates everything, unlocks buildings. Shield lifts at L10.", upgradable: true },
   bank:       { label: "Bank",                emoji: "🏦", produces: "cash",  blurb: "Produces Cash over time.", upgradable: true },
   oilwell:    { label: "Oil Well",            emoji: "🛢️", produces: "oil",   blurb: "Produces Oil over time.", upgradable: true },
   powerplant: { label: "Power Plant",         emoji: "⚡", produces: "power", blurb: "Produces Power over time.", upgradable: true },
@@ -448,11 +448,11 @@ export function startUpgrade(s: GameState, k: BKey): { state: GameState; ok: boo
   // Keep the global ceiling distinct from the Townhall progression gate. This
   // also protects old/GM saves that are already sitting at the ceiling.
   if (cur >= maxLevel(k)) return { state: ns, ok: false, reason: "Max level" };
-  if (!isUnlocked(ns, k)) return { state: ns, ok: false, reason: `Unlocks at Townhall Lv.${unlockAtKeep(k)}` };
+  if (!isUnlocked(ns, k)) return { state: ns, ok: false, reason: `Unlocks at Core Lv.${unlockAtKeep(k)}` };
   if (ns.buildings[k].finishAt > 0) return { state: ns, ok: false, reason: "Already upgrading" };
   const operationBlock = buildingOperationBlockReason(ns, k);
   if (operationBlock) return { state: ns, ok: false, reason: operationBlock };
-  if (target > capForLevel(ns, k)) return { state: ns, ok: false, reason: k === "keep" ? "Max level" : "Raise Townhall first" };
+  if (target > capForLevel(ns, k)) return { state: ns, ok: false, reason: k === "keep" ? "Max level" : "Raise the Core first" };
   if (k === "keep") {
     const missing = missingTownhallPrerequisites(ns, target);
     if (missing.length > 0) {

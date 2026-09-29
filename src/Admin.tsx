@@ -36,7 +36,7 @@ function humanize(value: string | number): string {
 }
 
 const BUILDING_INFO: Record<string, { name: string; icon: string; group: string; description: string }> = {
-  "building.keep": { name: "Townhall", icon: "🏰", group: "Core progression", description: "Sets the city's level cap and controls the main progression path." },
+  "building.keep": { name: "Core", icon: "🏰", group: "Core progression", description: "Sets the city's level cap and controls the main progression path." },
   "building.storage": { name: "Warehouse", icon: "📦", group: "Core progression", description: "Sets how many resources a player can hold and protects part of them from raids." },
   "building.bank": { name: "Bank", icon: "🏦", group: "Economy", description: "Generates Cash while the player is away." },
   "building.oilwell": { name: "Oil Well", icon: "🛢️", group: "Economy", description: "Generates Oil while the player is away." },
@@ -294,7 +294,7 @@ function PaceSimulator({ numbers }: { numbers: any }) {
           const onTarget = result.targetLevel === 10 ? result.totalDays >= 2 && result.totalDays <= 3.1 : result.totalDays >= 120 && result.totalDays <= 150;
           return (
             <div className={`adm-sim-card ${result.deadlock ? "bad" : onTarget ? "good" : "warn"}`} key={result.targetLevel}>
-              <div className="adm-sim-kicker">Reach Townhall {result.targetLevel}</div>
+              <div className="adm-sim-kicker">Reach Core {result.targetLevel}</div>
               <div className="adm-sim-value">{result.deadlock ? "Blocked" : fmtDays(result.totalDays)}</div>
               <div className="adm-sim-target">Goal: {result.targetLevel === 10 ? "2–3 days" : "120–150 days"}</div>
               <dl>
@@ -644,7 +644,7 @@ function RulesWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: 
           <NumberSetting {...p(["global", "buildingMaxLevel"])} label="Maximum building level" help="The top level for the whole city." />
           <NumberSetting {...p(["global", "buildQueueSlots"])} label="Builders" help="How many buildings can upgrade at the same time." />
           <NumberSetting {...p(["global", "offline", "collectorCapHours"])} label="Offline collection cap" help="Production stops after this many hours away." suffix="hours" />
-          <ToggleSetting {...p(["global", "buildingLevelCappedByKeep"])} label="Townhall level cap" help="Other buildings cannot exceed the Townhall." />
+          <ToggleSetting {...p(["global", "buildingLevelCappedByKeep"])} label="Core level cap" help="Other buildings cannot exceed the Core." />
         </RuleGroup>
         <RuleGroup icon="💰" title="Starting economy" description="What a completely new city receives before the first action.">
           <NumberSetting {...p(["startingLayout", "startingResources", "res.cash"])} label="Starting Cash" help="Opening construction budget." />
@@ -660,16 +660,16 @@ function RulesWorkspace({ numbers, onChange }: { numbers: any; onChange: (path: 
           <NumberSetting {...p(["global", "combat", "lootRate"])} label="Lootable resources" help="Maximum share of unprotected resources taken in one raid." suffix="%" scale={100} step={1} />
           <NumberSetting {...p(["global", "combat", "casualtyScaling"])} label="Casualty intensity" help="How punishing a battle is before Hospital protection." suffix="%" scale={100} step={1} />
           <NumberSetting {...p(["global", "combat", "woundedRatio"])} label="Wounded instead of dead" help="Share of casualties sent to the Hospital when space exists." suffix="%" scale={100} step={1} />
-          <NumberSetting {...p(["global", "combat", "keepDefenseBonusPerLevel"])} label="Townhall defense / level" help="Passive defense gained from every Townhall level." />
+          <NumberSetting {...p(["global", "combat", "keepDefenseBonusPerLevel"])} label="Core defense / level" help="Passive defense gained from every Core level." />
         </RuleGroup>
         <RuleGroup icon="🛡️" title="Protection & identity" description="New-player safety and basic account costs.">
-          <NumberSetting {...p(["global", "shield", "protectedUntilKeepLevel"])} label="New-player shield ends" help="Shield remains until the player reaches this Townhall level." suffix="TH level" />
+          <NumberSetting {...p(["global", "shield", "protectedUntilKeepLevel"])} label="New-player shield ends" help="Shield remains until the player reaches this Core level." suffix="TH level" />
           <ToggleSetting {...p(["global", "shield", "breaksOnOffensiveAction"])} label="Attacking breaks shield" help="Players lose protection when they attack first." />
           <NumberSetting {...p(["global", "player", "rename", "subsequentCost", "res.premium"])} label="Rename after first" help="Gem price after the free rename is used." suffix="Gems" />
           <NumberSetting {...p(["global", "march", "baseTravelSecondsPerTile"])} label="Travel time / tile" help="Base world-map travel time before future bonuses." suffix="seconds" />
         </RuleGroup>
       </div>
-      <Section title="Townhall prerequisite schedule" subtitle="Fixed and visible to players" defaultOpen={false}>
+      <Section title="Core prerequisite schedule" subtitle="Fixed and visible to players" defaultOpen={false}>
         <div className="adm-prereq-list">{Object.entries(numbers.townhallPrerequisites?.perLevel ?? {}).map(([level, keys]: [string, any]) => <div key={level}><b>TH{level}</b><span>{keys.map((key: string) => `${BUILDING_INFO[key]?.name ?? humanize(key)} Lv.${Number(level) - 1}`).join(" · ")}</span></div>)}</div>
       </Section>
     </div>

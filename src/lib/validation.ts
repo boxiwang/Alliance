@@ -41,7 +41,7 @@ export function validateNumbers(numbers: any): ValidationIssue[] {
   for (const [key, building] of Object.entries(numbers.buildings ?? {}) as [string, any][]) {
     if (building.upgradable === false) continue;
     if (!Number.isInteger(building.unlockAtKeep) || building.unlockAtKeep < 1 || building.unlockAtKeep > maxLevel) {
-      push("error", `${key}.unlockAtKeep`, "Unlock level must be within the Townhall range.");
+      push("error", `${key}.unlockAtKeep`, "Unlock level must be within the Core range.");
     }
     if (TRAINING_BUILDING_KEYS.has(key) && (!Number.isInteger(building.promotionUnlockLevel) || building.promotionUnlockLevel < 1 || building.promotionUnlockLevel > (building.maxLevel ?? maxLevel))) {
       push("error", `${key}.promotionUnlockLevel`, "Promotion unlock must be within the training building's level range.");

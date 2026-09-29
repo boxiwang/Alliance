@@ -67,17 +67,21 @@ describe("Town troop training UI", () => {
       />,
     );
 
-    expect(html).toContain("LOCAL GM");
+    expect(html).toContain("GM TOOLS");
+    expect(html).toContain("LOCAL SAVE");
     expect(html).toContain("Fill resources");
+    expect(html).toContain("Credits +25K");
     expect(html).toContain("Fill troops");
+    expect(html).toContain("Shield 8h");
     expect(html).toContain("Finish queues");
     expect(html).toContain("Max research");
     expect(html).toContain("Open Research");
-    expect(html).toContain("Test city attack");
-    expect(html).toContain("Townhall +1");
+    expect(html).toContain("Attack alert");
+    expect(html).toContain("Core +1");
     expect(html).toContain("Selected building +1");
     expect(html).toContain("Reset city");
-    expect(html).toContain("OWNER WALLET");
+    expect(html).not.toContain("OWNER WALLET");
+    expect(html).not.toContain("Townhall");
   });
 
   it("renders a playable three-branch Academy with per-level gates, costs and time", () => {

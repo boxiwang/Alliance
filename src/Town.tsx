@@ -35,10 +35,10 @@ import CosmicBackdrop from "./CosmicBackdrop";
 import MiniComms from "./MiniComms";
 import CityStarGrid from "./CityStarGrid";
 import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAllianceHelp } from "./lib/alliance";
-import { loadPlayerAccount } from "./lib/player-account";
+import { loadPlayerAccount, savePlayerAccount } from "./lib/player-account";
 import { playSfx, SFX_BUILDING_SELECT, SFX_BUILDING_SELECT_VOLUME } from "./lib/sfx";
 import {
-  consumeInventoryItem, enableGameAuthority, ensureGameAuthority, fetchServerGame, grantGmInventory, loadInventory,
+  consumeInventoryItem, enableGameAuthority, ensureGameAuthority, fetchServerGame, gmGrantShield, grantGmCredits, grantGmInventory, loadBackendSession, loadInventory,
   sendGameCommand, type GameCommandResponse, type InventoryBalance,
 } from "./lib/backend";
 import { MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath, WAREHOUSE_CATEGORIES, warehouseCategoryOf, warehouseSortKey, type WarehouseCategory } from "./lib/mvp-items";
@@ -149,6 +149,10 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [selectedResearchKey, setSelectedResearchKey] = useState("");
   const [gm, setGm] = useState(() => hasLocalGm(address));
   const [gmBuilding, setGmBuilding] = useState<BKey>("keep");
+  const [gmOpen, setGmOpen] = useState(() => { try { return localStorage.getItem("alliance:gm-panel-open") !== "0"; } catch { return true; } });
+  function toggleGmPanel() {
+    setGmOpen((open) => { try { localStorage.setItem("alliance:gm-panel-open", open ? "0" : "1"); } catch {} return !open; });
+  }
   const savedOnce = useRef(false);
   const [allianceRevision, setAllianceRevision] = useState(0);
   useEffect(() => {
@@ -455,7 +459,34 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     return result;
   }
 
-  function gmAct(fn: (state: GameState) => GameState, message: string) {
+  async function gmCredits() {
+    setInventoryBusy(true);
+    try {
+      const result = await grantGmCredits(address);
+      savePlayerAccount({ ...loadPlayerAccount(address), credits: result.balance });
+      setMsg("GM: 25,000 Credits added.");
+    } catch { setMsg("GM credit grant failed."); }
+    finally { setInventoryBusy(false); }
+  }
+
+  async function gmShieldSelf() {
+    const session = loadBackendSession(address);
+    if (!session) { setMsg("GM shield failed: sign in first."); return; }
+    setInventoryBusy(true);
+    try {
+      await gmGrantShield(session.token, [address], 8);
+      setMsg("GM: 8-hour shield on your city.");
+    } catch { setMsg("GM shield failed."); }
+    finally { setInventoryBusy(false); }
+  }
+
+  /** GM tool: on a server-economy account it runs the matching server `gm.*` command
+   *  (GM-only, own account); otherwise it edits the local save. */
+  function gmAct(fn: (state: GameState) => GameState, message: string, serverType?: string, serverArgs: Record<string, unknown> = {}) {
+    if (authorityVersion > 0 && serverType) {
+      void runServerAction(serverType, serverArgs, () => ({ state: fn(game), ok: true })).then((result) => { if (result?.ok) setMsg(message); });
+      return;
+    }
     const next = fn(game);
     setGame(next);
     saveGame(next);
@@ -625,14 +656,18 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
 
 
       {gm && (
-        <div className="gm-panel">
-          <div className="gm-panel-copy"><b>{authorityVersion > 0 ? "SERVER GM · BATCH 1" : "LOCAL GM"}</b></div>
-          <div className="gm-actions">
-            {authorityVersion === 0 && <button disabled={authorityBusy} onClick={() => void turnOnServerEconomy()}>{authorityBusy ? "Connecting…" : "Test server economy"}</button>}
-            <button disabled={authorityVersion > 0} onClick={() => gmAct(gmFillResources, "GM: resources filled to Warehouse capacity.")}>Fill resources</button>
-            <button disabled={authorityVersion > 0} onClick={() => gmAct(gmFillTroops, "GM: every trained arm filled to capacity at its highest unlocked tier.")}>Fill troops</button>
-            <button disabled={authorityVersion > 0} onClick={() => gmAct(gmFinishQueues, "GM: active build, research, training and healing queues completed.")}>Finish queues</button>
-            <button disabled={inventoryBusy} onClick={() => {
+        <section className={`gm-panel${gmOpen ? "" : " collapsed"}`} aria-label="GM tools">
+          <header className="gm-head">
+            <b>GM TOOLS</b>
+            <span className={authorityVersion > 0 ? "server" : "local"}>{authorityVersion > 0 ? "SERVER · THIS ACCOUNT" : "LOCAL SAVE"}</span>
+            {authorityVersion === 0 && <button className="gm-connect" disabled={authorityBusy} onClick={() => void turnOnServerEconomy()}>{authorityBusy ? "Connecting…" : "Connect server economy"}</button>}
+            <button className="gm-toggle" aria-expanded={gmOpen} onClick={() => toggleGmPanel()}>{gmOpen ? "HIDE" : "SHOW"}</button>
+          </header>
+          {gmOpen && <div className="gm-groups">
+            <div className="gm-group"><small>ECONOMY</small><div className="gm-actions">
+              <button disabled={commandBusy} onClick={() => gmAct(gmFillResources, "GM: resources filled to Warehouse capacity.", "gm.fill_resources")}>Fill resources</button>
+              <button disabled={inventoryBusy} onClick={() => void gmCredits()}>Credits +25K</button>
+              <button disabled={inventoryBusy} onClick={() => {
               setInventoryBusy(true);
               void grantGmInventory(address).then((items) => { setInventory(items); setMsg("GM: active MVP items stocked to 99."); }).catch(() => {
                 if (import.meta.env.DEV) {
@@ -644,40 +679,49 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
                 setMsg("GM inventory grant failed.");
               }).finally(() => setInventoryBusy(false));
             }}>Stock MVP items</button>
-            <button disabled={authorityVersion > 0} onClick={() => gmAct(gmMaxResearch, "GM: all three Research categories maxed. Account bonuses are active.")}>Max research</button>
-            <button disabled={authorityVersion > 0} onClick={() => {
-              const next = game.buildings.academy.lvl >= 1 ? game : gmRaiseBuilding(game, "academy");
-              setGame(next);
-              saveGame(next);
-              setFacilityOpen("academy");
-              setFacilityInterior(false);
-              setMsg(game.buildings.academy.lvl >= 1 ? "" : "GM: Research Institute built at Lv.1.");
-            }}>Open Research</button>
-            <button onClick={() => {
-              const start = Date.now();
-              handleCityMarch({ id: "gm-raid-" + start, attacker: "gm-hostile", attackerName: "TEST FLEET", defender: cityPlayerId.current, defenderName: profile.name,
-                from: {x:0,y:0}, to: {x:0,y:0}, departAt: start, arriveAt: start + 15_000, armyTotal: 4200 });
-            }}>Test city attack</button>
-            <button onClick={() => handleCityReport({ id: "gm-scan-" + Date.now(), kind: "scouted", ts: Date.now(), byName: "TEST SCOUT" })}>Test city scan</button>
-            <span className="gm-building-stepper">
+            </div></div>
+            <div className="gm-group"><small>PROGRESS</small><div className="gm-actions">
+              <button disabled={commandBusy || view.buildings.keep.lvl >= 30} onClick={() => gmAct(gmRaiseTownhall, "GM: Core raised by one level.", "gm.raise_townhall")}>Core +1</button>
+              <span className="gm-building-stepper">
               <select aria-label="GM building" value={gmBuilding} onChange={(event) => setGmBuilding(event.target.value as BKey)}>
                 {BUILDING_ORDER.filter(isUpgradable).map((building) => <option value={building} key={building}>{BUILDINGS[building].label} · Lv.{view.buildings[building].lvl}</option>)}
               </select>
-              <button disabled={authorityVersion > 0 || view.buildings[gmBuilding].lvl >= 30 || !!buildingOperationBlockReason(view, gmBuilding)} onClick={() => gmAct((state) => gmRaiseBuilding(state, gmBuilding), `GM: ${BUILDINGS[gmBuilding].label} raised by one level.`)}>Selected building +1</button>
+              <button aria-label="Selected building +1" disabled={commandBusy || view.buildings[gmBuilding].lvl >= 30 || !!buildingOperationBlockReason(view, gmBuilding)} onClick={() => gmAct((state) => gmRaiseBuilding(state, gmBuilding), `GM: ${BUILDINGS[gmBuilding].label} raised by one level.`, "gm.raise_building", { building: gmBuilding })}>+1 level</button>
             </span>
-            <button disabled={authorityVersion > 0 || view.buildings.keep.lvl >= 30} onClick={() => gmAct(gmRaiseTownhall, "GM: Townhall raised by one level.")}>Townhall +1</button>
-            <button disabled={authorityVersion > 0} className="gm-reset" onClick={() => {
-              if (!window.confirm("Reset this wallet's city? Buildings, resources, troops and queues will be cleared. Townhall returns to Lv.1.")) return;
+              <button disabled={commandBusy} onClick={() => gmAct(gmMaxResearch, "GM: all three Research categories maxed. Account bonuses are active.", "gm.max_research")}>Max research</button>
+              <button disabled={commandBusy} onClick={() => gmAct(gmFinishQueues, "GM: active build, research, training and healing queues completed.", "gm.finish_queues")}>Finish queues</button>
+            </div></div>
+            <div className="gm-group"><small>MILITARY</small><div className="gm-actions">
+              <button disabled={commandBusy} onClick={() => gmAct(gmFillTroops, "GM: every trained arm filled to capacity at its highest unlocked tier.", "gm.fill_troops")}>Fill troops</button>
+              <button disabled={inventoryBusy || authorityVersion <= 0} onClick={() => void gmShieldSelf()}>Shield 8h</button>
+            </div></div>
+            <div className="gm-group"><small>PREVIEW</small><div className="gm-actions">
+              <button onClick={() => {
+                const start = Date.now();
+                handleCityMarch({ id: "gm-raid-" + start, attacker: "gm-hostile", attackerName: "TEST FLEET", defender: cityPlayerId.current, defenderName: profile.name,
+                  from: {x:0,y:0}, to: {x:0,y:0}, departAt: start, arriveAt: start + 15_000, armyTotal: 4200 });
+              }}>Attack alert</button>
+              <button onClick={() => handleCityReport({ id: "gm-scan-" + Date.now(), kind: "scouted", ts: Date.now(), byName: "TEST SCOUT" })}>Scout alert</button>
+              <button disabled={commandBusy} onClick={() => {
+                if (game.buildings.academy.lvl < 1) gmAct((state) => gmRaiseBuilding(state, "academy"), "GM: Research Institute built at Lv.1.", "gm.raise_building", { building: "academy" });
+                setFacilityOpen("academy");
+                setFacilityInterior(false);
+              }}>Open Research</button>
+            </div></div>
+            <div className="gm-group danger"><small>DANGER</small><div className="gm-actions">
+              <button disabled={commandBusy} className="gm-reset" onClick={() => {
+              if (!window.confirm("Reset this wallet's city? Buildings, resources, troops and queues will be cleared. The Core returns to Lv.1.")) return;
+              if (authorityVersion > 0) { setAway(null); gmAct(() => gmResetProgress(address), "GM: city reset to a blank Core Lv.1 test state.", "gm.reset"); return; }
               const next = gmResetProgress(address);
               clearLocalWorldSession(address);
               setAway(null);
               setGame(next);
               saveGame(next);
-              setMsg("GM: city reset to a blank Townhall Lv.1 test state.");
+              setMsg("GM: city reset to a blank Core Lv.1 test state.");
             }}>Reset city</button>
-            <span className="gm-off">OWNER WALLET</span>
-          </div>
-        </div>
+            </div></div>
+          </div>}
+        </section>
       )}
 
       {away && (away.cash > 0 || away.oil > 0 || away.power > 0) && (
@@ -853,7 +897,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const localPlayer = localWorld?.world.players[localWorld.playerId];
     const reports = localWorld ? Object.values(localWorld.world.reports).filter((report) => report.playerId === localWorld.playerId) : [];
     const priorities = [
-      { label: "Raise Townhall to Lv.2", detail: `Lv.${view.buildings.keep.lvl} / 2`, done: view.buildings.keep.lvl >= 2 },
+      { label: "Raise Core to Lv.2", detail: `Lv.${view.buildings.keep.lvl} / 2`, done: view.buildings.keep.lvl >= 2 },
       { label: "Train 100 combat units", detail: `${Math.min(100, troopsTotal).toLocaleString()} / 100`, done: troopsTotal >= 100 },
       { label: "Complete a resource run", detail: reports.some((report) => report.action === "gather" && report.stage === "return") ? "COMPLETED" : "0 / 1", done: reports.some((report) => report.action === "gather" && report.stage === "return") },
       { label: "Defeat a Lv.1 Rogue", detail: `Lv.${localPlayer?.highestMonsterDefeated || 0} / 1`, done: (localPlayer?.highestMonsterDefeated || 0) >= 1 },
@@ -1206,7 +1250,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         </header>
         <div className="bmain">
           {locked ? (
-            <div className="bgate" aria-label={`Unlocks at Townhall Lv.${unlockAtKeep(k)}`}>🔒 TH {unlockAtKeep(k)}</div>
+            <div className="bgate" aria-label={`Unlocks at Core Lv.${unlockAtKeep(k)}`}>🔒 CORE {unlockAtKeep(k)}</div>
           ) : !upgradable ? (
             <div className="bgate">SOON</div>
           ) : upgrading ? (
@@ -1217,7 +1261,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           ) : atMaximum ? (
             <div className="bgate maxed">MAX LEVEL</div>
           ) : atCap ? (
-            <div className="bgate" aria-label="Upgrade Townhall first">🔒 TH {b.lvl + 1}</div>
+            <div className="bgate" aria-label="Upgrade the Core first">🔒 CORE {b.lvl + 1}</div>
           ) : (
             <div className={`bcard-state ${upgradeReady ? "ready" : "blocked"}`}><b>{status}</b><i>→</i></div>
           )}
@@ -1250,10 +1294,10 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <strong className="mono">LV.{building.lvl}</strong>
         </div>
         <div className="economy-output"><span className="mono">+{compact(displayResource(rate[resource]))}/HR</span><i /></div>
-        {locked ? <div className="economy-gate mono">🔒 TH {unlockAtKeep(k)}</div>
+        {locked ? <div className="economy-gate mono">🔒 CORE {unlockAtKeep(k)}</div>
           : upgrading ? <div className="economy-progress"><div className="rmeter"><i style={{ width: upPct(k, building, now) + "%" }} /></div><span className="mono">{fmtMs(building.finishAt - now)}</span></div>
             : atMaximum ? <div className="economy-gate maxed mono">MAX LEVEL</div>
-              : atCap ? <div className="economy-gate mono">🔒 TH {building.lvl + 1}</div>
+              : atCap ? <div className="economy-gate mono">🔒 CORE {building.lvl + 1}</div>
               : <div className={`economy-state ${upgradeReady ? "ready" : "blocked"}`}><b>{buildersBusy ? "BUILDERS BUSY" : resourcesMet ? "READY" : "NEEDS RESOURCES"}</b><i>→</i></div>}
       </article>
     );

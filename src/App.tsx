@@ -659,7 +659,7 @@ function DesktopApp() {
             <div className="wl">
               <div className="k">Welcome back</div>
               <div className="pname">{profile.name}</div>
-              <div className="psub">Townhall Lv.{currentKeepLevel}</div>
+              <div className="psub">Core Lv.{currentKeepLevel}</div>
             </div>
             <button className="cta" onClick={() => { requestGameMusicStart(); setStage("town"); }}>Open Command Center →</button>
           </div>
@@ -681,7 +681,7 @@ function DesktopApp() {
       {stage === "start" && records && (
         <section className="mid">
           <div className="lede">
-            <h1>Found your Townhall</h1>
+            <h1>Found your civilization</h1>
             <p>You’ll enter Personal Mode as <b>{autoName(address)}</b>. Alliance membership is optional and can be changed later.</p>
           </div>
 
@@ -712,9 +712,9 @@ function DesktopApp() {
           {selectedCA ? (
             <div className="ctarow alliance-cta">
               <button className="cta big" onClick={() => found(selectedCA)}>
-                Join ${memes.find((m) => m.address === selectedCA)?.symbol} alliance &amp; found Townhall →
+                Join ${memes.find((m) => m.address === selectedCA)?.symbol} alliance &amp; found your civilization →
               </button>
-              <div className="shieldnote">Alliance membership adds a shared layer; your Townhall remains your permanent personal progression.</div>
+              <div className="shieldnote">Alliance membership adds a shared layer; your civilization remains your permanent personal progression.</div>
             </div>
           ) : (
             <div className="alliance-prompt">Select an alliance above to join it.</div>
@@ -726,7 +726,7 @@ function DesktopApp() {
               <b>Continue independently</b>
               <span>Alliance membership can be added later.</span>
             </div>
-            <button className="solo-button" onClick={() => found(null)}>Found Townhall →</button>
+            <button className="solo-button" onClick={() => found(null)}>Found civilization →</button>
           </div>
 
           {/* top factions */}
@@ -749,7 +749,7 @@ function DesktopApp() {
           </div>
 
           <div className="ctarow protection-row">
-            <div className="shieldnote">🛡️ New keeps stay protected until Townhall Lv.10 — or until you throw the first punch.</div>
+            <div className="shieldnote">🛡️ New civilizations stay protected until Core Lv.10 — or until you throw the first punch.</div>
           </div>
         </section>
       )}
@@ -766,15 +766,15 @@ function DesktopApp() {
         <section className="mid">
           <div className="card founded">
             <div className="fbadge">🏰</div>
-            <h1>Townhall founded</h1>
+            <h1>Civilization founded</h1>
             <div className="fsummary">
               <div><span>Commander</span><b>{profile.name}</b></div>
               <div><span>Mode</span><b>Personal</b></div>
               {profile.factionSymbol && <div><span>Alliance</span><b>${profile.factionSymbol}</b></div>}
-              <div><span>Townhall</span><b>Lv.{profile.keepLevel}</b></div>
+              <div><span>Core</span><b>Lv.{profile.keepLevel}</b></div>
               <div><span>Protection</span><b>until Lv.10</b></div>
             </div>
-            <button className="cta big" onClick={() => { requestGameMusicStart(); setStage("town"); }}>Enter your Townhall →</button>
+            <button className="cta big" onClick={() => { requestGameMusicStart(); setStage("town"); }}>Enter your civilization →</button>
             <p className="soon">Your sector is ready. Build your city, explore the Star Map, and open Comms to meet other commanders.</p>
             {import.meta.env.DEV && <button className="mini out" onClick={resetDev}>Reset onboarding</button>}
           </div>
