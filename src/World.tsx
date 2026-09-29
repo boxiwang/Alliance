@@ -224,7 +224,7 @@ function WorldLevelBadge({ x, y, level }: { x: number; y: number; level: number 
   return <g className="world-level-badge"><circle cx={x + 6.5} cy={y + 6.2} r="3.25" /><text x={x + 6.5} y={y + 7.25}>{level}</text></g>;
 }
 
-function CityIdentityTag({ x, y, level, name, signal = "clear-channel", own = false, relation = own ? "self" : "neutral" }: { x: number; y: number; level: number; name: string; signal?: ChatSignalId | null; own?: boolean; relation?: AllianceRelation }) {
+function CityIdentityTag({ x, y, level, name, signal = "clear-channel", own = false, relation = own ? "self" : "neutral", coord }: { x: number; y: number; level: number; name: string; signal?: ChatSignalId | null; own?: boolean; relation?: AllianceRelation; coord?: Point }) {
   const label = name.slice(0, 18);
   // Width fits the actual rendered text (~1.82 units/char at this font) plus the level pill,
   // so the plate hugs the name instead of trailing empty space; the name is centred in the
@@ -239,6 +239,15 @@ function CityIdentityTag({ x, y, level, name, signal = "clear-channel", own = fa
     <circle cx={left} cy={y + 9.65} r="4.15" />
     <text className="world-city-level" x={left} y={y + 10.9} textAnchor="middle">{level}</text>
     <text className="world-city-player" x={textCx} y={y + 10.85} textAnchor="middle">{label}</text>
+    {coord && (() => {
+      // Coordinates hang under the plate as a small tab of the same material.
+      const text = `X ${Math.round(coord.x)} · Y ${Math.round(coord.y)}`;
+      const tabW = text.length * 1.58 + 3.4;
+      return <g className="world-city-coord-tab">
+        <path d={`M ${x - tabW / 2} ${y + 13.2} h ${tabW} v 3.1 q 0 1.4 -1.4 1.4 h ${-(tabW - 2.8)} q -1.4 0 -1.4 -1.4 Z`} />
+        <text x={x} y={y + 16.45} textAnchor="middle">{text}</text>
+      </g>;
+    })()}
   </g>;
 }
 
@@ -1033,14 +1042,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // Strategic band) and growing with the planet in Tactical.
   const homeTagBase = (.95 + (1.18 - .95) * strategicBlend) / zoom;
   const homeTagScale = homeTagBase * homeTagGrowth;
-  const homeIdentityOffset = (() => {
-    const fieldLocal = worldIdentityLocalOffset(zoom, true);
-    if (mapPx.w <= 10) return fieldLocal;
-    if (zoom > WORLD_TACTICAL_ZOOM) return (homeBodyPx + 18 * homeTagGrowth) * worldPerPxEarly / homeTagScale;
-    const fieldPx = fieldLocal * (1.18 / zoom) / worldPerPxEarly; // the Field design position
-    const px = strategicBlend >= 1 ? fieldPx : (homeBodyPx + 2) + (fieldPx - (homeBodyPx + 2)) * strategicBlend;
-    return px * worldPerPxEarly / homeTagScale;
-  })();
+  // One rule at every zoom: the plate sits a fixed screen gap below the planet body the
+  // visual layer actually draws, so it never drifts against the planet while zooming.
+  const homeIdentityOffset = mapPx.w <= 10
+    ? worldIdentityLocalOffset(zoom, true)
+    : (homeBodyPx + 12 * homeTagGrowth) * worldPerPxEarly / homeTagScale;
   const rivalIdentityOffset = worldIdentityLocalOffset(zoom, false);
   // The home planet must read as clearly the biggest body on the map at every
   // zoom. importantScale is a flat 1/zoom shrink, so in deep Tactical view it
@@ -1116,8 +1122,20 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           burning: city.state === "burning",
         };
       });
-    return live.concat(detailZoom ? stressVisuals : []);
-  }, [cityEntities, detailZoom, layers.city, selectedId, session.playerId, stressVisuals, world.players, equippedCosmetics]);
+    // Other real commanders (shared map) use the same planet renderer as your own city, so
+    // their halo/orbit look identical instead of a tight SVG ring.
+    const remote = !strategicZoom && layers.city ? remotePlayers.map((p): WorldVisualCity => {
+      const cos = (p.cosmetics || {}) as { planetBody?: string; halo?: string; orbit?: string };
+      return {
+        id: `rp-${p.id}`, position: p.coords,
+        skin: (PLANET_SKINS.some((skin) => skin.id === cos.planetBody) ? cos.planetBody : ISSUED_WORLD_COSMETICS.planetBody) as PlanetSkinId,
+        halo: (PLANET_HALOS.some((halo) => halo.id === cos.halo) ? cos.halo : null) as PlanetHaloId | null,
+        orbit: (PLANET_ORBITS.some((orbit) => orbit.id === cos.orbit) ? cos.orbit : null) as PlanetOrbitId | null,
+        selected: p.id === remoteSelectedId,
+      };
+    }) : [];
+    return live.concat(remote, detailZoom ? stressVisuals : []);
+  }, [cityEntities, detailZoom, strategicZoom, layers.city, selectedId, session.playerId, stressVisuals, world.players, equippedCosmetics, remotePlayers, remoteSelectedId]);
   const monsterPreview = useMemo(() => {
     if (!selected || selected.kind !== "monster" || sentCount <= 0) return null;
     const runtime = { ...(N.runtimeAccountModifiers ?? {}) };
@@ -1306,18 +1324,26 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         const skin = (PLANET_SKINS.some((s) => s.id === cos.planetBody) ? cos.planetBody : "dust-homestead") as PlanetSkinId;
         const halo = (PLANET_HALOS.some((h) => h.id === cos.halo) ? cos.halo : null) as PlanetHaloId | null;
         const orbit = (PLANET_ORBITS.some((o) => o.id === cos.orbit) ? cos.orbit : null) as PlanetOrbitId | null;
+        // With the GPU layer the planet is drawn there (like your own); SVG keeps the hit area
+        // and the plate, placed a fixed gap below the body that is actually drawn.
+        const gpuBodyPx = worldVisualBodyRadius(zoom, false, sel, CALM_MAP);
+        const toLocal = worldPerPx / Math.max(.0001, markerScale);
+        const hitR = gpuFallback ? bodyR + 3 : (gpuBodyPx + 5) * toLocal;
+        const tagY = gpuFallback ? cy : cy + (gpuBodyPx + 4) * toLocal - 6.1;
         return <g key={`rp-${p.id}`} transform={`translate(${cx} ${cy}) scale(${markerScale}) translate(${-cx} ${-cy})`} className={`world-remote-player ${sel ? "selected" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setRemoteSelectedId(p.id); setSelectedId(null); setHomeSelected(false); setSelection(emptySelection()); setMessage(""); setTileMark(null); playSelectSfx(); }}>
           {/* Planet skin and name plate ignore the pointer, so the city needs its own hit area. */}
-          <circle cx={cx} cy={cy} r={bodyR + 3} className="world-remote-hit" />
-          {halo && <WorldHaloFx cx={cx} cy={cy} r={bodyR} halo={halo} half="back" />}
-          {orbit && <WorldOrbitFx cx={cx} cy={cy} r={bodyR} orbit={orbit} half="back" />}
-          <WorldPlanetFx cx={cx} cy={cy} r={bodyR} skin={skin} />
-          {orbit && <WorldOrbitFx cx={cx} cy={cy} r={bodyR} orbit={orbit} half="front" />}
-          {halo && <WorldHaloFx cx={cx} cy={cy} r={bodyR} halo={halo} half="front" />}
-          <CityIdentityTag x={cx} y={cy} level={p.keepLevel || 1} name={`${p.faction ? `[${p.faction}] ` : ""}${p.name || "Commander"}`} signal={cos.chatSignal ?? "clear-channel"} relation="neutral" />
+          <circle cx={cx} cy={cy} r={hitR} className="world-remote-hit" />
+          {gpuFallback && <>
+            {halo && <WorldHaloFx cx={cx} cy={cy} r={bodyR} halo={halo} half="back" />}
+            {orbit && <WorldOrbitFx cx={cx} cy={cy} r={bodyR} orbit={orbit} half="back" />}
+            <WorldPlanetFx cx={cx} cy={cy} r={bodyR} skin={skin} />
+            {orbit && <WorldOrbitFx cx={cx} cy={cy} r={bodyR} orbit={orbit} half="front" />}
+            {halo && <WorldHaloFx cx={cx} cy={cy} r={bodyR} halo={halo} half="front" />}
+          </>}
+          <CityIdentityTag x={cx} y={tagY} level={p.keepLevel || 1} name={`${p.faction ? `[${p.faction}] ` : ""}${p.name || "Commander"}`} signal={cos.chatSignal ?? "clear-channel"} relation="neutral" />
         </g>;
       });
-  }, [strategicZoom, remotePlayers, remoteSelectedId, viewX, viewY, viewport.width, viewport.height, markerScale, detailZoom]);
+  }, [strategicZoom, remotePlayers, remoteSelectedId, viewX, viewY, viewport.width, viewport.height, markerScale, detailZoom, gpuFallback, zoom, worldPerPx]);
   const remoteSelected = useMemo(() => remotePlayers.find((p) => p.id === remoteSelectedId) || null, [remotePlayers, remoteSelectedId]);
 
   function commit(result: ReturnType<typeof advanceLocalWorldSession>) {
@@ -1790,8 +1816,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
               {equippedPlanetHalo && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><WorldHaloFx cx={playerCity.position.x} cy={playerCity.position.y} r={9} halo={equippedPlanetHalo} half="front" /></g>}
             </> : <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}><circle cx={playerCity.position.x} cy={playerCity.position.y} r="14" className="world-city-hit" /></g>}
             {gpuFallback && <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeTagScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
-              <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={`${profile.factionSymbol ? `[${profile.factionSymbol}] ` : ""}${profile.name}`} signal={equippedCosmetics.chatSignal} own relation="self" />
-              <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
+              <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={`${profile.factionSymbol ? `[${profile.factionSymbol}] ` : ""}${profile.name}`} signal={equippedCosmetics.chatSignal} own relation="self" coord={playerCity.position} />
             </g>}
           </g>
           {warpOpen && warpDestination && <g className={`world-warp-ghost ${warpDestinationBlock ? "invalid" : "valid"}`} pointerEvents="none">
@@ -1819,7 +1844,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           {homeSelected && <CelestialLock position={playerCity.position} radius={selectionRadius(true, false)} worldPerPx={worldPerPx} own />}
           {marches.filter((m) => m.kind === "scout" && m.attacker === address && m.arriveAt > now).map((m) => <ScoutTrail key={m.id} march={m} scale={markerScale} />)}
           {remoteSelected && !strategicZoom && <CelestialLock key={`lock-rp-${remoteSelected.id}`} position={remoteSelected.coords} tone="rival"
-            radius={(detailZoom ? 7.2 : 4.2) * markerScale / Math.max(.0001, worldPerPx) + 8} worldPerPx={worldPerPx} />}
+            radius={selectionRadius(false, true)} worldPerPx={worldPerPx} />}
           <g className="world-wormhole-caption" transform={`translate(${center.x} ${center.y}) scale(${worldPerPx})`}>
             <text y={-worldWormholeRadius(zoom) * 1.7 - 22} className="world-circle-label">WORMHOLE</text>
             <text y={-worldWormholeRadius(zoom) * 1.7 - 8} className="world-circle-sub">GRAVITY ANCHOR · FRONTIER I</text>
@@ -1833,8 +1858,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             </g>;
           })}
           <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeTagScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
-            <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={`${profile.factionSymbol ? `[${profile.factionSymbol}] ` : ""}${profile.name}`} signal={equippedCosmetics.chatSignal} own relation="self" />
-            <text x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset + 19} className="world-city-coordinate">{Math.round(playerCity.position.x).toString().padStart(3, "0")}:{Math.round(playerCity.position.y).toString().padStart(3, "0")}</text>
+            <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={`${profile.factionSymbol ? `[${profile.factionSymbol}] ` : ""}${profile.name}`} signal={equippedCosmetics.chatSignal} own relation="self" coord={playerCity.position} />
           </g>
         </svg>}
         {gpuFallback && voidSkinEquipped && <VoidPlanetOverlay svgRef={svgRef} home={playerCity.position} zoom={zoom} strategic={strategicZoom} onActiveChange={setVoidShaderActive} />}
