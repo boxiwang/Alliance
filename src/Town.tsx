@@ -119,6 +119,13 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [game, setGame] = useState<GameState>(() => loadGame(address) || initGame(address));
   const [now, setNow] = useState(Date.now());
   const [msg, setMsg] = useState<string>("");
+  // Notices are transient: they clear themselves (errors stay a little longer).
+  useEffect(() => {
+    if (!msg) return;
+    const failed = /fail|could not|cannot|not enough|no speedups|rejected|blocked|left\./i.test(msg);
+    const timer = window.setTimeout(() => setMsg(""), failed ? 7000 : 4000);
+    return () => window.clearTimeout(timer);
+  }, [msg]);
   const [away, setAway] = useState<{ cash: number; oil: number; power: number } | null>(null);
   const [trainQty, setTrainQty] = useState<Record<TroopKey, number>>({ army: 10, navy: 10, air: 10 });
   const [trainTier, setTrainTier] = useState<Record<TroopKey, number>>({ army: 1, navy: 1, air: 1 });
@@ -462,7 +469,6 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const item = MVP_ITEM_BY_ID.get(itemId);
     if (!item?.speedupSeconds || !speedupCompatible(item.speedupQueue, target)) return false;
     const count = Math.max(1, Math.min(quantity, inventoryById.get(itemId) || 0));
-    const label = count > 1 ? `${count}× ${item.name}` : item.name;
     const result = applySpeedup(game, target, item.speedupSeconds * count, Date.now());
     if (!result.secondsApplied) { setMsg("That operation has already finished."); return false; }
     setInventoryBusy(true);
@@ -474,7 +480,6 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
             ? { ...entry, quantity: command.inventory!.quantity, updatedAt: Date.now() }
             : entry));
         }
-        if (command?.ok) setMsg(`${label} used. ${fmtSec(result.secondsApplied)} removed.`);
         if (!command) void loadInventory(address).then(setInventory).catch(() => {});
         return !!command?.ok;
       } catch {
@@ -489,7 +494,6 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       setInventory((current) => current.map((entry) => entry.itemId === itemId
         ? { ...entry, quantity: Math.max(0, entry.quantity - count), updatedAt: Date.now() }
         : entry));
-      setMsg(`${label} used. ${fmtSec(result.secondsApplied)} removed.`);
       setInventoryBusy(false);
       return true;
     }
@@ -499,7 +503,6 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       setGame(legacy.state);
       saveGame(legacy.state);
       setInventory((current) => current.map((entry) => entry.itemId === itemId ? { ...entry, quantity: consumed.quantity, updatedAt: Date.now() } : entry));
-      setMsg(`${label} used. ${fmtSec(legacy.secondsApplied)} removed.`);
       return true;
     } catch (error) {
       setMsg(error instanceof Error && error.message === "insufficient_inventory" ? "No speedups left." : "Speedup failed. Try again.");
