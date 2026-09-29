@@ -7,6 +7,8 @@ import NameSignal from "./NameSignal";
 import { TITLE_SEALS, loadCosmeticVault, loadPlayerAccount } from "./lib/player-account";
 import { loadShopAccount } from "./lib/backend";
 import { worldEngineConfig } from "./lib/world-engine";
+import { BUFFS_CHANGED_EVENT, activeBuffs, buffTimeLeft } from "./lib/buffs";
+import { getN } from "./lib/numbers";
 
 const RESOURCE_COLOR: Record<ResKey, string> = {
   cash: "#43f2a1",
@@ -95,6 +97,7 @@ export default function GameNav({
   }, [visibleCredits]);
   return (
     <nav className="command-nav" aria-label="Game view and account status">
+      <BuffBar address={profile.address} coreLevel={townhallLevel} />
       <div className="command-nav-head">
         <div className="command-nav-left">
         {/* Identity = the way into Profile & settings (mainstream SLG: tap your avatar).
@@ -232,6 +235,32 @@ const GEAR_PATH = (() => {
   }
   return `${d}Z M${c + hole} ${c} A${hole} ${hole} 0 1 0 ${c - hole} ${c} A${hole} ${hole} 0 1 0 ${c + hole} ${c} Z`;
 })();
+
+/** Buff bar above the nav: nothing when no buff is active; otherwise one chip per buff with
+ *  its countdown (ticks every second only while something is shown). */
+function BuffBar({ address, coreLevel }: { address: string; coreLevel: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  const [, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision((value) => value + 1);
+    window.addEventListener(BUFFS_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(BUFFS_CHANGED_EVENT, refresh);
+  }, []);
+  const buffs = activeBuffs(address, coreLevel, now, getN());
+  const ticking = buffs.some((buff) => buff.endsAt != null && !buff.permanent);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), ticking ? 1000 : 30_000);
+    return () => window.clearInterval(timer);
+  }, [ticking]);
+  if (!buffs.length) return null;
+  return <div className="command-buffs" aria-label="Active buffs">
+    {buffs.map((buff) => <span key={buff.id} className={`command-buff buff-${buff.id}`}>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 13.5 3.6v4c0 3.3-2.3 5.5-5.5 6.9-3.2-1.4-5.5-3.6-5.5-6.9v-4Z" /></svg>
+      <b>{buff.label}</b>
+      <em className="mono">{buffTimeLeft(buff, now)}</em>
+    </span>)}
+  </div>;
+}
 
 function DualClock() {
   const [now, setNow] = useState(() => new Date());

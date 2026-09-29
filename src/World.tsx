@@ -21,8 +21,9 @@ import {
 } from "./lib/world-adapter";
 import GameNav from "./GameNav";
 import NameSignal from "./NameSignal";
-import CommanderCardView from "./CommanderCardView";
+import CommanderCardView, { ShieldGlyph } from "./CommanderCardView";
 import { shieldActive } from "./lib/shield";
+import { buffTimeLeft, rememberOwnShield } from "./lib/buffs";
 import MiniComms from "./MiniComms";
 import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
@@ -668,11 +669,13 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       setRemotePlayers((cur) => [...cur.filter((x) => onRoster.has(x.id) && !fresh.some((p) => p.id === x.id)), ...fresh]);
       setRtEpoch((value) => value + 1);
       setMarches(snapMarches || []);
-      const mine = players.find((p) => p.id === address)?.coords;
+      const me = players.find((p) => p.id === address);
+      if (me) rememberOwnShield(address, me.shieldUntil);
+      const mine = me?.coords;
       if (mine && Number.isFinite(mine.x) && Number.isFinite(mine.y)) setServerHomeCoord({ x: mine.x, y: mine.y });
     };
     rt.handlers.onPlayer = (p) => {
-      if (p.id === address) return;
+      if (p.id === address) { rememberOwnShield(address, p.shieldUntil); return; }
       // No coordinates = outside our view (or it warped away): drop it from the map.
       const id = p.id;
       if (!hasCoords(p)) { setRemotePlayers((cur) => cur.filter((x) => x.id !== id)); return; }
@@ -1913,18 +1916,26 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           const intel = recon[remoteSelected.id];
           const intelLeftMs = intel ? intel.expiresAt - now : 0;
           const snap = intelLeftMs > 0 ? intel.snapshot : null;
+          // Their shield is public (the dome shows it too): item shield countdown, or the Core rule.
+          const targetShieldUntil = Number(remoteSelected.shieldUntil) || 0;
+          const targetShielded = shieldActive({ keepLevel: remoteSelected.keepLevel || 1, shieldUntil: targetShieldUntil }, now, N);
+          const protectedUntil = Number(N.global?.shield?.protectedUntilKeepLevel) || 0;
+          const shieldLabel = !targetShielded ? null : targetShieldUntil > now
+            ? buffTimeLeft({ id: "shield", label: "SHIELD", endsAt: targetShieldUntil, permanent: targetShieldUntil - now > 365 * 86_400_000 }, now)
+            : `UNTIL CORE ${protectedUntil}`;
           return <WorldAnchor svgRef={svgRef} point={remoteSelected.coords} className="commander-card" data-frame={frame} style={{ "--commander": col } as CSSProperties}>
             <button className="commander-card-close" aria-label="Close commander card" onClick={() => setRemoteSelectedId(null)}>×</button>
             <CommanderCardView id={remoteSelected.id} name={remoteSelected.name || "Commander"} faction={remoteSelected.faction || null} avatar={remoteSelected.avatar}
-              coreLevel={remoteSelected.keepLevel || 1} signal={cosmetics?.chatSignal} recon={intel} now={now}>
+              coreLevel={remoteSelected.keepLevel || 1} signal={cosmetics?.chatSignal} recon={intel} now={now} shield={shieldLabel}>
             <div className="commander-card-actions">
               <button className="scout" disabled={launching || !!scoutFlight || !canPayScout}
                 onMouseEnter={() => setCardHint(canPayScout ? `Costs ${scoutCostLabel} · reveals Might, troops and loot · they will see the scout` : `Needs ${scoutCostLabel} to launch a scout`)} onMouseLeave={() => setCardHint(null)}
                 onClick={() => void launchScout(remoteSelected)}>
                 {scoutFlight ? `◎ EN ROUTE · ${clockLeft(scoutFlight.arriveAt - now)}` : launching ? "LAUNCHING…" : <>{snap ? "◎ RESCOUT" : "◎ SCOUT"}<small className="commander-card-cost">{scoutCostLabel}</small></>}
               </button>
-              <button className="attack" onMouseEnter={() => setCardHint("They will see your fleet coming")} onMouseLeave={() => setCardHint(null)}
-                onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>⚔ ATTACK</button>
+              <button className="attack" disabled={targetShielded}
+                onMouseEnter={() => setCardHint(targetShielded ? "Shielded — it can't be attacked until the shield ends" : "They will see your fleet coming")} onMouseLeave={() => setCardHint(null)}
+                onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>{targetShielded ? <><ShieldGlyph />SHIELDED</> : "⚔ ATTACK"}</button>
               <button className="quiet" onClick={() => { queueDirectMessage(address, { id: remoteSelected.id, name: remoteSelected.name || "Commander" }); onMessages(); }}>✉ MESSAGE</button>
               <button className="quiet" onClick={() => { queueCommsShare(address, createCommanderShare(remoteSelected, intelLeftMs > 0 ? intel : null)); onMessages(); }}>⇪ SHARE</button>
             </div>

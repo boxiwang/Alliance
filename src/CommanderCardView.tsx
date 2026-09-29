@@ -7,17 +7,25 @@ import type { ScoutSnapshot } from "./lib/realtime";
 
 const RESOURCE_COLORS = { cash: "#43f2a1", oil: "#ffb454", power: "#38d9ff" } as const;
 
+/** The shield mark (same shape as the nav buff bar), in shield blue. */
+export function ShieldGlyph() {
+  return <svg className="shield-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 13.5 3.6v4c0 3.3-2.3 5.5-5.5 6.9-3.2-1.4-5.5-3.6-5.5-6.9v-4Z" /></svg>;
+}
+
 /**
  * The commander card body, shared by the Star Map card and a card relayed to chat, so a
  * share looks exactly like what the sender saw: identity, plus recon rows while the
  * intel is still valid (they disappear when it expires). Troops and resources use the same
  * display units as the rest of the game (nav bar, city).
  */
-export default function CommanderCardView({ id, name, faction, avatar, coreLevel, signal, recon, now, markExpired = false, children }: {
+export default function CommanderCardView({ id, name, faction, avatar, coreLevel, signal, recon, now, markExpired = false, shield = null, children }: {
   id: string; name: string; faction: string | null; avatar: string | null | undefined; coreLevel: number;
   signal: ChatSignalId | null | undefined; recon: { snapshot: ScoutSnapshot; expiresAt: number } | null | undefined; now: number;
   /** A relayed card says its recon has expired (the Star Map card simply returns to normal). */
-  markExpired?: boolean; children?: ReactNode;
+  markExpired?: boolean;
+  /** Public shield status on the live Star Map card ("7:42:10", "UNTIL CORE 10", "∞"). */
+  shield?: string | null;
+  children?: ReactNode;
 }) {
   const sigil = /^[a-z0-9-]{1,24}$/.test(String(avatar || "")) ? avatar : "genesis";
   const leftMs = recon ? recon.expiresAt - now : 0;
@@ -30,7 +38,7 @@ export default function CommanderCardView({ id, name, faction, avatar, coreLevel
       </span>
       <div>
         <b>{faction ? <i>[{faction}]</i> : null}<NameSignal key={id} signal={signal ?? null}>{name || "Commander"}</NameSignal></b>
-        <small>CORE {coreLevel}</small>
+        <small>CORE {coreLevel}{shield != null && <span className="commander-card-shield"><ShieldGlyph />SHIELD · {shield}</span>}</small>
       </div>
     </header>
     {!snap && recon && markExpired && <div className="commander-card-expired">RECON EXPIRED</div>}

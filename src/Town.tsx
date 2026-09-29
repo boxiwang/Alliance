@@ -28,6 +28,7 @@ import { compact } from "./lib/format";
 import { clearLocalWorldSession, loadLocalWorldSession, openLocalWorldSession } from "./lib/world-adapter";
 import { energyAt } from "./lib/world-engine";
 import { shieldActive } from "./lib/shield";
+import { ownShieldUntil, rememberOwnShield } from "./lib/buffs";
 import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
 import BuildingGlyph from "./BuildingGlyph";
@@ -329,8 +330,11 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   }) : [];
   // Shield item from the server roster (arrives live, e.g. a GM grant) — the local world
   // session only refreshes on a Star Map sync.
-  const [serverShieldUntil, setServerShieldUntil] = useState(0);
-  const handleSelf = useCallback((me: PresenceCity) => setServerShieldUntil(Number(me.shieldUntil) || 0), []);
+  const [serverShieldUntil, setServerShieldUntil] = useState(() => ownShieldUntil(address));
+  const handleSelf = useCallback((me: PresenceCity) => {
+    setServerShieldUntil(Number(me.shieldUntil) || 0);
+    rememberOwnShield(address, me.shieldUntil);
+  }, [address]);
   const worldStatus = useMemo(() => {
     const stored = loadLocalWorldSession(address);
     if (!stored) {
@@ -476,7 +480,9 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     setInventoryBusy(true);
     try {
       const result = await gmSetShield(session.token, [address], on);
-      setServerShieldUntil(result.granted[0]?.shieldUntil ?? (on ? Number.MAX_SAFE_INTEGER : 0));
+      const until = result.granted[0]?.shieldUntil ?? 0;
+      setServerShieldUntil(until);
+      rememberOwnShield(address, until);
       setMsg(on ? "GM: shield ON (until you turn it off)." : "GM: shield OFF.");
     } catch { setMsg("GM shield failed."); }
     finally { setInventoryBusy(false); }
