@@ -1889,3 +1889,19 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 @media(prefers-reduced-motion:reduce){.chest-result .chest-loot .inv-slot{animation:none}}
 .command-buff.buff-march{border-color:rgba(127,240,196,.7);background:linear-gradient(100deg,rgba(67,242,161,.24),rgba(67,242,161,.06));box-shadow:0 0 16px rgba(67,242,161,.25)}
 .command-buff.buff-march svg{stroke:#bff7de}
+/* Warehouse: item consumed burst (ghost lifts and fades, ring + sparks, gain tag rises, "−N" drops off the count). */
+.inv-detail-art{position:relative}
+.inv-consume-fx{position:absolute;inset:0;pointer-events:none;animation:inv-consume-life 1.5s linear forwards}
+.inv-consume-ghost{position:absolute;inset:8px;filter:brightness(1.8) drop-shadow(0 0 14px var(--rarity));animation:inv-consume-ghost .7s cubic-bezier(.2,.7,.3,1) forwards}
+.inv-consume-ring{position:absolute;left:50%;top:50%;width:64px;height:64px;margin:-32px 0 0 -32px;border:2px solid var(--rarity);border-radius:50%;box-shadow:0 0 18px var(--rarity),inset 0 0 12px var(--rarity);animation:inv-consume-ring .75s ease-out forwards}
+.inv-consume-spark{position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:#fff;box-shadow:0 0 8px 2px var(--rarity);transform:rotate(var(--a)) translateY(0);animation:inv-consume-spark .7s cubic-bezier(.15,.7,.3,1) forwards}
+.inv-consume-gain{position:absolute;left:50%;bottom:36%;padding:3px 7px;border:1px solid color-mix(in srgb,var(--rarity) 55%,transparent);border-radius:5px;background:color-mix(in srgb,var(--rarity) 18%,#06101e);color:#fff;font:850 11px var(--mono);letter-spacing:.04em;white-space:nowrap;text-shadow:0 0 8px var(--rarity);box-shadow:0 0 16px color-mix(in srgb,var(--rarity) 40%,transparent);transform:translateX(-50%);opacity:0;animation:inv-consume-gain 1.4s cubic-bezier(.18,.72,.25,1) .18s forwards}
+.inv-consume-spent{position:absolute;right:-6px;top:-8px;padding:1px 6px;border-radius:9px;background:#ff5f6d;color:#fff;font:850 11px var(--mono);font-style:normal;box-shadow:0 0 10px rgba(255,95,109,.6);animation:inv-consume-spent 1.1s ease-out .1s both}
+.inv-slot.consumed{animation:inv-slot-consumed .6s ease-out}
+@keyframes inv-consume-life{to{opacity:1}}
+@keyframes inv-consume-ghost{0%{opacity:.95;transform:scale(1)}100%{opacity:0;transform:scale(1.35) translateY(-10px)}}
+@keyframes inv-consume-ring{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(2)}}
+@keyframes inv-consume-spark{0%{opacity:1;transform:rotate(var(--a)) translateY(0)}100%{opacity:0;transform:rotate(var(--a)) translateY(-70px) scale(.4)}}
+@keyframes inv-consume-gain{0%{opacity:0;transform:translate(-50%,10px) scale(.85)}18%{opacity:1;transform:translate(-50%,0) scale(1.06)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-48px) scale(1)}}
+@keyframes inv-consume-spent{0%{opacity:0;transform:translateY(-6px) scale(.7)}20%{opacity:1;transform:none}70%{opacity:1}100%{opacity:0;transform:translateY(14px)}}
+@keyframes inv-slot-consumed{0%{filter:brightness(2.1);transform:scale(.9)}100%{filter:none;transform:none}}

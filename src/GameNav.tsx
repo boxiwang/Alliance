@@ -151,7 +151,7 @@ export default function GameNav({
           );
         })}
         {/* Same icon + title + amount grammar as the resources. Fleets live in Operations. */}
-        <CommandMetric glyph={METRIC_GLYPH.stamina} label="Stamina" value={`${Math.floor(stamina)}/${staminaCap}`}
+        <CommandMetric glyph={METRIC_GLYPH.stamina} label="Stamina" value={`${Math.floor(stamina)}/${staminaCap}`} amount={Math.floor(stamina)}
           note={stamina >= staminaCap ? "FULL" : `+${compact(3600 / worldEngineConfig().energyRegenSec)}/H`} tone="#aa82ff" />
         <CommandMetric glyph={METRIC_GLYPH.troops} label="Troops" value={compact(displayTroops(troops))} note="READY IN CITY" tone="#43f2a1" />
         <CommandMetric glyph={METRIC_GLYPH.wounded} label="Wounded" value={compact(displayTroops(wounded))} note={wounded > 0 ? "IN HOSPITAL" : "NONE"} tone="#ff7188" />
@@ -315,14 +315,23 @@ const METRIC_GLYPH = {
   wounded: <path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6V3Z" />,
 };
 
-function CommandMetric({ glyph, label, value, note, tone }: { glyph: ReactNode; label: string; value: string; note: string; tone: string }) {
+function CommandMetric({ glyph, label, value, note, tone, amount }: { glyph: ReactNode; label: string; value: string; note: string; tone: string; amount?: number }) {
+  // A jump of more than one (an item, not the slow regen tick) pops the value with a "+N" tag.
+  const previous = useRef(amount);
+  const [gain, setGain] = useState<{ amount: number; id: number } | null>(null);
+  useEffect(() => {
+    const from = previous.current;
+    previous.current = amount;
+    if (amount != null && from != null && amount - from > 1) setGain({ amount: amount - from, id: Date.now() });
+  }, [amount]);
   return (
     <div className="command-resource command-metric-stat" style={{ "--resource": tone } as CSSProperties}>
       <span className="command-resource-icon"><svg className="building-glyph" viewBox="0 0 24 24" aria-hidden="true">{glyph}</svg></span>
-      <div className="command-resource-value">
+      <div className={`command-resource-value${gain ? " is-gaining" : ""}`}>
         <small>{label}</small>
-        <b>{value}</b>
+        <b key={`value:${gain?.id ?? 0}`}>{value}</b>
         <span className="command-resource-rate">{note}</span>
+        {gain && <em key={gain.id} className="command-resource-gain" onAnimationEnd={() => setGain(null)}>+{gain.amount}</em>}
       </div>
     </div>
   );

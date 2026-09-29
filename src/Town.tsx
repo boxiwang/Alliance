@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   GameState, BKey, TroopKey, ResKey, BUILDINGS, BUILDING_ORDER, RES, RES_ORDER, TROOPS_META, TROOP_ORDER,
   project, startUpgrade, startTrain, upgradeCost, upgradeTimeSec,
@@ -25,7 +25,7 @@ import {
 } from "./lib/gm";
 import { Profile } from "./lib/profile";
 import { compact } from "./lib/format";
-import { clearLocalWorldSession, loadLocalWorldSession, openLocalWorldSession } from "./lib/world-adapter";
+import { clearLocalWorldSession, loadLocalWorldSession, openLocalWorldSession, saveLocalWorldSession } from "./lib/world-adapter";
 import { energyAt } from "./lib/world-engine";
 import { shieldActive } from "./lib/shield";
 import { ownShieldUntil, rememberOwnMarchBoost, rememberOwnShield } from "./lib/buffs";
@@ -42,7 +42,7 @@ import {
   consumeInventoryItem, enableGameAuthority, ensureGameAuthority, fetchServerGame, gmSetShield, grantGmCredits, grantGmInventory, loadBackendSession, loadInventory,
   sendGameCommand, type GameCommandResponse, type InventoryBalance,
 } from "./lib/backend";
-import { isUnlimitedQuantity, MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath, WAREHOUSE_CATEGORIES, warehouseCategoryOf, warehouseSortKey, type WarehouseCategory } from "./lib/mvp-items";
+import { isUnlimitedQuantity, type ItemEffect, MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath, WAREHOUSE_CATEGORIES, warehouseCategoryOf, warehouseSortKey, type WarehouseCategory } from "./lib/mvp-items";
 import ItemIcon from "./ItemIcon";
 import { autoSpeedupCount, autoSpeedupPick, type OwnedSpeedup } from "./lib/speedup-pick";
 import { activeSpeedupTargets, applySpeedup, speedupCompatible, speedupTargetId, type SpeedupTarget } from "./lib/speedups";
@@ -170,6 +170,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [warehouseCategory, setWarehouseCategory] = useState<WarehouseCategory | null>(null);
   const [warehouseCount, setWarehouseCount] = useState(1);
   const [chestLoot, setChestLoot] = useState<Record<string, number> | null>(null);
+  // Warehouse "item consumed" burst: plays on the used item, with what it gave and how many were spent.
+  const [consumeFx, setConsumeFx] = useState<{ id: number; itemId: string; gain: string; spent: number | null } | null>(null);
   // Speedup order dialog. itemId/quantity null = auto-pick (lib/speedup-pick.ts).
   const [pendingSpeedup, setPendingSpeedup] = useState<{ target: SpeedupTarget; itemId: string | null; quantity: number | null } | null>(null);
   const [inventoryBusy, setInventoryBusy] = useState(false);
@@ -486,8 +488,21 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       if (!result.ok) { setMsg(ITEM_ERROR_COPY[result.reason || ""] || "That item could not be used."); return; }
       if (result.effect?.shieldUntil) rememberOwnShield(address, result.effect.shieldUntil);
       if (result.effect?.marchBoostUntil) rememberOwnMarchBoost(address, result.effect.marchBoostUntil);
-      if (item.effect.kind === "chest") setChestLoot(result.loot || {});
-      else setMsg(`${quantity > 1 ? `${quantity}× ` : ""}${item.name} used.`);
+      // The City reads Stamina and March Boost from the cached Star Map session: write the
+      // server's new values through so the nav updates without a trip to the Star Map.
+      const cached = loadLocalWorldSession(address);
+      const me = cached?.world.players[cached.playerId];
+      if (cached && me && (result.effect?.stamina != null || result.effect?.marchBoostUntil)) {
+        const nowMs = Date.now();
+        const nextMe = { ...me,
+          ...(result.effect.stamina != null ? { energyStored: result.effect.stamina, energyUpdatedAt: nowMs } : {}),
+          ...(result.effect.marchBoostUntil ? { marchBoostUntil: result.effect.marchBoostUntil, marchBoostBonus: Math.max(me.marchBoostBonus ?? 0, item.effect.kind === "march_boost" ? item.effect.bonus : 0) } : {}) };
+        saveLocalWorldSession({ ...cached, world: { ...cached.world, players: { ...cached.world.players, [cached.playerId]: nextMe } } });
+      }
+      const unlimited = isUnlimitedQuantity(inventoryById.get(itemId) ?? 0);
+      if (!unlimited) setInventory((current) => current.map((entry) => entry.itemId === itemId ? { ...entry, quantity: Math.max(0, entry.quantity - quantity), updatedAt: Date.now() } : entry));
+      setConsumeFx({ id: Date.now(), itemId, gain: itemGainCopy(item.effect, quantity), spent: unlimited ? null : quantity });
+      if (item.effect.kind === "chest") window.setTimeout(() => setChestLoot(result.loot || {}), 520);
       setWarehouseCount(1);
     } catch {
       setMsg("That item could not be used. Try again.");
@@ -549,6 +564,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     if (authorityVersion > 0) {
       try {
         const command = await runServerAction("speedup.use", { itemId, target, quantity: count }, () => ({ state: result.state, ok: true }));
+        if (command?.ok) setConsumeFx({ id: Date.now(), itemId, gain: `−${fmtSec(result.secondsApplied)}`, spent: isUnlimitedQuantity(inventoryById.get(itemId) ?? 0) ? null : count });
         if (command?.inventory) {
           setInventory((current) => current.map((entry) => entry.itemId === command.inventory!.itemId
             ? { ...entry, quantity: command.inventory!.quantity, updatedAt: Date.now() }
@@ -657,7 +673,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         <div className="inv-grid-wrap">
           <div className="inv-grid-title"><b>{meta.label.toUpperCase()}</b><span>{shown.length ? `${itemCount(shown.reduce((sum, entry) => sum + entry.quantity, 0))} ITEMS` : ""}</span></div>
           {shown.length ? <div className="inv-grid">
-            {shown.map(({ item, quantity }) => <button key={item.id} type="button" className={`inv-slot rarity-${item.rarity}${selected?.item.id === item.id ? " selected" : ""}`}
+            {shown.map(({ item, quantity }) => <button key={consumeFx?.itemId === item.id ? `${item.id}:${consumeFx.id}` : item.id} type="button" className={`inv-slot rarity-${item.rarity}${selected?.item.id === item.id ? " selected" : ""}${consumeFx?.itemId === item.id ? " consumed" : ""}`}
               aria-pressed={selected?.item.id === item.id} aria-label={`${item.name}, ${quantity} owned`} onClick={() => { setWarehouseItemId(item.id); setWarehouseCount(1); }}>
               <ItemIcon item={item} />
               <span className="mono">{itemCount(quantity)}</span>
@@ -666,7 +682,16 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         </div>
         <aside className="inv-detail" aria-label="Item details">
           {selected ? <>
-            <div className={`inv-detail-art rarity-${selected.item.rarity}`}><ItemIcon item={selected.item} /></div>
+            <div className={`inv-detail-art rarity-${selected.item.rarity}`}>
+              <ItemIcon item={selected.item} />
+              {consumeFx?.itemId === selected.item.id && <div key={consumeFx.id} className="inv-consume-fx" aria-hidden="true" onAnimationEnd={(event) => { if (event.target === event.currentTarget) setConsumeFx(null); }}>
+                <span className="inv-consume-ghost"><ItemIcon item={selected.item} /></span>
+                <i className="inv-consume-ring" />
+                {Array.from({ length: 10 }, (_, index) => <i key={index} className="inv-consume-spark" style={{ "--a": `${index * 36 + 8}deg` } as CSSProperties} />)}
+                {consumeFx.gain && <b className="inv-consume-gain">{consumeFx.gain}</b>}
+                {consumeFx.spent != null && <em className="inv-consume-spent">−{consumeFx.spent}</em>}
+              </div>}
+            </div>
             <small className={`inv-rarity rarity-${selected.item.rarity}`}>{selected.item.rarity.toUpperCase()}</small>
             <h3>{selected.item.name}</h3>
             <p>{selected.item.description}</p>
@@ -1495,6 +1520,18 @@ function ResearchRing({ value, max, large = false }: { value: number; max: numbe
 function itemCount(n: number): string {
   if (isUnlimitedQuantity(n)) return "∞";
   return n < 10_000 ? Math.floor(n).toLocaleString("en-US") : compact(n);
+}
+
+/** The burst's gain tag, e.g. "+10M CASH", "+20 STAMINA", "SHIELD +8H". */
+function itemGainCopy(effect: ItemEffect, quantity: number): string {
+  switch (effect.kind) {
+    case "resource": return `+${compact(displayResource(effect.amount * quantity))} ${RES[effect.resource].label}`.toUpperCase();
+    case "stamina": return `+${effect.amount * quantity} STAMINA`;
+    case "shield": return `SHIELD +${effect.hours * quantity}H`;
+    case "march_boost": return `MARCH +${Math.round(effect.bonus * 100)}%`;
+    case "chest": return quantity > 1 ? `${quantity} OPENED` : "OPENED";
+    default: return "";
+  }
 }
 
 const ITEM_ERROR_COPY: Record<string, string> = {
