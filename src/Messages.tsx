@@ -462,15 +462,16 @@ function intelRemaining(expiresAt: number, now: number): string {
 
 function SharedIntelCard({ share, now, onOpen, compactView = false }: { share: SharedWorldIntel; now: number; onOpen: () => void; compactView?: boolean }) {
   if (share.kind === "commander") {
-    // Same card the sender saw on the Star Map (recon rows only while still valid).
+    // Same card for sender and receiver, in the composer and in the thread (recon rows
+    // only while the intel is still valid).
     const reconLive = !!share.recon && share.recon.expiresAt > now;
     return <div className={`commander-card commander-card-shared ${compactView ? "compact" : ""}`} data-frame="standard" style={{ "--commander": "#7cc0ff" } as CSSProperties}
       role={compactView ? undefined : "button"} tabIndex={compactView ? undefined : 0}
       onClick={compactView ? undefined : onOpen} onKeyDown={compactView ? undefined : (event) => { if (event.key === "Enter") onOpen(); }}>
       <CommanderCardView id={share.playerId} name={share.name} faction={share.faction} avatar={share.avatar} coreLevel={share.coreLevel}
-        signal={share.signal as ChatSignalId | null | undefined} recon={compactView ? null : share.recon} now={now}>
+        signal={share.signal as ChatSignalId | null | undefined} recon={share.recon} now={now}>
         <footer>{compactView
-          ? <span>{reconLive ? "RECON ATTACHED" : "COMMANDER CARD"}</span>
+          ? <span>{reconLive ? "READY TO SEND · WITH RECON" : "READY TO SEND"}</span>
           : <span>{share.position ? "LOCATE ON STAR MAP ▸" : "MESSAGE ▸"}</span>}</footer>
       </CommanderCardView>
     </div>;
