@@ -606,16 +606,20 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // Shared star map: other real commanders from the realtime presence roster.
   // Read-only for now — you can see them, open their card and message them;
   // scouting/attacking real players is the next milestone (server-side combat).
-  const [remotePlayers, setRemotePlayers] = useState<MapCity[]>([]);
+  // Returning to the Star Map paints the last view at once (cached per player), then refreshes.
+  const [remotePlayers, setRemotePlayers] = useState<MapCity[]>(() => cachedView(address)?.players ?? []);
   const [rtEpoch, setRtEpoch] = useState(0); // bumps on every (re)connect snapshot → resend the map view
   // Shared world (authority v2, docs/SHARED-ECOLOGY.md): public targets arrive per map view;
   // own city, marches and reports come in the server slice. Others' fleets are known only
   // as "who occupies this planet" — never their paths (their homes stay private).
-  const [viewTargets, setViewTargets] = useState<Record<string, WorldEntity>>({});
-  const [viewOccupiers, setViewOccupiers] = useState<Record<string, string>>({});
-  const [serverClusters, setServerClusters] = useState<SignalCluster[] | null>(null);
+  const [viewTargets, setViewTargets] = useState<Record<string, WorldEntity>>(() => cachedView(address)?.targets ?? {});
+  const [viewOccupiers, setViewOccupiers] = useState<Record<string, string>>(() => cachedView(address)?.occupiers ?? {});
+  const [serverClusters, setServerClusters] = useState<SignalCluster[] | null>(() => cachedView(address)?.clusters ?? null);
   // Dense Field view: the server sent an aggregate instead of every planet.
-  const [serverFieldClusters, setServerFieldClusters] = useState<SignalCluster[] | null>(null);
+  const [serverFieldClusters, setServerFieldClusters] = useState<SignalCluster[] | null>(() => cachedView(address)?.fieldClusters ?? null);
+  useEffect(() => {
+    VIEW_CACHE.set(address, { at: Date.now(), targets: viewTargets, occupiers: viewOccupiers, clusters: serverClusters, fieldClusters: serverFieldClusters, players: remotePlayers });
+  }, [address, viewTargets, viewOccupiers, serverClusters, serverFieldClusters, remotePlayers]);
   const searchReplyRef = useRef<((result: { total: number; target: unknown | null }) => void) | null>(null);
   const [remoteSelectedId, setRemoteSelectedId] = useState<string | null>(null);
   // A shared commander card opened from chat: select that planet once it arrives in view.
@@ -646,7 +650,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       const known: Record<string, ReconIntel> = {};
       for (const report of reports || []) { const entry = reconFromReport(report); if (entry) known[entry[0]] = entry[1]; }
       setRecon(known);
-      setRemotePlayers(keep(players));
+      // The roster carries no coordinates for others; keep cities already placed from a view
+      // answer (if they are still in the world) until the next view refreshes them.
+      const fresh = keep(players);
+      const onRoster = new Set(players.map((p) => p.id));
+      setRemotePlayers((cur) => [...cur.filter((x) => onRoster.has(x.id) && !fresh.some((p) => p.id === x.id)), ...fresh]);
       setRtEpoch((value) => value + 1);
       setMarches(snapMarches || []);
       const mine = players.find((p) => p.id === address)?.coords;
@@ -1253,6 +1261,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     return () => window.clearInterval(timer);
   }, [sharedMode, strategicZoom, rtEpoch]);
   const lastViewDetailRef = useRef<boolean | null>(null);
+  // Fetch planets one zoom step before Tactical, so zooming in finds them already here
+  // (Field then clusters them locally until the Tactical threshold).
+  const wantPlanets = !denseField || zoom >= WORLD_TACTICAL_ZOOM * .75;
   useEffect(() => {
     lastViewRef.current = null; lastViewDetailRef.current = null;
   }, [rtEpoch]);
@@ -1264,8 +1275,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     // Reuse the last answer only while it still fits the view at a similar scale: after a
     // zoom-in the last answer may have been clusters, and planets are needed now.
     const area = (rect: ViewRect) => (rect.x1 - rect.x0) * (rect.y1 - rect.y0);
-    const detail = !denseField; // planets (Tactical) or signal clusters (Field)
+    const detail = wantPlanets; // planets (Tactical, or one zoom step before it) or signal clusters (Field)
     if (last && lastViewDetailRef.current === detail && want.x0 >= last.x0 && want.y0 >= last.y0 && want.x1 <= last.x1 && want.y1 <= last.y1 && area(want) > area(last) * .35) return;
+    // First view and a Field <-> Tactical switch go out at once; pans are lightly debounced.
+    const urgent = !last || lastViewDetailRef.current !== detail;
     const timer = window.setTimeout(() => {
       // The server serves at most VIEW_MAX_SPAN tiles per axis; spend what is left on the margin.
       const sx = Math.max(0, Math.min(spare, (VIEW_MAX_SPAN - (want.x1 - want.x0)) / 2));
@@ -1273,9 +1286,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       const rect = { x0: Math.floor(want.x0 - sx), y0: Math.floor(want.y0 - sy), x1: Math.ceil(want.x1 + sx), y1: Math.ceil(want.y1 + sy) };
       lastViewRef.current = rect; lastViewDetailRef.current = detail;
       rtRef.current?.sendView(rect, false, detail);
-    }, 200);
+    }, urgent ? 0 : 120);
     return () => window.clearTimeout(timer);
-  }, [strategicZoom, denseField, viewX, viewY, viewport.width, viewport.height, rtEpoch]);
+  }, [strategicZoom, wantPlanets, viewX, viewY, viewport.width, viewport.height, rtEpoch]);
   const mapRemotePlayers = useMemo(() => {
     if (strategicZoom) return null;
     const pad = 30;
@@ -2073,4 +2086,13 @@ function ScoutTrail({ march, scale }: { march: LiveMarch; scale: number }) {
     <line x1={march.from.x} y1={march.from.y} x2={march.to.x} y2={march.to.y} vectorEffect="non-scaling-stroke" />
     <circle ref={dotRef} r={3 * scale} cx={0} cy={0} transform={`translate(${march.from.x} ${march.from.y})`} />
   </g>;
+}
+
+/** The last Star Map view per player (module scope, survives page switches). */
+type ViewCache = { at: number; targets: Record<string, WorldEntity>; occupiers: Record<string, string>; clusters: SignalCluster[] | null; fieldClusters: SignalCluster[] | null; players: MapCity[] };
+const VIEW_CACHE = new Map<string, ViewCache>();
+const VIEW_CACHE_MS = 10 * 60_000;
+function cachedView(address: string): ViewCache | null {
+  const entry = VIEW_CACHE.get(address);
+  return entry && Date.now() - entry.at < VIEW_CACHE_MS ? entry : null;
 }

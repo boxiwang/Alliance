@@ -53,6 +53,8 @@ export class RealtimeClient {
   private closed = false;
   private retry = 0;
   private queue: string[] = [];
+  // The latest map-view request made while the socket was not open; sent first on open.
+  private pendingView: string | null = null;
   handlers: Handlers = {};
 
   constructor(id: string, name: string) {
@@ -68,6 +70,7 @@ export class RealtimeClient {
     this.ws.onopen = () => {
       this.retry = 0;
       this.handlers.onStatus?.(true);
+      if (this.pendingView) { try { this.ws?.send(this.pendingView); } catch {} this.pendingView = null; }
       const pending = this.queue; this.queue = [];
       pending.forEach((m) => { try { this.ws?.send(m); } catch {} });
     };
@@ -117,9 +120,12 @@ export class RealtimeClient {
   sendDMFav(partner: string, on: boolean) { this.send({ type: "dm_fav", with: partner, on }); }
   sendScout(to: string) { this.send({ type: "scout", to }); }
   sendMarch(to: string) { this.send({ type: "march", to }); }
-  // Map view query: never queued (a stale view is useless); resent after reconnect.
+  // Map view query: only the latest one is kept while connecting (older views are useless),
+  // and it goes out the moment the socket opens.
   sendView(rect: ViewRect, strategic = false, detail?: boolean) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) { try { this.ws.send(JSON.stringify({ type: "view", rect, strategic, detail })); } catch {} }
+    const message = JSON.stringify({ type: "view", rect, strategic, detail });
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) { try { this.ws.send(message); } catch {} }
+    else this.pendingView = message;
   }
   // Shared-world Search: nearest free target of a kind/level from home; `index` walks outward.
   sendSearch(kind: string, level: number, index: number) { this.send({ type: "search", kind, level, index }); }
