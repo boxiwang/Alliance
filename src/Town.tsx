@@ -513,19 +513,21 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   }
 
   function renderSpeedupTray(target: SpeedupTarget, variant: "compact" | "wide" = "compact") {
-    const compatible = speedupCatalog.filter((item) => speedupCompatible(item.speedupQueue, target));
+    // Only what you own and can use on this queue (same rule as the Warehouse).
+    const compatible = speedupCatalog.filter((item) => speedupCompatible(item.speedupQueue, target) && (inventoryById.get(item.id) || 0) > 0);
     const remainingMs = target.kind === "construction" ? view.buildings[target.key].finishAt - now
       : target.kind === "training" ? view.training[target.key].finishAt - now
         : target.kind === "research" ? view.researchQueue.finishAt - now
           : view.healing.finishAt - now;
     return <section className={`speedup-tray ${variant}`} aria-label={`Speedups for ${speedupTargetLabel(target)}`}>
       <header><span>ACCELERATE</span><b className="mono">{fmtMs(remainingMs)}</b></header>
+      {!compatible.length && <p className="speedup-tray-empty">No speedups for this queue — get them from the Shop and events.</p>}
       <div className="speedup-tray-items">
         {compatible.map((item) => {
           const quantity = inventoryById.get(item.id) || 0;
           return <button key={item.id} type="button" disabled={quantity <= 0 || inventoryBusy || commandBusy} onClick={() => requestSpeedupUse(item.id, target)} aria-label={`Use ${item.name}, ${quantity} owned`}>
             <img src={speedupIconPath(item)} alt="" />
-            <span className="mono">×{quantity}</span>
+            <span className="mono">×{itemCount(quantity)}</span>
           </button>;
         })}
       </div>
