@@ -42,12 +42,14 @@ function saveDockPosition(position: DockPosition | null) {
 }
 const dockDraggable = () => typeof window !== "undefined" && window.innerWidth >= 700;
 
-export default function MiniComms({ address, profile, onOpenMessages, onReport, onMarch, onMarchDone, onMarchSnapshot }: {
+export default function MiniComms({ address, profile, onOpenMessages, onReport, onMarch, onMarchDone, onMarchSnapshot, onSelf }: {
   address: string; profile: Profile; onOpenMessages: () => void;
   onReport?: (report: ServerReport) => void;
   onMarch?: (march: LiveMarch) => void;
   onMarchDone?: (id: string) => void;
   onMarchSnapshot?: (you: string, marches: LiveMarch[]) => void;
+  /** Your own roster row from the server (e.g. a shield item granted by a GM). */
+  onSelf?: (me: PresenceCity) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState("");
@@ -109,8 +111,9 @@ export default function MiniComms({ address, profile, onOpenMessages, onReport, 
   const dragHandlers = { onPointerDown: onDockPointerDown, onPointerMove: onDockPointerMove, onPointerUp: onDockPointerUp, onPointerCancel: onDockPointerUp };
   const expandedRef = useRef(expanded);
   const reportRef = useRef(onReport);
-  const marchEvents = useRef({ onMarch, onMarchDone, onMarchSnapshot });
-  marchEvents.current = { onMarch, onMarchDone, onMarchSnapshot };
+  const marchEvents = useRef({ onMarch, onMarchDone, onMarchSnapshot, onSelf });
+  marchEvents.current = { onMarch, onMarchDone, onMarchSnapshot, onSelf };
+  const selfIdRef = useRef<string | null>(null);
   // Clear unread whenever the widget is opened; the ref lets the socket handler
   // (bound once) read the current open/closed state without re-subscribing.
   useEffect(() => { expandedRef.current = expanded; if (expanded) setUnread(0); }, [expanded]);
@@ -125,6 +128,9 @@ export default function MiniComms({ address, profile, onOpenMessages, onReport, 
       setLive(chat); setRoster(players);
       reports.forEach((report) => reportRef.current?.(report));
       marchEvents.current.onMarchSnapshot?.(you, marches);
+      selfIdRef.current = you;
+      const me = players.find((p) => p.id === you);
+      if (me) marchEvents.current.onSelf?.(me);
     };
     rt.handlers.onChat = (m) => {
       setLive((cur) => {
@@ -134,13 +140,13 @@ export default function MiniComms({ address, profile, onOpenMessages, onReport, 
       });
       if (!expandedRef.current && m.pid !== address) setUnread((n) => Math.min(n + 1, 99));
     };
-    rt.handlers.onPlayer = (p) => setRoster((cur) => {
+    rt.handlers.onPlayer = (p) => { if (p.id === selfIdRef.current) marchEvents.current.onSelf?.(p); setRoster((cur) => {
       const i = cur.findIndex((x) => x.id === p.id);
       const next = i < 0 ? [...cur, p] : cur.slice();
       if (i >= 0) next[i] = p;
       cacheComms(address, { roster: next });
       return next;
-    });
+    }); };
     rt.handlers.onStatus = setConnected;
     rt.handlers.onReport = (report) => reportRef.current?.(report);
     rt.handlers.onMarch = (march) => marchEvents.current.onMarch?.(march);

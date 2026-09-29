@@ -432,6 +432,10 @@ async function gmWorld(request: Request, env: BackendEnv, claims: SessionClaims,
   if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
   const data = await body(request);
   const ids = Array.isArray(data?.ids) ? data.ids : [];
+  if (pathname === "/gm/world/shield") {
+    const res = await room.fetch("https://world.internal/grant-shield", { method: "POST", body: JSON.stringify({ ids, hours: data?.hours }) });
+    return response(await res.json());
+  }
   const res = await room.fetch("https://world.internal/release", { method: "POST", body: JSON.stringify({ ids }) });
   return response(await res.json());
 }
@@ -1035,7 +1039,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (request.method === "POST" && pathname === "/auth/wallet/verify") return walletVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/google") return googleVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/guest") return guestVerify(request, env);
-  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/game/authority/enable", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha", "/shop/account", "/shop/purchase", "/shop/daily-claim", "/shop/grant-alpha", "/gm/world/roster", "/gm/world/release"].includes(pathname)) return null;
+  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/game/authority/enable", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha", "/shop/account", "/shop/purchase", "/shop/daily-claim", "/shop/grant-alpha", "/gm/world/roster", "/gm/world/release", "/gm/world/shield"].includes(pathname)) return null;
   const claims = await authClaims(request, env);
   if (!claims) return response({ error: "unauthorized" }, 401);
   if (request.method === "GET" && pathname === "/me") return me(request, env, claims);
@@ -1054,6 +1058,6 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (pathname === "/shop/purchase") return shopPurchase(request, env, claims);
   if (pathname === "/shop/daily-claim") return shopDailyClaim(request, env, claims);
   if (pathname === "/shop/grant-alpha") return grantAlphaCredits(request, env, claims);
-  if (pathname === "/gm/world/roster" || pathname === "/gm/world/release") return gmWorld(request, env, claims, pathname);
+  if (pathname === "/gm/world/roster" || pathname === "/gm/world/release" || pathname === "/gm/world/shield") return gmWorld(request, env, claims, pathname);
   return response({ error: "method_not_allowed" }, 405);
 }

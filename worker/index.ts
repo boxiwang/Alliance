@@ -14,6 +14,7 @@ import {
 } from "../src/lib/shared-world";
 import type { WorldAuthoritySession } from "../src/lib/world-authority";
 import { worldEngineConfig, type WorldEntity } from "../src/lib/world-engine";
+import { shieldActive } from "../src/lib/shield";
 import { STORE_PREFIX, assembleShared, chunkDelta, clustersFromChunk, sectorKeysForRect, sharedChunks, targetsFromSectorChunks } from "../src/lib/shared-store";
 import { DORMANT_MAX_CORE, QUADRANT_CAPACITY, assignOuterRingCoord, clampViewRect, dormantCandidates, quadrantOfCoord, spawnQuadrant, type ViewRect, type WorldCoord } from "./world-coords";
 import { projectGameJson } from "./economy";
@@ -95,6 +96,8 @@ type PlayerRow = {
   might: number; keepLevel: number; faction: string | null;
   cosmetics: unknown; online: boolean; lastSeen: number; coordVersion?: number;
   avatar?: string | null;
+  /** Shield item expiry (GM grant now; the weekly shield later). Public, like the dome. */
+  shieldUntil?: number;
 };
 type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; toName?: string; intel?: unknown; signal?: string | null };
 
@@ -164,9 +167,9 @@ function buildScoutSnapshot(player: PlayerRow, gameJson: string | null | undefin
     },
     safePerResource: safe,
     wallLevel: num(game?.buildings?.wall?.lvl),
-    // v1 shield estimate: cities under Keep 10 are protected (attack-drops-it is a
-    // later refinement). Presence has no PvP-active flag yet.
-    shielded: keepLevel < 10,
+    // Shield (src/lib/shield.ts): Core under protectedUntilKeepLevel, or a shield item.
+    // Attack-drops-it arrives with P0-5 (no PvP-active flag server-side yet).
+    shielded: shieldActive({ keepLevel, shieldUntil: player.shieldUntil }, Date.now(), defaultN()),
   };
 }
 
@@ -501,6 +504,7 @@ export class WorldRoom {
     if (url.pathname === "/world/sync") return this.worldRoute(req, "sync");
     if (url.pathname === "/roster") return this.roster();
     if (url.pathname === "/release" && req.method === "POST") return this.release(req);
+    if (url.pathname === "/grant-shield" && req.method === "POST") return this.grantShield(req);
     const pid = (req.headers.get("x-alliance-player") || "").slice(0, 64);
     const name = (req.headers.get("x-alliance-name") || "Commander").slice(0, 24);
     const sessionId = (req.headers.get("x-alliance-session") || "").slice(0, 64);
@@ -553,6 +557,7 @@ export class WorldRoom {
     const live = this.liveIds();
     const rows = Object.values(players).map((player) => ({
       id: player.id, name: player.name, keepLevel: player.keepLevel, lastSeen: player.lastSeen, online: live.has(player.id),
+      shieldUntil: player.shieldUntil || 0,
     }));
     return Response.json({ players: rows });
   }
@@ -574,6 +579,38 @@ export class WorldRoom {
     if (released.length) await this.state.storage.put("players", players);
     for (const id of released) this.broadcast({ type: "player_removed", id });
     return Response.json({ released, skippedOnline: ids.filter((id) => live.has(id)) });
+  }
+
+  /** GM: give players a shield for `hours` (extends a running one). Sets the public roster
+   *  field (dome for everyone, attack/scout gate) and the shared-world city (own session). */
+  async grantShield(req: Request): Promise<Response> {
+    let body: { ids?: unknown; hours?: unknown } = {};
+    try { body = await req.json(); } catch {}
+    const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id).slice(0, 64)).slice(0, 500) : [];
+    const hours = Math.max(1, Math.min(72, Math.floor(Number(body.hours) || 8)));
+    const now = Date.now();
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    const granted: Array<{ id: string; shieldUntil: number }> = [];
+    for (const id of ids) {
+      const player = players[id];
+      if (!player) continue;
+      player.shieldUntil = Math.max(now, player.shieldUntil || 0) + hours * 3_600_000;
+      granted.push({ id, shieldUntil: player.shieldUntil });
+    }
+    if (!granted.length) return Response.json({ granted });
+    await this.state.storage.put("players", players);
+    await this.locked(async () => {
+      if (!(await this.hasShared())) return;
+      const shared = await this.loadShared();
+      for (const { id, shieldUntil } of granted) {
+        const cityId = shared.world.players[id]?.cityId;
+        const city = cityId ? shared.world.entities[cityId] : null;
+        if (city?.kind === "city") city.shieldUntil = Math.max(city.shieldUntil || 0, shieldUntil);
+      }
+      await this.saveShared(shared);
+    });
+    for (const { id } of granted) this.sendPlayerUpdate(players[id]);
+    return Response.json({ granted });
   }
 
   // The authoritative "who's online" set is the currently-open sockets, not a

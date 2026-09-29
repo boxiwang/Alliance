@@ -43,7 +43,7 @@ import {
 } from "./lib/backend";
 import { MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath } from "./lib/mvp-items";
 import { activeSpeedupTargets, applySpeedup, speedupCompatible, speedupTargetId, type SpeedupTarget } from "./lib/speedups";
-import type { ServerReport, LiveMarch } from "./lib/realtime";
+import type { ServerReport, LiveMarch, PresenceCity } from "./lib/realtime";
 import { incomingCityMarches, recentCityScan } from "./lib/city-alerts";
 import { useGraphicsQuality } from "./useGraphicsQuality";
 
@@ -312,12 +312,16 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const item = MVP_ITEM_BY_ID.get(entry.itemId);
     return entry.quantity > 0 && item?.status === "active" && item.category === "speedup" && speedupCompatible(item.speedupQueue, selectedSpeedupTarget);
   }) : [];
+  // Shield item from the server roster (arrives live, e.g. a GM grant) — the local world
+  // session only refreshes on a Star Map sync.
+  const [serverShieldUntil, setServerShieldUntil] = useState(0);
+  const handleSelf = useCallback((me: PresenceCity) => setServerShieldUntil(Number(me.shieldUntil) || 0), []);
   const worldStatus = useMemo(() => {
     const stored = loadLocalWorldSession(address);
     if (!stored) {
       const energyCap = Number(getN().world?.energy?.cap) || 100;
       return { location: "RHCHAIN 4663 · HOME NOT YET CHARTED", energy: energyCap, energyCap, activeFleets: 0, fleetCap: worldMarchSlots(view),
-        shielded: shieldActive({ keepLevel: view.buildings.keep.lvl }, now, getN()) };
+        shielded: shieldActive({ keepLevel: view.buildings.keep.lvl, shieldUntil: serverShieldUntil }, now, getN()) };
     }
     const player = stored.world.players[stored.playerId];
     const city = player ? stored.world.entities[player.cityId] : null;
@@ -329,9 +333,10 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       energyCap: stored.world.config.energyCap,
       activeFleets,
       fleetCap: player?.marchSlots ?? worldMarchSlots(view),
-      shielded: shieldActive({ keepLevel: view.buildings.keep.lvl, hasAttacked: city?.kind === "city" ? city.hasAttacked : false, shieldUntil: city?.kind === "city" ? city.shieldUntil : 0 }, now, getN()),
+      shielded: shieldActive({ keepLevel: view.buildings.keep.lvl, hasAttacked: city?.kind === "city" ? city.hasAttacked : false,
+        shieldUntil: Math.max(city?.kind === "city" ? city.shieldUntil : 0, serverShieldUntil) }, now, getN()),
     };
-  }, [address, now, view]);
+  }, [address, now, view, serverShieldUntil]);
 
   function act(fn: () => { state: GameState; ok: boolean; reason?: string }) {
     if (authorityVersion > 0) {
@@ -722,7 +727,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <aside className="facility-inspector command-feed" aria-label="Command feed">{renderCommandFeed()}</aside>
         )}
       </div>
-      <MiniComms address={address} profile={profile} onOpenMessages={onMessages} onReport={handleCityReport} onMarch={handleCityMarch} onMarchDone={handleCityMarchDone} onMarchSnapshot={handleCityMarchSnapshot} />
+      <MiniComms address={address} profile={profile} onOpenMessages={onMessages} onReport={handleCityReport} onMarch={handleCityMarch} onMarchDone={handleCityMarchDone} onMarchSnapshot={handleCityMarchSnapshot} onSelf={handleSelf} />
       {pendingSpeedup && (() => {
         const item = MVP_ITEM_BY_ID.get(pendingSpeedup.itemId);
         if (!item?.speedupSeconds) return null;

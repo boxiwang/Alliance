@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { gmReleaseWorldPlayers, gmWorldRoster, resumeBackendSession, type BackendSession, type GmRosterPlayer } from "./lib/backend";
+import { gmGrantShield, gmReleaseWorldPlayers, gmWorldRoster, resumeBackendSession, type BackendSession, type GmRosterPlayer } from "./lib/backend";
 
 // Live Ops: server-side GM tools (docs/BETA-P0.md). Uses the GM session the game
 // already signed in with on this origin; nothing here edits numbers.json.
@@ -46,6 +46,19 @@ export default function AdminOps() {
     finally { setBusy(false); }
   }
 
+  async function grantShield() {
+    if (!session || !picked.size) return;
+    const names = sorted.filter((player) => picked.has(player.id)).map((player) => player.name).join(", ");
+    if (!window.confirm(`Give an 8-hour shield to ${picked.size} player(s)?\n\n${names}\n\nA running shield is extended by 8 hours.`)) return;
+    setBusy(true);
+    try {
+      const result = await gmGrantShield(session.token, [...picked], 8);
+      setNote(`Shielded ${result.granted.length} for 8h.`);
+      await load();
+    } catch (error) { setNote(`Shield failed: ${(error as Error).message}`); }
+    finally { setBusy(false); }
+  }
+
   const toggle = (id: string) => setPicked((current) => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -61,16 +74,18 @@ export default function AdminOps() {
         <div className="adm-ops-bar">
           <span>{roster ? `${roster.length} on the map · ${roster.filter((player) => player.online).length} online` : "Loading…"}</span>
           <button className="adm-btn" disabled={busy} onClick={() => void load()}>Refresh</button>
+          <button className="adm-btn" disabled={busy || !picked.size} onClick={() => void grantShield()}>Shield 8h ({picked.size})</button>
           <button className="adm-btn adm-btn-danger" disabled={busy || !picked.size} onClick={() => void release()}>Release selected ({picked.size})</button>
           {note && <span className="adm-savednote">{note}</span>}
         </div>
         <table className="adm-ops-table">
-          <thead><tr><th /><th>Name</th><th>Player id</th><th>Core</th><th>Last seen</th><th>Status</th></tr></thead>
+          <thead><tr><th /><th>Name</th><th>Player id</th><th>Core</th><th>Shield item</th><th>Last seen</th><th>Status</th></tr></thead>
           <tbody>{sorted.map((player) => <tr key={player.id} className={picked.has(player.id) ? "picked" : ""}>
-            <td><input type="checkbox" aria-label={`Select ${player.name}`} disabled={player.online} checked={picked.has(player.id)} onChange={() => toggle(player.id)} /></td>
+            <td><input type="checkbox" aria-label={`Select ${player.name}`} checked={picked.has(player.id)} onChange={() => toggle(player.id)} /></td>
             <td>{player.name}</td>
             <td className="mono">{player.id.length > 18 ? `${player.id.slice(0, 10)}…${player.id.slice(-6)}` : player.id}</td>
             <td>{player.keepLevel}</td>
+            <td>{(player.shieldUntil || 0) > now ? `${Math.ceil(((player.shieldUntil || 0) - now) / 3_600_000)}h left` : "—"}</td>
             <td>{player.lastSeen ? ago(player.lastSeen, now) : "—"}</td>
             <td>{player.online ? <b className="adm-ops-online">ONLINE</b> : "offline"}</td>
           </tr>)}</tbody>

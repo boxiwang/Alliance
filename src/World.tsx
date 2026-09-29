@@ -1309,11 +1309,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     return () => window.clearTimeout(timer);
   }, [strategicZoom, wantPlanets, viewX, viewY, viewport.width, viewport.height, rtEpoch]);
   // Shield domes (hex lattice, outside halo + orbit; the selection lock wraps outside the dome).
-  // Other commanders: the public Core rule (their shield items arrive with P0-7).
+  // Other commanders: the public Core rule or a shield item (roster shieldUntil).
   const shieldDomes = strategicZoom ? null : <>
     {cityShielded(playerCity, now, N) && <ShieldDome position={playerCity.position} radiusPx={worldVisualBodyRadius(zoom, true, homeSelected, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} own />}
     {remotePlayers.filter((p) => p.coords.x >= viewX - 40 && p.coords.x <= viewX + viewport.width + 40 && p.coords.y >= viewY - 40 && p.coords.y <= viewY + viewport.height + 40
-      && shieldActive({ keepLevel: p.keepLevel || 1 }, now, N))
+      && shieldActive({ keepLevel: p.keepLevel || 1, shieldUntil: p.shieldUntil }, now, N))
       .map((p) => <ShieldDome key={`dome-${p.id}`} position={p.coords} radiusPx={worldVisualBodyRadius(zoom, false, p.id === remoteSelectedId, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} />)}
   </>;
   const mapRemotePlayers = useMemo(() => {

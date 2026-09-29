@@ -11,6 +11,8 @@ export type PresenceCity = {
   cosmetics: unknown; online: boolean; lastSeen: number;
   /** Commander sigil (profile avatar), shown on the map card. */
   avatar?: string | null;
+  /** Shield item expiry (public, like the dome). */
+  shieldUntil?: number;
 };
 export type ViewRect = { x0: number; y0: number; x1: number; y1: number };
 export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; toName?: string; intel?: unknown; signal?: string | null };

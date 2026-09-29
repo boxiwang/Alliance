@@ -374,7 +374,7 @@ export async function mirrorPlayerState(address: string, snapshot: { profile?: u
 }
 
 // ---- GM live ops (Admin → Live Ops) ----
-export type GmRosterPlayer = { id: string; name: string; keepLevel: number; lastSeen: number; online: boolean };
+export type GmRosterPlayer = { id: string; name: string; keepLevel: number; lastSeen: number; online: boolean; shieldUntil?: number };
 
 export async function gmWorldRoster(token: string): Promise<GmRosterPlayer[]> {
   return (await get<{ players: GmRosterPlayer[] }>("/gm/world/roster", token)).players;
@@ -382,4 +382,9 @@ export async function gmWorldRoster(token: string): Promise<GmRosterPlayer[]> {
 
 export async function gmReleaseWorldPlayers(token: string, ids: string[]): Promise<{ released: string[]; skippedOnline: string[] }> {
   return post("/gm/world/release", { ids }, token);
+}
+
+/** GM: give players a shield for `hours` (extends a running one). */
+export async function gmGrantShield(token: string, ids: string[], hours: number): Promise<{ granted: Array<{ id: string; shieldUntil: number }> }> {
+  return post("/gm/world/shield", { ids, hours }, token);
 }
