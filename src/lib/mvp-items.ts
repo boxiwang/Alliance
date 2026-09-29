@@ -84,3 +84,26 @@ export function speedupIconPath(item: Pick<MvpItem, "id" | "speedupQueue">): str
   const duration = parts[parts.length - 1] || "1m";
   return `/assets/items/speedups-v2/${item.speedupQueue || "universal"}-${duration}.svg`;
 }
+
+// ---- Warehouse (backpack) categories ----
+export type WarehouseCategory = "resources" | "speedups" | "gear" | "boosts" | "other";
+export const WAREHOUSE_CATEGORIES: readonly { id: WarehouseCategory; label: string; glyph: string; empty: string }[] = [
+  { id: "resources", label: "Resources", glyph: "▣", empty: "Resource crates and Stamina cells land here — from daily rewards, events and the Shop." },
+  { id: "speedups", label: "Speedups", glyph: "»", empty: "Speedups come from the Shop, daily rewards and events." },
+  { id: "gear", label: "Gear", glyph: "◈", empty: "Hero gear arrives with Heroes." },
+  { id: "boosts", label: "Boosts", glyph: "⬡", empty: "Shields, march boosts and battle buffs show up here." },
+  { id: "other", label: "Other", glyph: "✦", empty: "Warp jumps, chests, keys and rename signals show up here." },
+];
+
+export function warehouseCategoryOf(item: Pick<MvpItem, "id" | "category">): WarehouseCategory {
+  if (item.category === "speedup") return "speedups";
+  if (item.category === "resource" || item.category === "energy") return "resources";
+  if (item.id.startsWith("war.shield")) return "boosts";
+  return "other";
+}
+
+/** Backpack order: speedups by queue then duration; everything else by catalog order. */
+export function warehouseSortKey(item: Pick<MvpItem, "id" | "speedupQueue" | "speedupSeconds">): number {
+  if (item.speedupQueue) return SPEEDUP_QUEUES.indexOf(item.speedupQueue) * 1e6 + (item.speedupSeconds || 0);
+  return 1e8 + MVP_ITEMS.findIndex((entry) => entry.id === item.id);
+}

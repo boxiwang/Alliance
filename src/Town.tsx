@@ -41,7 +41,8 @@ import {
   consumeInventoryItem, enableGameAuthority, ensureGameAuthority, fetchServerGame, grantGmInventory, loadInventory,
   sendGameCommand, type GameCommandResponse, type InventoryBalance,
 } from "./lib/backend";
-import { MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath } from "./lib/mvp-items";
+import { MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath, WAREHOUSE_CATEGORIES, warehouseCategoryOf, warehouseSortKey, type WarehouseCategory } from "./lib/mvp-items";
+import ItemIcon from "./ItemIcon";
 import { activeSpeedupTargets, applySpeedup, speedupCompatible, speedupTargetId, type SpeedupTarget } from "./lib/speedups";
 import type { ServerReport, LiveMarch, PresenceCity } from "./lib/realtime";
 import { incomingCityMarches, recentCityScan } from "./lib/city-alerts";
@@ -152,7 +153,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   }, [address]);
   const [inventory, setInventory] = useState<InventoryBalance[]>([]);
   const [speedupTarget, setSpeedupTarget] = useState("");
-  const [warehouseItemId, setWarehouseItemId] = useState("speedup.universal.1m");
+  const [warehouseItemId, setWarehouseItemId] = useState("");
+  const [warehouseCategory, setWarehouseCategory] = useState<WarehouseCategory | null>(null);
   const [pendingSpeedup, setPendingSpeedup] = useState<{ itemId: string; target: SpeedupTarget } | null>(null);
   const [inventoryBusy, setInventoryBusy] = useState(false);
   const [authorityVersion, setAuthorityVersion] = useState(0);
@@ -531,38 +533,63 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   }
 
   function renderWarehouse() {
-    const selectedItem = MVP_ITEM_BY_ID.get(warehouseItemId);
-    const selectedQuantity = selectedItem ? inventoryById.get(selectedItem.id) || 0 : 0;
-    const compatible = !!selectedItem && !!selectedSpeedupTarget && speedupCompatible(selectedItem.speedupQueue, selectedSpeedupTarget);
-    return <section className="warehouse-inventory">
-      <header className="warehouse-inventory-head">
-        <div><span>WAREHOUSE</span><b>SPEEDUPS</b></div>
+    // Backpack: only what you own, by category; select an item to see it and use it.
+    const owned = inventory
+      .map((entry) => ({ item: MVP_ITEM_BY_ID.get(entry.itemId), quantity: entry.quantity }))
+      .filter((entry): entry is { item: NonNullable<typeof entry.item>; quantity: number } => !!entry.item && entry.quantity > 0)
+      .sort((a, b) => warehouseSortKey(a.item) - warehouseSortKey(b.item));
+    const counts = Object.fromEntries(WAREHOUSE_CATEGORIES.map((category) => [category.id, owned.filter((entry) => warehouseCategoryOf(entry.item) === category.id).length])) as Record<WarehouseCategory, number>;
+    const category = warehouseCategory ?? WAREHOUSE_CATEGORIES.find((entry) => counts[entry.id] > 0)?.id ?? "speedups";
+    const shown = owned.filter((entry) => warehouseCategoryOf(entry.item) === category);
+    const selected = shown.find((entry) => entry.item.id === warehouseItemId) ?? shown[0] ?? null;
+    const meta = WAREHOUSE_CATEGORIES.find((entry) => entry.id === category)!;
+    const speedup = selected?.item.category === "speedup";
+    const compatible = !!selected && speedup && !!selectedSpeedupTarget && speedupCompatible(selected.item.speedupQueue, selectedSpeedupTarget);
+    return <section className="warehouse-inventory inv">
+      <header className="inv-head">
+        <div><span>WAREHOUSE · LV.{view.buildings.storage.lvl}</span><b>INVENTORY</b></div>
         <button className="city-interior-back" type="button" onClick={() => setFacilityInterior(false)}>← STAR GRID</button>
-        <label><span>ACTIVE QUEUE</span><select aria-label="Warehouse speedup target" value={selectedSpeedupTarget ? speedupTargetId(selectedSpeedupTarget) : ""} disabled={!speedupTargets.length} onChange={(event) => setSpeedupTarget(event.target.value)}>
-          {!speedupTargets.length && <option value="">NO ACTIVE QUEUES</option>}
-          {speedupTargets.map((target) => <option key={speedupTargetId(target)} value={speedupTargetId(target)}>{speedupTargetLabel(target)}</option>)}
-        </select></label>
       </header>
-      <div className="warehouse-speedup-groups">
-        {SPEEDUP_QUEUES.map((queue) => <section className={`warehouse-speedup-group ${queue}`} key={queue}>
-          <header><b>{queue.toUpperCase()}</b><span>{speedupCatalog.filter((item) => item.speedupQueue === queue).reduce((sum, item) => sum + (inventoryById.get(item.id) || 0), 0)}</span></header>
-          <div>{speedupCatalog.filter((item) => item.speedupQueue === queue).map((item) => {
-            const quantity = inventoryById.get(item.id) || 0;
-            return <button key={item.id} type="button" className={`${warehouseItemId === item.id ? "selected " : ""}${quantity <= 0 ? "empty" : ""}`} onClick={() => setWarehouseItemId(item.id)} aria-pressed={warehouseItemId === item.id}>
-              <img src={speedupIconPath(item)} alt="" />
-              <span className="mono">×{quantity}</span>
-            </button>;
-          })}</div>
-        </section>)}
+      <div className="inv-body">
+        <nav className="inv-cats" aria-label="Item categories">
+          {WAREHOUSE_CATEGORIES.map((entry) => <button key={entry.id} type="button" className={category === entry.id ? "on" : ""} aria-pressed={category === entry.id}
+            onClick={() => { setWarehouseCategory(entry.id); setWarehouseItemId(""); }}>
+            <i aria-hidden="true">{entry.glyph}</i><span>{entry.label}</span><b className="mono">{counts[entry.id] || ""}</b>
+          </button>)}
+        </nav>
+        <div className="inv-grid-wrap">
+          <div className="inv-grid-title"><b>{meta.label.toUpperCase()}</b><span>{shown.length ? `${itemCount(shown.reduce((sum, entry) => sum + entry.quantity, 0))} ITEMS` : ""}</span></div>
+          {shown.length ? <div className="inv-grid">
+            {shown.map(({ item, quantity }) => <button key={item.id} type="button" className={`inv-slot rarity-${item.rarity}${selected?.item.id === item.id ? " selected" : ""}`}
+              aria-pressed={selected?.item.id === item.id} aria-label={`${item.name}, ${quantity} owned`} onClick={() => setWarehouseItemId(item.id)}>
+              <ItemIcon item={item} />
+              <span className="mono">{itemCount(quantity)}</span>
+            </button>)}
+          </div> : <div className="inv-empty"><i aria-hidden="true">{meta.glyph}</i><b>Nothing here yet</b><span>{meta.empty}</span></div>}
+        </div>
+        <aside className="inv-detail" aria-label="Item details">
+          {selected ? <>
+            <div className={`inv-detail-art rarity-${selected.item.rarity}`}><ItemIcon item={selected.item} /></div>
+            <small className={`inv-rarity rarity-${selected.item.rarity}`}>{selected.item.rarity.toUpperCase()}</small>
+            <h3>{selected.item.name}</h3>
+            <p>{selected.item.description}</p>
+            <div className="inv-owned"><span>OWNED</span><b className="mono">×{itemCount(selected.quantity)}</b></div>
+            {speedup ? <div className="inv-use">
+              <label><span>ACTIVE QUEUE</span><select aria-label="Speedup target" value={selectedSpeedupTarget ? speedupTargetId(selectedSpeedupTarget) : ""} disabled={!speedupTargets.length} onChange={(event) => setSpeedupTarget(event.target.value)}>
+                {!speedupTargets.length && <option value="">NO ACTIVE QUEUES</option>}
+                {speedupTargets.map((target) => <option key={speedupTargetId(target)} value={speedupTargetId(target)}>{speedupTargetLabel(target)}</option>)}
+              </select></label>
+              <button type="button" disabled={!compatible || inventoryBusy || commandBusy} onClick={() => selectedSpeedupTarget && requestSpeedupUse(selected.item.id, selectedSpeedupTarget)}>
+                {!speedupTargets.length ? "NO ACTIVE QUEUE" : !compatible ? "WRONG QUEUE" : "USE"}
+              </button>
+            </div> : selected.item.id.startsWith("war.relocator") ? <div className="inv-use">
+              <button type="button" onClick={onWorld}>WARP ON THE STAR MAP ▸</button>
+              <small>Open WARP on the Star Map and pick a spot; the jump uses this item.</small>
+            </div> : <div className="inv-use"><button type="button" disabled>USE · COMING SOON</button></div>}
+          </> : <div className="inv-detail-empty">Select an item to see what it does.</div>}
+          <details className="warehouse-upgrade"><summary>WAREHOUSE UPGRADE</summary>{renderBuildingUpgrade("storage")}</details>
+        </aside>
       </div>
-      <footer className="warehouse-usebar">
-        <span>{selectedItem?.name || "SELECT AN ITEM"}</span>
-        <b className="mono">×{selectedQuantity}</b>
-        <button type="button" disabled={!selectedItem || selectedQuantity <= 0 || !compatible || inventoryBusy || commandBusy} onClick={() => selectedItem && selectedSpeedupTarget && requestSpeedupUse(selectedItem.id, selectedSpeedupTarget)}>
-          {!speedupTargets.length ? "NO ACTIVE QUEUE" : !compatible ? "INCOMPATIBLE" : "USE"}
-        </button>
-      </footer>
-      <details className="warehouse-upgrade"><summary>WAREHOUSE UPGRADE</summary>{renderBuildingUpgrade("storage")}</details>
     </section>;
   }
 
@@ -936,90 +963,107 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const activeEffects = Object.entries(RESEARCH_EFFECT_BRANCH)
       .filter(([key, category]) => category === researchBranch && (accountModifiers[key] ?? 0) > 0);
 
+    const branchProgress = (key: ResearchBranch) => {
+      const done = researchTechs(key).reduce((sum, tech) => sum + researchLevel(view, tech.key), 0);
+      const total = config.branches[key].totals.levels || 1;
+      return { done, total, pct: Math.min(100, done / total * 100) };
+    };
+
     return (
-      <section className="research-center">
-        <div className="research-titlebar">
+      <section className="research-center rs">
+        <header className="rs-head">
+          <div><span>RESEARCH INSTITUTE · LV.{view.buildings.academy.lvl}</span><b>RESEARCH</b></div>
           <button className="city-interior-back" type="button" onClick={() => setFacilityInterior(false)}>← STAR GRID</button>
-          <span>PROGRESS</span>
-          <div className="research-summary mono"><b>{researchedLevels}/{branch.totals.levels}</b></div>
-        </div>
+        </header>
 
         {queue.finishAt > 0 && queueTech ? (
-          <div className="research-queue active">
+          <div className="rs-queue active">
             <div><span>RESEARCHING</span><b>{queueTech.name} → Lv.{queue.targetLevel}</b></div>
-            <div className="research-queue-time mono">{fmtMs(queue.finishAt - now)}</div>
-            <div className="rmeter"><i style={{ width: Math.min(100, Math.max(0, ((queue.durationSec * 1000 - (queue.finishAt - now)) / (queue.durationSec * 1000)) * 100)) + "%" }} /></div>
+            <div className="rs-queue-time mono">{fmtMs(queue.finishAt - now)}</div>
+            <div className="rs-meter"><i style={{ width: Math.min(100, Math.max(0, ((queue.durationSec * 1000 - (queue.finishAt - now)) / (queue.durationSec * 1000)) * 100)) + "%" }} /></div>
             {renderSpeedupTray({ kind: "research" }, "wide")}
           </div>
-        ) : <div className="research-queue"><div><span>QUEUE</span><b>IDLE</b></div></div>}
+        ) : <div className="rs-queue"><div><span>QUEUE</span><b>IDLE · pick a technology to research</b></div></div>}
 
-        <div className="research-tabs">
-          {(Object.keys(config.branches) as ResearchBranch[]).map((key) => {
-            const meta = config.branches[key];
-            return <button key={key} className={researchBranch === key ? "on" : ""} onClick={() => { setResearchBranch(key); setSelectedResearchKey(""); }}><b>{meta.label}</b></button>;
-          })}
-        </div>
-        {selectedTech && renderResearchDetail(selectedTech)}
-
-        <div className="research-tree-head">
-          <div><b>{branch.label.toUpperCase()} TREE</b></div>
-          <div className="research-tree-legend"><span className="complete">MAXED</span><span className="available">AVAILABLE</span><span className="locked">LOCKED</span></div>
-        </div>
-        <div className="research-graph-scroll">
-          <div className="research-graph" style={{ width: graphWidth, height: graphHeight }}>
-            <svg className="research-links" width={graphWidth} height={graphHeight} viewBox={`0 0 ${graphWidth} ${graphHeight}`} aria-hidden="true">
-              {technologies.flatMap((tech) => {
-                const target = positions.get(tech.key);
-                if (!target) return [];
-                return (tech.requirements ?? []).flatMap((requirement: any) => {
-                  const source = positions.get(requirement.tech);
-                  if (!source) return [];
-                  const startX = source.x + nodeWidth / 2;
-                  const startY = source.y + nodeHeight;
-                  const endX = target.x + nodeWidth / 2;
-                  const endY = target.y;
-                  const middleY = startY + (endY - startY) / 2;
-                  const met = researchLevel(view, requirement.tech) >= requirement.level;
-                  const focused = selectedTech.key === tech.key || selectedTech.key === requirement.tech;
-                  return <path key={`${requirement.tech}-${tech.key}`} className={`${met ? "met " : ""}${focused ? "focused" : ""}`} d={`M ${startX} ${startY} V ${middleY} H ${endX} V ${endY}`} />;
-                });
-              })}
-            </svg>
-            {technologies.map((tech) => {
-              const position = positions.get(tech.key)!;
-              const current = researchLevel(view, tech.key);
-              const complete = current >= tech.maxLevel;
-              const reason = complete ? null : researchBlockReason(view, tech.key);
-              const nextLevel = Math.min(tech.maxLevel, current + 1);
-              const row = researchLevelRow(tech.key, nextLevel);
-              const state = complete ? "complete" : reason ? "locked" : "available";
-              return <button
-                type="button"
-                key={tech.key}
-                className={`research-tree-node ${state}${selectedTech.key === tech.key ? " selected" : ""}`}
-                style={{ left: position.x, top: position.y, width: nodeWidth, height: nodeHeight }}
-                onClick={() => setSelectedResearchKey(tech.key)}
-                aria-label={`${tech.name}, level ${current} of ${tech.maxLevel}`}
-              >
-                <span className="research-tree-node-name">{tech.name}</span>
-                <span className="research-tree-node-meta"><i>RI {row?.academyLevel ?? 30}</i><b className="mono">{complete ? "MAX" : `${current}/${tech.maxLevel}`}</b></span>
+        <div className="rs-body">
+          <nav className="rs-branches" aria-label="Research branches">
+            {(Object.keys(config.branches) as ResearchBranch[]).map((key) => {
+              const meta = config.branches[key];
+              const progress = branchProgress(key);
+              return <button key={key} type="button" className={researchBranch === key ? "on" : ""} aria-pressed={researchBranch === key} onClick={() => { setResearchBranch(key); setSelectedResearchKey(""); }}>
+                <span>{meta.label.toUpperCase()}</span>
+                <b className="mono">{progress.done}/{progress.total}</b>
+                <i><em style={{ width: `${progress.pct}%` }} /></i>
               </button>;
             })}
+            {activeEffects.length > 0 && <div className="rs-bonuses">
+              <small>ACTIVE BONUSES</small>
+              {activeEffects.map(([key]) => {
+                const value = accountModifiers[key];
+                const flat = key === "trainingCapacityBonus" || key === "hospitalCapacityBonus" || key === "marchQueueBonus";
+                const detail = key === "marchQueueBonus"
+                  ? `${worldMarchSlots(view)} queues`
+                  : key === "marchCapacityBonus"
+                    ? `${compact(displayTroops(accountMarchCapacity(view)))} cap`
+                    : flat ? `+${compact(displayTroops(value))}` : `+${(value * 100).toFixed(value * 100 < 10 ? 1 : 0)}%`;
+                return <div key={key}><span>{researchEffectName(key)}</span><b className="mono">{detail}</b></div>;
+              })}
+            </div>}
+          </nav>
+
+          <div className="rs-tree">
+            <div className="rs-tree-head">
+              <b>{branch.label.toUpperCase()} TREE</b>
+              <div className="rs-legend"><span className="complete">MAXED</span><span className="available">AVAILABLE</span><span className="locked">LOCKED</span></div>
+            </div>
+            <div className="research-graph-scroll rs-graph-scroll">
+              <div className="research-graph rs-graph" style={{ width: graphWidth, height: graphHeight }}>
+                <svg className="rs-links" width={graphWidth} height={graphHeight} viewBox={`0 0 ${graphWidth} ${graphHeight}`} aria-hidden="true">
+                  {technologies.flatMap((tech) => {
+                    const target = positions.get(tech.key);
+                    if (!target) return [];
+                    return (tech.requirements ?? []).flatMap((requirement: any) => {
+                      const source = positions.get(requirement.tech);
+                      if (!source) return [];
+                      const startX = source.x + nodeWidth / 2;
+                      const startY = source.y + nodeHeight;
+                      const endX = target.x + nodeWidth / 2;
+                      const endY = target.y;
+                      const middleY = startY + (endY - startY) / 2;
+                      const met = researchLevel(view, requirement.tech) >= requirement.level;
+                      const focused = selectedTech.key === tech.key || selectedTech.key === requirement.tech;
+                      return <path key={`${requirement.tech}-${tech.key}`} className={`${met ? "met " : ""}${focused ? "focused" : ""}`} d={`M ${startX} ${startY} V ${middleY} H ${endX} V ${endY}`} />;
+                    });
+                  })}
+                </svg>
+                {technologies.map((tech) => {
+                  const position = positions.get(tech.key)!;
+                  const current = researchLevel(view, tech.key);
+                  const complete = current >= tech.maxLevel;
+                  const reason = complete ? null : researchBlockReason(view, tech.key);
+                  const nextLevel = Math.min(tech.maxLevel, current + 1);
+                  const row = researchLevelRow(tech.key, nextLevel);
+                  const state = complete ? "complete" : reason ? "locked" : "available";
+                  const researching = queue.finishAt > 0 && queue.tech === tech.key;
+                  return <button
+                    type="button"
+                    key={tech.key}
+                    className={`rs-node ${state}${selectedTech.key === tech.key ? " selected" : ""}${researching ? " researching" : ""}`}
+                    style={{ left: position.x, top: position.y, width: nodeWidth, height: nodeHeight }}
+                    onClick={() => setSelectedResearchKey(tech.key)}
+                    aria-label={`${tech.name}, level ${current} of ${tech.maxLevel}`}
+                  >
+                    <ResearchRing value={current} max={tech.maxLevel} />
+                    <span className="rs-node-name">{tech.name}</span>
+                    <span className="rs-node-meta">{complete ? "MAXED" : state === "locked" ? (view.buildings.academy.lvl < (row?.academyLevel ?? 30) ? `🔒 NEEDS RI ${row?.academyLevel ?? 30}` : "🔒 LOCKED") : `LV.${current} → ${nextLevel}`}</span>
+                  </button>;
+                })}
+              </div>
+            </div>
           </div>
+
+          <aside className="rs-side">{selectedTech && renderResearchDetail(selectedTech)}</aside>
         </div>
-        {activeEffects.length > 0 && <div className="research-account-effects">
-          <div className="research-account-title"><b>ACTIVE BONUSES</b></div>
-          <div className="research-account-grid">{activeEffects.map(([key]) => {
-            const value = accountModifiers[key];
-            const flat = key === "trainingCapacityBonus" || key === "hospitalCapacityBonus" || key === "marchQueueBonus";
-            const detail = key === "marchQueueBonus"
-              ? `${worldMarchSlots(view)} total World queues`
-              : key === "marchCapacityBonus"
-                ? `${compact(displayTroops(accountMarchCapacity(view)))} current march cap`
-                : flat ? `+${compact(displayTroops(value))}` : `+${(value * 100).toFixed(value * 100 < 10 ? 1 : 0)}%`;
-            return <div key={key}><span><strong>{researchEffectName(key)}</strong><small>{researchEffectTarget(key)}</small></span><b className="mono">{detail}</b></div>;
-          })}</div>
-        </div>}
       </section>
     );
   }
@@ -1037,17 +1081,25 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     const effectKey = nextEffect?.key ?? currentEffect?.key ?? "";
     const currentEffectLabel = currentEffect ? effectLabel(currentEffect) : nextEffect?.unit === "percent" ? "+0%" : "+0";
     return (
-      <article className={`research-detail ${complete ? "complete" : reason ? "locked" : "available"}`}>
-        <div className="research-detail-copy"><h3>{tech.name}</h3></div>
-        <div className="research-detail-progress"><small>AFFECTS</small><strong>{researchEffectTarget(effectKey)}</strong><div className="research-effect"><span><i>CURRENT</i><b>{currentEffectLabel}</b></span>{!complete && nextEffect && <><em>→</em><span className="next"><i>LV.{nextLevel}</i><b>{effectLabel(nextEffect)}</b></span></>}</div><div className="research-level-count mono">LEVEL {current}/{tech.maxLevel}</div></div>
-        {!complete && <div className="research-detail-gates">
-          {view.buildings.academy.lvl < row.academyLevel && <span>🔒 Research Institute Lv.{row.academyLevel}</span>}
-          {(tech.requirements ?? []).filter((requirement: any) => researchLevel(view, requirement.tech) < requirement.level).map((requirement: any) => <span key={requirement.tech}>🔒 {researchTech(requirement.tech)?.name} Lv.{requirement.level}</span>)}
+      <article className={`rs-card ${complete ? "complete" : reason ? "locked" : "available"}`}>
+        <div className="rs-card-top">
+          <ResearchRing value={current} max={tech.maxLevel} large />
+          <div><small>{researchConfig().branches[researchBranch].label.toUpperCase()}</small><h3>{tech.name}</h3><span className="mono">LEVEL {current}/{tech.maxLevel}</span></div>
+        </div>
+        <div className="rs-effect">
+          <small>AFFECTS</small>
+          <strong>{researchEffectTarget(effectKey)}</strong>
+          <div><span><i>NOW</i><b>{currentEffectLabel}</b></span>{!complete && nextEffect && <><em>→</em><span className="next"><i>LV.{nextLevel}</i><b>{effectLabel(nextEffect)}</b></span></>}</div>
+        </div>
+        {!complete && (view.buildings.academy.lvl < row.academyLevel || (tech.requirements ?? []).some((requirement: any) => researchLevel(view, requirement.tech) < requirement.level)) && <div className="rs-gates">
+          <small>REQUIRES</small>
+          {view.buildings.academy.lvl < row.academyLevel && <span>Research Institute Lv.{row.academyLevel}</span>}
+          {(tech.requirements ?? []).filter((requirement: any) => researchLevel(view, requirement.tech) < requirement.level).map((requirement: any) => <span key={requirement.tech}>{researchTech(requirement.tech)?.name} Lv.{requirement.level}</span>)}
         </div>}
-        {!complete && <div className="research-detail-action"><div className="research-cost mono">{renderResourceCosts(cost)}<span>◷ {fmtSec(row.timeSec)}</span></div><button className={resourcesMet && !reason ? "ready" : ""} disabled={!!reason || commandBusy} onClick={() => void runServerAction("research.start", { tech: tech.key }, () => startResearch(game, tech.key))}>
-          {complete ? "MAXED" : reason ?? `Research Lv.${nextLevel}`}
-        </button></div>}
-        {complete && <div className="research-detail-maxed">MAXED</div>}
+        {!complete && <div className="rs-cost"><small>COST</small><div className="mono">{renderResourceCosts(cost)}<span>◷ {fmtSec(row.timeSec)}</span></div></div>}
+        {!complete ? <button className={`rs-go${resourcesMet && !reason ? " ready" : ""}`} disabled={!!reason || commandBusy} onClick={() => void runServerAction("research.start", { tech: tech.key }, () => startResearch(game, tech.key))}>
+          {reason ?? `RESEARCH LV.${nextLevel}`}
+        </button> : <div className="rs-maxed">MAXED</div>}
       </article>
     );
   }
@@ -1232,4 +1284,20 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     if (total <= 0) return 0;
     return Math.min(100, ((total - (b.finishAt - t)) / total) * 100);
   }
+}
+
+/** Level ring for a technology (current / max), used on tree nodes and the detail card. */
+function ResearchRing({ value, max, large = false }: { value: number; max: number; large?: boolean }) {
+  const size = large ? 46 : 22, r = size / 2 - (large ? 4 : 2.5), c = 2 * Math.PI * r;
+  const frac = max > 0 ? Math.min(1, value / max) : 0;
+  return <svg className={`rs-ring${large ? " large" : ""}`} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+    <circle className="track" cx={size / 2} cy={size / 2} r={r} />
+    {frac > 0 && <circle className="fill" cx={size / 2} cy={size / 2} r={r} strokeDasharray={`${frac * c} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />}
+    {large && <text x={size / 2} y={size / 2 + 4} textAnchor="middle">{value}</text>}
+  </svg>;
+}
+
+/** Item counts are whole numbers: 7, 99, 1,240, then 12.5K. */
+function itemCount(n: number): string {
+  return n < 10_000 ? Math.floor(n).toLocaleString("en-US") : compact(n);
 }
