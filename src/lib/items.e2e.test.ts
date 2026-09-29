@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { issueSession } from "../../worker/auth";
 import { initGame } from "./gamestore";
+import { MVP_ITEMS, UNLIMITED_ITEM_QUANTITY } from "./mvp-items";
 import { getN } from "./numbers";
 import { createLocalWorldSession } from "./world-adapter";
 
@@ -83,5 +84,22 @@ describe.runIf(process.env.E2E_URL && process.env.E2E_AUTH_SECRET)("Warehouse it
     expect(signal.status).toBe(200);
     const inventory = (await call("/inventory", token)).data.inventory as any[];
     expect(inventory.find((entry) => entry.itemId === "identity.rename")?.quantity).toBe(98);
+  }, 60_000);
+  it("GM accounts hold every item without limit and are never debited", async () => {
+    const playerId = `0x${hex(40)}`;
+    const { data: auth } = await call("/auth/guest", null, { method: "POST", body: JSON.stringify({ guestId: `guest:${hex(24)}`, playerId }) });
+    const player = await call("/game", auth.token);
+    const gm = await issueSession(process.env.E2E_AUTH_SECRET!, { sub: auth.player.id, method: "guest", role: "gm" } as any, 600);
+    const n: any = structuredClone(getN());
+    n.world.population.localNpcCities = 0;
+    const local = createLocalWorldSession(auth.player.id, initGame(auth.player.id), Date.now(), n);
+    await call("/game/authority/enable", gm, { method: "POST", body: JSON.stringify({ game: local.game, world: local.session, revision: player.data.revision ?? 0 }) });
+    const inventory = (await call("/inventory", gm)).data.inventory as any[];
+    expect(inventory.find((entry) => entry.itemId === "chest.supply")?.quantity).toBe(UNLIMITED_ITEM_QUANTITY);
+    expect(inventory.length).toBe(MVP_ITEMS.filter((item) => item.status === "active").length);
+    const crate = await command(gm, "item.use", { itemId: "resource.oil.large", quantity: 5 });
+    expect(crate.data.reason ?? "ok").toBe("ok");
+    expect(crate.data.inventory.quantity).toBe(UNLIMITED_ITEM_QUANTITY);
+    expect(((await call("/inventory", gm)).data.inventory as any[]).find((entry) => entry.itemId === "resource.oil.large")?.quantity).toBe(UNLIMITED_ITEM_QUANTITY);
   }, 60_000);
 });

@@ -42,7 +42,7 @@ import {
   consumeInventoryItem, enableGameAuthority, ensureGameAuthority, fetchServerGame, gmSetShield, grantGmCredits, grantGmInventory, loadBackendSession, loadInventory,
   sendGameCommand, type GameCommandResponse, type InventoryBalance,
 } from "./lib/backend";
-import { MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath, WAREHOUSE_CATEGORIES, warehouseCategoryOf, warehouseSortKey, type WarehouseCategory } from "./lib/mvp-items";
+import { isUnlimitedQuantity, MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath, WAREHOUSE_CATEGORIES, warehouseCategoryOf, warehouseSortKey, type WarehouseCategory } from "./lib/mvp-items";
 import ItemIcon from "./ItemIcon";
 import { autoSpeedupCount, autoSpeedupPick, type OwnedSpeedup } from "./lib/speedup-pick";
 import { activeSpeedupTargets, applySpeedup, speedupCompatible, speedupTargetId, type SpeedupTarget } from "./lib/speedups";
@@ -850,7 +850,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="speedup-items">
             {usableSpeedups.map((entry) => {
               const item = MVP_ITEM_BY_ID.get(entry.itemId)!;
-              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy || !selectedSpeedupTarget} onClick={() => selectedSpeedupTarget && requestSpeedupUse(entry.itemId, selectedSpeedupTarget)} aria-label={`Use ${item.name}, ${entry.quantity} owned`}><img src={speedupIconPath(item)} alt="" /><span>×{entry.quantity}</span></button>;
+              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy || !selectedSpeedupTarget} onClick={() => selectedSpeedupTarget && requestSpeedupUse(entry.itemId, selectedSpeedupTarget)} aria-label={`Use ${item.name}, ${entry.quantity} owned`}><img src={speedupIconPath(item)} alt="" /><span>×{itemCount(entry.quantity)}</span></button>;
             })}
             {selectedSpeedupTarget && usableSpeedups.length === 0 && <i>NO SPEEDUPS AVAILABLE</i>}
           </div>
@@ -1493,6 +1493,7 @@ function ResearchRing({ value, max, large = false }: { value: number; max: numbe
 
 /** Item counts are whole numbers: 7, 99, 1,240, then 12.5K. */
 function itemCount(n: number): string {
+  if (isUnlimitedQuantity(n)) return "∞";
   return n < 10_000 ? Math.floor(n).toLocaleString("en-US") : compact(n);
 }
 

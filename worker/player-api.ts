@@ -12,7 +12,7 @@ import {
   type PlayerRole,
   type SessionClaims,
 } from "./auth";
-import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS, rollChest } from "../src/lib/mvp-items";
+import { ALPHA_STARTER_ITEMS, MVP_ITEM_BY_ID, MVP_ITEMS, rollChest, UNLIMITED_ITEM_QUANTITY } from "../src/lib/mvp-items";
 import { DAILY_SUPPLY, SHOP_OFFER_BY_ID, SHOP_OFFERS, TOPUP_PACKS } from "../src/lib/shop-catalog";
 import { gameStateBelongsToPlayer, projectGameJson } from "./economy";
 import { applyCommand } from "./commands";
@@ -209,6 +209,13 @@ async function savePlayer(env: BackendEnv, input: {
 function inventoryRows(env: BackendEnv, playerId: string) {
   return env.DB.prepare(`SELECT item_id AS itemId, quantity, updated_at AS updatedAt
     FROM inventory_balances WHERE player_id = ? ORDER BY item_id`).bind(playerId).all<{ itemId: string; quantity: number; updatedAt: number }>();
+}
+
+/** What a player's Warehouse shows: GM accounts see every active item without limit. */
+async function inventoryView(env: BackendEnv, claims: SessionClaims) {
+  if (claims.role !== "gm") return (await inventoryRows(env, claims.sub)).results;
+  const now = Date.now();
+  return MVP_ITEMS.filter((item) => item.status === "active").map((item) => ({ itemId: item.id, quantity: UNLIMITED_ITEM_QUANTITY, updatedAt: now }));
 }
 
 function utcDay(now = Date.now()): string {
@@ -467,7 +474,7 @@ async function grantAlphaCredits(request: Request, env: BackendEnv, claims: Sess
 
 async function inventory(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
   if (request.method !== "GET") return response({ error: "method_not_allowed" }, 405);
-  return response({ inventory: (await inventoryRows(env, claims.sub)).results });
+  return response({ inventory: await inventoryView(env, claims) });
 }
 
 async function inventoryHistory(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
@@ -486,6 +493,7 @@ async function consumeInventory(request: Request, env: BackendEnv, claims: Sessi
   const referenceId = String(data?.referenceId || "").slice(0, 128) || null;
   const item = MVP_ITEM_BY_ID.get(itemId);
   if (!item || item.status !== "active" || !idempotencyKey) return response({ error: "invalid_item" }, 400);
+  if (claims.role === "gm") return response({ itemId, quantity: UNLIMITED_ITEM_QUANTITY, effect: { speedupSeconds: item.speedupSeconds, speedupQueue: item.speedupQueue } });
 
   const prior = await env.DB.prepare(`SELECT status, balance_after AS balanceAfter FROM inventory_transactions
     WHERE player_id = ? AND idempotency_key = ?`).bind(claims.sub, idempotencyKey)
@@ -543,7 +551,7 @@ async function grantAlphaInventory(request: Request, env: BackendEnv, claims: Se
     );
   }
   if (statements.length) await env.DB.batch(statements);
-  return response({ inventory: (await inventoryRows(env, claims.sub)).results });
+  return response({ inventory: await inventoryView(env, claims) });
 }
 
 async function sessionResponse(env: BackendEnv, player: PlayerRow, method: AuthMethod, extra: Record<string, unknown> = {}): Promise<Response> {
@@ -1025,12 +1033,14 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
   if (encodedWorld && encodedWorld.length > WORLD_STATE_BYTES) return response({ error: "world_state_too_large" }, 413);
   const commandId = crypto.randomUUID();
   const guardId = crypto.randomUUID();
-  const inventoryTransactionId = inventoryItemId ? crypto.randomUUID() : null;
-  const inventoryBefore = inventoryItemId
+  // GM accounts hold every item without limit: the item is recorded on the command but never debited.
+  const unlimitedItems = claims.role === "gm";
+  const inventoryTransactionId = inventoryItemId && !unlimitedItems ? crypto.randomUUID() : null;
+  const inventoryBefore = inventoryItemId && !unlimitedItems
     ? await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
       .bind(claims.sub, inventoryItemId).first<{ quantity: number }>()
     : null;
-  if (inventoryItemId && (!inventoryBefore || inventoryBefore.quantity < inventoryQuantity)) {
+  if (inventoryItemId && !unlimitedItems && (!inventoryBefore || inventoryBefore.quantity < inventoryQuantity)) {
     if (warpReservation?.previous) await reserveWorldCoord(env, claims.sub, warpReservation.previous, 0, true);
     return response({ error: "insufficient_inventory" }, 409);
   }
@@ -1105,7 +1115,7 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
         .then((res) => res.json() as Promise<{ ok?: boolean; error?: string }>).catch(() => ({ ok: false, error: "world_unreachable" }))
       : { ok: false, error: "world_unreachable" };
     if (!applied.ok) {
-      await env.DB.batch([
+      if (!unlimitedItems) await env.DB.batch([
         env.DB.prepare("UPDATE inventory_balances SET quantity = quantity + ?, updated_at = ? WHERE player_id = ? AND item_id = ?").bind(inventoryQuantity, Date.now(), claims.sub, inventoryItemId),
         env.DB.prepare(`INSERT INTO inventory_transactions (id, player_id, item_id, delta, balance_after, reason, idempotency_key, status, metadata_json, created_at, committed_at)
           VALUES (?, ?, ?, ?, (SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?), 'item_refunded', ?, 'committed', '{}', ?, ?)`)
@@ -1129,8 +1139,8 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
       return response({ ok: false, reason: launched.error || "scout_rejected", game: refunded, revision: resultRevision + 1, authorityVersion: row.economy_authority_version });
     }
   }
-  const inventory = inventoryItemId
-    ? await env.DB.prepare("SELECT item_id AS itemId, quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
+  const inventory = inventoryItemId && unlimitedItems ? { itemId: inventoryItemId, quantity: UNLIMITED_ITEM_QUANTITY }
+    : inventoryItemId ? await env.DB.prepare("SELECT item_id AS itemId, quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
       .bind(claims.sub, inventoryItemId).first<{ itemId: string; quantity: number }>()
     : null;
   return response({

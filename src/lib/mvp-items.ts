@@ -123,6 +123,10 @@ export function rollChest(table: string, count: number, random: () => number = M
 
 export const MVP_ITEM_BY_ID = new Map(MVP_ITEMS.map((item) => [item.id, item]));
 
+/** GM accounts hold every active item without limit; the server reports this count and never debits them. */
+export const UNLIMITED_ITEM_QUANTITY = 999_999;
+export const isUnlimitedQuantity = (quantity: number) => quantity >= UNLIMITED_ITEM_QUANTITY;
+
 export const ALPHA_STARTER_ITEMS: Readonly<Record<string, number>> = {
   "war.relocator.advanced": 1,
   "war.relocator.random": 2,

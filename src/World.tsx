@@ -52,6 +52,7 @@ import { createCommanderShare, createCoordinateShare, createScoutIntelShare, que
 import { allianceForAddress, relationshipBetween, type AllianceRelation } from "./lib/alliance";
 import { ensureGameAuthority, scoutCommander, sendGameCommand, type GameCommandResponse, loadInventory } from "./lib/backend";
 import { scoutOilCost } from "./lib/scout-cost";
+import { isUnlimitedQuantity } from "./lib/mvp-items";
 
 type SelectableEntity = ResourceEntity | MonsterEntity | CityEntity;
 type WorldLayer = "resource" | "monster" | "city";
@@ -1785,7 +1786,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           <header><b>WARP</b><button aria-label="Close warp" onClick={() => setWarpOpen(false)}>×</button></header>
           {warpNotReady && <p className="world-warp-alert">{ERROR_COPY[warpNotReady]}</p>}
           <section>
-            <div className="world-warp-option-head"><b>PRECISION JUMP</b><em>{warpCounts ? `×${warpCounts.precision}` : "DEV"}</em></div>
+            <div className="world-warp-option-head"><b>PRECISION JUMP</b><em>{warpCounts ? `×${isUnlimitedQuantity(warpCounts.precision) ? "∞" : warpCounts.precision}` : "DEV"}</em></div>
             <form className="world-warp-coord" onSubmit={(event) => { event.preventDefault(); setWarpDestinationFromDraft(); }}>
               <label>X<input aria-label="Warp X coordinate" value={warpDraft.x} onChange={(event) => setWarpDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label>
               <label>Y<input aria-label="Warp Y coordinate" value={warpDraft.y} onChange={(event) => setWarpDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label>
@@ -1797,7 +1798,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             <button className="world-warp-go" disabled={warpBusy || !!warpNotReady || !warpDestination || !!warpDestinationBlock || warpCounts?.precision === 0} onClick={() => void executeWarp("precision")}>{warpBusy ? "WARPING…" : "WARP HERE"}</button>
           </section>
           <section>
-            <div className="world-warp-option-head"><b>DRIFT JUMP</b><em>{warpCounts ? `×${warpCounts.drift}` : "DEV"}</em></div>
+            <div className="world-warp-option-head"><b>DRIFT JUMP</b><em>{warpCounts ? `×${isUnlimitedQuantity(warpCounts.drift) ? "∞" : warpCounts.drift}` : "DEV"}</em></div>
             <p>Jump to a random safe sector of the Frontier.</p>
             <button className="world-warp-go secondary" disabled={warpBusy || !!warpNotReady || warpCounts?.drift === 0} onClick={() => void executeWarp("random")}>RANDOM WARP</button>
           </section>
