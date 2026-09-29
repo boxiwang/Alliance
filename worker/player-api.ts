@@ -873,6 +873,7 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
     if (isWorldAuthoritySession(parsed, claims.sub)) world = parsed;
   } catch {}
   let inventoryItemId: string | null = null;
+  let inventoryQuantity = 1;
   let result: { state: typeof state; ok: boolean; reason?: string; world?: WorldAuthoritySession; extra?: Record<string, unknown> };
   const isWorldCommand = type === "world.advance" || type === "world.dispatch" || type === "world.recall" || type === "world.scan" || type === "world.warp";
   let warpReservation: { coord: { x: number; y: number }; previous: { x: number; y: number } | null } | null = null;
@@ -942,11 +943,13 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
     if (!item || item.status !== "active" || item.category !== "speedup" || !item.speedupSeconds || !target || !speedupCompatible(item.speedupQueue, target)) {
       result = { state, ok: false, reason: "Invalid speedup" };
     } else {
-      const applied = applySpeedup(state, target, item.speedupSeconds, now);
+      // Several of the same speedup in one order (the client auto-picks the count).
+      const quantity = Math.max(1, Math.min(999, Math.floor(Number(args.quantity) || 1)));
+      const applied = applySpeedup(state, target, item.speedupSeconds * quantity, now);
       result = applied.secondsApplied > 0
         ? { state: applied.state, ok: true }
         : { state, ok: false, reason: "That operation has already finished" };
-      if (result.ok) inventoryItemId = itemId;
+      if (result.ok) { inventoryItemId = itemId; inventoryQuantity = quantity; }
     }
   } else {
     result = applyCommand(state, type, args);
@@ -965,7 +968,7 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
     ? await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?")
       .bind(claims.sub, inventoryItemId).first<{ quantity: number }>()
     : null;
-  if (inventoryItemId && (!inventoryBefore || inventoryBefore.quantity < 1)) {
+  if (inventoryItemId && (!inventoryBefore || inventoryBefore.quantity < inventoryQuantity)) {
     if (warpReservation?.previous) await reserveWorldCoord(env, claims.sub, warpReservation.previous, 0, true);
     return response({ error: "insufficient_inventory" }, 409);
   }
@@ -975,16 +978,16 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
        result_game_json, created_at, inventory_item_id, inventory_quantity, inventory_transaction_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(commandId, claims.sub, idempotencyKey, type, fingerprint, argsJson, result.ok ? 1 : 0, reason, revision, resultRevision,
-        result.ok ? encoded : null, now, inventoryItemId, inventoryItemId ? 1 : null, inventoryTransactionId);
+        result.ok ? encoded : null, now, inventoryItemId, inventoryItemId ? inventoryQuantity : null, inventoryTransactionId);
     if (!result.ok) {
       await insert.run();
     } else {
       const statements: D1PreparedStatement[] = [insert];
       if (inventoryItemId && inventoryBefore && inventoryTransactionId) {
-        const expectedBalance = inventoryBefore.quantity - 1;
+        const expectedBalance = inventoryBefore.quantity - inventoryQuantity;
         statements.push(
-          env.DB.prepare("UPDATE inventory_balances SET quantity = quantity - 1, updated_at = ? WHERE player_id = ? AND item_id = ? AND quantity >= 1")
-            .bind(now, claims.sub, inventoryItemId),
+          env.DB.prepare("UPDATE inventory_balances SET quantity = quantity - ?, updated_at = ? WHERE player_id = ? AND item_id = ? AND quantity >= ?")
+            .bind(inventoryQuantity, now, claims.sub, inventoryItemId, inventoryQuantity),
           env.DB.prepare(`INSERT INTO command_transaction_guards (id, ok)
             VALUES (?, COALESCE((SELECT CASE WHEN quantity = ? THEN 1 ELSE 0 END FROM inventory_balances WHERE player_id = ? AND item_id = ?), 0))`)
             .bind(`${guardId}:inventory`, expectedBalance, claims.sub, inventoryItemId),
@@ -1001,9 +1004,9 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
       if (inventoryItemId && inventoryTransactionId) {
         statements.push(env.DB.prepare(`INSERT INTO inventory_transactions
           (id, player_id, item_id, delta, balance_after, reason, reference_id, idempotency_key, status, metadata_json, created_at, committed_at)
-          VALUES (?, ?, ?, -1, (SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?),
+          VALUES (?, ?, ?, ?, (SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?),
             'item_used', ?, ?, 'committed', '{}', ?, ?)`)
-          .bind(inventoryTransactionId, claims.sub, inventoryItemId, claims.sub, inventoryItemId, commandId, `command:${idempotencyKey}`, now, now));
+          .bind(inventoryTransactionId, claims.sub, inventoryItemId, -inventoryQuantity, claims.sub, inventoryItemId, commandId, `command:${idempotencyKey}`, now, now));
       }
       statements.push(
         env.DB.prepare("UPDATE game_commands SET result_game_json = NULL WHERE id = ?").bind(commandId),

@@ -229,10 +229,10 @@ export async function loadInventory(address: string): Promise<InventoryBalance[]
   return (await get<{ inventory: InventoryBalance[] }>("/inventory", session.token)).inventory;
 }
 
-export async function consumeInventoryItem(address: string, itemId: string, referenceId: string): Promise<{ itemId: string; quantity: number; effect: Record<string, unknown> }> {
+export async function consumeInventoryItem(address: string, itemId: string, referenceId: string, quantity = 1): Promise<{ itemId: string; quantity: number; effect: Record<string, unknown> }> {
   const session = loadBackendSession(address);
   if (!session) throw new Error("session_required");
-  return post("/inventory/consume", { itemId, quantity: 1, referenceId, idempotencyKey: referenceId }, session.token);
+  return post("/inventory/consume", { itemId, quantity, referenceId, idempotencyKey: referenceId }, session.token);
 }
 
 export async function grantGmInventory(address: string): Promise<InventoryBalance[]> {

@@ -1823,3 +1823,20 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .rs-maxed{padding:12px;border:1px solid rgba(255,193,90,.35);border-radius:8px;color:#ffc15a;font:750 10px var(--hud);letter-spacing:.14em;text-align:center}
 @media(max-width:1100px){.rs-body{grid-template-columns:170px minmax(0,1fr) 260px}}
 @media(max-width:860px){.rs-body{grid-template-columns:1fr}.rs-branches{flex-direction:row;overflow-x:auto}.rs-branches>button{flex:none;min-width:150px}}
+/* Speedup order: auto-picked item + count, change either before confirming. */
+.speedup-order{width:min(440px,calc(100vw - 32px))}
+.speedup-order-items{display:grid;grid-template-columns:repeat(auto-fill,52px);gap:6px;margin:0;padding:14px 16px 12px}
+.speedup-order-items button{position:relative;width:52px;height:52px;padding:0;border:1px solid rgba(92,129,171,.18);border-radius:8px;background:#070f1c;cursor:pointer}
+.speedup-order-items button.on{border-color:#38d9ff;box-shadow:0 0 0 1px rgba(56,217,255,.35),0 0 14px rgba(56,217,255,.14)}
+.speedup-order-items img{display:block;width:50px;height:50px;object-fit:contain}
+.speedup-order-items span{position:absolute;right:2px;bottom:2px;padding:1px 3px;border-radius:5px;background:rgba(3,8,16,.92);color:#c8e8f1;font-size:7px}
+.speedup-order-pick{display:flex;align-items:center;gap:10px;margin:0;padding:0 16px 12px}
+.speedup-order-pick>b{flex:1;color:#eaf6ff;font:700 12px var(--hud)}
+.speedup-order-pick>small{color:#6f8ca0;font-size:9px}
+.speedup-order-qty{display:flex;align-items:center;border:1px solid rgba(92,129,171,.3);border-radius:8px;overflow:hidden}
+.speedup-order-qty button{width:30px;height:30px;border:0;background:rgba(56,217,255,.06);color:#cfe6f2;font:700 15px var(--hud);cursor:pointer}
+.speedup-order-qty button:disabled{color:#3f5566;cursor:default}
+.speedup-order-qty>b{min-width:40px;color:#eaf6ff;font-size:14px;text-align:center}
+.speedup-order p em{color:#ffb454;font-style:normal}
+.speedup-tray-auto{margin-left:auto;padding:4px 9px;border:1px solid rgba(56,217,255,.45);border-radius:6px;background:rgba(56,217,255,.1);color:#bff3ff;font:700 7.5px var(--hud);letter-spacing:.12em;cursor:pointer}
+.speedup-tray>header{gap:8px}

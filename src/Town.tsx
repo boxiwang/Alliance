@@ -43,6 +43,7 @@ import {
 } from "./lib/backend";
 import { MVP_ITEM_BY_ID, MVP_ITEMS, SPEEDUP_QUEUES, speedupIconPath, WAREHOUSE_CATEGORIES, warehouseCategoryOf, warehouseSortKey, type WarehouseCategory } from "./lib/mvp-items";
 import ItemIcon from "./ItemIcon";
+import { autoSpeedupCount, autoSpeedupPick, type OwnedSpeedup } from "./lib/speedup-pick";
 import { activeSpeedupTargets, applySpeedup, speedupCompatible, speedupTargetId, type SpeedupTarget } from "./lib/speedups";
 import type { ServerReport, LiveMarch, PresenceCity } from "./lib/realtime";
 import { incomingCityMarches, recentCityScan } from "./lib/city-alerts";
@@ -155,7 +156,8 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
   const [speedupTarget, setSpeedupTarget] = useState("");
   const [warehouseItemId, setWarehouseItemId] = useState("");
   const [warehouseCategory, setWarehouseCategory] = useState<WarehouseCategory | null>(null);
-  const [pendingSpeedup, setPendingSpeedup] = useState<{ itemId: string; target: SpeedupTarget } | null>(null);
+  // Speedup order dialog. itemId/quantity null = auto-pick (lib/speedup-pick.ts).
+  const [pendingSpeedup, setPendingSpeedup] = useState<{ target: SpeedupTarget; itemId: string | null; quantity: number | null } | null>(null);
   const [inventoryBusy, setInventoryBusy] = useState(false);
   const [authorityVersion, setAuthorityVersion] = useState(0);
   const [authorityBusy, setAuthorityBusy] = useState(false);
@@ -453,56 +455,72 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
     setMsg(message);
   }
 
-  async function useSpeedup(itemId: string, targetOverride?: SpeedupTarget) {
+  /** Use `quantity` of one speedup on a queue. Resolves true when it was applied. */
+  async function useSpeedup(itemId: string, targetOverride?: SpeedupTarget, quantity = 1): Promise<boolean> {
     const target = targetOverride || selectedSpeedupTarget;
-    if (!target || inventoryBusy) return;
+    if (!target || inventoryBusy) return false;
     const item = MVP_ITEM_BY_ID.get(itemId);
-    if (!item?.speedupSeconds || !speedupCompatible(item.speedupQueue, target)) return;
-    const result = applySpeedup(game, target, item.speedupSeconds, Date.now());
-    if (!result.secondsApplied) { setMsg("That operation has already finished."); return; }
+    if (!item?.speedupSeconds || !speedupCompatible(item.speedupQueue, target)) return false;
+    const count = Math.max(1, Math.min(quantity, inventoryById.get(itemId) || 0));
+    const label = count > 1 ? `${count}× ${item.name}` : item.name;
+    const result = applySpeedup(game, target, item.speedupSeconds * count, Date.now());
+    if (!result.secondsApplied) { setMsg("That operation has already finished."); return false; }
     setInventoryBusy(true);
     if (authorityVersion > 0) {
       try {
-        const command = await runServerAction("speedup.use", { itemId, target }, () => ({ state: result.state, ok: true }));
+        const command = await runServerAction("speedup.use", { itemId, target, quantity: count }, () => ({ state: result.state, ok: true }));
         if (command?.inventory) {
           setInventory((current) => current.map((entry) => entry.itemId === command.inventory!.itemId
             ? { ...entry, quantity: command.inventory!.quantity, updatedAt: Date.now() }
             : entry));
         }
-        if (command?.ok) setMsg(`${item.name} used. ${fmtSec(result.secondsApplied)} removed.`);
+        if (command?.ok) setMsg(`${label} used. ${fmtSec(result.secondsApplied)} removed.`);
         if (!command) void loadInventory(address).then(setInventory).catch(() => {});
+        return !!command?.ok;
       } catch {
         setMsg("Speedup failed. Try again.");
+        return false;
       } finally { setInventoryBusy(false); }
-      return;
     }
     const referenceId = `speedup:${speedupTargetId(target)}:${crypto.randomUUID()}`;
     if (import.meta.env.DEV && gm) {
       setGame(result.state);
       saveGame(result.state);
       setInventory((current) => current.map((entry) => entry.itemId === itemId
-        ? { ...entry, quantity: Math.max(0, entry.quantity - 1), updatedAt: Date.now() }
+        ? { ...entry, quantity: Math.max(0, entry.quantity - count), updatedAt: Date.now() }
         : entry));
-      setMsg(`${item.name} used. ${fmtSec(result.secondsApplied)} removed.`);
+      setMsg(`${label} used. ${fmtSec(result.secondsApplied)} removed.`);
       setInventoryBusy(false);
-      return;
+      return true;
     }
     try {
-      const consumed = await consumeInventoryItem(address, itemId, referenceId);
-      setGame(result.state);
-      saveGame(result.state);
+      const consumed = await consumeInventoryItem(address, itemId, referenceId, Math.min(99, count));
+      const legacy = count > 99 ? applySpeedup(game, target, item.speedupSeconds * 99, Date.now()) : result;
+      setGame(legacy.state);
+      saveGame(legacy.state);
       setInventory((current) => current.map((entry) => entry.itemId === itemId ? { ...entry, quantity: consumed.quantity, updatedAt: Date.now() } : entry));
-      setMsg(`${item.name} used. ${fmtSec(result.secondsApplied)} removed.`);
+      setMsg(`${label} used. ${fmtSec(legacy.secondsApplied)} removed.`);
+      return true;
     } catch (error) {
       setMsg(error instanceof Error && error.message === "insufficient_inventory" ? "No speedups left." : "Speedup failed. Try again.");
       void loadInventory(address).then(setInventory).catch(() => {});
+      return false;
     } finally { setInventoryBusy(false); }
   }
 
-  function requestSpeedupUse(itemId: string, target: SpeedupTarget) {
-    const item = MVP_ITEM_BY_ID.get(itemId);
-    if (!item || (inventoryById.get(itemId) || 0) <= 0 || !speedupCompatible(item.speedupQueue, target)) return;
-    setPendingSpeedup({ itemId, target });
+  /** Open the speedup order for a queue: auto-picks the item and count, or starts from `itemId`. */
+  function requestSpeedupUse(itemId: string | null, target: SpeedupTarget) {
+    if (itemId) {
+      const item = MVP_ITEM_BY_ID.get(itemId);
+      if (!item || (inventoryById.get(itemId) || 0) <= 0 || !speedupCompatible(item.speedupQueue, target)) return;
+    }
+    setPendingSpeedup({ target, itemId, quantity: null });
+  }
+
+  /** Owned speedups usable on a queue, in the auto-pick shape. */
+  function ownedSpeedupsFor(target: SpeedupTarget): OwnedSpeedup[] {
+    return speedupCatalog.filter((item) => speedupCompatible(item.speedupQueue, target) && (inventoryById.get(item.id) || 0) > 0)
+      .map((item) => ({ id: item.id, seconds: item.speedupSeconds || 0, universal: item.speedupQueue === "universal", owned: inventoryById.get(item.id) || 0 }));
   }
 
   function speedupRemainingMs(target: SpeedupTarget): number {
@@ -520,7 +538,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
         : target.kind === "research" ? view.researchQueue.finishAt - now
           : view.healing.finishAt - now;
     return <section className={`speedup-tray ${variant}`} aria-label={`Speedups for ${speedupTargetLabel(target)}`}>
-      <header><span>ACCELERATE</span><b className="mono">{fmtMs(remainingMs)}</b></header>
+      <header><span>ACCELERATE</span><b className="mono">{fmtMs(remainingMs)}</b>{compatible.length > 0 && <button type="button" className="speedup-tray-auto" disabled={inventoryBusy || commandBusy} onClick={() => requestSpeedupUse(null, target)}>SPEED UP</button>}</header>
       {!compatible.length && <p className="speedup-tray-empty">No speedups for this queue — get them from the Shop and events.</p>}
       <div className="speedup-tray-items">
         {compatible.map((item) => {
@@ -758,18 +776,59 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
       </div>
       <MiniComms address={address} profile={profile} onOpenMessages={onMessages} onReport={handleCityReport} onMarch={handleCityMarch} onMarchDone={handleCityMarchDone} onMarchSnapshot={handleCityMarchSnapshot} onSelf={handleSelf} />
       {pendingSpeedup && (() => {
-        const item = MVP_ITEM_BY_ID.get(pendingSpeedup.itemId);
-        if (!item?.speedupSeconds) return null;
-        const remainingMs = speedupRemainingMs(pendingSpeedup.target);
-        const appliedSeconds = Math.ceil(Math.min(item.speedupSeconds * 1000, remainingMs) / 1000);
-        const quantity = inventoryById.get(item.id) || 0;
-        return <div className="speedup-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingSpeedup(null); }}>
-          <section className="speedup-confirm" role="dialog" aria-modal="true" aria-labelledby="speedup-confirm-title">
-            <header><span>ACCELERATION ORDER</span><button type="button" aria-label="Cancel speedup" onClick={() => setPendingSpeedup(null)}>×</button></header>
-            <div className="speedup-confirm-item"><img src={speedupIconPath(item)} alt="" /><div><b id="speedup-confirm-title">{item.name}</b><small>{speedupTargetLabel(pendingSpeedup.target)}</small></div><em className="mono">×{quantity}</em></div>
-            <div className="speedup-confirm-impact"><span><small>QUEUE</small><b className="mono">{fmtMs(remainingMs)}</b></span><i>→</i><span><small>AFTER</small><b className="mono">{fmtMs(Math.max(0, remainingMs - item.speedupSeconds * 1000))}</b></span></div>
-            <p>Consume 1 item and remove <b>{fmtSec(appliedSeconds)}</b> from this queue?</p>
-            <footer><button type="button" onClick={() => setPendingSpeedup(null)}>CANCEL</button><button className="confirm" type="button" disabled={quantity <= 0 || appliedSeconds <= 0 || inventoryBusy || commandBusy} onClick={() => { const pending = pendingSpeedup; setPendingSpeedup(null); void useSpeedup(pending.itemId, pending.target); }}>CONFIRM USE</button></footer>
+        // Speedup order: auto-picked item and count (lib/speedup-pick.ts); change the item
+        // and the count re-fills; after each use the next pick is made from the new time left.
+        const target = pendingSpeedup.target;
+        const remainingMs = speedupRemainingMs(target);
+        const remainingSec = Math.ceil(remainingMs / 1000);
+        const owned = ownedSpeedupsFor(target);
+        const auto = autoSpeedupPick(owned, remainingSec);
+        const chosen = owned.find((entry) => entry.id === (pendingSpeedup.itemId ?? auto?.id)) ?? null;
+        const item = chosen ? MVP_ITEM_BY_ID.get(chosen.id) : null;
+        const quantity = chosen ? Math.max(1, Math.min(chosen.owned, pendingSpeedup.quantity ?? autoSpeedupCount(chosen, remainingSec))) : 0;
+        const removeSec = chosen ? chosen.seconds * quantity : 0;
+        const close = () => setPendingSpeedup(null);
+        const confirm = async () => {
+          if (!chosen) return;
+          const ok = await useSpeedup(chosen.id, target, quantity);
+          // Next pick from the new time left; the dialog closes itself when nothing is left.
+          if (ok) setPendingSpeedup((current) => current ? { ...current, itemId: null, quantity: null } : current);
+        };
+        if (remainingMs <= 0 || !owned.length) {
+          return <div className="speedup-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+            <section className="speedup-confirm" role="dialog" aria-modal="true" aria-label="Speedup">
+              <header><span>ACCELERATION ORDER</span><button type="button" aria-label="Close" onClick={close}>×</button></header>
+              <p>{remainingMs <= 0 ? "This queue is complete." : "No speedups left for this queue."}</p>
+              <footer><button className="confirm" type="button" onClick={close}>DONE</button></footer>
+            </section>
+          </div>;
+        }
+        return <div className="speedup-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+          <section className="speedup-confirm speedup-order" role="dialog" aria-modal="true" aria-labelledby="speedup-confirm-title">
+            <header><span>ACCELERATION ORDER · {speedupTargetLabel(target).toUpperCase()}</span><button type="button" aria-label="Cancel speedup" onClick={close}>×</button></header>
+            <div className="speedup-order-items" role="radiogroup" aria-label="Choose a speedup">
+              {owned.map((entry) => {
+                const option = MVP_ITEM_BY_ID.get(entry.id)!;
+                return <button key={entry.id} type="button" role="radio" aria-checked={chosen?.id === entry.id} className={chosen?.id === entry.id ? "on" : ""}
+                  onClick={() => setPendingSpeedup((current) => current ? { ...current, itemId: entry.id, quantity: null } : current)}>
+                  <img src={speedupIconPath(option)} alt="" /><span className="mono">×{itemCount(entry.owned)}</span>
+                </button>;
+              })}
+            </div>
+            {item && chosen && <>
+              <div className="speedup-order-pick">
+                <b id="speedup-confirm-title">{item.name}</b>
+                <div className="speedup-order-qty" aria-label="Quantity">
+                  <button type="button" aria-label="Fewer" disabled={quantity <= 1} onClick={() => setPendingSpeedup((current) => current ? { ...current, itemId: chosen.id, quantity: quantity - 1 } : current)}>−</button>
+                  <b className="mono">{quantity}</b>
+                  <button type="button" aria-label="More" disabled={quantity >= chosen.owned} onClick={() => setPendingSpeedup((current) => current ? { ...current, itemId: chosen.id, quantity: quantity + 1 } : current)}>+</button>
+                </div>
+                <small className="mono">of {itemCount(chosen.owned)}</small>
+              </div>
+              <div className="speedup-confirm-impact"><span><small>QUEUE</small><b className="mono">{fmtMs(remainingMs)}</b></span><i>→</i><span><small>AFTER</small><b className="mono">{fmtMs(Math.max(0, remainingMs - removeSec * 1000))}</b></span></div>
+              <p>Use <b>{quantity}× {item.name}</b> to remove <b>{fmtSec(Math.min(removeSec, remainingSec))}</b>{removeSec > remainingSec ? <> — <em>{fmtSec(removeSec - remainingSec)} unused</em></> : null}.</p>
+            </>}
+            <footer><button type="button" onClick={close}>CANCEL</button><button className="confirm" type="button" disabled={!chosen || inventoryBusy || commandBusy} onClick={() => void confirm()}>USE {quantity > 1 ? `${quantity} ` : ""}→</button></footer>
           </section>
         </div>;
       })()}
