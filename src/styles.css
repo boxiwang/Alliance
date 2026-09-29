@@ -1717,3 +1717,20 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world-scout-trail circle{fill:#d8fff0;filter:drop-shadow(0 0 3px rgba(127,240,196,.95))}
 @keyframes world-scout-dash{to{stroke-dashoffset:-9}}
 @media(prefers-reduced-motion:reduce){.world-scout-trail line{animation:none}}
+/* A commander card relayed to chat: the same card, placed inline (no anchor, no notch). */
+.commander-card.commander-card-shared{position:relative;left:auto;top:auto;z-index:auto;display:block;text-align:left;width:100%;max-width:272px;margin-top:6px;transform:none!important;will-change:auto;cursor:pointer;animation:none}
+.commander-card.commander-card-shared:before{display:none}
+.commander-card.commander-card-shared:hover{border-color:color-mix(in srgb,var(--commander,#7cc0ff) 70%,transparent)}
+.commander-card-shared footer{display:flex;justify-content:flex-end;padding-top:9px;border-top:1px solid rgba(120,160,190,.14)}
+.commander-card-shared footer span{color:#8fcfe8;font:700 8px var(--hud);letter-spacing:.1em}
+.commander-card-shared.compact{max-width:none;margin:0;padding:9px 34px 9px 10px;cursor:default}
+.commander-card-shared.compact header{margin:0 0 6px}
+.commander-card-shared.compact footer{padding-top:6px}
+.commander-card-shared.compact footer span{color:#6f8ca0}
+/* Direct list: remove a thread (appears on hover/focus); retention note at the top of a DM. */
+.comms-page .chan-dm{position:relative}
+.comms-page .chan-remove{flex:none;width:20px;height:20px;padding:0;border:0;border-radius:6px;background:transparent;color:#6f8ca0;font-size:13px;line-height:1;cursor:pointer;opacity:0;transition:opacity .12s}
+.comms-page .chan-dm:hover .chan-remove,.comms-page .chan-dm:focus-within .chan-remove,.comms-page .chan-dm.on .chan-remove{opacity:1}
+.comms-page .chan-remove:hover{color:#ffb3c0;background:rgba(255,111,133,.1)}
+.comms-page .dm-retention{align-self:center;margin:4px auto 10px;padding:5px 10px;border:1px solid rgba(120,160,190,.16);border-radius:12px;color:#6f8ca0;font:600 9px var(--mono);letter-spacing:.03em;text-align:center}
+@media(hover:none){.comms-page .chan-remove{opacity:1}}

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { RealtimeClient, type LiveChat, type PresenceCity, type ServerReport } from "./lib/realtime";
 import type { Profile } from "./lib/profile";
 import { capacity, displayResource, displayTroops, mightBreakdown, prodPerHour, project, totalTroops, worldMarchSlots } from "./lib/game";
@@ -12,6 +12,7 @@ import CosmicBackdrop from "./CosmicBackdrop";
 import PlayerCard, { type PlayerSignal } from "./PlayerCard";
 import { shouldSubmitTextEntry } from "./lib/ime";
 import NameSignal from "./NameSignal";
+import CommanderCardView from "./CommanderCardView";
 import { loadCosmeticVault, type ChatSignalId } from "./lib/player-account";
 import { loadPlayerAccount } from "./lib/player-account";
 import { refreshLocalCommsIntel, saveLocalComms, type LocalCommsMessage } from "./lib/comms-local";
@@ -105,7 +106,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       const threads: Record<string, LiveChat[]> = {}; const names: Record<string, string> = {};
       for (const [k, arr] of Object.entries(dms)) {
         const partner = partnerOf(k); threads[partner] = arr;
-        const last = arr.filter((m) => m.pid === partner).slice(-1)[0]; if (last) names[partner] = last.name;
+        const name = dmPartnerName(arr, partner); if (name) names[partner] = name;
       }
       setDmThreads(threads); setDmNames((cur) => ({ ...names, ...cur }));
     };
@@ -113,7 +114,8 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     rt.handlers.onDM = (k, m) => {
       const partner = partnerOf(k);
       setDmThreads((cur) => ({ ...cur, [partner]: [...(cur[partner] || []), m].slice(-200) }));
-      if (m.pid === partner) setDmNames((cur) => ({ ...cur, [partner]: m.name }));
+      const name = dmPartnerName([m], partner);
+      if (name) setDmNames((cur) => ({ ...cur, [partner]: name }));
     };
     rt.handlers.onPlayer = (p) => setRoster((cur) => {
       const i = cur.findIndex((x) => x.id === p.id);
@@ -265,7 +267,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
         intel = pendingShare; // rides along so it renders as a clickable star-map card
       }
       if (!text) return;
-      if (dmWith) rtRef.current?.sendDM(dmWith.id, text, intel);
+      if (dmWith) rtRef.current?.sendDM(dmWith.id, text, intel, dmWith.name);
       else rtRef.current?.sendChat(text, intel);
       const channel = dmWith ? "dm" : "cosmos";
       void trackEvents(address, [{ name: intel ? "chat.intel_shared" : "chat.message_sent", page: "messages", properties: { channel, intelType: intel?.kind || null } }]).catch(() => {});
@@ -296,10 +298,21 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   }
 
   function openSharedTarget(share: SharedWorldIntel) {
-    // A commander card carries no location: open a direct line to that commander instead.
-    if (share.kind === "commander") { openDM(share.playerId, share.name); return; }
+    // A commander card jumps to that planet (older cards without a location open a DM).
+    if (share.kind === "commander") {
+      if (!share.position) { openDM(share.playerId, share.name); return; }
+      queueWorldFocus(address, share.playerId, share.position);
+      onWorld();
+      return;
+    }
     queueWorldFocus(address, share.targetId, share.position);
     onWorld();
+  }
+
+  function removeDM(partner: string) {
+    rtRef.current?.sendDMHide(partner);
+    setDmThreads((cur) => { const next = { ...cur }; delete next[partner]; return next; });
+    if (dmWith?.id === partner) { setDmWith(null); setActive("cosmos"); }
   }
 
   function openChannel(channel: ChannelId) {
@@ -345,10 +358,12 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
           if (!partners.length) return null;
           return <>
             <div className="cm-grp" style={{ marginTop: 12 }}>Direct</div>
-            {partners.map((pid) => <button key={pid} className={`chan ${dmWith?.id === pid ? "on" : ""}`} onClick={() => openDM(pid, dmNames[pid] || "Commander")}>
+            {partners.map((pid) => <div key={pid} className={`chan chan-dm ${dmWith?.id === pid ? "on" : ""}`} role="button" tabIndex={0}
+              onClick={() => openDM(pid, dmNames[pid] || "Commander")} onKeyDown={(event) => { if (event.key === "Enter") openDM(pid, dmNames[pid] || "Commander"); }}>
               <span className="ci">◇</span>
-              <span className="cx"><b>{dmNames[pid] || "Commander"}</b><span>direct message</span></span>
-            </button>)}
+              <span className="cx"><b>{dmNames[pid] || (dmWith?.id === pid ? dmWith.name : "Commander")}</b><span>direct message</span></span>
+              <button className="chan-remove" aria-label={`Remove chat with ${dmNames[pid] || "Commander"}`} onClick={(event) => { event.stopPropagation(); removeDM(pid); }}>×</button>
+            </div>)}
           </>;
         })()}
       </aside>
@@ -381,6 +396,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
             </div>
           : <div className="stream" ref={streamRef}>
               {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} reducedMotion={account.reducedMotion} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} onLocate={(at) => { queueWorldFocus(address, null, at); onWorld(); }} />)}
+              {dmWith && <div className="dm-retention">Private chat. Kept in Direct until you remove it — cleared after 30 days with no new messages.</div>}
               {messages.length === 0 && <div className="spam">{dmWith ? "No messages yet — say hi." : isCosmos ? "Be the first to signal the frontier." : "No messages yet."}</div>}
             </div>}
 
@@ -446,14 +462,17 @@ function intelRemaining(expiresAt: number, now: number): string {
 
 function SharedIntelCard({ share, now, onOpen, compactView = false }: { share: SharedWorldIntel; now: number; onOpen: () => void; compactView?: boolean }) {
   if (share.kind === "commander") {
-    const sigil = /^[a-z0-9-]{1,24}$/.test(String(share.avatar || "")) ? share.avatar : "genesis";
-    return <div className={`comms-intel-card commander ${compactView ? "compact" : ""}`}>
-      <header><span>◆ COMMANDER</span><em>LOCATION PRIVATE</em></header>
-      <div className="comms-intel-commander">
-        <span className={`command-sigil command-sigil-${sigil}`}><i /></span>
-        <div className="comms-intel-target"><b>{share.faction ? `[${share.faction}] ` : ""}{share.name}</b><small>CORE {share.coreLevel}{share.faction ? ` · $${share.faction}` : " · NO ALLIANCE"}</small></div>
-      </div>
-      {!compactView && <button onClick={onOpen}>MESSAGE ▸</button>}
+    // Same card the sender saw on the Star Map (recon rows only while still valid).
+    const reconLive = !!share.recon && share.recon.expiresAt > now;
+    return <div className={`commander-card commander-card-shared ${compactView ? "compact" : ""}`} data-frame="standard" style={{ "--commander": "#7cc0ff" } as CSSProperties}
+      role={compactView ? undefined : "button"} tabIndex={compactView ? undefined : 0}
+      onClick={compactView ? undefined : onOpen} onKeyDown={compactView ? undefined : (event) => { if (event.key === "Enter") onOpen(); }}>
+      <CommanderCardView id={share.playerId} name={share.name} faction={share.faction} avatar={share.avatar} coreLevel={share.coreLevel}
+        signal={share.signal as ChatSignalId | null | undefined} recon={compactView ? null : share.recon} now={now}>
+        <footer>{compactView
+          ? <span>{reconLive ? "RECON ATTACHED" : "COMMANDER CARD"}</span>
+          : <span>{share.position ? "LOCATE ON STAR MAP ▸" : "MESSAGE ▸"}</span>}</footer>
+      </CommanderCardView>
     </div>;
   }
   const live = sharedIntelIsActive(share, now);
@@ -501,5 +520,15 @@ function renderContext(ctx: { active: ChannelId; roster: PresenceCity[]; onlineC
       <div className="rm"><span className="dot" />Harvest returned<span className="rm-f">off</span></div>
     </div>
   </>;
+  return null;
+}
+
+/** The other person's name in a DM thread: from their own messages, else from what we sent them. */
+function dmPartnerName(messages: LiveChat[], partner: string): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const m = messages[index];
+    if (m.pid === partner && m.name && m.name !== "Commander") return m.name;
+    if (m.to === partner && m.toName) return m.toName;
+  }
   return null;
 }

@@ -96,7 +96,7 @@ type PlayerRow = {
   cosmetics: unknown; online: boolean; lastSeen: number; coordVersion?: number;
   avatar?: string | null;
 };
-type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown; signal?: string | null };
+type ChatRow = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; toName?: string; intel?: unknown; signal?: string | null };
 
 // Server-authoritative per-player combat/intel reports (scouted / incoming /
 // battle). Delivered on join (offline players see them on return) and live.
@@ -196,6 +196,13 @@ function prune(arr: ChatRow[]): ChatRow[] {
   return out;
 }
 const dmKey = (a: string, b: string) => [a, b].sort().join("|");
+// A DM thread lives until 30 days pass with no new message (then it is cleared whole).
+const DM_RETAIN_MS = 30 * 24 * 60 * 60 * 1000;
+function pruneDm(arr: ChatRow[], now = Date.now()): ChatRow[] {
+  const last = arr[arr.length - 1];
+  if (!last || now - last.ts > DM_RETAIN_MS) return [];
+  return arr.length > MAX_CHAT ? arr.slice(-MAX_CHAT) : arr;
+}
 
 // Accept a relayed intel payload only when it is a small, shaped object — never
 // trust arbitrary client JSON into stored/broadcast chat.
@@ -207,8 +214,16 @@ function sanitizeIntel(value: unknown): unknown | null {
     if (typeof v.playerId !== "string" || typeof v.name !== "string" || v.playerId.length > 64 || v.name.length > 48) return null;
     const faction = typeof v.faction === "string" ? v.faction.replace(/[^a-z0-9_$.-]/gi, "").slice(0, 24) : null;
     const avatar = typeof v.avatar === "string" && /^[a-z0-9-]{1,24}$/.test(v.avatar) ? v.avatar : null;
+    // The sender chose to share where the planet is (and any recon they hold); the
+    // system itself still never volunteers coordinates.
+    const p = v.position as { x?: unknown; y?: unknown } | null | undefined;
+    const position = p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number(p.x) >= 0 && Number(p.y) >= 0 && Number(p.x) <= 8192 && Number(p.y) <= 8192
+      ? { x: Number(p.x), y: Number(p.y) } : null;
+    const signal = typeof v.signal === "string" && /^[a-z0-9-]{1,32}$/.test(v.signal) ? v.signal : null;
+    const recon = sanitizeRecon(v.recon);
     return { kind: "commander", id: String(v.id || "").slice(0, 120), playerId: v.playerId, name: v.name, faction: faction || null,
-      coreLevel: Math.max(1, Math.min(30, Math.floor(Number(v.coreLevel) || 1))), avatar, createdAt: Number(v.createdAt) || Date.now() };
+      coreLevel: Math.max(1, Math.min(30, Math.floor(Number(v.coreLevel) || 1))), avatar, createdAt: Number(v.createdAt) || Date.now(),
+      position, signal, recon };
   }
   const pos = v.position as { x?: unknown; y?: unknown } | undefined;
   if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number") return null;
@@ -217,6 +232,22 @@ function sanitizeIntel(value: unknown): unknown | null {
   try { json = JSON.stringify(v); } catch { return null; }
   if (json.length > 2000) return null;
   return JSON.parse(json);
+}
+
+/** Relayed recon on a commander card: numbers only, and never valid beyond one day. */
+function sanitizeRecon(value: unknown): { snapshot: Record<string, unknown>; expiresAt: number } | null {
+  const v = value as { snapshot?: Record<string, unknown>; expiresAt?: unknown } | null | undefined;
+  if (!v || !v.snapshot || typeof v.snapshot !== "object") return null;
+  const expiresAt = Number(v.expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() || expiresAt > Date.now() + 86_400_000) return null;
+  const n = (x: unknown) => Math.max(0, Math.min(1e13, Math.floor(Number(x) || 0)));
+  const s = v.snapshot;
+  const troops = (s.troops || {}) as Record<string, unknown>, resources = (s.resources || {}) as Record<string, unknown>;
+  return { expiresAt, snapshot: {
+    keepLevel: n(s.keepLevel), might: n(s.might), wounded: n(s.wounded), wallLevel: n(s.wallLevel), shielded: s.shielded === true, faction: null,
+    troops: { army: n(troops.army), navy: n(troops.navy), air: n(troops.air) },
+    resources: { cash: n(resources.cash), oil: n(resources.oil), power: n(resources.power) },
+  } };
 }
 
 function sanitizeCosmetics(value: unknown): unknown | null {
@@ -624,17 +655,25 @@ export class WorldRoom {
       ? { ...message, name: players[message.pid].name }
       : message);
     if (chat.some((message, index) => message.name !== storedChat[index]?.name)) await this.state.storage.put("chat:cosmos", chat);
-    // Only this player's DM threads, pruned to the retention window.
+    // Only this player's DM threads: cleared after 30 days without a new message, and
+    // hidden (for this player only) when they removed the thread — until a newer message.
     const dmsAll = (await this.state.storage.get<Record<string, ChatRow[]>>("dms")) || {};
+    const hidden = (await this.state.storage.get<Record<string, number>>(`dmhidden:${pid}`)) || {};
     const dms: Record<string, ChatRow[]> = {};
+    let expired = false;
     for (const [k, arr] of Object.entries(dmsAll)) {
-      if (k.split("|").includes(pid)) {
-        const p = prune(arr).map((message) => message.name === "Commander" && players[message.pid]?.name
-          ? { ...message, name: players[message.pid].name }
-          : message);
-        if (p.length) dms[k] = p;
-      }
+      const kept = pruneDm(arr);
+      if (!kept.length) { delete dmsAll[k]; expired = true; continue; }
+      if (!k.split("|").includes(pid)) continue;
+      const partner = k.split("|").find((id) => id !== pid) || k;
+      if (hidden[partner] && kept[kept.length - 1].ts <= hidden[partner]) continue;
+      dms[k] = kept.map((message) => ({
+        ...message,
+        name: players[message.pid]?.name || message.name,
+        ...(message.to ? { toName: players[message.to]?.name || message.toName } : {}),
+      }));
     }
+    if (expired) await this.state.storage.put("dms", dmsAll);
     if (returning) {
       await this.pushReport(pid, { id: crypto.randomUUID(), kind: "relocated", ts: Date.now(), payload: {
         summary: `Welcome back. Your city was moved to a new outer-ring sector while you were away. Progress is intact.`,
@@ -690,15 +729,26 @@ export class WorldRoom {
       const dmsAll = (await this.state.storage.get<Record<string, ChatRow[]>>("dms")) || {};
       const arr = dmsAll[key] || [];
       const intel = sanitizeIntel(data.intel);
-      const msg: ChatRow = { id: crypto.randomUUID(), pid, to, name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null, signal: chatSignalOf(players[pid]), ...(intel ? { intel } : {}) };
+      // Remember who this was sent to, so the thread keeps the partner's name even if they
+      // never reply or are no longer on the roster.
+      const toName = players[to]?.name || String(data.toName || "").replace(/[\u0000-\u001f]/g, "").slice(0, 48) || undefined;
+      const msg: ChatRow = { id: crypto.randomUUID(), pid, to, ...(toName ? { toName } : {}), name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null, signal: chatSignalOf(players[pid]), ...(intel ? { intel } : {}) };
       arr.push(msg);
-      dmsAll[key] = prune(arr);
+      dmsAll[key] = pruneDm(arr);
       await this.state.storage.put("dms", dmsAll);
       const payload = JSON.stringify({ type: "dm", key, msg });
       for (const sock of this.state.getWebSockets()) {
         const a = ((sock.deserializeAttachment() || {}) as Partial<SocketAttachment>).pid;
         if (a === pid || a === to) { try { sock.send(payload); } catch {} }
       }
+    } else if (data.type === "dm_hide") {
+      // Remove a DM thread from this player's Direct list (the other side keeps theirs).
+      const partner = String(data.with || "").slice(0, 64);
+      if (!partner) return;
+      const key = `dmhidden:${pid}`;
+      const hiddenAll = (await this.state.storage.get<Record<string, number>>(key)) || {};
+      hiddenAll[partner] = Date.now();
+      await this.state.storage.put(key, hiddenAll);
     } else if (data.type === "scout") {
       // Recon is a fleet: it flies at scoutSpeedMultiplier × march pace; the intel is taken
       // on arrival (alarm), filed to the sender's System as a "recon" report, and the target

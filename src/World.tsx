@@ -21,6 +21,7 @@ import {
 } from "./lib/world-adapter";
 import GameNav from "./GameNav";
 import NameSignal from "./NameSignal";
+import CommanderCardView from "./CommanderCardView";
 import MiniComms from "./MiniComms";
 import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
@@ -586,6 +587,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const sessionRef = useRef(initial.session);
   const [authorityVersion, setAuthorityVersion] = useState(0);
   const focusRequestedRef = useRef(false);
+  const focusTakenRef = useRef<{ address: string; focus: ReturnType<typeof takeWorldFocus> } | null>(null);
   const authorityRef = useRef(0);
   const advanceBusyRef = useRef(false);
   const [now, setNow] = useState(Date.now());
@@ -616,6 +618,14 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [serverFieldClusters, setServerFieldClusters] = useState<SignalCluster[] | null>(null);
   const searchReplyRef = useRef<((result: { total: number; target: unknown | null }) => void) | null>(null);
   const [remoteSelectedId, setRemoteSelectedId] = useState<string | null>(null);
+  // A shared commander card opened from chat: select that planet once it arrives in view.
+  const pendingRemoteFocusRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = pendingRemoteFocusRef.current;
+    if (!id || !remotePlayers.some((p) => p.id === id)) return;
+    pendingRemoteFocusRef.current = null;
+    setRemoteSelectedId(id); setSelectedId(null); setTileMark(null);
+  }, [remotePlayers]);
   const [cardHint, setCardHint] = useState<string | null>(null);
   // My own spawn coordinate, owned by the server (shared map). Once known, the
   // home city is moved here so "where I see my home" == "where others see me".
@@ -753,10 +763,14 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     opened.session.world.players[opened.session.playerId].allianceId = profile.faction;
     setGame(opened.game); gameRef.current = opened.game; setSession(opened.session); sessionRef.current = opened.session;
     const city = opened.session.world.entities[opened.session.world.players[opened.session.playerId].cityId] as CityEntity;
-    const requestedFocus = takeWorldFocus(address);
+    // Take the queued focus once per address (StrictMode re-runs this effect; the second
+    // run must see the same request, not an empty queue).
+    if (focusTakenRef.current?.address !== address) focusTakenRef.current = { address, focus: takeWorldFocus(address) };
+    const requestedFocus = focusTakenRef.current.focus;
     focusRequestedRef.current = !!requestedFocus;
     const focusedEntity = requestedFocus?.targetId ? opened.session.world.entities[requestedFocus.targetId] : null;
     if (requestedFocus) {
+      if (requestedFocus.targetId && !focusedEntity) pendingRemoteFocusRef.current = requestedFocus.targetId;
       const position = focusedEntity?.position || requestedFocus.position;
       setCamera({ ...position });
       setZoom(focusedEntity?.kind === "city" || !focusedEntity ? 3.2 : 2.1);
@@ -1814,11 +1828,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         {resultNotice && <div className={`world-event-toast ${resultNotice.good ? "good" : "bad"}`}><div><small>MISSION UPDATE</small><b>{resultNotice.title}</b><span>{resultNotice.detail}</span></div><button aria-label="Dismiss mission update" onClick={() => setResultNotice(null)}>×</button></div>}
         {remoteSelected && (() => {
           // Commander card: sits beside the selected planet and follows it while the map
-          // pans/zooms. Identity only (sigil, alliance tag, name, Core) — no coordinates,
-          // no Might (Scout reveals it). `data-frame` is the slot for a future card-frame
-          // cosmetic (docs/IDEAS.md).
+          // pans/zooms. Identity (sigil, alliance tag, name, Core) plus recon rows while a
+          // scout's intel is valid. SHARE relays this same card (with the planet's location,
+          // a player's own choice). `data-frame` is the slot for a card-frame cosmetic.
           const col = REMOTE_FACTION_COLOR[String(remoteSelected.faction || "")] || "#7cc0ff";
-          const sigil = /^[a-z0-9-]{1,24}$/.test(String(remoteSelected.avatar || "")) ? remoteSelected.avatar : "genesis";
           const cosmetics = remoteSelected.cosmetics as { chatSignal?: ChatSignalId | null; cardFrame?: string } | null;
           const frame = /^[a-z0-9-]{1,24}$/.test(String(cosmetics?.cardFrame || "")) ? cosmetics!.cardFrame : "standard";
           const launching = scoutingId === remoteSelected.id;
@@ -1828,34 +1841,17 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           const snap = intelLeftMs > 0 ? intel.snapshot : null;
           return <WorldAnchor svgRef={svgRef} point={remoteSelected.coords} className="commander-card" data-frame={frame} style={{ "--commander": col } as CSSProperties}>
             <button className="commander-card-close" aria-label="Close commander card" onClick={() => setRemoteSelectedId(null)}>×</button>
-            <header>
-              <span className="commander-card-avatar">
-                <span className={`command-sigil command-sigil-${sigil} commander-card-sigil`}><i /></span>
-                <em aria-label={`Core ${remoteSelected.keepLevel || 1}`}>{remoteSelected.keepLevel || 1}</em>
-              </span>
-              <div>
-                <b>{remoteSelected.faction ? <i>[{remoteSelected.faction}]</i> : null}<NameSignal key={remoteSelected.id} signal={cosmetics?.chatSignal ?? null}>{remoteSelected.name || "Commander"}</NameSignal></b>
-                <small>CORE {remoteSelected.keepLevel || 1}</small>
-              </div>
-            </header>
-            {snap && <div className="commander-card-intel" aria-label="Recon intel">
-              <div className="commander-card-intel-head"><small>MIGHT</small><b>{compact(snap.might)}</b><em>INTEL · {intelLeftMs >= 60_000 ? `${Math.ceil(intelLeftMs / 60_000)}M` : "<1M"}</em></div>
-              <dl>
-                <div><dt>ARMY</dt><dd>{compact(snap.troops.army)}</dd></div><div><dt>NAVY</dt><dd>{compact(snap.troops.navy)}</dd></div><div><dt>AIR</dt><dd>{compact(snap.troops.air)}</dd></div>
-                <div><dt>WALL</dt><dd>Lv.{snap.wallLevel}</dd></div><div><dt>WOUNDED</dt><dd>{compact(snap.wounded)}</dd></div><div><dt>SHIELD</dt><dd>{snap.shielded ? "ON" : "OFF"}</dd></div>
-              </dl>
-              <dl className="commander-card-loot">
-                {(["cash", "oil", "power"] as const).map((key) => <div key={key}><dt>{key.toUpperCase()}</dt><dd style={{ color: RESOURCE_COLORS[key] }}>{compact(snap.resources[key])}</dd></div>)}
-              </dl>
-            </div>}
+            <CommanderCardView id={remoteSelected.id} name={remoteSelected.name || "Commander"} faction={remoteSelected.faction || null} avatar={remoteSelected.avatar}
+              coreLevel={remoteSelected.keepLevel || 1} signal={cosmetics?.chatSignal} recon={intel} now={now}>
             <div className="commander-card-actions">
               <button className="scout" disabled={launching || !!scoutFlight} onMouseEnter={() => setCardHint("Reveals Might, troops and loot · they will see the scout")} onMouseLeave={() => setCardHint(null)}
                 onClick={() => { setScoutingId(remoteSelected.id); rtRef.current?.sendScout(remoteSelected.id); }}>{scoutFlight ? `◎ EN ROUTE · ${clockLeft(scoutFlight.arriveAt - now)}` : launching ? "LAUNCHING…" : snap ? "◎ RESCOUT" : "◎ SCOUT"}</button>
               <button className="attack" onMouseEnter={() => setCardHint("They will see your fleet coming")} onMouseLeave={() => setCardHint(null)}
                 onClick={() => { rtRef.current?.sendMarch(remoteSelected.id); setResultNotice({ title: "March launched", detail: `Your army is marching on ${remoteSelected.name || "the target"}.`, good: true }); }}>⚔ ATTACK</button>
               <button className="quiet" onClick={() => { queueDirectMessage(address, { id: remoteSelected.id, name: remoteSelected.name || "Commander" }); onMessages(); }}>✉ MESSAGE</button>
-              <button className="quiet" onClick={() => { queueCommsShare(address, createCommanderShare(remoteSelected)); onMessages(); }}>⇪ SHARE</button>
+              <button className="quiet" onClick={() => { queueCommsShare(address, createCommanderShare(remoteSelected, intelLeftMs > 0 ? intel : null)); onMessages(); }}>⇪ SHARE</button>
             </div>
+            </CommanderCardView>
             {cardHint && <p className="commander-card-hint">{cardHint}</p>}
           </WorldAnchor>;
         })()}

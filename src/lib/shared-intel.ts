@@ -1,5 +1,6 @@
 import type { Point, WorldReport } from "./world-engine";
 import { scoutReportExpiresAt } from "./world-engine";
+import type { ScoutSnapshot } from "./realtime";
 
 export type SharedTargetKind = "city" | "resource" | "monster";
 
@@ -25,8 +26,10 @@ export interface SharedScoutIntel extends SharedTarget {
 }
 
 /**
- * A rival commander's card relayed to chat ("this is who hit us"). Identity only —
- * never a location: coordinates stay private (location-privacy rule).
+ * A commander card relayed to chat — the same card the sender sees on the Star Map:
+ * identity, the planet's location (the sender chose to share it; the system never
+ * volunteers coordinates) and, when the sender had valid recon, that intel until it
+ * expires. Opening it jumps to the planet on the Star Map.
  */
 export interface SharedCommander {
   kind: "commander";
@@ -37,15 +40,25 @@ export interface SharedCommander {
   coreLevel: number;
   avatar: string | null;
   createdAt: number;
+  position?: Point | null;
+  signal?: string | null;
+  recon?: { snapshot: ScoutSnapshot; expiresAt: number } | null;
 }
 
 export type SharedWorldIntel = SharedCoordinate | SharedScoutIntel | SharedCommander;
 export type SharedMapIntel = SharedCoordinate | SharedScoutIntel;
 
-export function createCommanderShare(player: { id: string; name: string; faction: string | null; keepLevel: number; avatar?: string | null }, createdAt = Date.now()): SharedCommander {
+export function createCommanderShare(
+  player: { id: string; name: string; faction: string | null; keepLevel: number; avatar?: string | null; coords?: Point | null; cosmetics?: unknown },
+  recon: { snapshot: ScoutSnapshot; expiresAt: number } | null = null, createdAt = Date.now(),
+): SharedCommander {
+  const signal = (player.cosmetics as { chatSignal?: unknown } | null | undefined)?.chatSignal;
   return {
     kind: "commander", id: `commander:${player.id}:${createdAt}`, playerId: player.id, name: player.name || "Commander",
     faction: player.faction || null, coreLevel: Math.max(1, Math.floor(player.keepLevel || 1)), avatar: player.avatar || null, createdAt,
+    position: player.coords && validPoint(player.coords) ? { x: player.coords.x, y: player.coords.y } : null,
+    signal: typeof signal === "string" ? signal : null,
+    recon: recon ? { snapshot: recon.snapshot, expiresAt: recon.expiresAt } : null,
   };
 }
 

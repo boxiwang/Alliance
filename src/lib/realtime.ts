@@ -13,7 +13,7 @@ export type PresenceCity = {
   avatar?: string | null;
 };
 export type ViewRect = { x0: number; y0: number; x1: number; y1: number };
-export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; intel?: unknown; signal?: string | null };
+export type LiveChat = { id: string; pid: string; name: string; text: string; ts: number; faction: string | null; to?: string; toName?: string; intel?: unknown; signal?: string | null };
 
 // Server-authoritative combat/intel report (scouted / incoming / battle).
 export type ServerReport = { id: string; kind: "scouted" | "incoming" | "battle" | "relocated" | "recon"; ts: number; by?: string; byName?: string; payload?: Record<string, unknown> };
@@ -110,7 +110,9 @@ export class RealtimeClient {
   }
 
   sendChat(text: string, intel?: unknown) { this.send({ type: "chat", text, ...(intel ? { intel } : {}) }); }
-  sendDM(to: string, text: string, intel?: unknown) { this.send({ type: "dm", to, text, ...(intel ? { intel } : {}) }); }
+  sendDM(to: string, text: string, intel?: unknown, toName?: string) { this.send({ type: "dm", to, text, ...(toName ? { toName } : {}), ...(intel ? { intel } : {}) }); }
+  /** Remove a DM thread from your Direct list (it returns if they message again). */
+  sendDMHide(partner: string) { this.send({ type: "dm_hide", with: partner }); }
   sendScout(to: string) { this.send({ type: "scout", to }); }
   sendMarch(to: string) { this.send({ type: "march", to }); }
   // Map view query: never queued (a stale view is useless); resent after reconnect.
