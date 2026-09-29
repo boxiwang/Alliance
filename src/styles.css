@@ -1726,13 +1726,22 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .commander-card-shared.compact{width:272px;max-width:100%;margin:0;padding-right:34px;cursor:default}
 .commander-card-shared.compact footer span{color:#6f8ca0}
 .comms-pending-share:has(.commander-card-shared),.comms-pending-hint:has(.commander-card-shared){width:fit-content;max-width:100%}
-/* Direct list: remove a thread (appears on hover/focus); retention note at the top of a DM. */
-.comms-page .chan-dm{position:relative}
-.comms-page .chan-remove{flex:none;width:20px;height:20px;padding:0;border:0;border-radius:6px;background:transparent;color:#6f8ca0;font-size:13px;line-height:1;cursor:pointer;opacity:0;transition:opacity .12s}
-.comms-page .chan-dm:hover .chan-remove,.comms-page .chan-dm:focus-within .chan-remove,.comms-page .chan-dm.on .chan-remove{opacity:1}
-.comms-page .chan-remove:hover{color:#ffb3c0;background:rgba(255,111,133,.1)}
+/* Direct list: pinned (favourite) chats; retention note at the top of a DM. */
+.comms-page .chan-dm.fav .ci{color:#ffd27a;border-color:rgba(255,210,122,.4);background:rgba(255,210,122,.08)}
+.comms-page .chan-dm.fav .cx>span{color:#c9a868}
 .comms-page .dm-retention{align-self:center;margin:4px auto 10px;padding:5px 10px;border:1px solid rgba(120,160,190,.16);border-radius:12px;color:#6f8ca0;font:600 9px var(--mono);letter-spacing:.03em;text-align:center}
-@media(hover:none){.comms-page .chan-remove{opacity:1}}
+/* DM header: pin + options menu (Delete chat, with a confirm step). */
+.comms-page .th-actions .cm-icon.on{color:#ffd27a;border-color:rgba(255,210,122,.45)}
+.comms-page .th-menu-wrap{position:relative}
+.comms-page .th-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:170px;padding:5px;border:1px solid rgba(120,160,190,.25);border-radius:10px;background:#0a1424;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.comms-page .th-menu>button,.comms-page .th-menu.confirm div button{width:100%;padding:8px 10px;border:0;border-radius:7px;background:transparent;color:#cfe6f2;font:600 11px var(--sans);text-align:left;cursor:pointer}
+.comms-page .th-menu>button:hover{background:rgba(255,255,255,.05)}
+.comms-page .th-menu .danger{color:#ff9aab}
+.comms-page .th-menu.confirm{width:240px;padding:11px}
+.comms-page .th-menu.confirm p{margin:0 0 10px;color:#b7ccd9;font:500 11px/1.45 var(--sans)}
+.comms-page .th-menu.confirm div{display:flex;gap:6px}
+.comms-page .th-menu.confirm div button{flex:1;text-align:center;border:1px solid rgba(120,160,190,.25)}
+.comms-page .th-menu.confirm div button.danger{border-color:rgba(255,111,133,.5);background:rgba(255,111,133,.1)}
 /* Shop keeps Credits as the hero cell: the other six are quieter (smaller figures, icons
    dropped when space is short) and wrap to two rows before anything truncates. */
 .shop-page .command-network>.command-resource .command-resource-value>b{font-size:14px}

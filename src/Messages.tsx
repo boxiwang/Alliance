@@ -75,6 +75,8 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   const [rtConnected, setRtConnected] = useState(false);
   const [dmThreads, setDmThreads] = useState<Record<string, LiveChat[]>>({});
   const [dmNames, setDmNames] = useState<Record<string, string>>({});
+  const [dmFavs, setDmFavs] = useState<string[]>([]);
+  const [chatMenu, setChatMenu] = useState<"closed" | "menu" | "confirm">("closed");
   const [dmWith, setDmWith] = useState<{ id: string; name: string } | null>(null);
   const [serverReports, setServerReports] = useState<ServerReport[]>([]);
   const rtRef = useRef<RealtimeClient | null>(null);
@@ -101,7 +103,8 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   useEffect(() => {
     const rt = new RealtimeClient(address, profile.name || "Commander");
     rtRef.current = rt;
-    rt.handlers.onSnapshot = (_you, players, chat, dms, reports) => {
+    rt.handlers.onSnapshot = (_you, players, chat, dms, reports, _marches, meta) => {
+      setDmFavs(meta?.dmFavs || []);
       setLive(chat); setRoster(players); setServerReports(reports || []);
       const threads: Record<string, LiveChat[]> = {}; const names: Record<string, string> = {};
       for (const [k, arr] of Object.entries(dms)) {
@@ -155,7 +158,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       a: c.name, own: c.pid === address,
       sig: (c.signal as ChatSignalId | null | undefined) ?? undefined,
       t: new Date(c.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
-      b: c.text,
+      b: withoutCardLabel(c),
       intel: (c.intel as SharedWorldIntel | undefined) || undefined,
     }));
   }, [dmWith, dmThreads, address]);
@@ -165,7 +168,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     a: c.name, f: c.faction || undefined, own: c.pid === address,
     sig: (c.signal as ChatSignalId | null | undefined) ?? undefined,
     t: new Date(c.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
-    b: c.text,
+    b: withoutCardLabel(c),
     intel: (c.intel as SharedWorldIntel | undefined) || undefined,
   })), [live, address]);
 
@@ -255,18 +258,11 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     // would double). A pending share stays attached across channel switches until it is
     // sent — in whichever chat the player chooses — or removed.
     if (dmWith || isCosmos) {
-      let text = body;
-      let intel: SharedWorldIntel | undefined;
-      if (pendingShare?.kind === "commander") {
-        text = `${body ? body + " — " : ""}[Commander] ${pendingShare.faction ? `[${pendingShare.faction}] ` : ""}${pendingShare.name}`.trim();
-        intel = pendingShare;
-      } else if (pendingShare && sharedIntelIsActive(pendingShare, now)) {
-        const tag = pendingShare.kind === "scout-intel" ? "Recon" : pendingShare.targetKind === "monster" ? "Rogue" : pendingShare.targetKind === "resource" ? "Resource" : "City";
-        const pos = pendingShare.position ? ` ${Math.round(pendingShare.position.x)}:${Math.round(pendingShare.position.y)}` : "";
-        text = `${body ? body + " — " : ""}[${tag}] ${pendingShare.targetName || ""}${pos}`.trim();
-        intel = pendingShare; // rides along so it renders as a clickable star-map card
-      }
-      if (!text) return;
+      // A shared card is sent as the card itself (plus whatever the player typed) — no
+      // auto-generated "[Commander] name" text line.
+      const text = body;
+      const intel: SharedWorldIntel | undefined = pendingShare && (pendingShare.kind === "commander" || sharedIntelIsActive(pendingShare, now)) ? pendingShare : undefined;
+      if (!text && !intel) return;
       if (dmWith) rtRef.current?.sendDM(dmWith.id, text, intel, dmWith.name);
       else rtRef.current?.sendChat(text, intel);
       const channel = dmWith ? "dm" : "cosmos";
@@ -309,11 +305,20 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
     onWorld();
   }
 
+  function toggleFav(partner: string) {
+    const on = !dmFavs.includes(partner);
+    rtRef.current?.sendDMFav(partner, on);
+    setDmFavs((cur) => on ? [...cur, partner] : cur.filter((id) => id !== partner));
+  }
+
   function removeDM(partner: string) {
     rtRef.current?.sendDMHide(partner);
+    setDmFavs((cur) => cur.filter((id) => id !== partner));
     setDmThreads((cur) => { const next = { ...cur }; delete next[partner]; return next; });
     if (dmWith?.id === partner) { setDmWith(null); setActive("cosmos"); }
   }
+
+  useEffect(() => { setChatMenu("closed"); }, [dmWith?.id, active]);
 
   function openChannel(channel: ChannelId) {
     if (channel !== active || dmWith) playChannelSfx();
@@ -354,16 +359,18 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
           <span className="cx"><b>Contacts</b><span>{onlineCount} online</span></span>
         </button>
         {(() => {
-          const partners = Array.from(new Set([...(dmWith ? [dmWith.id] : []), ...Object.keys(dmThreads)]));
+          // Favourites first; then by the latest message sent or received. A brand-new chat
+          // (nothing sent yet) sits at the top until it has a message.
+          const lastAt = (pid: string) => { const thread = dmThreads[pid]; return thread?.length ? thread[thread.length - 1].ts : Number.MAX_SAFE_INTEGER; };
+          const partners = Array.from(new Set([...(dmWith ? [dmWith.id] : []), ...Object.keys(dmThreads)]))
+            .sort((a, b) => (Number(dmFavs.includes(b)) - Number(dmFavs.includes(a))) || (lastAt(b) - lastAt(a)));
           if (!partners.length) return null;
           return <>
             <div className="cm-grp" style={{ marginTop: 12 }}>Direct</div>
-            {partners.map((pid) => <div key={pid} className={`chan chan-dm ${dmWith?.id === pid ? "on" : ""}`} role="button" tabIndex={0}
-              onClick={() => openDM(pid, dmNames[pid] || "Commander")} onKeyDown={(event) => { if (event.key === "Enter") openDM(pid, dmNames[pid] || "Commander"); }}>
-              <span className="ci">◇</span>
-              <span className="cx"><b>{dmNames[pid] || (dmWith?.id === pid ? dmWith.name : "Commander")}</b><span>direct message</span></span>
-              <button className="chan-remove" aria-label={`Remove chat with ${dmNames[pid] || "Commander"}`} onClick={(event) => { event.stopPropagation(); removeDM(pid); }}>×</button>
-            </div>)}
+            {partners.map((pid) => <button key={pid} className={`chan chan-dm ${dmWith?.id === pid ? "on" : ""} ${dmFavs.includes(pid) ? "fav" : ""}`} onClick={() => openDM(pid, dmNames[pid] || "Commander")}>
+              <span className="ci">{dmFavs.includes(pid) ? "★" : "◇"}</span>
+              <span className="cx"><b>{dmNames[pid] || (dmWith?.id === pid ? dmWith.name : "Commander")}</b><span>{dmFavs.includes(pid) ? "pinned" : "direct message"}</span></span>
+            </button>)}
           </>;
         })()}
       </aside>
@@ -373,7 +380,17 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
         <div className="thread-head">
           <div className="th-icon" style={{ color: headColor, borderColor: "color-mix(in srgb,currentColor 45%,transparent)" }}>{headIcon}</div>
           <div className="th-t"><b>{headTitle}</b><span>{headDetail}</span></div>
-          <div className="th-actions"><button className="cm-icon">☆</button><button className="cm-icon">⋯</button></div>
+          {dmWith && <div className="th-actions">
+            <button className={`cm-icon ${dmFavs.includes(dmWith.id) ? "on" : ""}`} aria-pressed={dmFavs.includes(dmWith.id)} aria-label={dmFavs.includes(dmWith.id) ? "Unpin this chat" : "Pin this chat to the top"} onClick={() => toggleFav(dmWith.id)}>{dmFavs.includes(dmWith.id) ? "★" : "☆"}</button>
+            <div className="th-menu-wrap">
+              <button className="cm-icon" aria-label="Chat options" aria-expanded={chatMenu !== "closed"} onClick={() => setChatMenu((value) => value === "closed" ? "menu" : "closed")}>⋯</button>
+              {chatMenu === "menu" && <div className="th-menu" role="menu"><button role="menuitem" className="danger" onClick={() => setChatMenu("confirm")}>Delete chat</button></div>}
+              {chatMenu === "confirm" && <div className="th-menu confirm" role="dialog" aria-label="Delete chat">
+                <p>Delete this chat and all its messages? It is only removed for you.</p>
+                <div><button onClick={() => setChatMenu("closed")}>Cancel</button><button className="danger" onClick={() => { removeDM(dmWith.id); setChatMenu("closed"); }}>Delete</button></div>
+              </div>}
+            </div>
+          </div>}
         </div>
 
         {isSystem && <div className="sysfilter">{(["all", "mil", "eco", "sec"] as const).map((f) => <button key={f} className={f === sysFilter ? "on" : ""} onClick={() => { if (f !== sysFilter) playSubtabSfx(); setSysFilter(f); }}>{({ all: "All", mil: "Military", eco: "Economy", sec: "Security" } as const)[f]}</button>)}</div>}
@@ -395,8 +412,8 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
               {onlineCount === 0 && Object.keys(dmThreads).length === 0 && <div className="spam">No commanders online yet — invite a friend with Quick Play and they'll show up here.</div>}
             </div>
           : <div className="stream" ref={streamRef}>
-              {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} reducedMotion={account.reducedMotion} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} onLocate={(at) => { queueWorldFocus(address, null, at); onWorld(); }} />)}
               {dmWith && <div className="dm-retention">Private chat. Kept in Direct until you remove it — cleared after 30 days with no new messages.</div>}
+              {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} reducedMotion={account.reducedMotion} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} onLocate={(at) => { queueWorldFocus(address, null, at); onWorld(); }} />)}
               {messages.length === 0 && <div className="spam">{dmWith ? "No messages yet — say hi." : isCosmos ? "Be the first to signal the frontier." : "No messages yet."}</div>}
             </div>}
 
@@ -440,7 +457,7 @@ function MessageRow({ m, now, ownChatSignal, reducedMotion, onInspect, onOpenWor
         {m.tag && <span className={`mtag ${m.tag}`}>{m.tag}</span>}
         <span className="mtime">{m.t}</span>
       </div>
-      <div className="txt">{m.b}</div>
+      {m.b && <div className="txt">{m.b}</div>}
       {m.intel && <SharedIntelCard share={m.intel} now={now} onOpen={() => onOpenWorld(m.intel!)} />}
       {m.coord && <div className="chip-coord"><div className="cc-i">◈</div><div className="cc-t"><b>{m.coord.c}</b><span>{m.coord.k}</span></div><div className="cc-act"><button>Scout</button><button>Gather</button><button className="go">Open ▸</button></div></div>}
       {m.rally && <div className="chip-rally"><div className="rr-top"><b>Wormhole Sentinel</b><span className="rr-lv">L18</span></div>
@@ -532,4 +549,10 @@ function dmPartnerName(messages: LiveChat[], partner: string): string | null {
     if (m.to === partner && m.toName) return m.toName;
   }
   return null;
+}
+
+/** Older card messages carried an auto label ("[Commander] name"); show only what the player typed. */
+function withoutCardLabel(message: LiveChat): string {
+  if (!message.intel) return message.text;
+  return message.text.replace(/(^|\s—\s)\[(Commander|Recon|Rogue|Resource|City)\]\s.*$/, "").trim();
 }

@@ -666,8 +666,10 @@ export class WorldRoom {
       if (!kept.length) { delete dmsAll[k]; expired = true; continue; }
       if (!k.split("|").includes(pid)) continue;
       const partner = k.split("|").find((id) => id !== pid) || k;
-      if (hidden[partner] && kept[kept.length - 1].ts <= hidden[partner]) continue;
-      dms[k] = kept.map((message) => ({
+      // A deleted chat is gone for this player: only messages after the delete remain.
+      const visible = hidden[partner] ? kept.filter((message) => message.ts > hidden[partner]) : kept;
+      if (!visible.length) continue;
+      dms[k] = visible.map((message) => ({
         ...message,
         name: players[message.pid]?.name || message.name,
         ...(message.to ? { toName: players[message.to]?.name || message.toName } : {}),
@@ -683,7 +685,8 @@ export class WorldRoom {
     const allMarches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
     const marches = allMarches.filter((m) => m.arriveAt > Date.now() && (m.attacker === pid || (m.defender === pid && m.kind !== "scout")));
     const roster = Object.values(players).map((player) => player.id === pid ? player : publicPlayer(player));
-    ws.send(JSON.stringify({ type: "snapshot", you: pid, players: roster, chat, dms, reports, marches }));
+    const dmFavs = (await this.state.storage.get<string[]>(`dmfav:${pid}`)) || [];
+    ws.send(JSON.stringify({ type: "snapshot", you: pid, players: roster, chat, dms, reports, marches, dmFavs }));
     await this.sendQuadrants(ws, players);
     this.sendPlayerUpdate(players[pid], ws);
     // Tell everyone about any ghosts we just cleared (or others revived).
@@ -710,11 +713,11 @@ export class WorldRoom {
     if (data.type === "search") { await this.handleSearch(ws, pid, data); return; }
     if (data.type === "chat") {
       const text = String(data.text || "").slice(0, 500).trim();
-      if (!text) return;
-      const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
-      // A relayed coordinate/recon rides along as a small JSON payload so the
-      // message renders as a clickable star-map card, not just a text line.
+      // A relayed card rides along as a small JSON payload and renders as a clickable
+      // card; it may be sent on its own, without any text.
       const intel = sanitizeIntel(data.intel);
+      if (!text && !intel) return;
+      const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
       const msg: ChatRow = { id: crypto.randomUUID(), pid, name: players[pid]?.name || att.name || "Commander", text, ts: Date.now(), faction: players[pid]?.faction || null, signal: chatSignalOf(players[pid]), ...(intel ? { intel } : {}) };
       const chat = (await this.state.storage.get<ChatRow[]>("chat:cosmos")) || [];
       chat.push(msg);
@@ -723,12 +726,13 @@ export class WorldRoom {
     } else if (data.type === "dm") {
       const to = String(data.to || "").slice(0, 64);
       const text = String(data.text || "").slice(0, 500).trim();
-      if (!to || !text || to === pid) return;
+      if (!to || to === pid || (!text && !data.intel)) return;
       const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
       const key = dmKey(pid, to);
       const dmsAll = (await this.state.storage.get<Record<string, ChatRow[]>>("dms")) || {};
       const arr = dmsAll[key] || [];
       const intel = sanitizeIntel(data.intel);
+      if (!text && !intel) return;
       // Remember who this was sent to, so the thread keeps the partner's name even if they
       // never reply or are no longer on the roster.
       const toName = players[to]?.name || String(data.toName || "").replace(/[\u0000-\u001f]/g, "").slice(0, 48) || undefined;
@@ -741,14 +745,26 @@ export class WorldRoom {
         const a = ((sock.deserializeAttachment() || {}) as Partial<SocketAttachment>).pid;
         if (a === pid || a === to) { try { sock.send(payload); } catch {} }
       }
+    } else if (data.type === "dm_fav") {
+      // Favourite DMs are pinned to the top of this player's Direct list.
+      const partner = String(data.with || "").slice(0, 64);
+      if (!partner) return;
+      const key = `dmfav:${pid}`;
+      const favs = new Set((await this.state.storage.get<string[]>(key)) || []);
+      if (data.on) favs.add(partner); else favs.delete(partner);
+      await this.state.storage.put(key, [...favs].slice(-50));
     } else if (data.type === "dm_hide") {
-      // Remove a DM thread from this player's Direct list (the other side keeps theirs).
+      // Delete a DM thread for this player: its history so far is gone for them (the
+      // other side keeps theirs); a newer message starts a fresh thread.
       const partner = String(data.with || "").slice(0, 64);
       if (!partner) return;
       const key = `dmhidden:${pid}`;
       const hiddenAll = (await this.state.storage.get<Record<string, number>>(key)) || {};
       hiddenAll[partner] = Date.now();
       await this.state.storage.put(key, hiddenAll);
+      const favKey = `dmfav:${pid}`;
+      const favs = (await this.state.storage.get<string[]>(favKey)) || [];
+      if (favs.includes(partner)) await this.state.storage.put(favKey, favs.filter((id) => id !== partner));
     } else if (data.type === "scout") {
       // Recon is a fleet: it flies at scoutSpeedMultiplier × march pace; the intel is taken
       // on arrival (alarm), filed to the sender's System as a "recon" report, and the target

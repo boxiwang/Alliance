@@ -30,7 +30,7 @@ export type LiveMarch = {
 };
 
 type Handlers = {
-  onSnapshot?: (you: string, players: PresenceCity[], chat: LiveChat[], dms: Record<string, LiveChat[]>, reports: ServerReport[], marches: LiveMarch[]) => void;
+  onSnapshot?: (you: string, players: PresenceCity[], chat: LiveChat[], dms: Record<string, LiveChat[]>, reports: ServerReport[], marches: LiveMarch[], meta: { dmFavs: string[] }) => void;
   onChat?: (msg: LiveChat) => void;
   onDM?: (key: string, msg: LiveChat) => void;
   onPlayer?: (player: PresenceCity) => void;
@@ -73,7 +73,7 @@ export class RealtimeClient {
     };
     this.ws.onmessage = (ev) => {
       let d: any; try { d = JSON.parse(ev.data); } catch { return; }
-      if (d.type === "snapshot") this.handlers.onSnapshot?.(d.you, d.players || [], d.chat || [], d.dms || {}, d.reports || [], d.marches || []);
+      if (d.type === "snapshot") this.handlers.onSnapshot?.(d.you, d.players || [], d.chat || [], d.dms || {}, d.reports || [], d.marches || [], { dmFavs: Array.isArray(d.dmFavs) ? d.dmFavs : [] });
       else if (d.type === "chat") this.handlers.onChat?.(d.msg);
       else if (d.type === "dm") this.handlers.onDM?.(d.key, d.msg);
       else if (d.type === "player") this.handlers.onPlayer?.(d.player);
@@ -111,8 +111,10 @@ export class RealtimeClient {
 
   sendChat(text: string, intel?: unknown) { this.send({ type: "chat", text, ...(intel ? { intel } : {}) }); }
   sendDM(to: string, text: string, intel?: unknown, toName?: string) { this.send({ type: "dm", to, text, ...(toName ? { toName } : {}), ...(intel ? { intel } : {}) }); }
-  /** Remove a DM thread from your Direct list (it returns if they message again). */
+  /** Delete a DM thread for you (history included); a newer message starts it fresh. */
   sendDMHide(partner: string) { this.send({ type: "dm_hide", with: partner }); }
+  /** Pin / unpin a DM at the top of your Direct list. */
+  sendDMFav(partner: string, on: boolean) { this.send({ type: "dm_fav", with: partner, on }); }
   sendScout(to: string) { this.send({ type: "scout", to }); }
   sendMarch(to: string) { this.send({ type: "march", to }); }
   // Map view query: never queued (a stale view is useless); resent after reconnect.
