@@ -887,6 +887,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [warpBusy, setWarpBusy] = useState(false);
   const [warpCounts, setWarpCounts] = useState<{ precision: number; drift: number } | null>(null);
   const [warpArrival, setWarpArrival] = useState<WorldArrival | null>(null);
+  // Warp transition: the home is hidden between being beamed up and the arrival beam landing;
+  // the veil nonce replays the hyperspace blink over the map.
+  const [warpHidden, setWarpHidden] = useState(false);
+  const [warpVeil, setWarpVeil] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchKind, setSearchKind] = useState<SearchTab>("monster");
   const [searchLevels, setSearchLevels] = useState<Record<SearchKind, number>>({ monster: 0, cash: 1, oil: 1, power: 1 });
@@ -1145,8 +1149,8 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         selected: p.id === remoteSelectedId,
       };
     }) : [];
-    return live.concat(remote, detailZoom ? stressVisuals : []);
-  }, [cityEntities, detailZoom, strategicZoom, layers.city, selectedId, session.playerId, stressVisuals, world.players, equippedCosmetics, remotePlayers, remoteSelectedId]);
+    return (warpHidden ? live.filter((city) => !city.own) : live).concat(remote, detailZoom ? stressVisuals : []);
+  }, [cityEntities, detailZoom, strategicZoom, layers.city, selectedId, session.playerId, stressVisuals, world.players, equippedCosmetics, remotePlayers, remoteSelectedId, warpHidden]);
   const monsterPreview = useMemo(() => {
     if (!selected || selected.kind !== "monster" || sentCount <= 0) return null;
     const runtime = { ...(N.runtimeAccountModifiers ?? {}) };
@@ -1321,7 +1325,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // Shield domes (hex lattice, outside halo + orbit; the selection lock wraps outside the dome).
   // Other commanders: the public Core rule or a shield item (roster shieldUntil).
   const shieldDomes = strategicZoom ? null : <>
-    {cityShielded(playerCity, now, N) && <ShieldDome position={playerCity.position} radiusPx={worldVisualBodyRadius(zoom, true, homeSelected, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} own />}
+    {!warpHidden && cityShielded(playerCity, now, N) && <ShieldDome position={playerCity.position} radiusPx={worldVisualBodyRadius(zoom, true, homeSelected, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} own />}
     {remotePlayers.filter((p) => p.coords.x >= viewX - 40 && p.coords.x <= viewX + viewport.width + 40 && p.coords.y >= viewY - 40 && p.coords.y <= viewY + viewport.height + 40
       && shieldActive({ keepLevel: p.keepLevel || 1, shieldUntil: p.shieldUntil }, now, N))
       .map((p) => <ShieldDome key={`dome-${p.id}`} position={p.coords} radiusPx={worldVisualBodyRadius(zoom, false, p.id === remoteSelectedId, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} />)}
@@ -1609,10 +1613,11 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     setWarpBusy(true);
     try {
       let position: Point | undefined;
+      let commit: () => void = () => {};
       if (authorityVersion > 0) {
         const result = await sendWorldCommandWithRetry("world.warp", mode === "random" ? { mode } : { mode, x: warpDestination!.x, y: warpDestination!.y }, `world-warp:${crypto.randomUUID()}`);
         if (!result.ok) { setMessage(ERROR_COPY[result.reason || ""] || "Warp failed."); return; }
-        commitServer(result);
+        commit = () => commitServer(result);
         position = result.position;
       } else {
         // Local session: same engine rule, no item — dev/GM only. Production players
@@ -1621,16 +1626,36 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         const warped = relocateCity(session.world, session.playerId, mode === "random" ? { mode } : { mode, target: warpDestination! }, Date.now(), N);
         if (warped.error) { setMessage(ERROR_COPY[warped.error] || "Warp failed."); return; }
         const next: LocalWorldSession = { ...session, world: warped.world };
-        sessionRef.current = next; setSession(next); saveLocalWorldSession(next);
+        commit = () => { sessionRef.current = next; setSession(next); saveLocalWorldSession(next); };
         position = warped.position;
       }
-      if (position) {
-        setCamera({ ...position });
-        setWarpArrival({ key: crypto.randomUUID(), position: { ...position } });
+      setTileMark(null); setWarpOpen(false); setSelectedId(null); setHomeSelected(false); refreshWarpCounts();
+      if (!position) { commit(); return; }
+      const destination = { ...position };
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+        commit(); setCamera(destination); setHomeSelected(true); return;
       }
-      setTileMark(null); setWarpOpen(false); setSelectedId(null); setHomeSelected(true); playSelectSfx();
-      refreshWarpCounts();
-    } catch { setMessage("Warp link failed. Try again."); }
+      // 1) Beam up at the old home, 2) hyperspace blink (the veil scales, the map zoom stays put so
+      // the renderer never switches mode), cut the camera under it, 3) the arrival beam lands and
+      // the city reappears as it touches down.
+      const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+      setWarpArrival({ key: crypto.randomUUID(), position: { ...playerCity.position }, kind: "depart" });
+      playSelectSfx();
+      await sleep(190);
+      setWarpHidden(true);
+      await sleep(220);
+      setWarpVeil(1);
+      await sleep(340);
+      commit(); setCamera(destination);
+      // Let the new sector paint under the veil before lifting it (two frames + a beat).
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await sleep(90);
+      setWarpVeil(2);
+      await sleep(260);
+      setWarpArrival({ key: crypto.randomUUID(), position: destination, kind: "arrive" });
+      await sleep(240);
+      setWarpHidden(false); setHomeSelected(true);
+    } catch { setMessage("Warp link failed. Try again."); setWarpHidden(false); }
     finally { setWarpBusy(false); }
   }
   useEffect(() => {
@@ -1788,7 +1813,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           <header><b>WARP</b><button aria-label="Close warp" onClick={() => setWarpOpen(false)}>×</button></header>
           {warpNotReady && <p className="world-warp-alert">{ERROR_COPY[warpNotReady]}</p>}
           <section>
-            <div className="world-warp-option-head"><b>PRECISION JUMP</b><em>{warpCounts ? `×${isUnlimitedQuantity(warpCounts.precision) ? "∞" : warpCounts.precision}` : "DEV"}</em></div>
+            <div className="world-warp-option-head"><b>PRECISION JUMP</b>{!warpCounts && <em>DEV</em>}</div>
             <form className="world-warp-coord" onSubmit={(event) => { event.preventDefault(); setWarpDestinationFromDraft(); }}>
               <label>X<input aria-label="Warp X coordinate" value={warpDraft.x} onChange={(event) => setWarpDraft((value) => ({ ...value, x: event.target.value }))} inputMode="numeric" /></label>
               <label>Y<input aria-label="Warp Y coordinate" value={warpDraft.y} onChange={(event) => setWarpDraft((value) => ({ ...value, y: event.target.value }))} inputMode="numeric" /></label>
@@ -1797,16 +1822,16 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             <p>{warpDestination ? <>Destination <b>{coordLabel(warpDestination)}</b> · {fmtDuration(travelSecondsTo(warpDestination))} march from your current home</> : "Click an empty tile on the map, or enter X / Y."}</p>
             {warpDestination && warpDestinationBlock && <p className="world-warp-invalid">{ERROR_COPY[warpDestinationBlock]}</p>}
             {warpHint && <button type="button" className="world-warp-hint" onClick={selectWarpHint}>Nearest open tile <b>{coordLabel(warpHint)}</b> · SELECT</button>}
-            <button className="world-warp-go" disabled={warpBusy || !!warpNotReady || !warpDestination || !!warpDestinationBlock || warpCounts?.precision === 0} onClick={() => void executeWarp("precision")}>{warpBusy ? "WARPING…" : "WARP HERE"}</button>
+            <button className="world-warp-go" disabled={warpBusy || !!warpNotReady || !warpDestination || !!warpDestinationBlock || warpCounts?.precision === 0} onClick={() => void executeWarp("precision")}><span>{warpBusy ? "WARPING…" : "WARP HERE"}</span>{warpCounts && <span className="world-warp-count">×{isUnlimitedQuantity(warpCounts.precision) ? "∞" : warpCounts.precision}</span>}</button>
           </section>
           <section>
-            <div className="world-warp-option-head"><b>DRIFT JUMP</b><em>{warpCounts ? `×${isUnlimitedQuantity(warpCounts.drift) ? "∞" : warpCounts.drift}` : "DEV"}</em></div>
+            <div className="world-warp-option-head"><b>DRIFT JUMP</b>{!warpCounts && <em>DEV</em>}</div>
             <p>Jump to a random safe sector of the Frontier.</p>
-            <button className="world-warp-go secondary" disabled={warpBusy || !!warpNotReady || warpCounts?.drift === 0} onClick={() => void executeWarp("random")}>RANDOM WARP</button>
+            <button className="world-warp-go secondary" disabled={warpBusy || !!warpNotReady || warpCounts?.drift === 0} onClick={() => void executeWarp("random")}><span>{warpBusy ? "WARPING…" : "RANDOM WARP"}</span>{warpCounts && <span className="world-warp-count">×{isUnlimitedQuantity(warpCounts.drift) ? "∞" : warpCounts.drift}</span>}</button>
           </section>
           <footer>Fleets must be home · no warp while an attack is inbound · keep {WARP_RULES.minCitySpacing} tiles from other cities</footer>
         </div>}
-        <div className="world-coordinate-jump"><button type="button" className={`world-warp-open ${warpOpen ? "active" : ""}`} aria-expanded={warpOpen} onClick={() => (warpOpen ? setWarpOpen(false) : openWarp())}>WARP</button></div>
+        <div className="world-coordinate-jump"><button type="button" className={`world-warp-open ${warpOpen ? "active" : ""}`} aria-expanded={warpOpen} onClick={() => (warpOpen ? setWarpOpen(false) : openWarp())}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v5M12 16v5M3 12h5M16 12h5" /><circle cx="12" cy="12" r="3.2" /></svg>WARP</button></div>
         <div className="world-coordinate world-coordinate-x">X {Math.round(Math.max(0, viewX)).toString().padStart(3, "0")} — {Math.round(Math.min(world.config.width, viewX + viewport.width)).toString().padStart(3, "0")}</div>
         <div className="world-coordinate world-coordinate-y">Y {Math.round(Math.max(0, viewY)).toString().padStart(3, "0")} — {Math.round(Math.min(world.config.height, viewY + viewport.height)).toString().padStart(3, "0")}</div>
         <WorldBackdropLayer sealedQuadrants={sealedQuadrants} viewportRef={liveViewportRef} worldWidth={world.config.width} worldHeight={world.config.height} center={center} worldRadius={worldRadius} reserveRadius={world.config.circleReserveRadius} zoom={zoom} dprCap={quality.dprCap} animateStars={quality.bgAnimate} calm={CALM_MAP} tier={quality.tier} />
@@ -1839,7 +1864,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           {!gpuVisualsReady && <ShieldDefs />}
           {!gpuVisualsReady && shieldDomes}
           {mapRemotePlayers}
-          <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(null); setHomeSelected(true); setRemoteSelectedId(null); playSelectSfx(); }}>
+          <g className={`world-city ${voidSkinEquipped ? "world-city-void" : ""}`} style={warpHidden ? { display: "none" } : undefined} onPointerDown={(event) => event.stopPropagation()} onClick={() => { setSelectedId(null); setHomeSelected(true); setRemoteSelectedId(null); playSelectSfx(); }}>
             {strategicZoom && gpuFallback ? <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
               <circle cx={playerCity.position.x} cy={playerCity.position.y} r="9" className="world-home-ring" />
               <rect x={playerCity.position.x - 4.5} y={playerCity.position.y - 4.5} width="9" height="9" rx="1" transform={`rotate(45 ${playerCity.position.x} ${playerCity.position.y})`} />
@@ -1861,15 +1886,29 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             <circle cx={warpDestination.x} cy={warpDestination.y} r={WARP_RULES.minCitySpacing} className="world-warp-spacing" />
             <circle cx={warpDestination.x} cy={warpDestination.y} r={world.config.cityFootprint} className="world-warp-footprint" />
           </g>}
-          {tileMark && <g className="world-tile-mark" pointerEvents="none">
-            <rect x={tileMark.x} y={tileMark.y} width="1" height="1" className="world-tile-cell" />
-            <g transform={`translate(${tileMark.x + .5} ${tileMark.y + .5}) scale(${1 / zoom}) translate(${-(tileMark.x + .5)} ${-(tileMark.y + .5)})`}>
-              <path d={`M ${tileMark.x + .5 - 6} ${tileMark.y + .5} h 3.5 M ${tileMark.x + .5 + 2.5} ${tileMark.y + .5} h 3.5 M ${tileMark.x + .5} ${tileMark.y + .5 - 6} v 3.5 M ${tileMark.x + .5} ${tileMark.y + .5 + 2.5} v 3.5`} className="world-tile-cross" />
-              <text x={tileMark.x + .5} y={tileMark.y + .5 - 7.5} className="world-tile-coord">{tileMark.x.toString().padStart(3, "0")}:{tileMark.y.toString().padStart(3, "0")}</text>
-            </g>
-          </g>}
+          {tileMark && (() => {
+            // Selected tile: faint cell + a screen-sized lock-on (four corner brackets, centre dot,
+            // one pulse) and a coordinate chip above it. Brackets snap in on every new tile.
+            const cx = tileMark.x + .5, cy = tileMark.y + .5, b = 5.2, arm = 2;
+            const label = `${tileMark.x.toString().padStart(3, "0")} : ${tileMark.y.toString().padStart(3, "0")}`;
+            return <g className="world-tile-mark" pointerEvents="none">
+              <rect x={tileMark.x} y={tileMark.y} width="1" height="1" className="world-tile-cell" />
+              <g transform={`translate(${cx} ${cy}) scale(${1 / zoom})`}>
+                <g key={`${tileMark.x}:${tileMark.y}`} className="world-tile-lock">
+                  <circle r={b} className="world-tile-pulse" />
+                  <path d={[[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => `M ${sx * b} ${sy * (b - arm)} V ${sy * b} H ${sx * (b - arm)}`).join(" ")} className="world-tile-brackets" />
+                  <circle r=".55" className="world-tile-dot" />
+                </g>
+                <g transform={`translate(0 ${-b - 4.2})`} className="world-tile-chip">
+                  <rect x={-label.length * 1.18 - 2.4} y="-2.9" width={label.length * 2.36 + 4.8} height="5.8" rx="2.9" />
+                  <text y=".1">{label}</text>
+                </g>
+              </g>
+            </g>;
+          })()}
         </svg>
         <WorldVisualLayer viewportRef={liveViewportRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} calm={CALM_MAP} />
+        {warpVeil > 0 && <div className={`world-warp-veil ${warpVeil === 2 ? "out" : "in"}`} aria-hidden="true" onAnimationEnd={() => { if (warpVeil === 2) setWarpVeil(0); }} />}
         <WorldArrivalLayer arrival={warpArrival} viewportRef={liveViewportRef} zoom={zoom} dprCap={quality.dprCap} />
         <WorldStrikeLayer world={world} viewportRef={liveViewportRef} zoom={zoom} gm={gm} stressCount={strikeStressCount} burstNonce={strikeBurstNonce} dprCap={quality.dprCap} />
         <HomeBeacon viewportRef={liveViewportRef} home={playerCity.position} onHome={() => setCamera({ ...playerCity.position })} />
@@ -1898,7 +1937,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
                 : <WorldLevelBadge x={city.position.x} y={city.position.y} level={city.townhallLevel} />}
             </g>;
           })}
-          <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeTagScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`}>
+          <g transform={`translate(${playerCity.position.x} ${playerCity.position.y}) scale(${homeTagScale}) translate(${-playerCity.position.x} ${-playerCity.position.y})`} style={warpHidden ? { display: "none" } : undefined}>
             <CityIdentityTag x={playerCity.position.x} y={playerCity.position.y + homeIdentityOffset} level={viewGame.buildings.keep.lvl} name={`${profile.factionSymbol ? `[${profile.factionSymbol}] ` : ""}${profile.name}`} signal={equippedCosmetics.chatSignal} own relation="self" coord={playerCity.position} />
           </g>
         </svg>}

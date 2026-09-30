@@ -637,9 +637,15 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 @keyframes world-live{50%{opacity:.35;box-shadow:0 0 2px var(--world-green)}}@keyframes world-pulse{0%{opacity:.85}50%{opacity:.2}100%{opacity:.85}}@keyframes world-lock{to{stroke-dashoffset:20}}@keyframes world-dash{to{stroke-dashoffset:-9}}
 @media(max-width:900px){.world-layout{grid-template-columns:1fr}.world-side{position:static;max-height:none}.world-map{height:540px}.world-command{align-items:flex-start}.world-command-stats{flex-wrap:wrap;justify-content:flex-end}}
 /* Tile inspector — click an empty tile to read its coordinate */
-.world-tile-cell{fill:rgba(65,223,252,.16);stroke:#41dffc;stroke-width:.12}
-.world-tile-cross{fill:none;stroke:#7fe9ff;stroke-width:.6;opacity:.9}
-.world-tile-coord{font:700 7px var(--hud);text-anchor:middle;fill:#cdf3ff;letter-spacing:.04em;paint-order:stroke;stroke:#02050e;stroke-width:2.5px}
+.world-tile-cell{fill:rgba(65,223,252,.12);stroke:#6fe6ff;stroke-width:1px;vector-effect:non-scaling-stroke}
+.world-tile-lock{animation:world-tile-lock .24s cubic-bezier(.2,.8,.2,1) both}
+.world-tile-brackets{fill:none;stroke:#8ef0ff;stroke-width:.55;stroke-linecap:round;filter:drop-shadow(0 0 1.2px rgba(56,217,255,.9))}
+.world-tile-dot{fill:#e8fbff;filter:drop-shadow(0 0 1px #38d9ff)}
+.world-tile-pulse{fill:none;stroke:#38d9ff;stroke-width:.4;transform-box:fill-box;transform-origin:center;animation:world-tile-pulse .9s ease-out both}
+.world-tile-chip rect{fill:rgba(4,12,26,.88);stroke:rgba(111,230,255,.55);stroke-width:.3}
+.world-tile-chip text{font:700 3.3px var(--mono);text-anchor:middle;dominant-baseline:middle;fill:#d6f6ff;letter-spacing:.06em}
+@keyframes world-tile-lock{from{opacity:0;transform:scale(1.7)}to{opacity:1;transform:scale(1)}}
+@keyframes world-tile-pulse{from{opacity:.9;transform:scale(.6)}to{opacity:0;transform:scale(1.9)}}
 /* Dispatch force sliders (Kingshot-style per-tier allocation) */
 .world-crypto .world-force-row{grid-template-columns:minmax(0,1fr) minmax(88px,1.35fr) auto;gap:9px;padding:6px 8px}
 .world-crypto .world-force-row>span{gap:1px}
@@ -1905,3 +1911,16 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 @keyframes inv-consume-gain{0%{opacity:0;transform:translate(-50%,10px) scale(.85)}18%{opacity:1;transform:translate(-50%,0) scale(1.06)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-48px) scale(1)}}
 @keyframes inv-consume-spent{0%{opacity:0;transform:translateY(-6px) scale(.7)}20%{opacity:1;transform:none}70%{opacity:1}100%{opacity:0;transform:translateY(14px)}}
 @keyframes inv-slot-consumed{0%{filter:brightness(2.1);transform:scale(.9)}100%{filter:none;transform:none}}
+
+/* Warp: bigger launcher with a reticle icon, remaining jumps on the buttons, hyperspace blink veil. */
+.world-coordinate-jump .world-warp-open{display:inline-flex;align-items:center;gap:7px;padding:7px 14px 7px 11px;font:700 10.5px var(--hud);letter-spacing:.2em;border-radius:5px;box-shadow:0 0 14px rgba(56,217,255,.14)}
+.world-coordinate-jump .world-warp-open svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.world-coordinate-jump .world-warp-open:hover{background:rgba(56,217,255,.2);box-shadow:0 0 18px rgba(56,217,255,.28)}
+.world-warp-go{display:flex;align-items:center;justify-content:center;gap:10px}
+.world-warp-count{padding:1px 7px;border:1px solid rgba(230,251,255,.35);border-radius:9px;background:rgba(2,10,22,.55);font:700 9px var(--mono);letter-spacing:.04em}
+.world-warp-veil{position:absolute;z-index:5;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 50%,rgba(210,245,255,.22),rgba(20,60,110,.6) 30%,rgba(2,5,14,.97) 70%),repeating-conic-gradient(from 0deg at 50% 50%,rgba(150,236,255,.1) 0deg .5deg,transparent .9deg 6deg);background-blend-mode:screen}
+.world-warp-veil.in{animation:world-warp-veil-in .33s ease-in both}
+.world-warp-veil.out{animation:world-warp-veil-out .42s ease-out both}
+@keyframes world-warp-veil-in{from{opacity:0;transform:scale(1.25)}to{opacity:1;transform:scale(1)}}
+@keyframes world-warp-veil-out{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.85)}}
+@media (prefers-reduced-motion:reduce){.world-warp-veil{display:none}.world-tile-lock,.world-tile-pulse{animation:none}}

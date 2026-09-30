@@ -3,7 +3,8 @@ import type { Point } from "./lib/world-engine";
 import { worldVisualBodyRadius } from "./WorldVisualLayer";
 
 type Viewport = { x: number; y: number; width: number; height: number };
-export type WorldArrival = { key: string; position: Point };
+/** "depart" plays at the old home (the city is beamed up), "arrive" at the new one. */
+export type WorldArrival = { key: string; position: Point; kind: "depart" | "arrive" };
 
 /** Basic warp arrival every civilization gets; styled arrivals are future cosmetics (docs/IDEAS.md). */
 export const WARP_ARRIVAL_MS = 1500;
@@ -68,6 +69,40 @@ export function drawWarpArrival(ctx: CanvasRenderingContext2D, x: number, y: num
   ctx.restore();
 }
 
+export const WARP_DEPARTURE_MS = 520;
+
+/** The city is beamed up: a flash swallows it, then a soft beam leaves upward. */
+export function drawWarpDeparture(ctx: CanvasRenderingContext2D, x: number, y: number, bodyRadius: number, elapsedMs: number) {
+  const t = elapsedMs / WARP_DEPARTURE_MS;
+  if (t < 0 || t > 1) return;
+  const radius = Math.max(16, bodyRadius);
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  const flash = Math.sin(Math.PI * clamp(t / .7));
+  if (flash > 0) {
+    const size = radius * (1.4 + 1.2 * flash);
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 1.5);
+    glow.addColorStop(0, `rgba(255,255,255,${flash})`);
+    glow.addColorStop(.35, `rgba(160,236,255,${.7 * flash})`);
+    glow.addColorStop(1, "rgba(56,217,255,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(x, y, size * 1.5, 0, TAU); ctx.fill();
+  }
+  // Beam leaves upward: its foot lifts off the planet while it fades.
+  const rise = clamp((t - .25) / .75);
+  if (rise > 0) {
+    const fade = 1 - rise, length = radius * 9, foot = y - length * outCubic(rise) * .9, top = foot - length;
+    for (const [spread, alpha, rgb] of [[1, .16, "56,217,255"], [.55, .3, "150,236,255"], [.2, .85, "255,255,255"]] as const) {
+      const half = radius * .6 * spread;
+      const light = ctx.createLinearGradient(0, top, 0, foot);
+      light.addColorStop(0, `rgba(${rgb},0)`); light.addColorStop(1, `rgba(${rgb},${alpha * fade})`);
+      ctx.fillStyle = light;
+      ctx.beginPath(); ctx.moveTo(x - half * .15, top); ctx.lineTo(x + half * .15, top); ctx.lineTo(x + half, foot); ctx.lineTo(x - half, foot); ctx.closePath(); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 export default function WorldArrivalLayer({ arrival, viewportRef, zoom, dprCap = 2 }: {
   arrival: WorldArrival | null;
   viewportRef: RefObject<Viewport>;
@@ -93,10 +128,11 @@ export default function WorldArrivalLayer({ arrival, viewportRef, zoom, dprCap =
       ctx.clearRect(0, 0, width, height);
       const viewport = viewportRef.current;
       const elapsed = time - started;
-      if (viewport && elapsed <= WARP_ARRIVAL_MS) {
+      const duration = arrival.kind === "depart" ? WARP_DEPARTURE_MS : WARP_ARRIVAL_MS;
+      if (viewport && elapsed <= duration) {
         const x = ((arrival.position.x - viewport.x) / viewport.width) * width;
         const y = ((arrival.position.y - viewport.y) / viewport.height) * height;
-        drawWarpArrival(ctx, x, y, worldVisualBodyRadius(zoomRef.current, true, false, true), elapsed);
+        (arrival.kind === "depart" ? drawWarpDeparture : drawWarpArrival)(ctx, x, y, worldVisualBodyRadius(zoomRef.current, true, false, true), elapsed);
         raf = requestAnimationFrame(draw);
       }
     };
