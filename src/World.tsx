@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { Profile } from "./lib/profile";
 import {
@@ -458,6 +458,7 @@ function loadBookmarks(address: string): string[] {
 }
 
 const ERROR_COPY: Record<string, string> = {
+  battle_in_progress: "An attack is landing on your city — Quantum Warp unlocks once the battle is over.",
   player_not_found: "Player record is unavailable.", invalid_target: "That target is no longer valid.",
   cannot_target_self: "You cannot target your own city.", march_slots_full: "All march queues are busy.",
   troops_required: "Select at least one troop.", march_capacity_exceeded: "The selected force exceeds this march's capacity.",
@@ -893,7 +894,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // free match from home; pressing again steps to the next nearest.
   const [warpOpen, setWarpOpen] = useState(false);
   const [warpBusy, setWarpBusy] = useState(false);
-  const [warpCounts, setWarpCounts] = useState<{ precision: number; drift: number } | null>(null);
+  const [warpCounts, setWarpCounts] = useState<{ precision: number; drift: number; quantum: number } | null>(null);
   const [warpArrival, setWarpArrival] = useState<WorldArrival | null>(null);
   // Warp transition: the home is hidden between being beamed up and the arrival beam landing;
   // the veil nonce replays the hyperspace blink over the map.
@@ -1337,10 +1338,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // Shield domes (hex lattice, outside halo + orbit; the selection lock wraps outside the dome).
   // Other commanders: the public Core rule or a shield item (roster shieldUntil).
   const shieldDomes = strategicZoom ? null : <>
-    {!warpHidden && cityShielded(playerCity, now, N) && <ShieldDome position={playerCity.position} radiusPx={worldVisualBodyRadius(zoom, true, homeSelected, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} own />}
+    {!warpHidden && cityShielded(playerCity, now, N) && <ShieldDome position={playerCity.position} radiusPx={worldVisualBodyRadius(zoom, true, homeSelected, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} own animate={quality.bgAnimate} seed="own" />}
     {visibleRemotePlayers.filter((p) => p.coords.x >= viewX - 40 && p.coords.x <= viewX + viewport.width + 40 && p.coords.y >= viewY - 40 && p.coords.y <= viewY + viewport.height + 40
       && shieldActive({ keepLevel: p.keepLevel || 1, shieldUntil: p.shieldUntil }, now, N))
-      .map((p) => <ShieldDome key={`dome-${p.id}`} position={p.coords} radiusPx={worldVisualBodyRadius(zoom, false, p.id === remoteSelectedId, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} />)}
+      .map((p) => <ShieldDome key={`dome-${p.id}`} position={p.coords} radiusPx={worldVisualBodyRadius(zoom, false, p.id === remoteSelectedId, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} animate={quality.bgAnimate} seed={p.id} />)}
   </>;
   const mapRemotePlayers = useMemo(() => {
     if (strategicZoom) return null;
@@ -1588,12 +1589,16 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const warpDestination = tileMark ? { x: tileMark.x + .5, y: tileMark.y + .5 } : null;
   const inboundAttack = marches.some((march) => march.defender === address && march.kind !== "scout" && march.arriveAt > now);
   const warpNotReady = inboundAttack ? "under_attack" : warpReadiness(world, session.playerId);
+  // Quantum Warp ignores fleets away and attacks on the way; only an attack landing now blocks it.
+  const quantumLocked = marches.some((march) => march.defender === address && march.kind !== "scout" && march.arriveAt <= now + 5_000);
+  const quantumNotReady = quantumLocked ? "battle_in_progress" : warpNotReady === "no_city" ? "no_city" : null;
   const warpDestinationBlock = warpDestination ? warpBlockReason(world, session.playerId, warpDestination, N) : null;
   function refreshWarpCounts() {
     if (authorityVersion <= 0) { setWarpCounts(null); return; }
     loadInventory(address).then((rows) => setWarpCounts({
       precision: rows.find((row) => row.itemId === "war.relocator.advanced")?.quantity ?? 0,
       drift: rows.find((row) => row.itemId === "war.relocator.random")?.quantity ?? 0,
+      quantum: rows.find((row) => row.itemId === "war.relocator.quantum")?.quantity ?? 0,
     })).catch(() => setWarpCounts(null));
   }
   function openWarp() {
@@ -1619,9 +1624,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const tile = { x: Math.floor(warpHint.x), y: Math.floor(warpHint.y) };
     setTileMark(tile); setCamera({ x: warpHint.x, y: warpHint.y }); playSelectSfx();
   }
-  async function executeWarp(mode: "precision" | "random") {
+  async function executeWarp(mode: "precision" | "random" | "quantum") {
     if (warpBusy) return;
-    if (mode === "precision" && !warpDestination) { setMessage("Click an empty tile to choose the destination."); return; }
+    if (mode !== "random" && !warpDestination) { setMessage("Click an empty tile to choose the destination."); return; }
     setWarpBusy(true);
     try {
       let position: Point | undefined;
@@ -1840,7 +1845,13 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             <p>Jump to a random safe sector of the Frontier.</p>
             <button className="world-warp-go secondary" disabled={warpBusy || !!warpNotReady || warpCounts?.drift === 0} onClick={() => void executeWarp("random")}><span>{warpBusy ? "WARPING…" : "RANDOM WARP"}</span>{warpCounts && <span className="world-warp-count">×{isUnlimitedQuantity(warpCounts.drift) ? "∞" : warpCounts.drift}</span>}</button>
           </section>
-          <footer>Fleets must be home · no warp while an attack is inbound · keep {WARP_RULES.minCitySpacing} tiles from other cities</footer>
+          <section className="world-warp-quantum">
+            <div className="world-warp-option-head"><b>QUANTUM WARP</b>{!warpCounts && <em>DEV</em>}</div>
+            <p>Every fleet returns home instantly, then your city jumps to the destination above — even with an attack on its way.</p>
+            {quantumNotReady && <p className="world-warp-invalid">{ERROR_COPY[quantumNotReady]}</p>}
+            <button className="world-warp-go quantum" disabled={warpBusy || !!quantumNotReady || !warpDestination || !!warpDestinationBlock || warpCounts?.quantum === 0} onClick={() => void executeWarp("quantum")}><span>{warpBusy ? "WARPING…" : "QUANTUM WARP HERE"}</span>{warpCounts && <span className="world-warp-count">×{isUnlimitedQuantity(warpCounts.quantum) ? "∞" : warpCounts.quantum}</span>}</button>
+          </section>
+          <footer>Precision & Drift: fleets must be home and no attack inbound · keep {WARP_RULES.minCitySpacing} tiles from other cities</footer>
         </div>}
         <div className="world-coordinate-jump"><button type="button" className={`world-warp-open ${warpOpen ? "active" : ""}`} aria-expanded={warpOpen} onClick={() => (warpOpen ? setWarpOpen(false) : openWarp())}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v5M12 16v5M3 12h5M16 12h5" /><circle cx="12" cy="12" r="3.2" /></svg>WARP</button></div>
         <div className="world-coordinate world-coordinate-x">X {Math.round(Math.max(0, viewX)).toString().padStart(3, "0")} — {Math.round(Math.min(world.config.width, viewX + viewport.width)).toString().padStart(3, "0")}</div>
@@ -2245,16 +2256,60 @@ function ShieldDefs() {
     <pattern id="shield-dome-hex" width="15.6" height="27" patternUnits="userSpaceOnUse">
       <path d="M7.8 0 L15.6 4.5 L15.6 13.5 L7.8 18 L0 13.5 L0 4.5 Z M7.8 18 L7.8 27" fill="none" stroke="#8fc2ff" strokeWidth=".8" />
     </pattern>
+    <pattern id="shield-dome-hex-lit" width="15.6" height="27" patternUnits="userSpaceOnUse">
+      <path d="M7.8 0 L15.6 4.5 L15.6 13.5 L7.8 18 L0 13.5 L0 4.5 Z M7.8 18 L7.8 27" fill="rgba(170,215,255,.08)" stroke="#e4f3ff" strokeWidth="1.1" />
+    </pattern>
+    <linearGradient id="shield-dome-band" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stopColor="#fff" stopOpacity="0" /><stop offset=".5" stopColor="#fff" stopOpacity=".9" /><stop offset="1" stopColor="#fff" stopOpacity="0" />
+    </linearGradient>
   </defs>;
 }
 
-/** Hex-lattice shield dome around a planet, sized in screen px (constant look at any zoom). */
-function ShieldDome({ position, radiusPx, worldPerPx, own = false }: { position: Point; radiusPx: number; worldPerPx: number; own?: boolean }) {
+/** Stable 0..1 phase from an id, so neighbouring domes never shimmer in lockstep. */
+function domePhase(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i += 1) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 1000) / 1000;
+}
+
+/**
+ * Hex-lattice shield dome around a planet, sized in screen px (constant look at any zoom).
+ * Alive when motion is allowed: the specular glint sways across the curve, a soft band of
+ * light sweeps the surface now and then (lighting the hexes it crosses) and the rim breathes.
+ */
+function ShieldDome({ position, radiusPx, worldPerPx, own = false, animate = true, seed = "" }: { position: Point; radiusPx: number; worldPerPx: number; own?: boolean; animate?: boolean; seed?: string }) {
   const r = Math.max(8, radiusPx);
-  return <g className={`world-shield-dome ${own ? "own" : ""}`} transform={`translate(${position.x} ${position.y}) scale(${worldPerPx})`} pointerEvents="none">
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const phase = domePhase(seed || (own ? "own" : `${position.x}:${position.y}`));
+  const sweep = 8.5, begin = `${(-phase * sweep).toFixed(2)}s`;
+  const band = { x: -r * .32, y: -r * 1.3, width: r * .64, height: r * 2.6 };
+  const travel = `${-r * 1.9} 0; ${r * 1.9} 0; ${r * 1.9} 0`;
+  return <g className={`world-shield-dome ${own ? "own" : ""}${animate ? " alive" : ""}`} transform={`translate(${position.x} ${position.y}) scale(${worldPerPx})`} pointerEvents="none" style={{ "--dome-delay": `${(-phase * 6).toFixed(2)}s` } as CSSProperties}>
     <circle r={r} fill="url(#shield-dome-fill)" />
     <circle className="lattice" r={r} fill="url(#shield-dome-hex)" mask="url(#shield-dome-mask)" />
+    {animate && <>
+      <defs>
+        <clipPath id={`dome-clip-${uid}`}><circle r={r} /></clipPath>
+        <mask id={`dome-band-${uid}`}>
+          <rect {...band} fill="url(#shield-dome-band)" transform="rotate(-28)">
+            <animateTransform attributeName="transform" type="translate" values={travel} keyTimes="0;.42;1" dur={`${sweep}s`} begin={begin} repeatCount="indefinite" additive="sum" />
+          </rect>
+        </mask>
+      </defs>
+      <g clipPath={`url(#dome-clip-${uid})`}>
+        <rect {...band} className="sheen" fill="url(#shield-dome-band)" transform="rotate(-28)">
+          <animateTransform attributeName="transform" type="translate" values={travel} keyTimes="0;.42;1" dur={`${sweep}s`} begin={begin} repeatCount="indefinite" additive="sum" />
+        </rect>
+        <circle className="lattice-lit" r={r} fill="url(#shield-dome-hex-lit)" mask={`url(#dome-band-${uid})`} />
+      </g>
+    </>}
     <circle className="rim" r={r} fill="none" />
-    <path className="glint" d={`M ${-r * .7} ${-r * .45} A ${r * .88} ${r * .88} 0 0 1 ${-r * .1} ${-r * .84}`} />
+    <g className="glint-orbit">
+      <path className="glint" d={`M ${-r * .7} ${-r * .45} A ${r * .88} ${r * .88} 0 0 1 ${-r * .1} ${-r * .84}`} />
+      {animate && <>
+        <animateTransform attributeName="transform" type="rotate" values="-16;26;-16" dur={`${11 + phase * 4}s`} begin={begin} repeatCount="indefinite" />
+        <animate attributeName="opacity" values=".55;1;.55" dur={`${11 + phase * 4}s`} begin={begin} repeatCount="indefinite" />
+      </>}
+    </g>
   </g>;
 }

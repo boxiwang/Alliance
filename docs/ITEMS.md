@@ -15,6 +15,7 @@ Resource amounts are internal units; the game shows them x1000.
 | Boosts | Peace Shield 8h / 24h | `war.shield.8h/24h` | Shield item: can't be attacked; extends a running shield; public | rare / epic |
 | Boosts | March Boost 1h / 8h | `boost.march.1h/8h` | Fleets you send travel +25% faster; stacks in time | uncommon / epic |
 | Other | Drift Jump / Precision Jump | `war.relocator.random/advanced` | Warp to a random / chosen spot (Star Map → WARP) | common / epic |
+| Other | Quantum Warp | `war.relocator.quantum` | Recalls every fleet home instantly, then warps to a chosen spot; works with an attack on its way, not while one is landing (5 s lock → resolved) | legendary |
 | Other | Rename Signal | `identity.rename` | Rename during the free-rename cooldown (Profile) | rare |
 | Other | Supply Chest | `chest.supply` | 3 weighted rewards per chest (speedups, crates, Stamina, rarely a March Boost or Peace Shield) | uncommon |
 | Gear | — | — | Hero gear arrives with Heroes | — |

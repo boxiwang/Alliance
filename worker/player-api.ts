@@ -74,13 +74,13 @@ async function sharedWorldCoord(env: BackendEnv, playerId: string): Promise<{ x:
   } catch { return null; }
 }
 
-async function reserveWorldCoord(env: BackendEnv, playerId: string, coord: { x: number; y: number }, minSpacing: number, revert = false): Promise<{ ok: boolean; error?: string; previous?: { x: number; y: number } | null }> {
+async function reserveWorldCoord(env: BackendEnv, playerId: string, coord: { x: number; y: number }, minSpacing: number, revert = false, quantum = false): Promise<{ ok: boolean; error?: string; previous?: { x: number; y: number } | null }> {
   if (!env.WORLD_ROOM) return { ok: true, previous: null };
   try {
     const id = env.WORLD_ROOM.idFromName("frontier-1");
     const res = await env.WORLD_ROOM.get(id).fetch("https://world.internal/relocate", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ player: playerId, x: coord.x, y: coord.y, minSpacing, revert }),
+      body: JSON.stringify({ player: playerId, x: coord.x, y: coord.y, minSpacing, revert, quantum }),
     });
     const data = await res.json() as { ok?: boolean; error?: string; previous?: { x: number; y: number } | null };
     return { ok: !!data.ok, error: data.error, previous: data.previous ?? null };
@@ -987,11 +987,11 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
     } else if (type === "world.warp") {
       const x = Number(args.x), y = Number(args.y);
       if (args.mode === "random") command = { type, args: { mode: "random" } };
-      else if (Number.isFinite(x) && Number.isFinite(y)) command = { type, args: { mode: "precision", target: { x, y } } };
+      else if (Number.isFinite(x) && Number.isFinite(y)) command = { type, args: { mode: args.mode === "quantum" ? "quantum" : "precision", target: { x, y } } };
       else return response({ error: "invalid_command" }, 400);
     } else command = { type, args: {} };
     // Warp spends one relocation item; check the balance before simulating.
-    const warpItemId = type === "world.warp" ? (args.mode === "random" ? "war.relocator.random" : "war.relocator.advanced") : null;
+    const warpItemId = type === "world.warp" ? (args.mode === "random" ? "war.relocator.random" : args.mode === "quantum" ? "war.relocator.quantum" : "war.relocator.advanced") : null;
     const warpBalance = warpItemId
       ? await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = ?").bind(claims.sub, warpItemId).first<{ quantity: number }>()
       : null;
@@ -1021,7 +1021,7 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
       if (warpItemId && applied.ok && applied.position) {
         // The shared WorldRoom is the coordinate authority for real players: reserve first.
         const minSpacing = Number(defaultN().world?.warp?.minCitySpacing) || 6;
-        const reserved = await reserveWorldCoord(env, claims.sub, applied.position, minSpacing);
+        const reserved = await reserveWorldCoord(env, claims.sub, applied.position, minSpacing, false, args.mode === "quantum");
         if (!reserved.ok) result = { state, ok: false, reason: reserved.error || "warp_rejected", world: world ?? undefined };
         else { inventoryItemId = warpItemId; warpReservation = { coord: applied.position, previous: reserved.previous ?? null }; }
       }

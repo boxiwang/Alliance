@@ -7,7 +7,7 @@ export type ItemEffect =
   | { kind: "stamina"; amount: number }
   | { kind: "shield"; hours: number }
   | { kind: "march_boost"; bonus: number; minutes: number }
-  | { kind: "warp"; mode: "random" | "precision" }
+  | { kind: "warp"; mode: "random" | "precision" | "quantum" }
   | { kind: "rename" }
   | { kind: "chest"; table: string };
 
@@ -80,6 +80,7 @@ export const MVP_ITEMS: readonly MvpItem[] = [
   { id: "boost.march.8h", name: "March Boost 8h", category: "boost", rarity: "epic", status: "active", description: "Fleets you send travel 25% faster for 8 hours.", effect: { kind: "march_boost", bonus: .25, minutes: 480 } },
   { id: "war.relocator.random", name: "Drift Jump", category: "war", rarity: "common", status: "active", description: "Relocates your city to a random valid sector.", effect: { kind: "warp", mode: "random" } },
   { id: "war.relocator.advanced", name: "Precision Jump", category: "war", rarity: "epic", status: "active", description: "Relocates your city to a chosen valid coordinate.", effect: { kind: "warp", mode: "precision" } },
+  { id: "war.relocator.quantum", name: "Quantum Warp", category: "war", rarity: "legendary", status: "active", description: "Recalls every fleet home instantly, then relocates your city to a chosen coordinate. Works while an attack is on its way; not while one is landing.", effect: { kind: "warp", mode: "quantum" } },
   { id: "identity.rename", name: "Rename Signal", category: "identity", rarity: "rare", status: "active", description: "Change your commander name now, without waiting for the free rename window.", effect: { kind: "rename" } },
   { id: "chest.supply", name: "Supply Chest", category: "chest", rarity: "uncommon", status: "active", description: "Opens into 3 rewards: speedups, resource crates, Stamina — sometimes a Peace Shield.", effect: { kind: "chest", table: "supply" } },
   // Not in the MVP: nothing to open yet.

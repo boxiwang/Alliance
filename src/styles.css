@@ -1721,7 +1721,12 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 /* Shield dome on the Star Map (hex lattice, shield blue — deeper than the cyan halo cosmetics). */
 .world-shield-dome .lattice{opacity:.5;animation:shield-dome-breathe 4.5s ease-in-out infinite}
 .world-shield-dome .rim{stroke:#cfe3ff;stroke-opacity:.55;stroke-width:1.1}
-.world-shield-dome .glint{fill:none;stroke:rgba(255,255,255,.4);stroke-width:2.2;stroke-linecap:round}
+.world-shield-dome .glint{fill:none;stroke:rgba(255,255,255,.45);stroke-width:2.2;stroke-linecap:round;filter:drop-shadow(0 0 2px rgba(200,230,255,.8))}
+.world-shield-dome .sheen{opacity:.22;mix-blend-mode:screen}
+.world-shield-dome .lattice-lit{opacity:.9}
+.world-shield-dome.alive .rim{animation:shield-dome-rim 5.5s ease-in-out infinite;animation-delay:var(--dome-delay,0s)}
+.world-shield-dome.alive .lattice{animation-delay:var(--dome-delay,0s)}
+@keyframes shield-dome-rim{0%,100%{stroke-opacity:.42}50%{stroke-opacity:.78}}
 @keyframes shield-dome-breathe{0%,100%{opacity:.4}50%{opacity:.68}}
 @media(prefers-reduced-motion:reduce){.world-shield-dome .lattice{animation:none}}
 /* ===== Warehouse = backpack (categories · owned items only · detail) ===== */
@@ -2189,3 +2194,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .avatar-cropper-zoom input{flex:1;accent-color:#38d9ff}
 .avatar-cropper-actions{display:flex;gap:10px;width:100%}
 .avatar-cropper-actions .profile-action{flex:1;padding:11px;font:800 11px var(--mono);letter-spacing:.14em}
+/* Quantum Warp: the premium tier in the warp panel */
+.world-warp-quantum{border-top:1px solid rgba(255,193,90,.25);background:linear-gradient(180deg,rgba(255,193,90,.06),transparent)}
+.world-warp-quantum .world-warp-option-head b{color:#ffd98a}
+.world-warp-go.quantum{border-color:rgba(255,193,90,.6);background:linear-gradient(100deg,rgba(255,193,90,.22),rgba(180,120,255,.14));color:#fff4d8;box-shadow:0 0 14px rgba(255,193,90,.18)}

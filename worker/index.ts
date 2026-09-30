@@ -88,6 +88,8 @@ export default {
   },
 };
 
+/** Quantum Warp is locked from this long before a hostile attack lands until it is resolved. */
+const QUANTUM_LOCK_MS = 5_000;
 /** Senders at this Core level or above pass a recipient's new-commander DM filter. */
 const DM_FILTER_MIN_CORE = 10;
 /** A sigil id ("genesis") or an uploaded portrait version ("u1790000000000"). */
@@ -435,6 +437,31 @@ export class WorldRoom {
     return coord;
   }
 
+  /**
+   * Quantum Warp: the warping commander's own attacks and scouts in flight are called off, and
+   * attacks on their way to them miss (the target is gone) — both sides get a report.
+   */
+  async cancelMarchesFor(pid: string) {
+    const now = Date.now();
+    const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
+    const own = marches.filter((march) => march.attacker === pid && march.arriveAt > now);
+    const incoming = marches.filter((march) => march.defender === pid && march.kind !== "scout" && march.arriveAt > now);
+    if (!own.length && !incoming.length) return;
+    const gone = new Set([...own, ...incoming].map((march) => march.id));
+    await this.state.storage.put("marches", marches.filter((march) => !gone.has(march.id)));
+    for (const march of own) {
+      this.sendToPlayer(pid, { type: "march_done", id: march.id });
+      if (march.kind !== "scout") this.sendToPlayer(march.defender, { type: "march_done", id: march.id });
+    }
+    for (const march of incoming) {
+      this.sendToPlayer(march.attacker, { type: "march_done", id: march.id });
+      this.sendToPlayer(pid, { type: "march_done", id: march.id });
+      await this.pushReport(march.attacker, { id: crypto.randomUUID(), kind: "battle", ts: now, by: pid, byName: march.defenderName, payload: { summary: `${march.defenderName} used a Quantum Warp before your army arrived. The target is gone; your troops return home.` } });
+      await this.pushReport(pid, { id: crypto.randomUUID(), kind: "battle", ts: now, by: march.attacker, byName: march.attackerName, payload: { summary: `You warped away before ${march.attackerName}'s attack landed.` } });
+    }
+    await this.scheduleAlarm();
+  }
+
   /** A committed warp in the shared world: move the roster city and play the show for watchers. */
   async moveCoord(playerId: string, coord: WorldCoord) {
     await this.state.storage.put(`coord:v${COORD_VERSION}:${playerId}`, coord);
@@ -454,7 +481,7 @@ export class WorldRoom {
     const telegraph = (await this.state.storage.get<MarchRow[]>("marches")) || [];
     const roster = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
     let pending: SharedWorldState | null = null;
-    let warpTo: { playerId: string; coord: WorldCoord } | null = null;
+    let warpTo: { playerId: string; coord: WorldCoord; quantum?: boolean } | null = null;
     let done = false;
     const base = () => pending ?? this.shared!;
     return {
@@ -465,10 +492,16 @@ export class WorldRoom {
       },
       apply: (playerId, game, command, now) => {
         const fail = (reason: string) => ({ game, ok: false, reason, session: this.sessionSlice(base(), playerId) });
+        const quantum = command.type === "world.warp" && command.args.mode === "quantum";
         if (command.type === "world.warp") {
           const live = telegraph.filter((march) => march.arriveAt > now);
-          if (live.some((march) => march.defender === playerId && march.kind !== "scout")) return fail("under_attack");
-          if (live.some((march) => march.attacker === playerId)) return fail("fleets_away");
+          if (quantum) {
+            // Quantum Warp escapes an attack on its way, but not one that is landing / resolving.
+            if (telegraph.some((march) => march.defender === playerId && march.kind !== "scout" && march.arriveAt <= now + QUANTUM_LOCK_MS)) return fail("battle_in_progress");
+          } else {
+            if (live.some((march) => march.defender === playerId && march.kind !== "scout")) return fail("under_attack");
+            if (live.some((march) => march.attacker === playerId)) return fail("fleets_away");
+          }
         }
         const result = applySharedCommand(base(), playerId, game, command, now, numbers);
         if (command.type === "world.warp" && result.ok && result.position) {
@@ -477,7 +510,7 @@ export class WorldRoom {
           const clash = Object.values(roster).some((player) => player.id !== playerId && player.coords && !result.state.world.players[player.id]
             && Math.hypot(player.coords.x - target.x, player.coords.y - target.y) < WARP_SPACING);
           if (clash) return fail("too_close_city");
-          warpTo = { playerId, coord: target };
+          warpTo = { playerId, coord: target, quantum };
         }
         pending = result.state;
         return {
@@ -489,6 +522,7 @@ export class WorldRoom {
         if (done) return;
         done = true;
         if (pending) await this.saveShared(pending);
+        if (warpTo?.quantum) await this.cancelMarchesFor(warpTo.playerId);
         if (warpTo) await this.moveCoord(warpTo.playerId, warpTo.coord);
         await this.scheduleAlarm();
       },
@@ -555,7 +589,7 @@ export class WorldRoom {
   // spacing and any warp while a real-player march involves this commander.
   // `revert` restores a prior coordinate when the D1 commit loses a race.
   async relocate(req: Request): Promise<Response> {
-    let body: { player?: string; x?: number; y?: number; minSpacing?: number; revert?: boolean } = {};
+    let body: { player?: string; x?: number; y?: number; minSpacing?: number; revert?: boolean; quantum?: boolean } = {};
     try { body = await req.json(); } catch {}
     const pid = String(body.player || "").slice(0, 64);
     const x = Number(body.x), y = Number(body.y);
@@ -567,8 +601,12 @@ export class WorldRoom {
       const now = Date.now();
       const marches = (await this.state.storage.get<MarchRow[]>("marches")) || [];
       const live = marches.filter((march) => march.arriveAt > now);
-      if (live.some((march) => march.defender === pid && march.kind !== "scout")) return Response.json({ ok: false, error: "under_attack" }, { status: 409 });
-      if (live.some((march) => march.attacker === pid)) return Response.json({ ok: false, error: "fleets_away" }, { status: 409 });
+      if (body.quantum) {
+        if (marches.some((march) => march.defender === pid && march.kind !== "scout" && march.arriveAt <= now + QUANTUM_LOCK_MS)) return Response.json({ ok: false, error: "battle_in_progress" }, { status: 409 });
+      } else {
+        if (live.some((march) => march.defender === pid && march.kind !== "scout")) return Response.json({ ok: false, error: "under_attack" }, { status: 409 });
+        if (live.some((march) => march.attacker === pid)) return Response.json({ ok: false, error: "fleets_away" }, { status: 409 });
+      }
       const spacing = Math.max(1, Number(body.minSpacing) || 6);
       const clash = Object.values(players).some((player) => player.id !== pid && player.coordVersion === COORD_VERSION && player.coords
         && Math.hypot(player.coords.x - x, player.coords.y - y) < spacing);
@@ -576,6 +614,7 @@ export class WorldRoom {
     }
     const coord = { x, y };
     await this.state.storage.put(coordKey, coord);
+    if (body.quantum && !body.revert) await this.cancelMarchesFor(pid);
     if (players[pid]) {
       const before = players[pid].coords ?? previous;
       players[pid].coords = coord;

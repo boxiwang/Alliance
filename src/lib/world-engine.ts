@@ -1820,10 +1820,12 @@ export function advanceHeadlessWorld(source: HeadlessWorld, now = Date.now(), nu
 
 // ---------------------------------------------------------------------------
 // Warp (city relocation). Precision Jump = a chosen coordinate; Drift Jump = a
-// random safe sector. Pure: the caller consumes the item and, on the server,
+// random safe sector; Quantum Warp = every fleet recalled home instantly, then a chosen
+// coordinate (usable while fleets are out and after a battle; the server also blocks it
+// while an attack is landing). Pure: the caller consumes the item and, on the server,
 // reserves the coordinate in the shared WorldRoom before committing.
 
-export type WarpRequest = { mode: "precision"; target: Point } | { mode: "random" };
+export type WarpRequest = { mode: "precision"; target: Point } | { mode: "random" } | { mode: "quantum"; target: Point };
 export type WarpError = "no_city" | "fleets_away" | "city_burning" | "outside_frontier" | "sector_sealed" | "reserve_zone" | "too_close_city" | "tile_occupied" | "no_space";
 export const WARP_RULES = { minCitySpacing: 6, minTargetClearance: 2.5 } as const;
 
@@ -1893,15 +1895,19 @@ export function warpReadiness(world: HeadlessWorld, playerId: string): WarpError
 }
 
 export function relocateCity(
-  source: HeadlessWorld, playerId: string, request: WarpRequest, now = Date.now(), numbers: any = getN(), random: () => number = Math.random,
+  input: HeadlessWorld, playerId: string, request: WarpRequest, now = Date.now(), numbers: any = getN(), random: () => number = Math.random,
 ): { world: HeadlessWorld; error?: WarpError; position?: Point } {
+  // Quantum Warp brings every fleet home first (troops, wounded and cargo delivered now) and
+  // may leave a burning city; the other jumps need every fleet home and an intact city.
+  const quantum = request.mode === "quantum";
+  const source = quantum && input.players[playerId] ? settlePlayerMarches(input, playerId, now, numbers) : input;
   const ready = warpReadiness(source, playerId);
-  if (ready) return { world: source, error: ready };
+  if (ready && !(quantum && ready === "city_burning")) return { world: input, error: ready };
   let target: Point | null = null;
-  if (request.mode === "precision") {
+  if (request.mode === "precision" || request.mode === "quantum") {
     const point = { x: Math.round(request.target.x * 100) / 100, y: Math.round(request.target.y * 100) / 100 };
     const blocked = warpBlockReason(source, playerId, point, numbers);
-    if (blocked) return { world: source, error: blocked };
+    if (blocked) return { world: input, error: blocked };
     target = point;
   } else {
     // Drift Jump: uniform over the playable annulus, first valid of up to 400 samples.
@@ -1914,7 +1920,7 @@ export function relocateCity(
       const point = { x: Math.round((center.x + Math.cos(angle) * radial) * 100) / 100, y: Math.round((center.y + Math.sin(angle) * radial) * 100) / 100 };
       if (!warpBlockReason(source, playerId, point, numbers)) target = point;
     }
-    if (!target) return { world: source, error: "no_space" };
+    if (!target) return { world: input, error: "no_space" };
   }
   const world = structuredClone(source);
   const city = world.entities[world.players[playerId].cityId] as CityEntity;
