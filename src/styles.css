@@ -1202,7 +1202,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 
 /* One high-quality compositor for every live impact. It sits above WebGL planets
    but below tactical labels and never participates in pointer hit testing. */
-.world-strike-layer{position:absolute;z-index:3;inset:0;width:100%;height:100%;pointer-events:none;contain:strict}
+.world-strike-layer,.world-arrival-layer{position:absolute;z-index:3;inset:0;width:100%;height:100%;pointer-events:none;contain:strict}
 .world-crypto .world-map-tools,.world-crypto .world-map-status,.world-crypto .world-coordinate-jump,.world-crypto .world-coordinate,.world-crypto .world-map-legend,.world-crypto .world-map-hint{z-index:6}
 .world-strike-metrics{position:absolute;z-index:7;left:11px;bottom:38px;display:flex;align-items:center;gap:7px;padding:6px 8px;border:1px solid rgba(79,240,208,.28);border-radius:6px;background:rgba(2,8,15,.86);box-shadow:0 8px 22px rgba(0,0,0,.32);color:#628b90;font:700 6px var(--mono);letter-spacing:.08em;pointer-events:none}
 .world-strike-metrics b{color:#75efd8}.world-strike-metrics span:nth-of-type(2){color:#b7eef7}

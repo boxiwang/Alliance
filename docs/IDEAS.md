@@ -28,6 +28,31 @@ Motion; the frame is identity only (no stats), same as other cosmetics.
 
 ---
 
+## Warp Arrival signatures — cosmetic 跃迁到达特效
+
+**Idea (owner, 2026-09-29):** how your city appears at its new coordinate after a warp, sold
+as a cosmetic (like Strike Signatures). Everyone keeps the basic arrival (flash + two rings,
+`src/WorldArrivalLayer.tsx`). Four premium designs are kept, playable in
+[`docs/cosmetics/warp-arrivals.html`](cosmetics/warp-arrivals.html):
+
+| | Name | Look |
+|---|---|---|
+| A | Wormhole Fold 虫洞折叠 | violet vortex opens, the city spins out, the hole snaps shut with a flash (2.1 s) |
+| B | Hyperspace Drop 超光速降落 | stars stretch into light, the city streaks in and brakes with a shock ring (1.75 s) |
+| C | Phase Assembly 相位重组 | hex lock-on, particles stream in, a scan line prints the city (2.3 s) |
+| D | Singularity Bloom 奇点绽放 | matter falls into a pinpoint, nova + lens cross, the city is born out of the light (2.0 s) |
+
+**Hook already in place** — each design is one pure 2D-canvas draw function `(ctx, x, y,
+radius, elapsed)`, the same shape as `drawWarpArrival`; an owned signature swaps the draw
+function in `WorldArrivalLayer`.
+
+**Gotchas** — decide whether other players see your arrival (location privacy: only if they
+can already see your city); respect Reduced Motion; keep it under ~2.5 s so the map is usable.
+
+**When** — with the next cosmetics drop (P2).
+
+---
+
 ## Meme-token bounty — "Warrants" (escrow) 悬赏令
 
 **Idea (owner, 2026-09-11):** an alliance can post a bounty on a target and lock the

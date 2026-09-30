@@ -29,6 +29,7 @@ import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
 import WorldVisualLayer, { createWorldVisualStress, worldStrategicBlend, worldVisualBodyRadius, worldWormholeRadius, type WorldViewport, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
+import WorldArrivalLayer, { type WorldArrival } from "./WorldArrivalLayer";
 import WorldMarchLayer from "./WorldMarchLayer";
 import WorldBackdropLayer from "./WorldBackdropLayer";
 import { markWorldMotion } from "./lib/world-motion";
@@ -885,6 +886,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   const [warpOpen, setWarpOpen] = useState(false);
   const [warpBusy, setWarpBusy] = useState(false);
   const [warpCounts, setWarpCounts] = useState<{ precision: number; drift: number } | null>(null);
+  const [warpArrival, setWarpArrival] = useState<WorldArrival | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchKind, setSearchKind] = useState<SearchTab>("monster");
   const [searchLevels, setSearchLevels] = useState<Record<SearchKind, number>>({ monster: 0, cash: 1, oil: 1, power: 1 });
@@ -1624,7 +1626,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       }
       if (position) {
         setCamera({ ...position });
-        setMessage(`Warp complete · new home ${Math.round(position.x).toString().padStart(3, "0")}:${Math.round(position.y).toString().padStart(3, "0")}.`);
+        setWarpArrival({ key: crypto.randomUUID(), position: { ...position } });
       }
       setTileMark(null); setWarpOpen(false); setSelectedId(null); setHomeSelected(true); playSelectSfx();
       refreshWarpCounts();
@@ -1868,6 +1870,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           </g>}
         </svg>
         <WorldVisualLayer viewportRef={liveViewportRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} calm={CALM_MAP} />
+        <WorldArrivalLayer arrival={warpArrival} viewportRef={liveViewportRef} zoom={zoom} dprCap={quality.dprCap} />
         <WorldStrikeLayer world={world} viewportRef={liveViewportRef} zoom={zoom} gm={gm} stressCount={strikeStressCount} burstNonce={strikeBurstNonce} dprCap={quality.dprCap} />
         <HomeBeacon viewportRef={liveViewportRef} home={playerCity.position} onHome={() => setCamera({ ...playerCity.position })} />
         <WorldMarchLayer world={world} viewportRef={liveViewportRef} zoom={zoom} viewerId={session.playerId} quality={quality} />

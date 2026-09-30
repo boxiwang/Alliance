@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Warp Arrival FX</title>
+<style>
+  :root { --bg:#050a14; --panel:#0a1322; --line:#1b2a40; --text:#dbe8f5; --muted:#7f93aa; --cyan:#38d9ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  header { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; justify-content:space-between; padding:18px 20px 12px; }
+  h1 { margin:0; font:800 15px system-ui,sans-serif; letter-spacing:.2em; }
+  h1 small { display:block; margin-top:3px; color:var(--muted); font:600 11px ui-monospace,monospace; letter-spacing:.06em; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; }
+  button { padding:7px 12px; border:1px solid #2a3f5c; border-radius:7px; background:#0e1a2c; color:var(--text); font:700 11px ui-monospace,monospace; letter-spacing:.08em; cursor:pointer; }
+  button:hover { border-color:var(--cyan); }
+  button.on { border-color:var(--cyan); background:rgba(56,217,255,.14); color:#fff; }
+  .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; padding:0 20px 24px; }
+  @media (max-width:760px) { .grid { grid-template-columns:1fr; padding:0 16px 20px; } header { padding:16px; } }
+  .card { overflow:hidden; border:1px solid var(--line); border-radius:12px; background:var(--panel); cursor:pointer; }
+  .card canvas { display:block; width:100%; aspect-ratio:16/10; background:#040810; }
+  .meta { display:flex; gap:12px; align-items:flex-start; padding:11px 14px 13px; }
+  .tag { flex:none; width:26px; height:26px; display:grid; place-items:center; border-radius:7px; background:var(--accent); color:#06101c; font:900 13px system-ui; }
+  .meta b { color:#fff; letter-spacing:.06em; }
+  .meta b em { margin-left:6px; color:var(--accent); font-style:normal; font-weight:700; }
+  .meta p { margin:3px 0 0; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>WARP ARRIVAL · 4 OPTIONS<small>Your city appearing at the new coordinate · click a card to replay it</small></h1>
+  <div class="controls">
+    <button id="replay">REPLAY ALL</button>
+    <button id="speed1" class="on">1×</button>
+    <button id="speed04">0.35× SLOW</button>
+  </div>
+</header>
+<main class="grid" id="grid"></main>
+<script>
+(() => {
+  const TAU = Math.PI * 2;
+  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+  const seg = (t, a, b) => clamp((t - a) / (b - a));
+  const outCubic = (x) => 1 - Math.pow(1 - x, 3);
+  const inCubic = (x) => x * x * x;
+  const outExpo = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
+  const outBack = (x) => { const c = 1.9; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+  const mulberry = (seed) => () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+
+  // ---------- shared scene pieces ----------
+  function makeStars(seed) {
+    const r = mulberry(seed);
+    return Array.from({ length: 170 }, () => ({ x: r(), y: r(), s: r() * 1.3 + .3, a: r() * .6 + .2, tw: r() * TAU }));
+  }
+  function drawBackdrop(ctx, w, h, stars, now, stretch = null) {
+    const g = ctx.createRadialGradient(w * .5, h * .5, 0, w * .5, h * .5, Math.max(w, h) * .7);
+    g.addColorStop(0, "#0b1630"); g.addColorStop(.6, "#060c1b"); g.addColorStop(1, "#03060d");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    for (const s of stars) {
+      const a = s.a * (.75 + .25 * Math.sin(now * .002 + s.tw));
+      const x = s.x * w, y = s.y * h;
+      if (stretch && stretch.k > .02) {
+        const len = stretch.k * (18 + s.s * 34);
+        ctx.strokeStyle = `rgba(190,230,255,${a * .9})`; ctx.lineWidth = s.s * .9;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - stretch.dx * len, y - stretch.dy * len); ctx.stroke();
+      } else {
+        ctx.fillStyle = `rgba(200,225,255,${a})`; ctx.fillRect(x, y, s.s, s.s);
+      }
+    }
+    // faint sector grid, like the Star Map
+    ctx.strokeStyle = "rgba(56,217,255,.045)"; ctx.lineWidth = 1;
+    const step = Math.round(Math.min(w, h) / 6);
+    for (let x = (w / 2) % step; x < w; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+    for (let y = (h / 2) % step; y < h; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+  }
+  function drawPlanet(ctx, x, y, r, { alpha = 1, spin = 0, label = true } = {}) {
+    if (alpha <= 0 || r <= .5) return;
+    ctx.save(); ctx.globalAlpha = alpha;
+    const halo = ctx.createRadialGradient(x, y, r * .8, x, y, r * 1.9);
+    halo.addColorStop(0, "rgba(90,200,255,.38)"); halo.addColorStop(1, "rgba(90,200,255,0)");
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, r * 1.9, 0, TAU); ctx.fill();
+    const body = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+    body.addColorStop(0, "#c9f6ff"); body.addColorStop(.35, "#4fb8f0"); body.addColorStop(.75, "#1a4f9a"); body.addColorStop(1, "#0a1f45");
+    ctx.fillStyle = body; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    // cloud bands
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.clip();
+    ctx.strokeStyle = "rgba(220,248,255,.22)"; ctx.lineWidth = r * .09;
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath(); ctx.ellipse(x + Math.sin(spin + i) * r * .15, y + i * r * .32, r * 1.1, r * .12, -.18, 0, TAU); ctx.stroke();
+    }
+    const shade = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+    shade.addColorStop(.45, "rgba(0,0,0,0)"); shade.addColorStop(1, "rgba(2,6,20,.62)");
+    ctx.fillStyle = shade; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    ctx.restore();
+    ctx.strokeStyle = "rgba(170,235,255,.75)"; ctx.lineWidth = Math.max(1, r * .045);
+    ctx.beginPath(); ctx.arc(x, y, r, Math.PI * 1.05, Math.PI * 1.75); ctx.stroke();
+    if (label) {
+      ctx.font = `800 ${Math.max(10, r * .34)}px system-ui,sans-serif`; ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillText("BOXI", x + 1, y + r * 1.75 + 1);
+      ctx.fillStyle = "#eaf7ff"; ctx.fillText("BOXI", x, y + r * 1.75);
+      ctx.font = `600 ${Math.max(8, r * .24)}px ui-monospace,monospace`; ctx.fillStyle = "rgba(127,211,255,.8)";
+      ctx.fillText("812 : 344", x, y + r * 2.15);
+    }
+    ctx.restore();
+  }
+  const ring = (ctx, x, y, rad, width, color, alpha) => {
+    if (alpha <= 0 || rad <= 0) return;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.shadowColor = color; ctx.shadowBlur = width * 4;
+    ctx.beginPath(); ctx.arc(x, y, rad, 0, TAU); ctx.stroke(); ctx.restore();
+  };
+  const glow = (ctx, x, y, rad, stops, alpha = 1) => {
+    if (alpha <= 0 || rad <= 0) return;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+    for (const [o, c] of stops) g.addColorStop(o, c);
+    ctx.save(); ctx.globalAlpha = alpha; ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, rad, 0, TAU); ctx.fill(); ctx.restore();
+  };
+
+  // ---------- A · Wormhole Fold ----------
+  const A = {
+    id: "A", name: "WORMHOLE FOLD", cn: "虫洞折叠", accent: "#b48cff", dur: 2100,
+    desc: "A violet vortex tears open, the city spins out of it, the hole snaps shut with a flash.",
+    draw(ctx, w, h, t, r, stars, now) {
+      drawBackdrop(ctx, w, h, stars, now);
+      const x = w / 2, y = h / 2;
+      const open = outCubic(seg(t, 0, 700)), close = inCubic(seg(t, 1250, 1600));
+      const R = r * 2.3 * open * (1 - close);
+      if (R > 1) {
+        ctx.save(); ctx.globalCompositeOperation = "lighter";
+        const rot = now * .0035;
+        for (let arm = 0; arm < 5; arm++) {
+          const base = rot + arm * TAU / 5;
+          let prev = null;
+          for (let i = 0; i <= 36; i++) {
+            const s = i / 36, th = base + s * 1.55 * Math.PI, rr = R * (1 - s * .66);
+            const pt = [x + Math.cos(th) * rr, y + Math.sin(th) * rr * .9];
+            if (prev) {
+              ctx.strokeStyle = arm % 2 ? `rgba(160,120,255,${.12 + .75 * s})` : `rgba(100,215,255,${.1 + .65 * s})`;
+              ctx.lineWidth = r * (.03 + .16 * s); ctx.lineCap = "round";
+              ctx.beginPath(); ctx.moveTo(prev[0], prev[1]); ctx.lineTo(pt[0], pt[1]); ctx.stroke();
+            }
+            prev = pt;
+          }
+        }
+        for (let i = 0; i < 48; i++) { // debris spiralling in
+          const k = ((now * .00045 + i / 48) % 1), th = i * 2.39996 + k * 5 + rot, rr = R * (1.05 - k * .7);
+          ctx.fillStyle = `rgba(220,200,255,${.2 + .7 * k})`;
+          ctx.beginPath(); ctx.arc(x + Math.cos(th) * rr, y + Math.sin(th) * rr * .9, .6 + k * 1.4, 0, TAU); ctx.fill();
+        }
+        ctx.restore();
+        // event horizon + lensing ring
+        ctx.fillStyle = "rgba(3,2,12,.92)"; ctx.beginPath(); ctx.arc(x, y, R * .34, 0, TAU); ctx.fill();
+        ring(ctx, x, y, R * .36, r * .07, "#d6c2ff", .9);
+        glow(ctx, x, y, R * 1.2, [[0, "rgba(120,80,255,.0)"], [.35, "rgba(120,80,255,.22)"], [1, "rgba(120,80,255,0)"]]);
+      }
+      // city spins out
+      const emerge = seg(t, 650, 1250);
+      if (emerge > 0) {
+        const s = outBack(emerge);
+        ctx.save(); ctx.translate(x, y); ctx.rotate((1 - outCubic(emerge)) * -2.4); ctx.translate(-x, -y);
+        drawPlanet(ctx, x, y, r * s, { alpha: clamp(emerge * 2.2), spin: now * .001, label: t > 1500 });
+        ctx.restore();
+      }
+      // snap flash + shockwave
+      const f = seg(t, 1560, 2000);
+      if (f > 0 && f < 1) {
+        glow(ctx, x, y, r * 3.2, [[0, "rgba(255,255,255,.95)"], [.25, "rgba(200,170,255,.55)"], [1, "rgba(120,80,255,0)"]], 1 - outCubic(f));
+        ring(ctx, x, y, r * (1.1 + 2.6 * outCubic(f)), r * .09 * (1 - f) + 1, "#c9b0ff", 1 - f);
+      }
+      if (t > 1500) drawPlanet(ctx, x, y, r, { alpha: 0, label: false });
+    },
+  };
+
+  // ---------- B · Hyperspace Streak ----------
+  const B = {
+    id: "B", name: "HYPERSPACE DROP", cn: "超光速降落", accent: "#38d9ff", dur: 1750,
+    desc: "Stars stretch into light, the city streaks in from its old heading and brakes hard with a shock ring.",
+    init(seed) { const r = mulberry(seed); return { lines: Array.from({ length: 46 }, () => ({ off: (r() - .5) * 2, d: r(), len: r() * .6 + .4, w: r() * 1.4 + .4 })), sparks: Array.from({ length: 34 }, () => ({ a: (r() - .5) * 1.5, v: r() * .8 + .5, s: r() * 1.8 + .6 })) }; },
+    draw(ctx, w, h, t, r, stars, now, st) {
+      const dx = Math.cos(-.32), dy = Math.sin(-.32); // heading: from lower-left toward upper-right
+      const warpK = seg(t, 0, 250) * (1 - seg(t, 620, 900));
+      drawBackdrop(ctx, w, h, stars, now, { dx, dy, k: warpK });
+      const x = w / 2, y = h / 2, px = -dy, py = dx;
+      // converging light corridor
+      const lineP = seg(t, 60, 640);
+      if (lineP > 0 && lineP < 1) {
+        ctx.save(); ctx.globalCompositeOperation = "lighter";
+        for (const L of st.lines) {
+          const travel = (lineP * 1.6 + L.d) % 1;
+          const dist = (1 - outCubic(travel)) * r * 9;
+          const len = r * 2.4 * L.len * (1 - travel * .6);
+          const ox = px * L.off * r * 1.3 * (1 - travel), oy = py * L.off * r * 1.3 * (1 - travel);
+          const hx = x - dx * dist + ox, hy = y - dy * dist + oy;
+          const g = ctx.createLinearGradient(hx, hy, hx - dx * len, hy - dy * len);
+          g.addColorStop(0, `rgba(210,245,255,${.8 * (1 - travel * .5)})`); g.addColorStop(1, "rgba(56,217,255,0)");
+          ctx.strokeStyle = g; ctx.lineWidth = L.w; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx - dx * len, hy - dy * len); ctx.stroke();
+        }
+        ctx.restore();
+      }
+      // the city slams in
+      const come = seg(t, 480, 700), land = 700;
+      if (t >= 480) {
+        const k = outExpo(come), back = (1 - k) * r * 7;
+        const wob = t > land ? Math.sin((t - land) * .03) * Math.exp(-(t - land) * .008) * r * .12 : 0;
+        const cx = x - dx * (back - wob), cy = y - dy * (back - wob);
+        if (come < 1) {
+          ctx.save(); ctx.globalCompositeOperation = "lighter";
+          const g = ctx.createLinearGradient(cx, cy, cx - dx * r * 6, cy - dy * r * 6);
+          g.addColorStop(0, "rgba(220,250,255,.95)"); g.addColorStop(1, "rgba(56,217,255,0)");
+          ctx.strokeStyle = g; ctx.lineWidth = r * 1.3 * (1 - come * .3); ctx.lineCap = "round";
+          ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx - dx * r * 6, cy - dy * r * 6); ctx.stroke(); ctx.restore();
+          for (let i = 3; i >= 1; i--) drawPlanet(ctx, cx - dx * r * i * .9, cy - dy * r * i * .9, r, { alpha: .16 / i, label: false });
+        }
+        drawPlanet(ctx, cx, cy, r, { spin: now * .001, label: t > land + 250 });
+      }
+      // brake: flare, stretched shock ring, forward sparks
+      const b = seg(t, land, land + 700);
+      if (b > 0 && b < 1) {
+        glow(ctx, x, y, r * 2.6, [[0, "rgba(255,255,255,.9)"], [.3, "rgba(120,230,255,.45)"], [1, "rgba(56,217,255,0)"]], 1 - outCubic(seg(t, land, land + 380)));
+        ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(dy, dx)); ctx.globalAlpha = 1 - b;
+        ctx.strokeStyle = "#8fe9ff"; ctx.lineWidth = r * .08 * (1 - b) + 1; ctx.shadowColor = "#38d9ff"; ctx.shadowBlur = r * .4;
+        const R = r * (1.1 + 2.8 * outCubic(b));
+        ctx.beginPath(); ctx.ellipse(r * .4 * b, 0, R * .55, R, 0, 0, TAU); ctx.stroke();
+        // lens flare bar across the heading
+        const bar = ctx.createLinearGradient(0, -r * 5, 0, r * 5);
+        bar.addColorStop(0, "rgba(56,217,255,0)"); bar.addColorStop(.5, "rgba(230,250,255,.9)"); bar.addColorStop(1, "rgba(56,217,255,0)");
+        ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = bar; ctx.globalAlpha = (1 - outCubic(b)) * .8;
+        ctx.fillRect(-r * .05, -r * 5, r * .1, r * 10);
+        ctx.restore();
+        ctx.save(); ctx.globalCompositeOperation = "lighter";
+        for (const s of st.sparks) {
+          const ang = Math.atan2(dy, dx) + s.a, d = r * (1 + 3.4 * s.v * outCubic(b));
+          ctx.fillStyle = `rgba(200,245,255,${1 - b})`;
+          ctx.beginPath(); ctx.arc(x + Math.cos(ang) * d, y + Math.sin(ang) * d, s.s * (1 - b * .6), 0, TAU); ctx.fill();
+        }
+        ctx.restore();
+      }
+    },
+  };
+
+  // ---------- C · Phase Materialize ----------
+  const C = {
+    id: "C", name: "PHASE ASSEMBLY", cn: "相位重组", accent: "#5ef0d0", dur: 2300,
+    desc: "A hex lock-on marks the spot, particles stream in and a scan line prints the city into place.",
+    init(seed) { const r = mulberry(seed); return { parts: Array.from({ length: 170 }, () => { const a = r() * TAU, d = Math.sqrt(r()); return { ta: a, td: d, sa: r() * TAU, sd: 2.2 + r() * 1.8, delay: r() * .35, s: r() * 1.3 + .6 }; }) }; },
+    draw(ctx, w, h, t, r, stars, now, st) {
+      drawBackdrop(ctx, w, h, stars, now);
+      const x = w / 2, y = h / 2;
+      // hex field
+      const hexIn = outCubic(seg(t, 0, 450)), hexOut = seg(t, 1700, 2200), flash = seg(t, 1550, 1800);
+      const hexA = hexIn * (1 - hexOut) * (.45 + .55 * Math.sin(flash * Math.PI));
+      if (hexA > 0) {
+        const s = r * .42; ctx.save(); ctx.lineWidth = 1;
+        for (let q = -6; q <= 6; q++) for (let rr = -6; rr <= 6; rr++) {
+          const hx = x + s * 1.5 * q, hy = y + s * Math.sqrt(3) * (rr + q / 2);
+          const d = Math.hypot(hx - x, hy - y) / (r * 2.6);
+          if (d > 1) continue;
+          ctx.strokeStyle = `rgba(94,240,208,${hexA * (1 - d) * .55})`;
+          ctx.beginPath();
+          for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; const vx = hx + Math.cos(a) * s * .92, vy = hy + Math.sin(a) * s * .92; k ? ctx.lineTo(vx, vy) : ctx.moveTo(vx, vy); }
+          ctx.closePath(); ctx.stroke();
+        }
+        ctx.restore();
+      }
+      // lock-on brackets + scan arc
+      const lock = outCubic(seg(t, 80, 600)), lockOut = seg(t, 1800, 2200);
+      if (lock > 0 && lockOut < 1) {
+        const b = r * (2.6 - 1.05 * lock), L = r * .45;
+        ctx.save(); ctx.globalAlpha = lock * (1 - lockOut); ctx.strokeStyle = "#5ef0d0"; ctx.lineWidth = 2; ctx.shadowColor = "#5ef0d0"; ctx.shadowBlur = 8;
+        for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          ctx.beginPath(); ctx.moveTo(x + sx * b, y + sy * (b - L)); ctx.lineTo(x + sx * b, y + sy * b); ctx.lineTo(x + sx * (b - L), y + sy * b); ctx.stroke();
+        }
+        ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r * 1.35, -Math.PI / 2, -Math.PI / 2 + TAU * outCubic(seg(t, 150, 900))); ctx.stroke();
+        ctx.restore();
+      }
+      // particles stream into the planet disc
+      const pp = seg(t, 350, 1400);
+      if (pp > 0 && t < 1650) {
+        ctx.save(); ctx.globalCompositeOperation = "lighter";
+        for (const p of st.parts) {
+          const k = outCubic(clamp((pp - p.delay) / (1 - p.delay)));
+          if (k <= 0) continue;
+          const sx = x + Math.cos(p.sa) * r * p.sd, sy = y + Math.sin(p.sa) * r * p.sd;
+          const tx = x + Math.cos(p.ta) * r * p.td * .95, ty = y + Math.sin(p.ta) * r * p.td * .95;
+          const swirl = (1 - k) * 1.2, mx = sx + (tx - sx) * k, my = sy + (ty - sy) * k;
+          const ox = Math.cos(p.sa + Math.PI / 2) * swirl * r * .5, oy = Math.sin(p.sa + Math.PI / 2) * swirl * r * .5;
+          ctx.fillStyle = `rgba(150,255,230,${.85 * (1 - seg(t, 1350, 1650))})`;
+          ctx.beginPath(); ctx.arc(mx + ox, my + oy, p.s, 0, TAU); ctx.fill();
+        }
+        ctx.restore();
+      }
+      // wireframe globe, then a scan line prints the solid planet
+      const wire = seg(t, 700, 1200), print = seg(t, 1100, 1650);
+      if (wire > 0 && print < 1) {
+        ctx.save(); ctx.globalAlpha = wire * (1 - print * .8); ctx.strokeStyle = "#7ff5dc"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke();
+        for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.ellipse(x, y, r * i / 4, r, 0, 0, TAU); ctx.stroke(); ctx.beginPath(); ctx.ellipse(x, y, r, r * i / 4, 0, 0, TAU); ctx.stroke(); }
+        ctx.restore();
+      }
+      if (print > 0) {
+        const edge = y - r * 1.25 + r * 2.6 * outCubic(print);
+        ctx.save();
+        if (print < 1) { ctx.beginPath(); ctx.rect(0, 0, w, edge); ctx.clip(); }
+        drawPlanet(ctx, x, y, r, { spin: now * .001, label: false });
+        ctx.restore();
+        if (print < 1) {
+          ctx.save(); ctx.globalCompositeOperation = "lighter";
+          const g = ctx.createLinearGradient(x - r * 1.5, 0, x + r * 1.5, 0);
+          g.addColorStop(0, "rgba(94,240,208,0)"); g.addColorStop(.5, "rgba(210,255,245,.95)"); g.addColorStop(1, "rgba(94,240,208,0)");
+          ctx.fillStyle = g; ctx.fillRect(x - r * 1.5, edge - 1.5, r * 3, 3); ctx.restore();
+        }
+        if (t > 1750) drawPlanet(ctx, x, y, r, { alpha: seg(t, 1750, 1950), spin: now * .001 });
+      }
+      const pulse = seg(t, 1620, 2150);
+      if (pulse > 0 && pulse < 1) ring(ctx, x, y, r * (1.05 + 1.9 * outCubic(pulse)), 2, "#5ef0d0", 1 - pulse);
+    },
+  };
+
+  // ---------- D · Singularity Bloom ----------
+  const D = {
+    id: "D", name: "SINGULARITY BLOOM", cn: "奇点绽放", accent: "#ffc15a", dur: 2000,
+    desc: "Matter is pulled into a pinpoint, it ignites into a nova and the city is born out of the light.",
+    init(seed) { const r = mulberry(seed); return { inflow: Array.from({ length: 90 }, () => ({ a: r() * TAU, d: 2.4 + r() * 2.4, delay: r() * .4, s: r() * 1.4 + .5 })), dust: Array.from({ length: 70 }, () => ({ a: r() * TAU, v: .6 + r() * .9, s: r() * 1.6 + .5 })) }; },
+    draw(ctx, w, h, t, r, stars, now, st) {
+      drawBackdrop(ctx, w, h, stars, now);
+      const x = w / 2, y = h / 2, nova = 720;
+      // inflow with short trails
+      const inP = seg(t, 0, nova);
+      if (t < nova) {
+        ctx.save(); ctx.globalCompositeOperation = "lighter";
+        for (const p of st.inflow) {
+          const k = inCubic(clamp((inP - p.delay) / (1 - p.delay)));
+          const d = r * p.d * (1 - k), a = p.a + k * 1.4;
+          const px = x + Math.cos(a) * d, py = y + Math.sin(a) * d, tx = x + Math.cos(a - .12) * (d + r * .5 * k), ty = y + Math.sin(a - .12) * (d + r * .5 * k);
+          ctx.strokeStyle = `rgba(255,214,140,${.25 + .6 * k})`; ctx.lineWidth = p.s;
+          ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(tx, ty); ctx.stroke();
+        }
+        ctx.restore();
+        ring(ctx, x, y, r * (2.4 - 2.1 * inCubic(inP)), 1.2, "#b88cff", .35 + .4 * inP);
+        glow(ctx, x, y, r * (.25 + .5 * inCubic(inP)), [[0, "rgba(255,255,255,1)"], [.4, "rgba(255,210,140,.7)"], [1, "rgba(255,160,60,0)"]]);
+      }
+      // nova bloom + lens cross
+      const bl = seg(t, nova, nova + 700);
+      if (bl > 0 && bl < 1) {
+        const fade = 1 - outCubic(bl);
+        glow(ctx, x, y, r * (1.5 + 3 * outCubic(bl)), [[0, "rgba(255,255,255,1)"], [.2, "rgba(255,220,150,.8)"], [.55, "rgba(190,120,255,.35)"], [1, "rgba(120,60,255,0)"]], fade);
+        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = fade;
+        for (const [ang, len, wid] of [[0, 6, .07], [Math.PI / 2, 4, .06], [Math.PI / 4, 1.8, .035], [-Math.PI / 4, 1.8, .035]]) {
+          ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+          const g = ctx.createLinearGradient(-r * len, 0, r * len, 0);
+          g.addColorStop(0, "rgba(255,200,120,0)"); g.addColorStop(.5, "rgba(255,250,235,1)"); g.addColorStop(1, "rgba(255,200,120,0)");
+          ctx.fillStyle = g; ctx.fillRect(-r * len, -r * wid, r * len * 2, r * wid * 2); ctx.restore();
+        }
+        ctx.restore();
+      }
+      // shockwaves + dust disc
+      const s1 = seg(t, nova, nova + 900), s2 = seg(t, nova + 120, nova + 1250);
+      if (s1 > 0 && s1 < 1) ring(ctx, x, y, r * (1 + 3.4 * outCubic(s1)), r * .08 * (1 - s1) + 1, "#ffd28a", 1 - s1);
+      if (s2 > 0 && s2 < 1) ring(ctx, x, y, r * (1 + 2.3 * outCubic(s2)), 1.5, "#b88cff", (1 - s2) * .8);
+      const du = seg(t, nova, nova + 1200);
+      if (du > 0 && du < 1) {
+        ctx.save(); ctx.globalCompositeOperation = "lighter";
+        for (const p of st.dust) {
+          const d = r * (1 + 2.6 * p.v * outCubic(du));
+          ctx.fillStyle = `rgba(255,215,160,${(1 - du) * .9})`;
+          ctx.beginPath(); ctx.arc(x + Math.cos(p.a) * d, y + Math.sin(p.a) * d * .42, p.s * (1 - du * .5), 0, TAU); ctx.fill();
+        }
+        ctx.restore();
+      }
+      // the city is born out of the light
+      const born = seg(t, nova + 60, nova + 600);
+      if (born > 0) drawPlanet(ctx, x, y, r * (1.18 - .18 * outCubic(born)), { alpha: outCubic(born), spin: now * .001, label: t > nova + 700 });
+    },
+  };
+
+  const FX = [A, B, C, D];
+  const PAUSE = 1100;
+  let speed = 1, frozen = null;
+  const grid = document.getElementById("grid");
+  const cards = FX.map((fx, i) => {
+    const el = document.createElement("section");
+    el.className = "card"; el.style.setProperty("--accent", fx.accent);
+    el.innerHTML = `<canvas></canvas><div class="meta"><span class="tag">${fx.id}</span><div><b>${fx.name}<em>${fx.cn}</em></b><p>${fx.desc}</p></div></div>`;
+    grid.appendChild(el);
+    const card = { fx, el, canvas: el.querySelector("canvas"), stars: makeStars(11 + i * 7), state: fx.init ? fx.init(101 + i) : null, clock: 0 };
+    el.addEventListener("click", () => { card.clock = 0; });
+    return card;
+  });
+  const size = () => {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    for (const c of cards) { const b = c.canvas.getBoundingClientRect(); c.canvas.width = Math.round(b.width * dpr); c.canvas.height = Math.round(b.height * dpr); c.dpr = dpr; }
+  };
+  new ResizeObserver(size).observe(grid); size();
+  document.getElementById("replay").onclick = () => cards.forEach((c) => { c.clock = 0; });
+  const setSpeed = (s, id) => { speed = s; document.querySelectorAll(".controls button[id^=speed]").forEach((b) => b.classList.toggle("on", b.id === id)); };
+  document.getElementById("speed1").onclick = () => setSpeed(1, "speed1");
+  document.getElementById("speed04").onclick = () => setSpeed(.35, "speed04");
+  window.__seek = (t) => { frozen = t; };
+  let last = performance.now();
+  const frame = (now) => {
+    const dt = Math.min(50, now - last) * speed; last = now;
+    for (const c of cards) {
+      const ctx = c.canvas.getContext("2d"); const w = c.canvas.width / c.dpr, h = c.canvas.height / c.dpr;
+      c.clock = (c.clock + dt) % (c.fx.dur + PAUSE);
+      const t = frozen ?? c.clock;
+      ctx.setTransform(c.dpr, 0, 0, c.dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+      const r = Math.min(w, h) * .085;
+      c.fx.draw(ctx, w, h, t, r, c.stars, frozen ?? now, c.state);
+      if (t > c.fx.dur) drawPlanet(ctx, w / 2, h / 2, r, { alpha: 0 });
+    }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
