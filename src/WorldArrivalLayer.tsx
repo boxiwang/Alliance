@@ -22,21 +22,24 @@ export function drawWarpArrival(ctx: CanvasRenderingContext2D, x: number, y: num
   const land = .16; // the beam hits at 16% (~240 ms)
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  // Beam: drops from above, then thins and fades upward.
-  const drop = outCubic(clamp(t / land)), beamFade = 1 - clamp((t - land) / .38);
+  // Beam: a soft cone of light drops from above — narrow and transparent at the top, widest
+  // and brightest where it lands. Three stacked layers feather the edges; nothing is hard-cut.
+  const drop = outCubic(clamp(t / land)), beamFade = 1 - outCubic(clamp((t - land) / .5));
   if (beamFade > 0) {
-    const top = y - radius * 14, bottom = y - radius * 14 + radius * 14 * drop;
-    const halfWidth = radius * (.55 - .35 * clamp((t - land) / .38));
-    const beam = ctx.createLinearGradient(x - halfWidth, 0, x + halfWidth, 0);
-    beam.addColorStop(0, "rgba(56,217,255,0)");
-    beam.addColorStop(.5, `rgba(235,252,255,${.9 * beamFade})`);
-    beam.addColorStop(1, "rgba(56,217,255,0)");
-    ctx.fillStyle = beam;
-    ctx.fillRect(x - halfWidth, top, halfWidth * 2, bottom - top);
-    const core = ctx.createLinearGradient(0, top, 0, bottom);
-    core.addColorStop(0, "rgba(255,255,255,0)"); core.addColorStop(1, `rgba(255,255,255,${beamFade})`);
-    ctx.fillStyle = core;
-    ctx.fillRect(x - halfWidth * .18, top, halfWidth * .36, bottom - top);
+    const length = radius * 9, bottom = y - radius * .2, head = bottom - length * (1 - drop);
+    const top = head - length * .85;
+    for (const [spread, alpha, rgb] of [[1, .16, "56,217,255"], [.55, .3, "150,236,255"], [.2, .85, "255,255,255"]] as const) {
+      const halfBottom = radius * .7 * spread * (1 - .45 * clamp((t - land) / .5)), halfTop = halfBottom * .15;
+      const light = ctx.createLinearGradient(0, top, 0, head);
+      light.addColorStop(0, `rgba(${rgb},0)`);
+      light.addColorStop(.7, `rgba(${rgb},${alpha * .45 * beamFade})`);
+      light.addColorStop(1, `rgba(${rgb},${alpha * beamFade})`);
+      ctx.fillStyle = light;
+      ctx.beginPath();
+      ctx.moveTo(x - halfTop, top); ctx.lineTo(x + halfTop, top);
+      ctx.lineTo(x + halfBottom, head); ctx.quadraticCurveTo(x, head + halfBottom * .6, x - halfBottom, head);
+      ctx.closePath(); ctx.fill();
+    }
   }
   // Landing flash.
   const flash = t < land ? 0 : 1 - clamp((t - land) / .3);
