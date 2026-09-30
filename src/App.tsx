@@ -190,6 +190,7 @@ function DevGameShell({ initialView, slot, gm }: { initialView: MainStage; slot:
   }, []);
 
   return <div className="page">
+    <CosmicBackdrop address={address} />
     <GameMusic address={address} active />
     <GameCursor address={address} active />
     {view === "alliance" && <Alliance address={address} profile={profile} holdings={gmHoldings} onProfileChange={(next) => { saveProfile(next); setProfile(next); }} onCity={() => navigate("town")} onWorld={() => navigate("world")} onMessages={() => navigate("messages")} onShop={() => navigate("shop")} onProfile={() => navigate("profile")} />}
@@ -623,7 +624,8 @@ function DesktopApp() {
 
   return (
     <div className="page">
-      {!MAIN_STAGES.includes(stage as MainStage) && <CosmicBackdrop />}
+      {/* One shared sky for every page: it keeps drifting across navigation instead of restarting. */}
+      <CosmicBackdrop address={address} />
       <GameMusic address={address} active />
       <GameCursor address={address} active={!!address && MAIN_STAGES.includes(stage as MainStage)} />
       <header className={`topbar${stage === "connect" ? " connect-topbar" : ""}`}>

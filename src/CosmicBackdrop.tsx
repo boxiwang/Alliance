@@ -95,6 +95,31 @@ export default function CosmicBackdrop({ address = "" }: { address?: string }) {
       });
     };
 
+    // Rare shooting stars (motion allowed only): one every ~25–50 s, a short fading streak.
+    type Meteor = { x: number; y: number; vx: number; vy: number; born: number; life: number };
+    let meteor: Meteor | null = null;
+    let nextMeteor = performance.now() + 8000 + Math.random() * 14000;
+    const drawMeteor = (now: number) => {
+      if (reducedMotion) return;
+      if (!meteor && now >= nextMeteor) {
+        const angle = (0.12 + Math.random() * 0.3) * Math.PI;
+        const speed = 0.55 + Math.random() * 0.35;
+        meteor = { x: width * (0.15 + Math.random() * 0.7), y: height * (0.05 + Math.random() * 0.35), vx: Math.cos(angle) * speed * (Math.random() > 0.5 ? 1 : -1), vy: Math.sin(angle) * speed, born: now, life: 900 + Math.random() * 500 };
+        nextMeteor = now + 25000 + Math.random() * 25000;
+      }
+      if (!meteor) return;
+      const age = now - meteor.born;
+      if (age > meteor.life) { meteor = null; return; }
+      const k = age / meteor.life, fade = Math.sin(Math.PI * k);
+      const hx = meteor.x + meteor.vx * age, hy = meteor.y + meteor.vy * age;
+      const tail = 90 + 60 * fade, tx = hx - meteor.vx / Math.hypot(meteor.vx, meteor.vy) * tail, ty = hy - meteor.vy / Math.hypot(meteor.vx, meteor.vy) * tail;
+      const gradient = context.createLinearGradient(hx, hy, tx, ty);
+      gradient.addColorStop(0, `rgba(235,246,255,${0.85 * fade})`);
+      gradient.addColorStop(1, "rgba(150,200,255,0)");
+      context.strokeStyle = gradient; context.lineWidth = 1.4; context.lineCap = "round";
+      context.beginPath(); context.moveTo(hx, hy); context.lineTo(tx, ty); context.stroke();
+    };
+
     let last = 0;
     const draw = (timestamp: number) => {
       if (animate) animationFrame = window.requestAnimationFrame(draw);
@@ -121,6 +146,7 @@ export default function CosmicBackdrop({ address = "" }: { address?: string }) {
         context.arc(x, y, star.radius, 0, Math.PI * 2);
         context.fill();
       }
+      if (animate) drawMeteor(timestamp);
     };
 
     resize();
@@ -135,6 +161,7 @@ export default function CosmicBackdrop({ address = "" }: { address?: string }) {
   return (
     <div className={`cosmic-backdrop${animate ? " is-moving" : " is-still"}`} aria-hidden="true">
       <div className="cosmic-nebula" />
+      <div className="cosmic-nebula drift-b" />
       <canvas ref={canvasRef} />
     </div>
   );

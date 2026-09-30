@@ -25,7 +25,6 @@ import CommanderCardView, { ShieldGlyph } from "./CommanderCardView";
 import { shieldActive } from "./lib/shield";
 import { buffTimeLeft, rememberOwnShield } from "./lib/buffs";
 import MiniComms from "./MiniComms";
-import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
 import WorldVisualLayer, { createWorldVisualStress, worldStrategicBlend, worldVisualBodyRadius, worldWormholeRadius, type WorldViewport, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
@@ -1774,8 +1773,6 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   }
 
   return <section className={`world world-crypto world-cosmos${CALM_MAP ? " world-calm" : ""}${zoom >= 5.5 ? " world-deep" : ""}${detailZoom ? " world-tactical" : ""}`} style={CALM_MAP ? { ["--badge-boost" as string]: "1.5" } as CSSProperties : undefined}>
-    <CosmicBackdrop address={address} />
-    <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="world" profile={profile} townhallLevel={viewGame.buildings.keep.lvl}
       location={`SECTOR ${world.stateId.slice(-6).toUpperCase()} · HOME ${Math.round(playerCity.position.x).toString().padStart(3, "0")}:${Math.round(playerCity.position.y).toString().padStart(3, "0")}`}
       resources={viewGame.res}

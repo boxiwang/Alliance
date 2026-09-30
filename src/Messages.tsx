@@ -8,7 +8,6 @@ import { loadLocalWorldSession, openLocalWorldSession, saveLocalWorldSession } f
 import { energyAt } from "./lib/world-engine";
 import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
-import CosmicBackdrop from "./CosmicBackdrop";
 import PlayerCard, { type PlayerSignal } from "./PlayerCard";
 import { shouldSubmitTextEntry } from "./lib/ime";
 import NameSignal from "./NameSignal";
@@ -341,8 +340,6 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   const headColor = dmWith ? "var(--gold)" : "var(--cyan)";
 
   return <section className="comms-page">
-    <CosmicBackdrop address={address} />
-    <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="messages" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
       resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} stamina={energy} staminaCap={energyCap}
       troops={totalTroops(game)} wounded={game.wounded} might={mightBreakdown(game).total}

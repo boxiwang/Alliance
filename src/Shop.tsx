@@ -13,7 +13,6 @@ import {
 import { SHOP_OFFERS, TOPUP_PACKS, shopItem, type ShopCategory, type ShopOffer } from "./lib/shop-catalog";
 import { speedupIconPath } from "./lib/mvp-items";
 import GameNav from "./GameNav";
-import CosmicBackdrop from "./CosmicBackdrop";
 import MiniComms from "./MiniComms";
 
 type Dialog = { kind: "buy"; offer: ShopOffer } | { kind: "topup"; selected: string } | null;
@@ -124,7 +123,7 @@ export default function Shop({ address, profile, onAlliance, onCity, onWorld, on
   }
 
   return <section className="shop-page">
-    <CosmicBackdrop address={address} />
+    
     <GameNav view="shop" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
       resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} stamina={energy} staminaCap={world?.world.config.energyCap ?? 100} troops={totalTroops(game)} wounded={game.wounded}
       might={mightBreakdown(game).total} credits={balance} onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={onMessages}

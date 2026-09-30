@@ -1,5 +1,4 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import CosmicBackdrop from "./CosmicBackdrop";
 import GameNav from "./GameNav";
 import MarchSignaturePreview from "./MarchSignaturePreview";
 import PlanetOrbitPreview from "./PlanetOrbitPreview";
@@ -531,8 +530,6 @@ export default function ProfileScreen({
   const insignia = computeInsignia({ coreLevel: game.buildings.keep.lvl, rogue: player?.highestMonsterDefeated ?? 0, relics: relicOwned, aligned: !!profile.factionSymbol });
 
   return <section className={`profile-screen ${account.reducedMotion ? "profile-motion-stilled" : ""}`}>
-    <CosmicBackdrop address={address} />
-    <div className="world-page-black-hole" aria-hidden="true"><i className="world-page-hole-glow" /><i className="world-page-accretion" /><i className="world-page-hole-core" /></div>
     <GameNav view="profile" profile={profile} townhallLevel={game.buildings.keep.lvl} location={location}
       resources={game.res} incomePerHour={prodPerHour(game)} resourceCap={capacity(game)} stamina={player ? energyAt(player, now, world!.world.config) : 100} staminaCap={world?.world.config.energyCap ?? 100} troops={totalTroops(game)} wounded={game.wounded}
       might={mightBreakdown(game).total} credits={account.credits} onAlliance={onAlliance} onCity={onCity} onWorld={onWorld} onMessages={onMessages} onShop={onShop} onProfile={() => {}} />

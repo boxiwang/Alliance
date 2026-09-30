@@ -32,7 +32,6 @@ import { ownShieldUntil, rememberOwnMarchBoost, rememberOwnShield } from "./lib/
 import { getN } from "./lib/numbers";
 import GameNav from "./GameNav";
 import BuildingGlyph from "./BuildingGlyph";
-import CosmicBackdrop from "./CosmicBackdrop";
 import MiniComms from "./MiniComms";
 import CityStarGrid from "./CityStarGrid";
 import { ALLIANCE_CHANGED_EVENT, allianceGameplayBonuses, openHelpFor, requestAllianceHelp } from "./lib/alliance";
@@ -739,7 +738,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
 
   return (
     <section className="town">
-      <CosmicBackdrop address={address} />
+      
       <GameNav view="city" profile={profile} townhallLevel={view.buildings.keep.lvl} location={worldStatus.location}
         resources={view.res} incomePerHour={rate} resourceCap={capacity(view)} stamina={worldStatus.energy} staminaCap={worldStatus.energyCap} troops={troopsTotal} wounded={view.wounded}
         might={mightScore.total} onAlliance={onAlliance} onCity={() => {}} onWorld={onWorld} onMessages={onMessages} onShop={onShop} onProfile={onProfile} />
