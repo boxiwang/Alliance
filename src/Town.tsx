@@ -637,7 +637,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           const quantity = inventoryById.get(item.id) || 0;
           return <button key={item.id} type="button" disabled={quantity <= 0 || inventoryBusy || commandBusy} onClick={() => requestSpeedupUse(item.id, target)} aria-label={`Use ${item.name}, ${quantity} owned`}>
             <img src={speedupIconPath(item)} alt="" />
-            <span className="mono">×{itemCount(quantity)}</span>
+            <span className="mono">{itemTag(quantity)}</span>
           </button>;
         })}
       </div>
@@ -694,7 +694,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
             <small className={`inv-rarity rarity-${selected.item.rarity}`}>{selected.item.rarity.toUpperCase()}</small>
             <h3>{selected.item.name}</h3>
             <p>{selected.item.description}</p>
-            <div className="inv-owned"><span>OWNED</span><b className="mono">×{itemCount(selected.quantity)}</b></div>
+            <div className="inv-owned"><span>OWNED</span><b className="mono">{itemTag(selected.quantity)}</b></div>
             {speedup ? <div className="inv-use">
               <label><span>ACTIVE QUEUE</span><select aria-label="Speedup target" value={selectedSpeedupTarget ? speedupTargetId(selectedSpeedupTarget) : ""} disabled={!speedupTargets.length} onChange={(event) => setSpeedupTarget(event.target.value)}>
                 {!speedupTargets.length && <option value="">NO ACTIVE QUEUES</option>}
@@ -874,7 +874,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="speedup-items">
             {usableSpeedups.map((entry) => {
               const item = MVP_ITEM_BY_ID.get(entry.itemId)!;
-              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy || !selectedSpeedupTarget} onClick={() => selectedSpeedupTarget && requestSpeedupUse(entry.itemId, selectedSpeedupTarget)} aria-label={`Use ${item.name}, ${entry.quantity} owned`}><img src={speedupIconPath(item)} alt="" /><span>×{itemCount(entry.quantity)}</span></button>;
+              return <button key={entry.itemId} disabled={inventoryBusy || commandBusy || !selectedSpeedupTarget} onClick={() => selectedSpeedupTarget && requestSpeedupUse(entry.itemId, selectedSpeedupTarget)} aria-label={`Use ${item.name}, ${entry.quantity} owned`}><img src={speedupIconPath(item)} alt="" /><span>{itemTag(entry.quantity)}</span></button>;
             })}
             {selectedSpeedupTarget && usableSpeedups.length === 0 && <i>NO SPEEDUPS AVAILABLE</i>}
           </div>
@@ -925,7 +925,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
           <div className="chest-loot">
             {Object.entries(chestLoot).map(([itemId, quantity]) => {
               const item = MVP_ITEM_BY_ID.get(itemId);
-              return item ? <div key={itemId} className={`inv-slot rarity-${item.rarity}`} title={item.name}><ItemIcon item={item} /><span className="mono">×{itemCount(quantity)}</span></div> : null;
+              return item ? <div key={itemId} className={`inv-slot rarity-${item.rarity}`} title={item.name}><ItemIcon item={item} /><span className="mono">{itemTag(quantity)}</span></div> : null;
             })}
           </div>
           <p>{Object.entries(chestLoot).map(([itemId, quantity]) => `${quantity}× ${MVP_ITEM_BY_ID.get(itemId)?.name ?? itemId}`).join(" · ")}</p>
@@ -968,7 +968,7 @@ export default function Town({ address, profile, onAlliance = () => {}, onWorld,
                 const option = MVP_ITEM_BY_ID.get(entry.id)!;
                 return <button key={entry.id} type="button" role="radio" aria-checked={chosen?.id === entry.id} className={chosen?.id === entry.id ? "on" : ""}
                   onClick={() => setPendingSpeedup((current) => current ? { ...current, itemId: entry.id, quantity: null } : current)}>
-                  <img src={speedupIconPath(option)} alt="" /><span className="mono">×{itemCount(entry.owned)}</span>
+                  <img src={speedupIconPath(option)} alt="" /><span className="mono">{itemTag(entry.owned)}</span>
                 </button>;
               })}
             </div>
@@ -1516,6 +1516,11 @@ function ResearchRing({ value, max, large = false }: { value: number; max: numbe
 }
 
 /** Item counts are whole numbers: 7, 99, 1,240, then 12.5K. */
+/** "×12" for a count, just "∞" for an unlimited (GM) stack. */
+function itemTag(n: number): string {
+  return isUnlimitedQuantity(n) ? "∞" : `×${itemCount(n)}`;
+}
+
 function itemCount(n: number): string {
   if (isUnlimitedQuantity(n)) return "∞";
   return n < 10_000 ? Math.floor(n).toLocaleString("en-US") : compact(n);

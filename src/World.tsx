@@ -1838,18 +1838,18 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
             <p>{warpDestination ? <>Destination <b>{coordLabel(warpDestination)}</b> · {fmtDuration(travelSecondsTo(warpDestination))} march from your current home</> : "Click an empty tile on the map, or enter X / Y."}</p>
             {warpDestination && warpDestinationBlock && <p className="world-warp-invalid">{ERROR_COPY[warpDestinationBlock]}</p>}
             {warpHint && <button type="button" className="world-warp-hint" onClick={selectWarpHint}>Nearest open tile <b>{coordLabel(warpHint)}</b> · SELECT</button>}
-            <button className="world-warp-go" disabled={warpBusy || !!warpNotReady || !warpDestination || !!warpDestinationBlock || warpCounts?.precision === 0} onClick={() => void executeWarp("precision")}><span>{warpBusy ? "WARPING…" : "WARP HERE"}</span>{warpCounts && <span className="world-warp-count">×{isUnlimitedQuantity(warpCounts.precision) ? "∞" : warpCounts.precision}</span>}</button>
+            <button className="world-warp-go" disabled={warpBusy || !!warpNotReady || !warpDestination || !!warpDestinationBlock || warpCounts?.precision === 0} onClick={() => void executeWarp("precision")}><span>{warpBusy ? "WARPING…" : "WARP HERE"}</span>{warpCounts && <span className="world-warp-count">{isUnlimitedQuantity(warpCounts.precision) ? "∞" : `×${warpCounts.precision}`}</span>}</button>
           </section>
           <section>
             <div className="world-warp-option-head"><b>DRIFT JUMP</b>{!warpCounts && <em>DEV</em>}</div>
             <p>Jump to a random safe sector of the Frontier.</p>
-            <button className="world-warp-go secondary" disabled={warpBusy || !!warpNotReady || warpCounts?.drift === 0} onClick={() => void executeWarp("random")}><span>{warpBusy ? "WARPING…" : "RANDOM WARP"}</span>{warpCounts && <span className="world-warp-count">×{isUnlimitedQuantity(warpCounts.drift) ? "∞" : warpCounts.drift}</span>}</button>
+            <button className="world-warp-go secondary" disabled={warpBusy || !!warpNotReady || warpCounts?.drift === 0} onClick={() => void executeWarp("random")}><span>{warpBusy ? "WARPING…" : "RANDOM WARP"}</span>{warpCounts && <span className="world-warp-count">{isUnlimitedQuantity(warpCounts.drift) ? "∞" : `×${warpCounts.drift}`}</span>}</button>
           </section>
           <section className="world-warp-quantum">
             <div className="world-warp-option-head"><b>QUANTUM WARP</b>{!warpCounts && <em>DEV</em>}</div>
             <p>Every fleet returns home instantly, then your city jumps to the destination above — even with an attack on its way.</p>
             {quantumNotReady && <p className="world-warp-invalid">{ERROR_COPY[quantumNotReady]}</p>}
-            <button className="world-warp-go quantum" disabled={warpBusy || !!quantumNotReady || !warpDestination || !!warpDestinationBlock || warpCounts?.quantum === 0} onClick={() => void executeWarp("quantum")}><span>{warpBusy ? "WARPING…" : "QUANTUM WARP HERE"}</span>{warpCounts && <span className="world-warp-count">×{isUnlimitedQuantity(warpCounts.quantum) ? "∞" : warpCounts.quantum}</span>}</button>
+            <button className="world-warp-go quantum" disabled={warpBusy || !!quantumNotReady || !warpDestination || !!warpDestinationBlock || warpCounts?.quantum === 0} onClick={() => void executeWarp("quantum")}><span>{warpBusy ? "WARPING…" : "QUANTUM WARP HERE"}</span>{warpCounts && <span className="world-warp-count">{isUnlimitedQuantity(warpCounts.quantum) ? "∞" : `×${warpCounts.quantum}`}</span>}</button>
           </section>
           <footer>Precision & Drift: fleets must be home and no attack inbound · keep {WARP_RULES.minCitySpacing} tiles from other cities</footer>
         </div>}
