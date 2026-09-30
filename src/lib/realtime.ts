@@ -11,6 +11,8 @@ export type PresenceCity = {
   cosmetics: unknown; online: boolean; lastSeen: number;
   /** Commander sigil (profile avatar), shown on the map card. */
   avatar?: string | null;
+  /** Self-introduction shown on the commander card. */
+  bio?: string | null;
   /** Shield item expiry (public, like the dome). */
   shieldUntil?: number;
 };
@@ -37,6 +39,10 @@ type Handlers = {
   onDM?: (key: string, msg: LiveChat) => void;
   onPlayer?: (player: PresenceCity) => void;
   onPlayerRemoved?: (id: string) => void;
+  /** Another commander warped within your view: play their departure / arrival. */
+  /** Your DM was not delivered: the recipient only takes new chats from alliance members / Core 10+. */
+  onDmBlocked?: (to: string) => void;
+  onWarpFx?: (fx: { player: string; kind: "depart" | "arrive"; coords: { x: number; y: number }; signature: string | null }) => void;
   onViewPlayers?: (rect: ViewRect, players: PresenceCity[], shared?: { targets?: unknown[]; occupiers?: Record<string, string>; clusters?: { id: string; kind: "resource" | "monster"; position: { x: number; y: number }; count: number }[] }) => void;
   onViewClusters?: (clusters: { id: string; kind: "resource" | "monster"; position: { x: number; y: number }; count: number }[]) => void;
   onQuadrants?: (info: { open: number[]; counts: number[]; capacity: number }) => void;
@@ -82,6 +88,8 @@ export class RealtimeClient {
       else if (d.type === "chat") this.handlers.onChat?.(d.msg);
       else if (d.type === "dm") this.handlers.onDM?.(d.key, d.msg);
       else if (d.type === "player") this.handlers.onPlayer?.(d.player);
+      else if (d.type === "warp-fx") this.handlers.onWarpFx?.(d);
+      else if (d.type === "dm_blocked") this.handlers.onDmBlocked?.(String(d.to || ""));
       else if (d.type === "player_removed") this.handlers.onPlayerRemoved?.(d.id);
       else if (d.type === "view_players") this.handlers.onViewPlayers?.(d.rect, d.players || [],
         Array.isArray(d.targets) ? { targets: d.targets, occupiers: d.occupiers || {} } : Array.isArray(d.clusters) ? { clusters: d.clusters } : undefined);
@@ -131,7 +139,7 @@ export class RealtimeClient {
   }
   // Shared-world Search: nearest free target of a kind/level from home; `index` walks outward.
   sendSearch(kind: string, level: number, index: number) { this.send({ type: "search", kind, level, index }); }
-  sendPresence(p: { name?: string; might?: number; keepLevel?: number; faction?: string | null; cosmetics?: unknown; avatar?: string | null }) {
+  sendPresence(p: { name?: string; might?: number; keepLevel?: number; faction?: string | null; cosmetics?: unknown; avatar?: string | null; bio?: string | null; dmFilter?: boolean }) {
     this.send({ type: "presence", ...p });
   }
   close() { this.closed = true; try { this.ws?.close(); } catch {} }

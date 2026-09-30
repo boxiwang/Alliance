@@ -78,6 +78,8 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
   const [dmFavs, setDmFavs] = useState<string[]>([]);
   const [chatMenu, setChatMenu] = useState<"closed" | "menu" | "confirm">("closed");
   const [dmWith, setDmWith] = useState<{ id: string; name: string } | null>(null);
+  // Last DM partner who refused a new chat (Game Settings DM filter), shown as "Not delivered".
+  const [dmBlocked, setDmBlocked] = useState<string | null>(null);
   const [serverReports, setServerReports] = useState<ServerReport[]>([]);
   const rtRef = useRef<RealtimeClient | null>(null);
   const composingRef = useRef(false);
@@ -126,9 +128,10 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
       const next = cur.slice(); next[i] = p; return next;
     });
     rt.handlers.onStatus = setRtConnected;
+    rt.handlers.onDmBlocked = (to) => setDmBlocked(to);
     rt.handlers.onReport = (report) => setServerReports((cur) => [...cur, report].slice(-80));
     const g = loadGame(address);
-    rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, keepLevel: g?.buildings?.keep?.lvl ?? 1, cosmetics: loadCosmeticVault(address).equipped, avatar: profile.avatarId || "genesis" });
+    rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, keepLevel: g?.buildings?.keep?.lvl ?? 1, cosmetics: loadCosmeticVault(address).equipped, avatar: profile.avatarId || "genesis", bio: profile.motto || null, dmFilter: loadPlayerAccount(address).filterNewCommanderDms });
     return () => rt.close();
   }, [address, profile.name, profile.factionSymbol]);
 
@@ -418,6 +421,7 @@ export default function Messages({ address, profile, onAlliance = () => {}, onCi
           : <div className="stream" ref={streamRef}>
               {dmWith && <div className="dm-retention">Private chat. Kept in Direct until you remove it — cleared after 30 days with no new messages.</div>}
               {messages.map((m, i) => <MessageRow key={i} m={m} now={now} ownChatSignal={equippedChatSignal} reducedMotion={account.reducedMotion} onInspect={(name) => setInspectedSignal(PLAYER_SIGNALS[name] || null)} onOpenWorld={openSharedTarget} onLocate={(at) => { queueWorldFocus(address, null, at); onWorld(); }} />)}
+              {dmWith && dmBlocked === dmWith.id && <div className="dm-blocked">Not delivered — this commander only accepts new chats from their alliance and Core 10+ commanders.</div>}
               {messages.length === 0 && <div className="spam">{dmWith ? "No messages yet — say hi." : isCosmos ? "Be the first to signal the frontier." : "No messages yet."}</div>}
             </div>}
 
@@ -490,7 +494,7 @@ function SharedIntelCard({ share, now, onOpen, compactView = false }: { share: S
       role={compactView ? undefined : "button"} tabIndex={compactView ? undefined : 0}
       onClick={compactView ? undefined : onOpen} onKeyDown={compactView ? undefined : (event) => { if (event.key === "Enter") onOpen(); }}>
       <CommanderCardView id={share.playerId} name={share.name} faction={share.faction} avatar={share.avatar} coreLevel={share.coreLevel}
-        signal={share.signal as ChatSignalId | null | undefined} recon={share.recon} now={now} markExpired>
+        signal={share.signal as ChatSignalId | null | undefined} recon={share.recon} now={now} bio={share.bio} markExpired>
         <footer>{compactView
           ? <span>{reconLive ? "READY TO SEND · WITH RECON" : "READY TO SEND"}</span>
           : <span>{share.position ? "LOCATE ON STAR MAP ▸" : "MESSAGE ▸"}</span>}</footer>

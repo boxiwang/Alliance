@@ -1,3 +1,4 @@
+import { commanderIdOf } from "../src/lib/profile";
 import {
   bearerToken,
   hashSecret,
@@ -98,12 +99,13 @@ type PlayerRow = {
   last_login_at: number;
   name_key: string | null;
   last_renamed_at: number | null;
+  /** Set by savePlayer when this sign-in cancelled a pending account deletion. */
+  deletionCancelled?: boolean;
 };
 
 const MAX_BODY_BYTES = 600_000;
 const SESSION_SECONDS = 24 * 60 * 60;
 const CHALLENGE_MS = 10 * 60 * 1000;
-const FREE_RENAME_MS = 30 * 24 * 60 * 60 * 1000;
 const COMMAND_ARGS_BYTES = 8_000;
 const WORLD_STATE_BYTES = 450_000;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9:_-]{8,128}$/;
@@ -171,6 +173,7 @@ async function savePlayer(env: BackendEnv, input: {
   wallet?: string | null; displayName?: string; role?: PlayerRole; secretHash?: string | null;
 }): Promise<PlayerRow> {
   const now = Date.now();
+  const prior = await env.DB.prepare("SELECT status FROM players WHERE id = ?").bind(input.id).first<{ status: string }>();
   const initialName = generatedName(input.id, input.displayName);
   const displayName = initialName.name;
   await env.DB.batch([
@@ -178,8 +181,9 @@ async function savePlayer(env: BackendEnv, input: {
       VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET auth_method = excluded.auth_method,
         wallet_address = COALESCE(excluded.wallet_address, players.wallet_address),
-        display_name = CASE WHEN players.display_name = 'Commander' THEN excluded.display_name ELSE players.display_name END,
-        name_key = CASE WHEN players.name_key IS NULL THEN excluded.name_key ELSE players.name_key END,
+        display_name = CASE WHEN players.display_name = 'Commander' OR players.status = 'deleted' THEN excluded.display_name ELSE players.display_name END,
+        name_key = CASE WHEN players.name_key IS NULL OR players.status = 'deleted' THEN excluded.name_key ELSE players.name_key END,
+        status = 'active', deletion_requested_at = NULL,
         role = excluded.role, last_seen_at = excluded.last_seen_at, last_login_at = excluded.last_login_at`)
       .bind(input.id, input.method, input.wallet || null, displayName, initialName.key, input.role || "player", now, now, now),
     env.DB.prepare(`INSERT INTO player_identities (provider, provider_subject, player_id, secret_hash, created_at, last_verified_at)
@@ -203,6 +207,11 @@ async function savePlayer(env: BackendEnv, input: {
   ]);
   const player = await findPlayer(env, input.id);
   if (!player) throw new Error("player upsert failed");
+  if (prior?.status === "pending_deletion") {
+    // Signing in during the grace period cancels the deletion and puts the city back on the map.
+    await worldRoom(env)?.fetch("https://world.internal/account-freeze", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ player: input.id, frozen: false }) }).catch(() => null);
+    player.deletionCancelled = true;
+  }
   return player;
 }
 
@@ -441,6 +450,10 @@ async function gmWorld(request: Request, env: BackendEnv, claims: SessionClaims,
   if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
   const data = await body(request);
   const ids = Array.isArray(data?.ids) ? data.ids : [];
+  if (pathname === "/gm/world/purge-deleted") {
+    // Ops: purge accounts whose deletion grace period is over now instead of at the hourly sweep.
+    return response(await (await room.fetch("https://world.internal/purge-deleted", { method: "POST" })).json());
+  }
   if (pathname === "/gm/world/shield") {
     const res = await room.fetch("https://world.internal/grant-shield", { method: "POST", body: JSON.stringify({ ids, hours: data?.hours, mode: data?.mode }) });
     return response(await res.json());
@@ -560,6 +573,7 @@ async function sessionResponse(env: BackendEnv, player: PlayerRow, method: AuthM
     token,
     expiresAt: Date.now() + SESSION_SECONDS * 1000,
     player: { id: player.id, displayName: player.display_name, role: player.role, authMethod: player.auth_method, walletAddress: player.wallet_address },
+    ...(player.deletionCancelled ? { deletionCancelled: true } : {}),
     ...extra,
   });
 }
@@ -608,7 +622,8 @@ async function googleVerify(request: Request, env: BackendEnv): Promise<Response
   if (!identity) return response({ error: "invalid_google_token" }, 401);
   const id = synthAddress(`google:${identity.uid}`);
   const role: PlayerRole = listed(env.GM_EMAILS, identity.email) ? "gm" : "player";
-  const player = await savePlayer(env, { id, method: "google", provider: "google", subject: identity.uid, displayName: identity.name || undefined, role });
+  // The Google profile name (often a real name) is never published: the issued default name is used.
+  const player = await savePlayer(env, { id, method: "google", provider: "google", subject: identity.uid, role });
   return sessionResponse(env, player, "google");
 }
 
@@ -625,6 +640,13 @@ async function guestVerify(request: Request, env: BackendEnv): Promise<Response>
     const existing = await findPlayer(env, identity.player_id);
     if (!existing) return response({ error: "guest_missing" }, 404);
     await env.DB.prepare("UPDATE players SET last_seen_at = ?, last_login_at = ? WHERE id = ?").bind(Date.now(), Date.now(), existing.id).run();
+    if (existing.status === "pending_deletion") {
+      // Same rule as savePlayer: signing in during the grace period cancels the deletion.
+      await env.DB.prepare("UPDATE players SET status = 'active', deletion_requested_at = NULL WHERE id = ?").bind(existing.id).run();
+      await worldRoom(env)?.fetch("https://world.internal/account-freeze", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ player: existing.id, frozen: false }) }).catch(() => null);
+      existing.status = "active";
+      existing.deletionCancelled = true;
+    }
     return sessionResponse(env, existing, "guest");
   }
   const secret = randomSecret();
@@ -650,13 +672,13 @@ async function renamePlayer(request: Request, env: BackendEnv, claims: SessionCl
   if (!candidate) return response({ error: "invalid_name" }, 400);
   const player = await findPlayer(env, claims.sub);
   if (!player || player.status !== "active") return response({ error: "account_unavailable" }, 403);
-  if (player.name_key === candidate.key) return response({ displayName: player.display_name, nextFreeRenameAt: player.last_renamed_at ? player.last_renamed_at + FREE_RENAME_MS : 0 });
+  if (player.name_key === candidate.key) return response({ displayName: player.display_name, lastRenamedAt: player.last_renamed_at ?? undefined });
   const now = Date.now();
-  const nextFreeRenameAt = (player.last_renamed_at || 0) + FREE_RENAME_MS;
-  const onCooldown = claims.role !== "gm" && !!player.last_renamed_at && now < nextFreeRenameAt;
-  // A Rename Signal skips the cooldown; it is spent in the same batch as the rename.
-  const useSignal = onCooldown && data?.useItem === true;
-  if (onCooldown && !useSignal) return response({ error: "rename_cooldown", nextFreeRenameAt }, 429);
+  // The system-issued name is not a rename: the first change is free, every later one spends a
+  // Rename Signal (GM accounts rename freely for testing). The Signal is spent in the same batch.
+  const needsSignal = claims.role !== "gm" && !!player.last_renamed_at;
+  const useSignal = needsSignal && data?.useItem === true;
+  if (needsSignal && !useSignal) return response({ error: "rename_signal_required" }, 409);
   if (useSignal) {
     const owned = await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = 'identity.rename'").bind(claims.sub).first<{ quantity: number }>();
     if (!owned || owned.quantity < 1) return response({ error: "insufficient_inventory" }, 409);
@@ -678,7 +700,47 @@ async function renamePlayer(request: Request, env: BackendEnv, claims: SessionCl
     if (String(error).toLowerCase().includes("unique")) return response({ error: "name_taken" }, 409);
     throw error;
   }
-  return response({ displayName: candidate.name, lastRenamedAt: now, nextFreeRenameAt: now + FREE_RENAME_MS });
+  return response({ displayName: candidate.name, lastRenamedAt: now });
+}
+
+/** Deletion grace period: sign in within this window to cancel; after it the account is purged. */
+export const ACCOUNT_DELETION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Deleting needs a session issued within this window (fresh wallet signature / Google sign-in). */
+const DELETION_REAUTH_SEC = 10 * 60;
+
+async function requestAccountDeletion(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
+  const data = await body(request);
+  if (String(data?.confirm || "").trim().toUpperCase() !== commanderIdOf(claims.sub)) return response({ error: "confirm_mismatch" }, 400);
+  if (Math.floor(Date.now() / 1000) - claims.iat > DELETION_REAUTH_SEC) return response({ error: "reauth_required" }, 401);
+  const now = Date.now();
+  const updated = await env.DB.prepare("UPDATE players SET status = 'pending_deletion', deletion_requested_at = ? WHERE id = ? AND status = 'active'").bind(now, claims.sub).run();
+  if (!updated.meta.changes) return response({ error: "account_unavailable" }, 409);
+  await env.DB.prepare(`INSERT INTO account_audit_log (id, player_id, action, actor_player_id, metadata_json, created_at)
+    VALUES (?, ?, 'account.delete_requested', ?, '{}', ?)`).bind(crypto.randomUUID(), claims.sub, claims.sub, now).run();
+  await worldRoom(env)?.fetch("https://world.internal/account-freeze", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ player: claims.sub, frozen: true }) }).catch(() => null);
+  return response({ ok: true, purgeAt: now + ACCOUNT_DELETION_GRACE_MS });
+}
+
+/**
+ * Purge accounts whose grace period ended (called by the WorldRoom's hourly sweep). Game data,
+ * items, portrait, identities and history are deleted; purchase / credit records are kept for
+ * refunds and accounting under the pseudonymous id, and the row stays as "deleted" so the name
+ * is freed and a later sign-in starts a fresh account.
+ */
+export async function purgeDueAccounts(env: BackendEnv, now = Date.now()): Promise<string[]> {
+  const due = await env.DB.prepare("SELECT id FROM players WHERE status = 'pending_deletion' AND deletion_requested_at <= ? LIMIT 20")
+    .bind(now - ACCOUNT_DELETION_GRACE_MS).all<{ id: string }>();
+  const ids = (due.results || []).map((row) => row.id);
+  for (const id of ids) {
+    await env.DB.batch([
+      ...["player_state", "inventory_balances", "inventory_transactions", "player_avatars", "player_identities", "player_events", "game_commands", "shop_daily_claims", "alpha_feedback", "account_audit_log"]
+        .map((table) => env.DB.prepare(`DELETE FROM ${table} WHERE player_id = ?`).bind(id)),
+      env.DB.prepare("UPDATE players SET status = 'deleted', display_name = 'Commander', name_key = NULL, last_renamed_at = NULL, deletion_requested_at = NULL WHERE id = ?").bind(id),
+      env.DB.prepare(`INSERT INTO account_audit_log (id, player_id, action, actor_player_id, metadata_json, created_at) VALUES (?, ?, 'account.purged', ?, '{}', ?)`).bind(crypto.randomUUID(), id, id, now),
+    ]);
+  }
+  return ids;
 }
 
 async function submitFeedback(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
@@ -1151,18 +1213,61 @@ async function commandRouteInner(request: Request, env: BackendEnv, claims: Sess
   });
 }
 
+/** Uploaded portraits: square, re-encoded client-side; the server only checks size and type. */
+const AVATAR_MAX_BYTES = 64 * 1024;
+function avatarContentType(bytes: Uint8Array): string | null {
+  const at = (i: number) => bytes[i];
+  if (at(0) === 0x89 && at(1) === 0x50 && at(2) === 0x4e && at(3) === 0x47) return "image/png";
+  if (at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff) return "image/jpeg";
+  if (at(0) === 0x52 && at(1) === 0x49 && at(2) === 0x46 && at(3) === 0x46 && at(8) === 0x57 && at(9) === 0x45 && at(10) === 0x42 && at(11) === 0x50) return "image/webp";
+  return null;
+}
+
+async function uploadAvatar(request: Request, env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  if (request.method !== "POST") return response({ error: "method_not_allowed" }, 405);
+  if (Number(request.headers.get("content-length") || 0) > AVATAR_MAX_BYTES) return response({ error: "avatar_too_large" }, 413);
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (!bytes.length || bytes.length > AVATAR_MAX_BYTES) return response({ error: bytes.length ? "avatar_too_large" : "avatar_empty" }, bytes.length ? 413 : 400);
+  const type = avatarContentType(bytes);
+  if (!type) return response({ error: "avatar_type" }, 415);
+  const version = Date.now();
+  await env.DB.prepare(`INSERT INTO player_avatars (player_id, content_type, data, version, updated_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(player_id) DO UPDATE SET content_type = excluded.content_type, data = excluded.data, version = excluded.version, updated_at = excluded.updated_at`)
+    .bind(claims.sub, type, bytes, version, version).run();
+  return response({ avatar: `u${version}` });
+}
+
+async function clearAvatar(env: BackendEnv, claims: SessionClaims): Promise<Response> {
+  await env.DB.prepare("DELETE FROM player_avatars WHERE player_id = ?").bind(claims.sub).run();
+  return response({ ok: true });
+}
+
+async function serveAvatar(env: BackendEnv, playerId: string): Promise<Response> {
+  const row = await env.DB.prepare("SELECT content_type AS type, data FROM player_avatars WHERE player_id = ?").bind(playerId)
+    .first<{ type: string; data: ArrayBuffer | number[] }>();
+  if (!row) return new Response("not found", { status: 404, headers: { "cache-control": "public, max-age=60" } });
+  const data = row.data instanceof ArrayBuffer ? new Uint8Array(row.data) : new Uint8Array(row.data);
+  // URLs carry ?v=<version>, so a new upload is a new URL and old copies may cache forever.
+  return new Response(data, { headers: { "content-type": row.type, "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff" } });
+}
+
 export async function handlePlayerApi(request: Request, env: BackendEnv): Promise<Response | null> {
   const { pathname } = new URL(request.url);
   if (request.method === "GET" && pathname === "/items") return response({ items: MVP_ITEMS });
+  const avatarMatch = request.method === "GET" ? /^\/avatar\/([A-Za-z0-9:_.-]{1,80})$/.exec(pathname) : null;
+  if (avatarMatch) return serveAvatar(env, decodeURIComponent(avatarMatch[1]));
   if (request.method === "POST" && pathname === "/auth/wallet/challenge") return walletChallenge(request, env);
   if (request.method === "POST" && pathname === "/auth/wallet/verify") return walletVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/google") return googleVerify(request, env);
   if (request.method === "POST" && pathname === "/auth/guest") return guestVerify(request, env);
-  if (!["/me", "/profile/name", "/feedback", "/events", "/state", "/game", "/game/authority/enable", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha", "/shop/account", "/shop/purchase", "/shop/daily-claim", "/shop/grant-alpha", "/gm/world/roster", "/gm/world/release", "/gm/world/shield"].includes(pathname)) return null;
+  if (!["/me", "/profile/name", "/profile/avatar", "/profile/avatar/clear", "/account/delete", "/feedback", "/events", "/state", "/game", "/game/authority/enable", "/command", "/inventory", "/inventory/history", "/inventory/consume", "/inventory/grant-alpha", "/shop/account", "/shop/purchase", "/shop/daily-claim", "/shop/grant-alpha", "/gm/world/roster", "/gm/world/release", "/gm/world/shield", "/gm/world/purge-deleted"].includes(pathname)) return null;
   const claims = await authClaims(request, env);
   if (!claims) return response({ error: "unauthorized" }, 401);
   if (request.method === "GET" && pathname === "/me") return me(request, env, claims);
   if (pathname === "/profile/name") return renamePlayer(request, env, claims);
+  if (pathname === "/profile/avatar") return uploadAvatar(request, env, claims);
+  if (request.method === "POST" && pathname === "/profile/avatar/clear") return clearAvatar(env, claims);
+  if (pathname === "/account/delete") return requestAccountDeletion(request, env, claims);
   if (pathname === "/feedback") return submitFeedback(request, env, claims);
   if (request.method === "POST" && pathname === "/events") return storeEvents(request, env, claims);
   if ((request.method === "GET" || request.method === "PUT") && pathname === "/state") return stateRoute(request, env, claims);
@@ -1177,7 +1282,7 @@ export async function handlePlayerApi(request: Request, env: BackendEnv): Promis
   if (pathname === "/shop/purchase") return shopPurchase(request, env, claims);
   if (pathname === "/shop/daily-claim") return shopDailyClaim(request, env, claims);
   if (pathname === "/shop/grant-alpha") return grantAlphaCredits(request, env, claims);
-  if (pathname === "/gm/world/roster" || pathname === "/gm/world/release" || pathname === "/gm/world/shield") return gmWorld(request, env, claims, pathname);
+  if (pathname === "/gm/world/roster" || pathname === "/gm/world/release" || pathname === "/gm/world/shield" || pathname === "/gm/world/purge-deleted") return gmWorld(request, env, claims, pathname);
   return response({ error: "method_not_allowed" }, 405);
 }
 

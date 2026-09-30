@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import CommanderAvatar from "./CommanderAvatar";
 import type { Profile } from "./lib/profile";
 import { RES, RES_ORDER, ResKey, BKey, displayResource, displayTroops } from "./lib/game";
 import { compact, formatDualClock } from "./lib/format";
@@ -104,7 +105,7 @@ export default function GameNav({
         <button type="button" className={`command-profile ${view === "profile" ? "active" : ""}`}
           aria-label="Open profile and settings" aria-current={view === "profile" ? "page" : undefined} onClick={onProfile} onMouseEnter={replaySignal}>
           <span className="command-profile-avatar">
-            <span className={`command-sigil command-sigil-${profile.avatarId || "genesis"}`}><i /></span>
+            <CommanderAvatar playerId={profile.avatarPlayerId} avatar={profile.avatarId || "genesis"} />
             <em className="command-profile-core">{townhallLevel}</em>
             <span className="command-profile-gear" aria-hidden="true">
               <svg viewBox="0 0 16 16"><path d={GEAR_PATH} fillRule="evenodd" /></svg>

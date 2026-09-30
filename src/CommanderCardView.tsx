@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import CommanderAvatar from "./CommanderAvatar";
 import NameSignal from "./NameSignal";
 import { compact } from "./lib/format";
 import { displayResource, displayTroops } from "./lib/game";
@@ -18,22 +19,23 @@ export function ShieldGlyph() {
  * intel is still valid (they disappear when it expires). Troops and resources use the same
  * display units as the rest of the game (nav bar, city).
  */
-export default function CommanderCardView({ id, name, faction, avatar, coreLevel, signal, recon, now, markExpired = false, shield = null, children }: {
+export default function CommanderCardView({ id, name, faction, avatar, coreLevel, signal, recon, now, markExpired = false, shield = null, bio = null, children }: {
   id: string; name: string; faction: string | null; avatar: string | null | undefined; coreLevel: number;
   signal: ChatSignalId | null | undefined; recon: { snapshot: ScoutSnapshot; expiresAt: number } | null | undefined; now: number;
   /** A relayed card says its recon has expired (the Star Map card simply returns to normal). */
   markExpired?: boolean;
   /** Public shield status on the live Star Map card ("7:42:10", "UNTIL CORE 10", "∞"). */
   shield?: string | null;
+  /** The commander's self-introduction (one line). */
+  bio?: string | null;
   children?: ReactNode;
 }) {
-  const sigil = /^[a-z0-9-]{1,24}$/.test(String(avatar || "")) ? avatar : "genesis";
   const leftMs = recon ? recon.expiresAt - now : 0;
   const snap = leftMs > 0 ? recon!.snapshot : null;
   return <>
     <header>
       <span className="commander-card-avatar">
-        <span className={`command-sigil command-sigil-${sigil} commander-card-sigil`}><i /></span>
+        <CommanderAvatar playerId={id} avatar={avatar} className="commander-card-sigil" />
         <em aria-label={`Core ${coreLevel}`}>{coreLevel}</em>
       </span>
       <div>
@@ -41,6 +43,7 @@ export default function CommanderCardView({ id, name, faction, avatar, coreLevel
         <small>CORE {coreLevel}{shield != null && <span className="commander-card-shield"><ShieldGlyph />SHIELD · {shield}</span>}</small>
       </div>
     </header>
+    {bio && <p className="commander-card-bio">{bio}</p>}
     {!snap && recon && markExpired && <div className="commander-card-expired">RECON EXPIRED</div>}
     {snap && <div className="commander-card-intel" aria-label="Recon intel">
       <div className="commander-card-intel-head"><small>MIGHT</small><b>{compact(snap.might)}</b><em>INTEL · {leftMs >= 60_000 ? `${Math.ceil(leftMs / 60_000)}M` : "<1M"}</em></div>

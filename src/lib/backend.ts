@@ -25,6 +25,8 @@ export type BackendSession = {
   token: string;
   expiresAt: number;
   player: BackendPlayer;
+  /** This sign-in cancelled a pending account deletion. */
+  deletionCancelled?: boolean;
 };
 
 const sessionKey = (address: string) => `alliance:backend-session:${address.toLowerCase()}`;
@@ -241,14 +243,43 @@ export async function grantGmInventory(address: string): Promise<InventoryBalanc
   return (await post<{ inventory: InventoryBalance[] }>("/inventory/grant-alpha", { idempotencyKey: crypto.randomUUID() }, session.token)).inventory;
 }
 
-export async function updatePlayerName(address: string, name: string, useItem = false): Promise<{ displayName: string; lastRenamedAt?: number; nextFreeRenameAt: number }> {
+export async function updatePlayerName(address: string, name: string, useItem = false): Promise<{ displayName: string; lastRenamedAt?: number }> {
   const session = loadBackendSession(address);
   if (!session) throw new Error("session_required");
-  // useItem: spend a Rename Signal when the free rename is on cooldown.
-  const result = await post<{ displayName: string; lastRenamedAt?: number; nextFreeRenameAt: number }>("/profile/name", { name, useItem }, session.token);
+  // useItem: spend a Rename Signal (every rename after the first free one).
+  const result = await post<{ displayName: string; lastRenamedAt?: number }>("/profile/name", { name, useItem }, session.token);
   const updated = { ...session, player: { ...session.player, displayName: result.displayName } };
   saveBackendSession(updated);
   return result;
+}
+
+/** Public URL of an uploaded commander portrait ("u<version>" avatar token), else null. */
+export function avatarImageUrl(playerId: string | null | undefined, avatar: string | null | undefined): string | null {
+  const match = /^u(\d{10,14})$/.exec(String(avatar || ""));
+  return match && playerId ? `${BACKEND_HTTP}/avatar/${encodeURIComponent(playerId)}?v=${match[1]}` : null;
+}
+
+/** Upload a square portrait (already re-encoded by the client); returns the new avatar token. */
+export async function uploadAvatar(address: string, image: Blob): Promise<{ avatar: string; playerId: string }> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  const response = await fetch(`${BACKEND_HTTP}/profile/avatar`, { method: "POST", headers: { "content-type": image.type || "application/octet-stream", authorization: `Bearer ${session.token}` }, body: image });
+  const data = await response.json().catch(() => ({})) as { avatar?: string; error?: string };
+  if (!response.ok || !data.avatar) throw new Error(data.error || `backend_${response.status}`);
+  return { avatar: data.avatar, playerId: session.player.id };
+}
+
+export async function clearAvatar(address: string): Promise<void> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  await post("/profile/avatar/clear", {}, session.token);
+}
+
+/** Request account deletion (needs a fresh sign-in and the typed Commander ID). */
+export async function requestAccountDeletion(address: string, confirm: string): Promise<{ purgeAt: number }> {
+  const session = loadBackendSession(address);
+  if (!session) throw new Error("session_required");
+  return post<{ purgeAt: number }>("/account/delete", { confirm }, session.token);
 }
 
 export async function submitAlphaFeedback(address: string, input: { category: "bug" | "ux" | "balance" | "other"; page: string; message: string }): Promise<void> {

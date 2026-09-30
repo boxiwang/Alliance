@@ -11,6 +11,7 @@ export type PlanetSkinId = "dust-homestead" | "blue-marble" | "void-touched" | "
 export type PlanetOrbitId = "survey-ring" | "orbital-belt" | "accretion-halo" | "sovereign-crown";
 export type PlanetHaloId = "faint-corona" | "pulse-aura" | "aurora-veil" | "radiant-crown";
 export type MarchSignatureId = "ion-wake" | "warp-thread" | "aurora-sail" | "comet-vanguard";
+export type WarpSignatureId = "teleport-beam" | "hyperspace-drop" | "phase-assembly" | "wormhole-fold" | "singularity-bloom";
 export type StrikeSignatureId = "vector-snap" | "dust-fracture" | "blockfall" | "comet-break" | "rift-guillotine" | "solar-bloom" | "finality-engine" | "whalefall-protocol";
 export type ChatSignalId = "clear-channel" | "signal-boost" | "verdant-hail" | "void-whisper" | "ember-cipher" | "sovereign-flare" | "eclipse-herald";
 export type GameCursorId = "reticle" | "comet" | "sigil";
@@ -46,12 +47,16 @@ export interface PlayerAccount {
   criticalNotifications: boolean;
   showAchievements: boolean;
   allowDirectMessages: boolean;
+  /** Game Settings · Privacy: only alliance members and Core 10+ commanders may start a DM. Off by default. */
+  filterNewCommanderDms: boolean;
   consents: Record<ConsentKey, { version: string; acceptedAt: string | null }>;
 }
 
 export interface CosmeticLoadout {
   planetBody: PlanetSkinId;
   marchSignature: MarchSignatureId | null;
+  /** How your city appears at a new coordinate after a warp (null = the issued teleport beam). */
+  warpSignature: WarpSignatureId | null;
   strikeSignature: StrikeSignatureId | null;
   chatSignal: ChatSignalId | null;
   halo: PlanetHaloId | null;
@@ -182,6 +187,39 @@ export const MARCH_SIGNATURES: CosmeticEffectDefinition<MarchSignatureId>[] = [
     id: "comet-vanguard", skinId: "march.comet", name: "Comet Vanguard", translatedName: "彗锋",
     rarity: "SOVEREIGN", tier: "UR", accent: "#f3c46b", price: null,
     transmission: "The comet declares its intent: cyan to scout, gold to harvest, red to strike.",
+    source: "Season ascent // earn-only",
+  },
+];
+
+export const WARP_SIGNATURES: CosmeticEffectDefinition<WarpSignatureId>[] = [
+  {
+    id: "teleport-beam", name: "Teleport Beam", translatedName: "传送光柱",
+    rarity: "ISSUED", tier: "R", accent: "#38d9ff", price: null,
+    transmission: "A beam finds the coordinate in the dark. The city lands; the sector lights up around it.",
+    source: "Issued to every commander",
+  },
+  {
+    id: "hyperspace-drop", name: "Hyperspace Drop", translatedName: "超光速降落",
+    rarity: "RELIC", tier: "SR", accent: "#8fe9ff", price: 1200,
+    transmission: "Light stretches into a corridor; the city falls out of it and brakes hard against the void.",
+    source: "Credit exchange · Relic draw // ◈1,200",
+  },
+  {
+    id: "phase-assembly", name: "Phase Assembly", translatedName: "相位重组",
+    rarity: "MYTHIC", tier: "SSR", accent: "#5ef0d0", price: 2800,
+    transmission: "A hex lock takes the spot. Matter streams in and a scan line prints the city into being.",
+    source: "Limited relic draw // ◈2,800",
+  },
+  {
+    id: "wormhole-fold", name: "Wormhole Fold", translatedName: "虫洞折叠",
+    rarity: "MYTHIC", tier: "SSR", accent: "#b48cff", price: 2800,
+    transmission: "The dark folds open in violet. The city spins out of the throat, and the hole snaps shut behind it.",
+    source: "Limited relic draw // ◈2,800",
+  },
+  {
+    id: "singularity-bloom", name: "Singularity Bloom", translatedName: "奇点绽放",
+    rarity: "SOVEREIGN", tier: "UR", accent: "#ffc15a", price: null,
+    transmission: "Everything nearby falls into one point of light. It ignites, and the city is born out of the nova.",
     source: "Season ascent // earn-only",
   },
 ];
@@ -357,6 +395,7 @@ function defaultAccount(address: string): PlayerAccount {
     criticalNotifications: true,
     showAchievements: true,
     allowDirectMessages: true,
+    filterNewCommanderDms: false,
     consents: {
       terms: { version: CONSENT_VERSIONS.terms, acceptedAt: null },
       privacy: { version: CONSENT_VERSIONS.privacy, acceptedAt: null },
@@ -373,6 +412,7 @@ function gmCosmetics(address: string): string[] {
     ...PLANET_HALOS.map((halo) => `halo:${halo.id}`),
     ...MARCH_SIGNATURES.map((signature) => `march:${signature.id}`),
     ...STRIKE_SIGNATURES.map((signature) => `strike:${signature.id}`),
+    ...WARP_SIGNATURES.map((signature) => `warp:${signature.id}`),
     ...CHAT_SIGNALS.map((signal) => `chat:${signal.id}`),
     ...GAME_CURSORS.map((cursor) => `cursor:${cursor.id}`),
     ...TITLE_SEALS.map((title) => `title:${title.id}`),
@@ -382,12 +422,13 @@ function gmCosmetics(address: string): string[] {
 
 function defaultVault(address: string): CosmeticVault {
   const gm = gmCosmetics(address);
-  const owned = Array.from(new Set(["planet:dust-homestead", "orbit:survey-ring", "halo:faint-corona", "march:ion-wake", "strike:vector-snap", "chat:clear-channel", "cursor:reticle", "surface:founder-grid", "glyph:genesis", "trail:none", "title:frontier-born", ...gm]));
+  const owned = Array.from(new Set(["planet:dust-homestead", "orbit:survey-ring", "halo:faint-corona", "march:ion-wake", "warp:teleport-beam", "strike:vector-snap", "chat:clear-channel", "cursor:reticle", "surface:founder-grid", "glyph:genesis", "trail:none", "title:frontier-born", ...gm]));
   return {
     owned,
     equipped: {
       planetBody: gm.length ? "void-touched" : "dust-homestead",
       marchSignature: gm.length ? "aurora-sail" : "ion-wake",
+      warpSignature: gm.length ? "singularity-bloom" : "teleport-beam",
       strikeSignature: gm.length ? "whalefall-protocol" : "vector-snap",
       chatSignal: gm.length ? "void-whisper" : "clear-channel",
       halo: gm.length ? "radiant-crown" : "faint-corona",
@@ -454,7 +495,7 @@ export function savePlayerAccount(account: PlayerAccount): void {
     }
   } catch {}
   if (prior) {
-    const settingKeys: Array<keyof PlayerAccount> = ["language", "timeZone", "numberFormat", "soundEnabled", "musicEnabled", "musicVolume", "sfxVolume", "reducedMotion", "graphicsTier", "autoTranslateComms", "criticalNotifications", "showAchievements", "allowDirectMessages"];
+    const settingKeys: Array<keyof PlayerAccount> = ["language", "timeZone", "numberFormat", "soundEnabled", "musicEnabled", "musicVolume", "sfxVolume", "reducedMotion", "graphicsTier", "autoTranslateComms", "criticalNotifications", "showAchievements", "allowDirectMessages", "filterNewCommanderDms"];
     settingKeys.forEach((key) => {
       if (prior[key] !== account[key]) queuePlayerEvent(account.playerId, { name: "settings.changed", page: "profile", properties: { setting: key, value: account[key] } });
     });
@@ -472,11 +513,12 @@ export function loadCosmeticVault(address: string): CosmeticVault {
   if (!saved) return fallback;
   const savedOwned = (Array.isArray(saved.owned) ? saved.owned : []).filter((relic) => relic !== "planet:civic-core");
   const owned = Array.from(new Set([...fallback.owned, ...savedOwned]));
-  const savedEquipped = (saved.equipped || {}) as Partial<Omit<CosmeticLoadout, "halo" | "planetBody" | "orbit" | "marchSignature" | "strikeSignature" | "chatSignal" | "title" | "cursor">> & {
+  const savedEquipped = (saved.equipped || {}) as Partial<Omit<CosmeticLoadout, "halo" | "planetBody" | "orbit" | "marchSignature" | "warpSignature" | "strikeSignature" | "chatSignal" | "title" | "cursor">> & {
     halo?: string | null;
     planetBody?: string;
     orbit?: string | null;
     marchSignature?: string | null;
+    warpSignature?: string | null;
     strikeSignature?: string | null;
     chatSignal?: string | null;
     title?: string | null;
@@ -492,6 +534,9 @@ export function loadCosmeticVault(address: string): CosmeticVault {
   const savedMarch = savedEquipped.marchSignature === null
     ? null
     : MARCH_SIGNATURES.some((signature) => signature.id === savedEquipped.marchSignature) ? savedEquipped.marchSignature as MarchSignatureId : fallback.equipped.marchSignature;
+  const savedWarp = savedEquipped.warpSignature === null
+    ? null
+    : WARP_SIGNATURES.some((signature) => signature.id === savedEquipped.warpSignature) ? savedEquipped.warpSignature as WarpSignatureId : fallback.equipped.warpSignature;
   const savedStrike = savedEquipped.strikeSignature === null
     ? null
     : STRIKE_SIGNATURES.some((signature) => signature.id === savedEquipped.strikeSignature) ? savedEquipped.strikeSignature as StrikeSignatureId : fallback.equipped.strikeSignature;
@@ -512,6 +557,7 @@ export function loadCosmeticVault(address: string): CosmeticVault {
     halo: savedHalo,
     orbit: savedOrbit,
     marchSignature: savedMarch,
+    warpSignature: savedWarp,
     strikeSignature: savedStrike,
     chatSignal: savedChat,
     title: savedTitle,
@@ -521,6 +567,7 @@ export function loadCosmeticVault(address: string): CosmeticVault {
   if (equipped.orbit !== null && (!PLANET_ORBITS.some((orbit) => orbit.id === equipped.orbit) || !owned.includes(`orbit:${equipped.orbit}`))) equipped.orbit = fallback.equipped.orbit;
   if (equipped.halo !== null && (!PLANET_HALOS.some((halo) => halo.id === equipped.halo) || !owned.includes(`halo:${equipped.halo}`))) equipped.halo = fallback.equipped.halo;
   if (equipped.marchSignature !== null && (!MARCH_SIGNATURES.some((signature) => signature.id === equipped.marchSignature) || !owned.includes(`march:${equipped.marchSignature}`))) equipped.marchSignature = fallback.equipped.marchSignature;
+  if (equipped.warpSignature !== null && (!WARP_SIGNATURES.some((signature) => signature.id === equipped.warpSignature) || !owned.includes(`warp:${equipped.warpSignature}`))) equipped.warpSignature = fallback.equipped.warpSignature;
   if (equipped.strikeSignature !== null && (!STRIKE_SIGNATURES.some((signature) => signature.id === equipped.strikeSignature) || !owned.includes(`strike:${equipped.strikeSignature}`))) equipped.strikeSignature = fallback.equipped.strikeSignature;
   if (equipped.chatSignal !== null && (!CHAT_SIGNALS.some((signal) => signal.id === equipped.chatSignal) || !owned.includes(`chat:${equipped.chatSignal}`))) equipped.chatSignal = fallback.equipped.chatSignal;
   if (equipped.title !== null && (!TITLE_SEALS.some((title) => title.id === equipped.title) || !owned.includes(`title:${equipped.title}`))) equipped.title = fallback.equipped.title;
@@ -557,6 +604,10 @@ export function ownsPlanetHalo(vault: CosmeticVault, haloId: PlanetHaloId): bool
 
 export function ownsMarchSignature(vault: CosmeticVault, signatureId: MarchSignatureId): boolean {
   return vault.owned.includes(`march:${signatureId}`);
+}
+
+export function ownsWarpSignature(vault: CosmeticVault, signatureId: WarpSignatureId): boolean {
+  return vault.owned.includes(`warp:${signatureId}`);
 }
 
 export function ownsStrikeSignature(vault: CosmeticVault, signatureId: StrikeSignatureId): boolean {

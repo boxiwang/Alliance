@@ -1927,3 +1927,256 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 @keyframes world-warp-dim{from{opacity:0}to{opacity:1}}
 @keyframes world-warp-reveal{0%{--warp-reveal:0%;opacity:1}80%{opacity:1}100%{--warp-reveal:130%;opacity:0}}
 @media (prefers-reduced-motion:reduce){.world-warp-veil{display:none}.world-tile-lock,.world-tile-pulse{animation:none}}
+
+/* ── Profile · Dossier (revamp): identity card | equipped relics | record + insignia ── */
+.command-sigil-photo{background:#0a1626}.command-sigil-photo:before,.command-sigil-photo:after{display:none!important}
+.command-sigil-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.commander-card-bio{margin:9px 0 0;padding:7px 9px;border-left:2px solid color-mix(in srgb,var(--commander) 55%,transparent);border-radius:0 6px 6px 0;background:rgba(255,255,255,.035);color:#bcd5e4;font:500 11.5px/1.45 var(--body,system-ui);overflow-wrap:anywhere}
+.relic-tier{display:inline-grid;place-items:center;min-width:30px;height:18px;padding:0 6px;border-radius:5px;font:800 9px var(--hud);font-style:normal;letter-spacing:.06em;color:#06101c}
+.relic-tier.tier-R{background:#8fb3c9}
+.relic-tier.tier-SR{background:#b48cff}
+.relic-tier.tier-SSR{background:linear-gradient(135deg,#ffe29a,#ffb23f);box-shadow:0 0 10px rgba(255,193,90,.35)}
+.relic-tier.tier-UR{background:linear-gradient(120deg,#ff6fae,#ffc15a 35%,#7ff0c4 65%,#7fb8ff);box-shadow:0 0 12px rgba(255,140,200,.35)}
+.relic-tier.tier-none{background:rgba(255,255,255,.06);color:#56708a}
+.dossier-grid{display:grid;grid-template-columns:minmax(300px,340px) minmax(0,1fr) minmax(280px,330px);gap:14px;align-items:start}
+.dossier-identity{display:flex;flex-direction:column;gap:12px;padding-bottom:14px}
+.dossier-identity>*:not(header){margin-inline:14px}
+.commander-card.is-static{position:relative;left:auto;top:auto;z-index:auto;width:auto;animation:none;will-change:auto;box-shadow:0 10px 26px rgba(0,0,0,.35)}
+.commander-card.is-static:before{display:none}
+.dossier-portrait{display:grid;grid-template-columns:72px 1fr;gap:12px;align-items:center;padding:12px;border:1px solid rgba(92,129,171,.16);border-radius:10px;background:rgba(4,11,23,.4)}
+.dossier-portrait .dossier-portrait-face{width:72px!important;height:72px!important;border-radius:16px}
+.dossier-portrait small{display:block;margin-bottom:7px;color:#607d90;font:700 8px var(--mono);letter-spacing:.14em}
+.dossier-portrait em{display:block;margin-top:7px;color:#56708a;font:500 10px var(--mono);font-style:normal}
+.dossier-portrait-actions .profile-action{font-size:9px;padding:8px 12px}
+.dossier-sigils{display:flex;gap:6px;margin-top:8px}
+.dossier-sigils button{padding:2px;border:1px solid transparent;border-radius:9px;background:none;cursor:pointer}
+.dossier-sigils button .command-sigil{width:28px;height:28px;border-radius:7px}
+.dossier-sigils button.selected{border-color:#38d9ff;box-shadow:0 0 10px rgba(56,217,255,.3)}
+.dossier-field{display:flex;flex-direction:column;gap:6px}
+.dossier-field>span{display:flex;justify-content:space-between;gap:8px;color:#607d90;font:700 8px var(--mono);letter-spacing:.14em}
+.dossier-field>span em{color:#56708a;font-style:normal;letter-spacing:.04em;text-align:right}
+.dossier-field input,.dossier-field textarea{width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid rgba(92,129,171,.24);border-radius:7px;background:rgba(3,9,19,.7);color:#e6f4fb;font:600 13px var(--body,system-ui);resize:none}
+.dossier-field input:focus,.dossier-field textarea:focus{outline:none;border-color:rgba(56,217,255,.55);box-shadow:0 0 0 3px rgba(56,217,255,.1)}
+.dossier-identity .profile-action.full{font-size:9px;padding:10px}
+.dossier-identity .profile-action:disabled{opacity:.4;cursor:default}
+.dossier-tier-summary{display:flex;gap:5px}
+.dossier-loadout .profile-home-stage{position:relative;height:340px}
+.dossier-slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:rgba(92,129,171,.12);border-top:1px solid rgba(92,129,171,.13)}
+.dossier-slots button{display:grid;grid-template-columns:78px 38px minmax(0,1fr) 12px;align-items:center;gap:8px;min-height:48px;padding:0 14px;border:0;background:rgba(6,14,28,.96);color:#d9ecf6;text-align:left;cursor:pointer}
+.dossier-slots button:hover{background:rgba(14,30,52,.96)}
+.dossier-slot-name{color:#607d90;font:700 8px var(--mono);letter-spacing:.12em}
+.dossier-slots b{min-width:0;overflow:hidden;font:700 12.5px var(--body,system-ui);white-space:nowrap;text-overflow:ellipsis}
+.dossier-slots b em{margin-left:6px;color:#6f8ca0;font:500 11px var(--body,system-ui);font-style:normal}
+.dossier-slots .dossier-slot-empty{color:#56708a;font-weight:500}
+.dossier-slot-go{color:#4d6a80;font-size:16px}
+.dossier-side{display:flex;flex-direction:column;gap:14px}
+.dossier-record dl{margin:0;display:grid;grid-template-columns:1fr 1fr}
+.dossier-record dl>div{padding:11px 14px;border-bottom:1px solid rgba(92,129,171,.1)}
+.dossier-record dl>div:nth-child(odd){border-right:1px solid rgba(92,129,171,.1)}
+.dossier-record dt{color:#607d90;font:700 8px var(--mono);letter-spacing:.14em}
+.dossier-record dd{margin:4px 0 0;color:#e6f4fb;font:700 14px var(--hud)}
+.dossier-record .private{grid-column:1/-1;border-right:0!important;background:rgba(56,217,255,.04)}
+.dossier-record .private dd{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.dossier-record .private small{color:#4f8aa0;font:700 7.5px var(--mono);letter-spacing:.12em}
+.dossier-insignia ul{margin:0;padding:6px 0;list-style:none}
+.dossier-insignia li{display:grid;grid-template-columns:36px 1fr;gap:11px;align-items:center;padding:9px 14px;opacity:.55}
+.dossier-insignia li.earned{opacity:1}
+.dossier-insignia li>i{width:36px;height:36px;display:grid;place-items:center;border:1px solid rgba(92,129,171,.3);border-radius:50%;background:rgba(255,255,255,.03);color:#6f8ca0;font-style:normal;font-size:15px}
+.dossier-insignia li.earned>i{border-color:rgba(255,193,90,.6);background:radial-gradient(circle at 35% 30%,rgba(255,226,154,.35),rgba(255,178,63,.08));color:#ffd98a;box-shadow:0 0 12px rgba(255,193,90,.22)}
+.dossier-insignia b{display:block;color:#e6f4fb;font:800 11px var(--hud);letter-spacing:.08em}
+.dossier-insignia b em{margin-left:6px;color:#ffc15a;font-style:normal}
+.dossier-insignia small{display:block;margin-top:2px;color:#6f8ca0;font:500 10.5px var(--body,system-ui)}
+.dossier-progress{position:relative;display:block;height:14px;margin-top:6px;border-radius:7px;background:rgba(255,255,255,.05);overflow:hidden}
+.dossier-progress>span{position:absolute;inset:0 auto 0 0;border-radius:7px;background:linear-gradient(90deg,rgba(56,217,255,.35),rgba(56,217,255,.7))}
+.dossier-progress>em{position:relative;display:block;padding-right:7px;color:#cfe9f6;font:700 8.5px/14px var(--mono);font-style:normal;text-align:right}
+@media (max-width:1180px){.dossier-grid{grid-template-columns:minmax(280px,320px) minmax(0,1fr)}.dossier-side{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr}}
+@media (max-width:760px){.dossier-grid{grid-template-columns:1fr}.dossier-side{grid-template-columns:1fr}.dossier-slots{grid-template-columns:1fr}.dossier-loadout .profile-home-stage{height:260px}}
+/* Relic Vault: the same R/SR/SSR/UR grade chips as the Dossier. */
+.profile-vault-shell .relic-tier{height:16px;min-width:28px;margin-right:7px;padding:0 5px;font-size:8.5px;vertical-align:1px}
+.profile-relic-grid small .relic-tier{margin-right:5px}
+.profile-relic-copy>small{display:flex;align-items:center;gap:0}
+.profile-vault-preview>header span .relic-tier{margin-right:0}
+.dossier-field.locked input{opacity:.55;cursor:not-allowed}
+.dossier-field.locked>span em{color:#ffb454}
+
+/* ── Relic Vault (revamp): 9 categories in 3 groups · preview · uniform tile grid ── */
+/* Icon styles shared with the legacy vault lists (generated from those rules). */
+.vault-tile-art>i{position:relative;width:24px;height:24px;display:grid;place-items:center;border:1px solid currentColor;border-radius:50%;font:700 8px var(--mono);font-style:normal}
+.vault-tile-art>i.trace-cyan{border-width:2px 0;box-shadow:0 0 8px rgba(56,217,255,.25)}
+.vault-tile-art>i.trace-violet{border-color:#aa82ff;border-style:dashed}
+.vault-tile-art .march-effect-ion-wake{border-width:1px 0;color:#59dcff;box-shadow:0 0 7px rgba(89,220,255,.22)}
+.vault-tile-art .march-effect-warp-thread{border-color:#a96cff;border-style:dashed;box-shadow:0 0 9px rgba(169,108,255,.35)}
+.vault-tile-art .march-effect-warp-thread:after{content:"";width:1px;height:18px;transform:rotate(-28deg);background:linear-gradient(#59dcff,#a96cff);box-shadow:0 0 5px #a96cff}
+.vault-tile-art .march-effect-aurora-sail{border-color:#4ff0d0;border-width:2px 0;box-shadow:0 0 9px rgba(79,240,208,.3)}
+.vault-tile-art .march-effect-aurora-sail:after{content:"";width:14px;height:7px;border-radius:50%;background:linear-gradient(90deg,#4ff0d0,#59dcff,#a96cff);filter:blur(1px)}
+.vault-tile-art .march-effect-comet-vanguard{border-color:#f3c46b;box-shadow:0 0 9px rgba(243,196,107,.32)}
+.vault-tile-art .march-effect-comet-vanguard:after{content:"";width:7px;height:7px;border-radius:50%;background:#fff5ce;box-shadow:-6px 5px 5px #f3c46b,0 0 7px #f3c46b}
+.vault-tile-art .chat-effect-void-whisper{border-color:#a362e1;color:#d0a5ff;text-shadow:0 0 6px #8d34ff}
+.vault-tile-art .chat-effect-sovereign-flare{transform:rotate(45deg);border-radius:2px;border-color:#e8b24c;color:#ffd577;text-shadow:0 0 6px #e8b24c}
+.vault-tile-art .orbit-effect-icon{border:0}
+.vault-tile-art .orbit-effect-icon:before{content:"";position:absolute;width:22px;height:8px;border:1px dashed currentColor;border-radius:50%;transform:rotate(-17deg)}
+.vault-tile-art .orbit-effect-icon:after{content:"";width:4px;height:4px;border-radius:50%;background:currentColor;box-shadow:0 0 7px currentColor}
+.vault-tile-art .orbit-effect-survey-ring{color:#59dcff}
+.vault-tile-art .orbit-effect-orbital-belt{color:#a96cff}
+.vault-tile-art .orbit-effect-orbital-belt:before{border-style:double;border-width:3px}
+.vault-tile-art .orbit-effect-accretion-halo{color:#ffb454}
+.vault-tile-art .orbit-effect-accretion-halo:before{border-width:3px;border-style:solid;filter:blur(.6px);box-shadow:0 0 7px rgba(255,180,84,.65)}
+.vault-tile-art .orbit-effect-sovereign-crown{color:#d7e7ff}
+.vault-tile-art .orbit-effect-sovereign-crown:before{border-style:solid;box-shadow:8px 1px 0 -2px #f3c46b,-8px -1px 0 -2px #f3c46b}
+.vault-tile-art .orbit-effect-sovereign-crown:after{transform:rotate(45deg);border-radius:1px;background:#fff3c7;color:#f3c46b}
+.vault-tile-art .chat-effect-icon{overflow:visible;border-color:rgba(99,126,151,.4)}
+.vault-tile-art .chat-effect-icon>.name-signal{font-size:10px}
+.vault-tile-art .cursor-effect-icon{border:0;border-radius:0}
+.vault-tile-art .cursor-effect-icon svg{width:23px;height:23px;filter:drop-shadow(0 0 4px currentColor)}
+.vault-tile-art .cursor-effect-reticle,.vault-tile-art .cursor-effect-comet{color:#59dcff}
+.vault-tile-art .cursor-effect-sigil{color:#f3c46b}
+.vault-tile-art .halo-effect-icon{border:0;color:#59dcff;box-shadow:0 0 12px color-mix(in srgb,currentColor 36%,transparent)}
+.vault-tile-art .halo-effect-icon:before,.vault-tile-art .halo-effect-icon:after{content:"";position:absolute;border:1px solid currentColor;border-radius:50%}
+.vault-tile-art .halo-effect-icon:before{inset:5px}
+.vault-tile-art .halo-effect-icon:after{inset:1px;opacity:.3}
+.vault-tile-art .halo-effect-pulse-aura{color:#a96cff}
+.vault-tile-art .halo-effect-pulse-aura:after{animation:halo-icon-pulse 2.8s ease-out infinite}
+.vault-tile-art .halo-effect-aurora-veil{color:#4ff0d0;background:conic-gradient(from 30deg,rgba(79,240,208,.3),rgba(169,108,255,.65),rgba(79,240,208,.18));filter:blur(.1px)}
+.vault-tile-art .halo-effect-aurora-veil:after{border-color:#a96cff;transform:scale(.82,.58)}
+.vault-tile-art .halo-effect-radiant-crown{color:#f3c46b}
+.vault-tile-art .halo-effect-radiant-crown:before{inset:3px 2px 5px;border:0;border-radius:0;background:currentColor;clip-path:polygon(3% 73%,0 18%,25% 62%,34% 8%,47% 61%,50% 0,53% 61%,66% 8%,75% 62%,100% 18%,97% 73%);filter:drop-shadow(0 0 4px currentColor)}
+.vault-tile-art .halo-effect-radiant-crown:after{inset:0;border-color:#fff3c7;opacity:.24}
+.vault-tile-art .strike-effect-icon{overflow:hidden;border-color:#58dfff;color:#58dfff;background:radial-gradient(circle,rgba(88,223,255,.24),transparent 62%);box-shadow:0 0 9px rgba(88,223,255,.2)}
+.vault-tile-art .strike-effect-icon:before,.vault-tile-art .strike-effect-icon:after,.vault-tile-art .strike-effect-icon>span{content:"";position:absolute;inset:5px;border:1px solid currentColor;transform:rotate(45deg)}
+.vault-tile-art .strike-effect-icon:after{inset:2px;border-radius:50%;opacity:.32;transform:none}
+.vault-tile-art .strike-effect-dust-fracture{color:#c8a06a;background:conic-gradient(from 25deg,transparent,#c8a06a 2deg,transparent 8deg,transparent 42deg,#e5d2ae 44deg,transparent 50deg)}
+.vault-tile-art .strike-effect-dust-fracture:before{inset:4px;border-width:0 1px;transform:rotate(23deg)}
+.vault-tile-art .strike-effect-blockfall{color:#4ff0d0}
+.vault-tile-art .strike-effect-blockfall:before{inset:6px;box-shadow:-7px -5px 0 -2px rgba(79,240,208,.65),7px -5px 0 -2px rgba(89,220,255,.65),0 8px 0 -2px rgba(79,240,208,.55)}
+.vault-tile-art .strike-effect-comet-break{color:#59dcff}
+.vault-tile-art .strike-effect-comet-break:before{inset:7px;border-radius:50%;background:#efffff;box-shadow:-7px 7px 3px #f3c46b,-11px 11px 6px #59dcff}
+.vault-tile-art .strike-effect-comet-break:after{border:0}
+.vault-tile-art .strike-effect-rift-guillotine{color:#ad70ff}
+.vault-tile-art .strike-effect-rift-guillotine:before{inset:2px 10px;transform:rotate(52deg);box-shadow:0 0 5px currentColor}
+.vault-tile-art .strike-effect-rift-guillotine>span{inset:2px 10px;transform:rotate(-35deg);color:#6fdfff}
+.vault-tile-art .strike-effect-solar-bloom{color:#f3c46b;background:conic-gradient(from 0deg,rgba(243,196,107,.62),transparent 9deg,rgba(255,127,54,.52) 24deg,transparent 34deg,rgba(243,196,107,.62) 46deg,transparent 58deg);box-shadow:0 0 12px rgba(255,158,46,.35)}
+.vault-tile-art .strike-effect-solar-bloom:before{inset:7px;border-radius:50%;background:#fff1aa;box-shadow:0 0 8px #ff9e2e}
+.vault-tile-art .strike-effect-finality-engine{color:#f3c46b}
+.vault-tile-art .strike-effect-finality-engine:before{inset:3px}
+.vault-tile-art .strike-effect-finality-engine>span{inset:7px;color:#4ff0d0}
+.vault-tile-art .strike-effect-finality-engine:after{inset:0;border-style:dashed;color:#58dfff}
+.vault-tile-art .strike-effect-whalefall-protocol{color:#72d8ff;background:radial-gradient(ellipse at 58% 50%,rgba(114,216,255,.38),rgba(173,112,255,.12) 48%,transparent 67%);box-shadow:0 0 13px rgba(114,216,255,.35)}
+.vault-tile-art .strike-effect-whalefall-protocol:before{inset:7px 2px;border-radius:55% 42% 50% 48%;transform:rotate(-8deg)}
+.vault-tile-art .strike-effect-whalefall-protocol:after{inset:4px;border-style:dotted;color:#f3c46b}
+.vault{display:flex;flex-direction:column;gap:12px}
+.vault-tabs{display:grid;grid-template-columns:4fr 2fr 3fr;gap:10px}
+.vault-tab-group{padding:10px 12px 12px;border:1px solid rgba(92,129,171,.18);border-radius:11px;background:linear-gradient(150deg,rgba(11,22,41,.96),rgba(6,14,28,.95))}
+.vault-tab-group>small{display:block;margin-bottom:8px;color:#607d90;font:700 8px var(--mono);letter-spacing:.18em}
+.vault-tab-group>div{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px}
+.vault-tab-group button{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:9px 10px;border:1px solid rgba(92,129,171,.2);border-radius:7px;background:rgba(3,9,19,.6);color:#8fa9bb;cursor:pointer}
+.vault-tab-group button b{font:800 10px var(--hud);letter-spacing:.12em}
+.vault-tab-group button em{min-width:20px;padding:1px 5px;border-radius:8px;background:rgba(255,255,255,.06);color:#9fb6c6;font:700 9px var(--mono);font-style:normal;text-align:center}
+.vault-tab-group button:hover{border-color:rgba(56,217,255,.35);color:#d7eef8}
+.vault-tab-group button.active{border-color:rgba(56,217,255,.7);background:linear-gradient(135deg,rgba(56,217,255,.18),rgba(56,217,255,.05));color:#eafaff;box-shadow:0 0 14px rgba(56,217,255,.14)}
+.vault-tab-group button.active em{background:rgba(56,217,255,.25);color:#eafaff}
+.vault-body{display:grid;grid-template-columns:minmax(320px,380px) minmax(0,1fr);gap:12px;align-items:start}
+.vault-preview{position:sticky;top:12px}
+.vault-preview>header .relic-tier{height:18px}
+.vault-stage.profile-vault-stage{height:300px}
+.warp-signature-preview{display:block;width:100%;height:100%}
+.vault-copy{display:flex;flex-direction:column;gap:7px;padding:14px}
+.vault-copy h2{margin:0;color:#f1f9fd;font:800 20px var(--hud);letter-spacing:.02em}
+.vault-copy h2 span{margin-left:8px;color:#7f98ab;font:500 13px var(--body,system-ui)}
+.vault-copy p{margin:0;color:#a9c1d1;font:500 12.5px/1.5 var(--body,system-ui)}
+.vault-copy em{color:#56708a;font:600 9px var(--mono);font-style:normal;letter-spacing:.06em}
+.vault-copy .profile-action{margin-top:6px;padding:11px;font-size:10px;letter-spacing:.16em}
+.vault-copy .profile-action:disabled{opacity:.5;cursor:default}
+.vault-list-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:2px 2px 10px}
+.vault-list-head small{display:block;color:#607d90;font:700 8px var(--mono);letter-spacing:.16em}
+.vault-list-head b{display:block;margin-top:3px;color:#eaf6fd;font:800 17px var(--hud)}
+.vault-list-head>span{color:#6f8ca0;font:500 11.5px var(--body,system-ui);text-align:right}
+.vault-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px}
+.vault-grid>button{display:flex;flex-direction:column;overflow:hidden;padding:0;border:1px solid rgba(92,129,171,.2);border-radius:10px;background:linear-gradient(160deg,rgba(11,22,41,.96),rgba(6,14,28,.96));color:#d9ecf6;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.vault-grid>button:hover{border-color:rgba(56,217,255,.4);transform:translateY(-1px)}
+.vault-grid>button.selected{border-color:#38d9ff;box-shadow:0 0 0 1px rgba(56,217,255,.45),0 0 18px rgba(56,217,255,.18)}
+.vault-tile-art{position:relative;height:96px;display:grid;place-items:center;overflow:hidden;background:radial-gradient(circle at 50% 50%,rgba(56,120,190,.14),transparent 62%),#040a16;color:#59dcff}
+.vault-grid-core .vault-tile-art{height:128px}
+.vault-tile-art>i{transform:scale(1.9)}
+.vault-grid-core .vault-tile-art>*{width:100%;height:100%}
+.vault-grid>button.locked .vault-tile-art>*{opacity:.32;filter:grayscale(.7)}
+.vault-grid>button.locked b{color:#7890a2}
+.vault-tile-copy{display:flex;flex-direction:column;gap:4px;padding:9px 11px 11px}
+.vault-tile-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.vault-tile-copy b{overflow:hidden;font:700 12.5px var(--body,system-ui);white-space:nowrap;text-overflow:ellipsis}
+.vault-tile-copy small{color:#6f8ca0;font:500 10.5px var(--body,system-ui)}
+.vault-state{color:#607d90;font:800 7.5px var(--mono);font-style:normal;letter-spacing:.12em}
+.vault-state.on{color:#43f2a1}
+.vault-grid>button.equipped{border-color:rgba(67,242,161,.45)}
+.vault-grid>button.equipped.selected{border-color:#38d9ff}
+.warp-effect-icon{position:relative;width:24px;height:24px;display:block;border-radius:50%;border:1px solid var(--accent,#38d9ff);box-shadow:0 0 10px color-mix(in srgb,var(--accent,#38d9ff) 45%,transparent),inset 0 0 6px color-mix(in srgb,var(--accent,#38d9ff) 40%,transparent)}
+.warp-effect-icon>span{position:absolute;left:50%;bottom:50%;width:3px;height:22px;margin-left:-1.5px;border-radius:2px;background:linear-gradient(to top,#fff,var(--accent,#38d9ff) 40%,transparent)}
+.warp-effect-icon:after{content:"";position:absolute;inset:8px;border-radius:50%;background:#fff;box-shadow:0 0 8px var(--accent,#38d9ff)}
+.warp-effect-hyperspace-drop>span{left:10%;bottom:30%;height:18px;transform:rotate(-58deg);transform-origin:bottom center}
+.warp-effect-phase-assembly{border-radius:5px;transform:rotate(45deg)}.vault-tile-art>i.warp-effect-phase-assembly{transform:scale(1.9) rotate(45deg)}
+.warp-effect-phase-assembly>span{display:none}.warp-effect-phase-assembly:after{inset:6px;border-radius:2px;background:transparent;border:1px solid #fff}
+.warp-effect-wormhole-fold{border-style:dashed}.warp-effect-wormhole-fold>span{display:none}.warp-effect-wormhole-fold:after{inset:5px;background:#0b0620;border:2px solid var(--accent)}
+.warp-effect-singularity-bloom{border-width:2px}.warp-effect-singularity-bloom>span{display:none}
+.warp-effect-singularity-bloom:after{inset:7px;box-shadow:0 0 10px 3px var(--accent),0 0 0 3px rgba(255,255,255,.12)}
+@media (max-width:980px){.vault-tabs{grid-template-columns:1fr}.vault-body{grid-template-columns:1fr}.vault-preview{position:static}}
+@media (max-width:520px){.vault-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.vault-list-head{flex-direction:column;align-items:flex-start}.vault-list-head>span{text-align:left}}
+.dossier-slots{background:rgba(6,14,28,.96)}
+.dossier-slots button{box-shadow:0 0 0 .5px rgba(92,129,171,.16)}
+
+/* ── Profile type scale: one size per text role across Dossier · Relic Vault · Wallet · Protocols ── */
+.profile-screen{--t-label:700 10px var(--mono);--t-meta:600 10px var(--mono);--t-body:500 13px/1.5 var(--body,system-ui);--t-name:700 14px var(--hud);--t-value:800 18px var(--hud);--t-headline:800 22px var(--hud);--t-button:800 11px var(--mono);--c-label:#6f8ca0;--c-meta:#7c95a8;--c-body:#a9c1d1;--c-name:#e6f4fb}
+/* Tabs */
+.profile-screen .profile-tabs button b{font:800 12px var(--hud);letter-spacing:.14em}
+.profile-screen .profile-tabs button span{font:var(--t-meta);color:#4d6a80}
+/* Card headers: title (label) + right-side meta */
+.profile-screen .profile-card>header{min-height:46px}
+.profile-screen .profile-card>header small{font:var(--t-label);letter-spacing:.16em;color:var(--c-label)}
+.profile-screen .profile-card>header>span{font:var(--t-meta);letter-spacing:.1em;color:var(--c-meta)}
+/* Labels (field names, stat names, slot names, group names) */
+.profile-screen .dossier-field>span,.profile-screen .dossier-portrait small,.profile-screen .dossier-record dt,.profile-screen .dossier-slot-name,.profile-screen .vault-tab-group>small,.profile-screen .vault-list-head small,.profile-screen .profile-fields label>span,.profile-screen .profile-ledger>div>small,.profile-screen .profile-treasury small{font:var(--t-label);letter-spacing:.14em;color:var(--c-label)}
+/* Meta / sub-lines */
+.profile-screen .dossier-field>span em,.profile-screen .dossier-portrait em,.profile-screen .dossier-insignia small,.profile-screen .vault-tile-copy small,.profile-screen .vault-state,.profile-screen .profile-ledger>div>span em,.profile-screen .profile-ledger>div>strong,.profile-screen .profile-treasury span,.profile-screen .profile-switch-list small,.profile-screen .profile-volume-control small,.profile-screen .profile-accord-list small,.profile-screen .profile-accord-list em{font:var(--t-meta);font-style:normal;letter-spacing:.08em;color:var(--c-meta)}
+.profile-screen .vault-state.on,.profile-screen .profile-ledger>div>strong{color:#43f2a1}
+.profile-screen .profile-accord-list em.unsealed{color:#ffb454}.profile-screen .profile-accord-list em.sealed{color:#43f2a1}
+/* Body */
+.profile-screen .vault-copy p,.profile-screen .vault-list-head>span,.profile-screen .profile-lore-note,.profile-screen .profile-field-hint,.profile-screen .commander-card-bio,.profile-screen .dossier-insignia small{font:var(--t-body);letter-spacing:0;color:var(--c-body)}
+.profile-screen .profile-lore-note{font-style:italic}
+/* Names */
+.profile-screen .dossier-slots b,.profile-screen .dossier-insignia b,.profile-screen .vault-tile-copy b,.profile-screen .vault-tab-group button b,.profile-screen .profile-ledger>div>span b,.profile-screen .profile-switch-list b,.profile-screen .profile-volume-control b,.profile-screen .profile-accord-list b{font:var(--t-name);letter-spacing:.02em;color:var(--c-name)}
+.profile-screen .vault-tab-group button b{font-size:12px;letter-spacing:.12em;color:inherit}
+.profile-screen .dossier-insignia b em{font:inherit}
+/* Values */
+.profile-screen .dossier-record dd,.profile-screen .profile-treasury b,.profile-screen .vault-list-head b{font:var(--t-value);color:var(--c-name)}
+/* Headline */
+.profile-screen .vault-copy h2{font:var(--t-headline)}
+/* Inputs */
+.profile-screen .dossier-field input,.profile-screen .dossier-field textarea,.profile-screen .profile-fields select{font:600 14px var(--body,system-ui)}
+/* Buttons */
+.profile-screen .profile-action,.profile-screen .profile-ledger>div>button,.profile-screen .profile-accord-list button,.profile-screen .profile-final-actions button,.profile-screen .dossier-portrait-actions .profile-action,.profile-screen .dossier-identity .profile-action.full,.profile-screen .vault-copy .profile-action{font:var(--t-button);letter-spacing:.14em}
+.profile-screen .profile-ledger>div>button,.profile-screen .profile-accord-list button{padding:8px 12px}
+.profile-screen .profile-final-actions button{padding:10px 14px}
+/* Layout room for the larger text */
+.profile-screen .profile-ledger>div{grid-template-columns:130px minmax(0,1fr) auto;min-height:70px}
+.profile-screen .profile-accord-list>div{grid-template-columns:minmax(0,1fr) auto auto}
+.profile-screen .profile-treasury b{font-size:22px}
+@media (max-width:760px){.profile-screen .profile-ledger>div{grid-template-columns:1fr auto}.profile-screen .profile-ledger>div>small{grid-column:1/-1}}
+/* Relic Vault: owned relics are lit, relics not yet obtained are fully grey (no counts, no labels). */
+.vault-grid>button.locked{border-color:rgba(92,129,171,.12);background:rgba(8,14,24,.9)}
+.vault-grid>button.locked .vault-tile-art>*,.vault-grid>button.locked .relic-tier{opacity:.45;filter:grayscale(1)}
+.vault-grid>button.locked .vault-tile-copy b{color:#5d7384}
+.vault-grid>button.locked:hover{border-color:rgba(92,129,171,.3)}
+.dossier-field.invalid>span em{color:#ff7a8a}
+.dossier-field.invalid textarea{border-color:rgba(255,122,138,.6)}
+.dm-blocked{margin:8px auto;padding:7px 12px;max-width:520px;border:1px solid rgba(255,122,138,.35);border-radius:8px;background:rgba(255,122,138,.08);color:#ffb3bd;font:600 12px var(--body,system-ui);text-align:center}
+.banner.account-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(56,217,255,.1);border:1px solid rgba(56,217,255,.4);color:#cdefff}
+.banner.account-notice button{border:0;background:none;color:inherit;font-size:18px;cursor:pointer}
+/* Game Settings · Delete account */
+.delete-account{display:flex;flex-direction:column;gap:12px;padding:14px}
+.delete-account>p{margin:0;color:var(--c-body,#a9c1d1);font:500 13px/1.5 var(--body,system-ui);max-width:760px}
+.delete-step{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:12px;border:1px solid rgba(255,122,138,.2);border-radius:9px;background:rgba(255,122,138,.04)}
+.delete-step.done{border-color:rgba(67,242,161,.35);background:rgba(67,242,161,.05)}
+.delete-step b{color:#e6f4fb;font:700 14px var(--hud)}
+.delete-step code{margin-left:8px;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,.07);color:#ffd2d8;font:700 12px var(--mono);user-select:all}
+.delete-step input{flex:1 1 240px;padding:9px 10px;border:1px solid rgba(255,122,138,.3);border-radius:7px;background:rgba(3,9,19,.7);color:#fff;font:700 14px var(--mono);letter-spacing:.08em}
+.delete-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
+.profile-screen .profile-action.danger{border-color:rgba(255,122,138,.55);background:rgba(255,122,138,.1);color:#ffb3bd}
+.profile-screen .profile-action.danger:disabled{opacity:.4;cursor:not-allowed}

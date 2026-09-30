@@ -28,15 +28,26 @@ Motion; the frame is identity only (no stats), same as other cosmetics.
 
 ---
 
-## Warp Arrival signatures — cosmetic 跃迁到达特效
+## Warp Arrival signatures — cosmetic 跃迁到达特效 (in the Relic Vault)
 
-**Idea (owner, 2026-09-29):** how your city appears at its new coordinate after a warp, sold
-as a cosmetic (like Strike Signatures). Everyone keeps the basic arrival (flash + two rings,
-`src/WorldArrivalLayer.tsx`). Four premium designs are kept, playable in
-[`docs/cosmetics/warp-arrivals.html`](cosmetics/warp-arrivals.html):
+**Status (2026-09-29):** built as the Relic Vault category FLEET · WARP (`WARP_SIGNATURES` in
+`src/lib/player-account.ts`, effects in `src/warp-signatures.ts`). The equipped one plays when
+your city warps; the Star Map reveals the city and lifts the blackout at each relic's own
+`revealMs`. Designs: [`docs/cosmetics/warp-arrivals.html`](cosmetics/warp-arrivals.html).
 
-| | Name | Look |
+| Tier | Relic | Look |
 |---|---|---|
+| R | Teleport Beam 传送光柱 | issued to everyone — beam, flash, shock band |
+| SR | Hyperspace Drop 超光速降落 | light corridor, the city streaks in and brakes with a shock ring |
+| SSR | Phase Assembly 相位重组 | hex lock-on, particles stream in, a scan line prints the city |
+| SSR | Wormhole Fold 虫洞折叠 | violet vortex opens, the city spins out, the hole snaps shut |
+| UR | Singularity Bloom 奇点绽放 | matter falls into a pinpoint, nova + lens cross, the city is born |
+
+**Other players** see your departure and arrival when their Star Map view already contains
+that spot (WorldRoom `sendWarpFx`, same visibility rule as roster coordinates — no location
+is revealed). **Still open** — how they are sold / earned (shop, relic draw, season).
+
+---|---|---|
 | A | Wormhole Fold 虫洞折叠 | violet vortex opens, the city spins out, the hole snaps shut with a flash (2.1 s) |
 | B | Hyperspace Drop 超光速降落 | stars stretch into light, the city streaks in and brakes with a shock ring (1.75 s) |
 | C | Phase Assembly 相位重组 | hex lock-on, particles stream in, a scan line prints the city (2.3 s) |

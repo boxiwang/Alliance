@@ -1,10 +1,11 @@
 import { useEffect, useRef, type RefObject } from "react";
 import type { Point } from "./lib/world-engine";
 import { worldVisualBodyRadius } from "./WorldVisualLayer";
+import type { WarpSignatureFx } from "./warp-signatures";
 
 type Viewport = { x: number; y: number; width: number; height: number };
 /** "depart" plays at the old home (the city is beamed up), "arrive" at the new one. */
-export type WorldArrival = { key: string; position: Point; kind: "depart" | "arrive" };
+export type WorldArrival = { key: string; position: Point; kind: "depart" | "arrive"; /** Equipped Warp Arrival signature (default: the teleport beam). */ fx?: WarpSignatureFx };
 
 /** Basic warp arrival every civilization gets; styled arrivals are future cosmetics (docs/IDEAS.md). */
 export const WARP_ARRIVAL_MS = 1600;
@@ -180,11 +181,11 @@ export default function WorldArrivalLayer({ arrival, viewportRef, zoom, dprCap =
       ctx.clearRect(0, 0, width, height);
       const viewport = viewportRef.current;
       const elapsed = time - started;
-      const duration = arrival.kind === "depart" ? WARP_DEPARTURE_MS : WARP_ARRIVAL_MS;
+      const duration = arrival.kind === "depart" ? WARP_DEPARTURE_MS : arrival.fx?.durationMs ?? WARP_ARRIVAL_MS;
       if (viewport && elapsed <= duration) {
         const x = ((arrival.position.x - viewport.x) / viewport.width) * width;
         const y = ((arrival.position.y - viewport.y) / viewport.height) * height;
-        (arrival.kind === "depart" ? drawWarpDeparture : drawWarpArrival)(ctx, x, y, worldVisualBodyRadius(zoomRef.current, true, false, true), elapsed, arrival.key);
+        (arrival.kind === "depart" ? drawWarpDeparture : arrival.fx?.draw ?? drawWarpArrival)(ctx, x, y, worldVisualBodyRadius(zoomRef.current, true, false, true), elapsed, arrival.key);
         raf = requestAnimationFrame(draw);
       }
     };

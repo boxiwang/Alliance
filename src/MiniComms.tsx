@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Profile } from "./lib/profile";
-import { loadCosmeticVault, loadPlayerAccount } from "./lib/player-account";
+import { loadCosmeticVault, loadPlayerAccount, PLAYER_ACCOUNT_CHANGED_EVENT } from "./lib/player-account";
 import { RealtimeClient, type LiveChat, type PresenceCity, type ServerReport, type LiveMarch } from "./lib/realtime";
 import { playSfx, SFX_CHAT_SEND, SFX_CHAT_SEND_VOLUME, SFX_CHANNEL_SWITCH, SFX_CHANNEL_SWITCH_VOLUME } from "./lib/sfx";
 import { trackEvents } from "./lib/backend";
@@ -151,8 +151,11 @@ export default function MiniComms({ address, profile, onOpenMessages, onReport, 
     rt.handlers.onReport = (report) => reportRef.current?.(report);
     rt.handlers.onMarch = (march) => marchEvents.current.onMarch?.(march);
     rt.handlers.onMarchDone = (id) => marchEvents.current.onMarchDone?.(id);
-    rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, cosmetics: loadCosmeticVault(address).equipped, avatar: profile.avatarId || "genesis" });
-    return () => rt.close();
+    rt.sendPresence({ name: profile.name, faction: profile.factionSymbol || null, cosmetics: loadCosmeticVault(address).equipped, avatar: profile.avatarId || "genesis", bio: profile.motto || null, dmFilter: loadPlayerAccount(address).filterNewCommanderDms });
+    // Game Settings changes (e.g. the new-commander DM filter) reach the server with presence.
+    const resend = () => rt.sendPresence({ dmFilter: loadPlayerAccount(address).filterNewCommanderDms });
+    window.addEventListener(PLAYER_ACCOUNT_CHANGED_EVENT, resend);
+    return () => { window.removeEventListener(PLAYER_ACCOUNT_CHANGED_EVENT, resend); rt.close(); };
   }, [address, profile.name, profile.factionSymbol]);
 
   const onlineCount = useMemo(() => roster.filter((p) => p.online).length, [roster]);

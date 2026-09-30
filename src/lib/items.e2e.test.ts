@@ -71,7 +71,7 @@ describe.runIf(process.env.E2E_URL && process.env.E2E_AUTH_SECRET)("Warehouse it
     ws.close();
   }, 60_000);
 
-  it("a Rename Signal renames during the free-rename cooldown and is spent", async () => {
+  it("the first rename is free; later renames need a Rename Signal, which is spent", async () => {
     const playerId = `0x${hex(40)}`;
     const { data: auth } = await call("/auth/guest", null, { method: "POST", body: JSON.stringify({ guestId: `guest:${hex(24)}`, playerId }) });
     const token = auth.token as string;
@@ -79,7 +79,9 @@ describe.runIf(process.env.E2E_URL && process.env.E2E_AUTH_SECRET)("Warehouse it
     await call("/inventory/grant-alpha", gm, { method: "POST", body: JSON.stringify({ idempotencyKey: `e2e:${hex(8)}` }) });
     const rename = (name: string, useItem = false) => call("/profile/name", token, { method: "POST", body: JSON.stringify({ name, useItem }) });
     expect((await rename(`first${hex(6)}`)).status).toBe(200);
-    expect((await rename(`second${hex(6)}`)).status).toBe(429);
+    const refused = await rename(`second${hex(6)}`);
+    expect(refused.status).toBe(409);
+    expect(refused.data.error).toBe("rename_signal_required");
     const signal = await rename(`third${hex(6)}`, true);
     expect(signal.status).toBe(200);
     const inventory = (await call("/inventory", token)).data.inventory as any[];

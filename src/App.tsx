@@ -228,6 +228,9 @@ function DesktopApp() {
   const [selectedCA, setSelectedCA] = useState<string | null>(null);
   const [busy, setBusy] = useState<string>("");
   const [error, setError] = useState<string>("");
+  // Account lifecycle notices (deletion scheduled / cancelled by signing in).
+  const [accountNotice, setAccountNotice] = useState<string>("");
+  const noteDeletionCancelled = (session: { deletionCancelled?: boolean }) => { if (session.deletionCancelled) setAccountNotice("Welcome back — your account deletion was cancelled."); };
   const [sessionRestorePending, setSessionRestorePending] = useState(true);
   const loginAttemptRef = useRef(0);
   useTabSwitchSfx(address, stage);
@@ -312,6 +315,7 @@ function DesktopApp() {
       const u = cred.user;
       const session = await authenticateGoogle(await u.getIdToken());
       if (attempt !== loginAttemptRef.current) return;
+      noteDeletionCancelled(session);
       if (session.player.role === "gm") registerOwnerGm(session.player.id);
       await beginLocalSession(session.player.id, session.player.displayName || u.displayName || "", "Google");
       void trackEvents(session.player.id, [{ name: "auth.login", page: "connect", properties: { method: "google" } }]);
@@ -357,6 +361,7 @@ function DesktopApp() {
       if (attempt !== loginAttemptRef.current) return;
       const session = await authenticateWallet(w.provider, res.address);
       if (attempt !== loginAttemptRef.current) return;
+      noteDeletionCancelled(session);
       if (session.player.role === "gm") registerOwnerGm(session.player.id);
       const connectedAddress = session.player.id;
       setProvider(w.provider);
@@ -520,6 +525,7 @@ function DesktopApp() {
       const playerId = synthAddress(id);
       const session = await authenticateGuest(id, playerId);
       if (attempt !== loginAttemptRef.current) return;
+      noteDeletionCancelled(session);
       await beginLocalSession(session.player.id, session.player.displayName, "Guest");
       void trackEvents(session.player.id, [{ name: "auth.login", page: "connect", properties: { method: "guest" } }]);
     } catch {
@@ -547,6 +553,33 @@ function DesktopApp() {
     setProfile(null);
     setSelectedCA(null);
     setStage("start");
+  }
+
+  /** Profile · Delete account step 1: prove it's still you with a fresh session. */
+  async function reauthenticate() {
+    const session = loadBackendSession(address);
+    if (!session) throw new Error("session_required");
+    if (session.player.authMethod === "wallet") {
+      if (!provider) throw new Error("wallet_unavailable");
+      await authenticateWallet(provider, address);
+    } else if (session.player.authMethod === "google") {
+      const auth = firebaseAuth();
+      if (!auth) throw new Error("google_unavailable");
+      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+      const fresh = await authenticateGoogle(await cred.user.getIdToken());
+      if (fresh.player.id !== session.player.id) throw new Error("different_account");
+    } else {
+      let id = "";
+      try { id = localStorage.getItem("alliance:guest-id") || ""; } catch {}
+      if (!id) throw new Error("guest_unavailable");
+      await authenticateGuest(id, synthAddress(id));
+    }
+  }
+
+  async function accountDeleted(purgeAt: number) {
+    await disconnect();
+    const when = new Date(purgeAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    setAccountNotice(`Your account is scheduled for deletion on ${when}. Sign in again before then to cancel.`);
   }
 
   async function disconnect() {
@@ -606,6 +639,7 @@ function DesktopApp() {
       </header>
 
       {error && <div className="banner err">{error}</div>}
+      {accountNotice && <div className="banner account-notice" role="status"><span>{accountNotice}</span><button type="button" aria-label="Dismiss" onClick={() => setAccountNotice("")}>×</button></div>}
       {localGmRequested() && stage !== "town" && (
         <div className="banner gm-notice">
           🧪 GM access is limited to the owner wallet.
@@ -759,7 +793,7 @@ function DesktopApp() {
       {stage === "world" && profile && <World address={address} profile={profile} onAlliance={() => setStage("alliance")} onBack={() => setStage("town")} onMessages={() => setStage("messages")} onShop={() => setStage("shop")} onProfile={() => setStage("profile")} />}
       {stage === "messages" && profile && <Messages address={address} profile={profile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onShop={() => setStage("shop")} onProfile={() => setStage("profile")} />}
       {stage === "shop" && profile && <Shop address={address} profile={profile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} onProfile={() => setStage("profile")} />}
-      {stage === "profile" && profile && <ProfileScreen address={address} profile={profile} onProfileChange={updateProfile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} onShop={() => setStage("shop")} />}
+      {stage === "profile" && profile && <ProfileScreen address={address} profile={profile} onProfileChange={updateProfile} onAlliance={() => setStage("alliance")} onCity={() => setStage("town")} onWorld={() => setStage("world")} onMessages={() => setStage("messages")} onShop={() => setStage("shop")} onReauth={reauthenticate} onAccountDeleted={(purgeAt) => void accountDeleted(purgeAt)} />}
       {address && MAIN_STAGES.includes(stage as MainStage) && <AlphaFeedback address={address} page={stage} />}
 
       {stage === "founded" && profile && (

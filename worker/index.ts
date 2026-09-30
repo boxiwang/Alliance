@@ -4,8 +4,9 @@
 // Personal economy/city is progressively mirrored to D1; public presence + chat
 // stay in a hibernatable Durable Object for low-latency coordination.
 
+import { bioLooksLikeLink } from "../src/lib/profile";
 import { verifySession } from "./auth";
-import { handlePlayerApi, sharedClaims, sharedCommandRoute, sharedCutover, sharedSyncRoute, type BackendEnv, type SharedWorldPort } from "./player-api";
+import { handlePlayerApi, purgeDueAccounts, sharedClaims, sharedCommandRoute, sharedCutover, sharedSyncRoute, type BackendEnv, type SharedWorldPort } from "./player-api";
 import { defaultN } from "../src/lib/numbers";
 import {
   advanceSharedWorld, applySharedCommand, createSharedWorld, joinSharedWorld, nextSharedEventAt, openQuadrants, openSharedQuadrant,
@@ -87,6 +88,18 @@ export default {
   },
 };
 
+/** Senders at this Core level or above pass a recipient's new-commander DM filter. */
+const DM_FILTER_MIN_CORE = 10;
+/** A sigil id ("genesis") or an uploaded portrait version ("u1790000000000"). */
+const AVATAR_TOKEN = /^(?:[a-z0-9-]{1,24}|u\d{10,14})$/;
+/** Bio: plain text, one line, <= 80 chars. */
+function cleanBio(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.replace(/[\u0000-\u001f\u007f<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  // No links or wallet addresses: an introduction must not be a scam vector.
+  return text && !bioLooksLikeLink(text) ? text : null;
+}
+
 const MAX_CHAT = 80;         // stored chat history (ring, per channel/thread)
 const RETAIN_MS = 7 * 24 * 60 * 60 * 1000; // drop chat older than a week (save storage)
 const COORD_VERSION = 3; // 3 = map 2048 (docs/MAP-2048.md); older coordinates are reassigned
@@ -96,6 +109,10 @@ type PlayerRow = {
   might: number; keepLevel: number; faction: string | null;
   cosmetics: unknown; online: boolean; lastSeen: number; coordVersion?: number;
   avatar?: string | null;
+  /** Self-introduction shown on the commander card (<= 80 chars, plain text). */
+  bio?: string | null;
+  /** Game Settings · Privacy: only alliance members and Core 10+ commanders may start a DM. */
+  dmFilter?: boolean;
   /** Shield item expiry (GM grant now; the weekly shield later). Public, like the dome. */
   shieldUntil?: number;
 };
@@ -220,7 +237,8 @@ function sanitizeIntel(value: unknown): unknown | null {
   if (v.kind === "commander") {
     if (typeof v.playerId !== "string" || typeof v.name !== "string" || v.playerId.length > 64 || v.name.length > 48) return null;
     const faction = typeof v.faction === "string" ? v.faction.replace(/[^a-z0-9_$.-]/gi, "").slice(0, 24) : null;
-    const avatar = typeof v.avatar === "string" && /^[a-z0-9-]{1,24}$/.test(v.avatar) ? v.avatar : null;
+    const avatar = typeof v.avatar === "string" && AVATAR_TOKEN.test(v.avatar) ? v.avatar : null;
+    const bio = cleanBio(v.bio);
     // The sender chose to share where the planet is (and any recon they hold); the
     // system itself still never volunteers coordinates.
     const p = v.position as { x?: unknown; y?: unknown } | null | undefined;
@@ -230,7 +248,7 @@ function sanitizeIntel(value: unknown): unknown | null {
     const recon = sanitizeRecon(v.recon);
     return { kind: "commander", id: String(v.id || "").slice(0, 120), playerId: v.playerId, name: v.name, faction: faction || null,
       coreLevel: Math.max(1, Math.min(30, Math.floor(Number(v.coreLevel) || 1))), avatar, createdAt: Number(v.createdAt) || Date.now(),
-      position, signal, recon };
+      position, signal, recon, bio };
   }
   const pos = v.position as { x?: unknown; y?: unknown } | undefined;
   if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number") return null;
@@ -259,7 +277,7 @@ function sanitizeRecon(value: unknown): { snapshot: Record<string, unknown>; exp
 
 function sanitizeCosmetics(value: unknown): unknown | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const allowed = ["planetBody", "marchSignature", "strikeSignature", "chatSignal", "halo", "surface", "orbit", "glyph", "trail", "title", "cursor"];
+  const allowed = ["planetBody", "marchSignature", "warpSignature", "strikeSignature", "chatSignal", "halo", "surface", "orbit", "glyph", "trail", "title", "cursor"];
   const input = value as Record<string, unknown>;
   const output: Record<string, string | null> = {};
   for (const key of allowed) {
@@ -417,12 +435,15 @@ export class WorldRoom {
     return coord;
   }
 
+  /** A committed warp in the shared world: move the roster city and play the show for watchers. */
   async moveCoord(playerId: string, coord: WorldCoord) {
     await this.state.storage.put(`coord:v${COORD_VERSION}:${playerId}`, coord);
     const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
     if (players[playerId]) {
+      const before = players[playerId].coords;
       players[playerId].coords = coord;
       await this.state.storage.put("players", players);
+      if (before) this.sendWarpFx(players[playerId], before, coord);
       this.sendPlayerUpdate(players[playerId]);
     }
   }
@@ -508,6 +529,11 @@ export class WorldRoom {
     if (url.pathname === "/world/sync") return this.worldRoute(req, "sync");
     if (url.pathname === "/roster") return this.roster();
     if (url.pathname === "/release" && req.method === "POST") return this.release(req);
+    if (url.pathname === "/account-freeze" && req.method === "POST") return this.accountFreeze(req);
+    if (url.pathname === "/purge-deleted" && req.method === "POST") {
+      const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+      return Response.json({ purged: await this.purgeDeletedAccounts(players, Date.now(), true) });
+    }
     if (url.pathname === "/grant-shield" && req.method === "POST") return this.grantShield(req);
     if (url.pathname === "/player-effect" && req.method === "POST") return this.playerEffect(req);
     if (url.pathname === "/scout-quote" && req.method === "POST") return this.scoutOrder(req, false);
@@ -551,8 +577,12 @@ export class WorldRoom {
     const coord = { x, y };
     await this.state.storage.put(coordKey, coord);
     if (players[pid]) {
+      const before = players[pid].coords ?? previous;
       players[pid].coords = coord;
       await this.state.storage.put("players", players);
+      // Warp show for commanders already watching either spot — sent before the coordinate
+      // update so their client can hide the city until its arrival effect delivers it.
+      if (!body.revert && before) this.sendWarpFx(players[pid], before, coord);
       this.sendPlayerUpdate(players[pid]);
     }
     return Response.json({ ok: true, coord, previous });
@@ -571,6 +601,57 @@ export class WorldRoom {
 
   // Release map slots (ghost/test players). The D1 account is untouched; a released
   // player respawns on a random outer-ring slot with a welcome-back notice.
+  /**
+   * Account deletion requested (frozen) or cancelled by signing in (unfrozen). A frozen
+   * commander is taken off the map for everyone and disconnected; the coordinate is kept, so
+   * cancelling brings the city back where it was.
+   */
+  async accountFreeze(req: Request): Promise<Response> {
+    let body: { player?: unknown; frozen?: unknown } = {};
+    try { body = await req.json(); } catch {}
+    const pid = String(body.player || "").slice(0, 64);
+    if (!pid) return Response.json({ ok: false }, { status: 400 });
+    if (body.frozen === false) { await this.state.storage.delete(`frozen:${pid}`); return Response.json({ ok: true }); }
+    await this.state.storage.put(`frozen:${pid}`, Date.now());
+    const players = (await this.state.storage.get<Record<string, PlayerRow>>("players")) || {};
+    if (players[pid]) { delete players[pid]; await this.state.storage.put("players", players); }
+    this.broadcast({ type: "player_removed", id: pid });
+    for (const ws of this.state.getWebSockets()) {
+      if (((ws.deserializeAttachment() || {}) as Partial<SocketAttachment>).pid === pid) { try { ws.close(4003, "account_deleting"); } catch {} }
+    }
+    return Response.json({ ok: true });
+  }
+
+  /** Grace period over: purge D1 (see purgeDueAccounts) and this room's copy of the commander. */
+  async purgeDeletedAccounts(players: Record<string, PlayerRow>, now: number, force = false): Promise<string[]> {
+    const last = (await this.state.storage.get<number>("deletionSweepAt")) || 0;
+    if (!force && now - last < DORMANT_SWEEP_EVERY_MS) return [];
+    await this.state.storage.put("deletionSweepAt", now);
+    const ids = await purgeDueAccounts(this.env as unknown as BackendEnv, now);
+    if (!ids.length) return [];
+    const gone = new Set(ids);
+    for (const id of ids) {
+      delete players[id];
+      for (const key of [`coord:v${COORD_VERSION}:${id}`, `frozen:${id}`, `dormant:${id}`, `dmfav:${id}`, `dmhidden:${id}`, `reports:${id}`]) await this.state.storage.delete(key);
+    }
+    await this.state.storage.put("players", players);
+    const dms = (await this.state.storage.get<Record<string, ChatRow[]>>("dms")) || {};
+    for (const key of Object.keys(dms)) if (dms[key].some((m) => gone.has(m.pid) || (m.to && gone.has(m.to)))) delete dms[key];
+    await this.state.storage.put("dms", dms);
+    await this.locked(async () => {
+      if (!(await this.hasShared())) return;
+      const shared = await this.loadShared();
+      for (const id of ids) {
+        const cityId = shared.world.players[id]?.cityId;
+        if (cityId) delete shared.world.entities[cityId];
+        delete shared.world.players[id];
+        for (const [marchId, march] of Object.entries(shared.world.marches)) if (march.playerId === id) delete shared.world.marches[marchId];
+      }
+      await this.saveShared(shared);
+    });
+    return ids;
+  }
+
   async release(req: Request): Promise<Response> {
     let body: { ids?: unknown } = {};
     try { body = await req.json(); } catch {}
@@ -760,6 +841,7 @@ export class WorldRoom {
     if (await this.hasShared()) await this.locked(() => this.loadShared());
     const players = ((await this.state.storage.get<Record<string, PlayerRow>>("players")) || {});
     const retired = await this.retireDormant(players, Date.now());
+    await this.purgeDeletedAccounts(players, Date.now());
     const coordKey = `coord:v${COORD_VERSION}:${pid}`;
     let coord = await this.state.storage.get<WorldCoord>(coordKey);
     const returning = await this.state.storage.get<number>(`dormant:${pid}`);
@@ -868,6 +950,12 @@ export class WorldRoom {
       const arr = dmsAll[key] || [];
       const intel = sanitizeIntel(data.intel);
       if (!text && !intel) return;
+      // Recipient filters new commanders: only alliance members, Core 10+ senders, or someone the
+      // recipient already wrote to may open a chat. Blocked messages are not stored.
+      if (players[to]?.dmFilter && !(await this.dmAllowed(pid, to, players, arr))) {
+        this.sendToPlayer(pid, { type: "dm_blocked", to, reason: "filtered" });
+        return;
+      }
       // Remember who this was sent to, so the thread keeps the partner's name even if they
       // never reply or are no longer on the roster.
       const toName = players[to]?.name || String(data.toName || "").replace(/[\u0000-\u001f]/g, "").slice(0, 48) || undefined;
@@ -941,7 +1029,9 @@ export class WorldRoom {
       if (account?.display_name) p.name = account.display_name;
       const cosmetics = sanitizeCosmetics(data.cosmetics);
       if (cosmetics) p.cosmetics = cosmetics;
-      if (typeof data.avatar === "string" && /^[a-z0-9-]{1,24}$/.test(data.avatar)) p.avatar = data.avatar;
+      if (typeof data.avatar === "string" && AVATAR_TOKEN.test(data.avatar)) p.avatar = data.avatar;
+      if (data.bio === null || typeof data.bio === "string") p.bio = cleanBio(data.bio);
+      if (typeof data.dmFilter === "boolean") p.dmFilter = data.dmFilter;
       const might = finiteInteger(data.might, 0, 10_000_000_000);
       const keepLevel = finiteInteger(data.keepLevel, 1, 30);
       if (might !== null) p.might = might;
@@ -1054,6 +1144,25 @@ export class WorldRoom {
 
   // Presence update: full row (with coordinates) only to the player themself and to
   // sockets whose current view contains the city; everyone else gets it without coords.
+  /**
+   * Tell viewers of the old spot that the city left and viewers of the new spot that it
+   * arrived (with its Warp Arrival relic). Same visibility rule as sendPlayerUpdate: only a
+   * socket whose current view already contains that coordinate learns it.
+   */
+  sendWarpFx(player: PlayerRow, from: WorldCoord, to: WorldCoord) {
+    const signature = (player.cosmetics as { warpSignature?: unknown } | null)?.warpSignature;
+    const depart = JSON.stringify({ type: "warp-fx", kind: "depart", player: player.id, coords: from });
+    const arrive = JSON.stringify({ type: "warp-fx", kind: "arrive", player: player.id, coords: to, signature: typeof signature === "string" ? signature : null });
+    for (const ws of this.state.getWebSockets()) {
+      const a = (ws.deserializeAttachment() || {}) as Partial<SocketAttachment>;
+      if (a.pid === player.id) continue;
+      try {
+        if (inView(a.view, from)) ws.send(depart);
+        if (inView(a.view, to)) ws.send(arrive);
+      } catch {}
+    }
+  }
+
   sendPlayerUpdate(player: PlayerRow | undefined, except?: WebSocket) {
     if (!player) return;
     const full = JSON.stringify({ type: "player", player });
@@ -1063,6 +1172,22 @@ export class WorldRoom {
       const a = (ws.deserializeAttachment() || {}) as Partial<SocketAttachment>;
       try { ws.send(a.pid === player.id || inView(a.view, player.coords) ? full : masked); } catch {}
     }
+  }
+
+  /** DM filter rule (see "dm"): same alliance, an existing reply from the recipient, or Core 10+. */
+  async dmAllowed(from: string, to: string, players: Record<string, PlayerRow>, thread: ChatRow[]): Promise<boolean> {
+    const sender = players[from], recipient = players[to];
+    if (sender?.faction && recipient?.faction && sender.faction === recipient.faction) return true;
+    if (thread.some((message) => message.pid === to)) return true;
+    // Core level: the shared world's city is authoritative; the roster (presence) is the fallback.
+    let core = sender?.keepLevel ?? 1;
+    if (await this.hasShared()) {
+      const shared = await this.loadShared();
+      const cityId = shared.world.players[from]?.cityId;
+      const city = cityId ? shared.world.entities[cityId] : null;
+      if (city?.kind === "city") core = city.townhallLevel;
+    }
+    return core >= DM_FILTER_MIN_CORE;
   }
 
   // Send to every open socket for one player (multi-tab safe). No-op if offline.

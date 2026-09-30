@@ -43,13 +43,14 @@ export interface SharedCommander {
   position?: Point | null;
   signal?: string | null;
   recon?: { snapshot: ScoutSnapshot; expiresAt: number } | null;
+  bio?: string | null;
 }
 
 export type SharedWorldIntel = SharedCoordinate | SharedScoutIntel | SharedCommander;
 export type SharedMapIntel = SharedCoordinate | SharedScoutIntel;
 
 export function createCommanderShare(
-  player: { id: string; name: string; faction: string | null; keepLevel: number; avatar?: string | null; coords?: Point | null; cosmetics?: unknown },
+  player: { id: string; name: string; faction: string | null; keepLevel: number; avatar?: string | null; coords?: Point | null; cosmetics?: unknown; bio?: string | null },
   recon: { snapshot: ScoutSnapshot; expiresAt: number } | null = null, createdAt = Date.now(),
 ): SharedCommander {
   const signal = (player.cosmetics as { chatSignal?: unknown } | null | undefined)?.chatSignal;
@@ -59,6 +60,7 @@ export function createCommanderShare(
     position: player.coords && validPoint(player.coords) ? { x: player.coords.x, y: player.coords.y } : null,
     signal: typeof signal === "string" ? signal : null,
     recon: recon ? { snapshot: recon.snapshot, expiresAt: recon.expiresAt } : null,
+    bio: player.bio || null,
   };
 }
 

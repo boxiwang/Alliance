@@ -29,7 +29,8 @@ import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
 import WorldVisualLayer, { createWorldVisualStress, worldStrategicBlend, worldVisualBodyRadius, worldWormholeRadius, type WorldViewport, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
-import WorldArrivalLayer, { WARP_LANDING_MS, type WorldArrival } from "./WorldArrivalLayer";
+import WorldArrivalLayer, { type WorldArrival } from "./WorldArrivalLayer";
+import { warpSignatureFx } from "./warp-signatures";
 import WorldMarchLayer from "./WorldMarchLayer";
 import WorldBackdropLayer from "./WorldBackdropLayer";
 import { markWorldMotion } from "./lib/world-motion";
@@ -37,7 +38,7 @@ import { useGraphicsQuality } from "./useGraphicsQuality";
 import type { GraphicsQuality } from "./lib/graphics-tier";
 import {
   PLANET_HALOS, PLANET_ORBITS, PLANET_SKINS, loadCosmeticVault, loadPlayerAccount,
-  type ChatSignalId, type MarchSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
+  type ChatSignalId, type MarchSignatureId, type WarpSignatureId, type PlanetHaloId, type PlanetOrbitId, type PlanetSkinId,
 } from "./lib/player-account";
 import { playSfx, SFX_STARMAP_SELECT, SFX_STARMAP_SELECT_VOLUME } from "./lib/sfx";
 import { RealtimeClient, type PresenceCity, type ScoutSnapshot, type LiveMarch, type ServerReport, type ViewRect } from "./lib/realtime";
@@ -684,6 +685,14 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       setRemotePlayers((cur) => { const i = cur.findIndex((x) => x.id === p.id); if (i < 0) return [...cur, p]; const next = cur.slice(); next[i] = p; return next; });
     };
     rt.handlers.onPlayerRemoved = (id) => setRemotePlayers((cur) => cur.filter((x) => x.id !== id));
+    rt.handlers.onWarpFx = (event) => {
+      if (!event?.coords || !Number.isFinite(event.coords.x) || !Number.isFinite(event.coords.y)) return;
+      if (event.kind === "depart") { setRemoteWarp({ key: crypto.randomUUID(), position: { ...event.coords }, kind: "depart" }); return; }
+      const fx = warpSignatureFx(event.signature as WarpSignatureId | null);
+      setWarpHiddenRemote((cur) => new Set(cur).add(event.player));
+      window.setTimeout(() => setRemoteWarp({ key: crypto.randomUUID(), position: { ...event.coords }, kind: "arrive", fx }), 180);
+      window.setTimeout(() => setWarpHiddenRemote((cur) => { const next = new Set(cur); next.delete(event.player); return next; }), 180 + fx.revealMs);
+    };
     rt.handlers.onViewPlayers = (rect, list, shared) => {
       const fresh = keep(list);
       setRemotePlayers((cur) => [...cur.filter((x) => !rectHas(rect, x.coords) && !fresh.some((p) => p.id === x.id)), ...fresh]);
@@ -728,7 +737,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       keepLevel: g?.buildings?.keep?.lvl ?? 1,
       might: g ? mightBreakdown(project(g, Date.now())).total : 0,
       cosmetics: loadCosmeticVault(address).equipped,
-      avatar: profile.avatarId || "genesis",
+      avatar: profile.avatarId || "genesis", bio: profile.motto || null, dmFilter: loadPlayerAccount(address).filterNewCommanderDms,
     });
     return () => rt.close();
   }, [address, profile.name, profile.factionSymbol]);
@@ -742,9 +751,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       keepLevel: game.buildings.keep.lvl,
       might: mightBreakdown(project(game, Date.now())).total,
       cosmetics: loadCosmeticVault(address).equipped,
-      avatar: profile.avatarId || "genesis",
+      avatar: profile.avatarId || "genesis", bio: profile.motto || null, dmFilter: loadPlayerAccount(address).filterNewCommanderDms,
     });
-  }, [game.buildings.keep.lvl, profile.factionSymbol, profile.name, profile.avatarId, address]);
+  }, [game.buildings.keep.lvl, profile.factionSymbol, profile.name, profile.avatarId, profile.motto, address]);
   const [selection, setSelection] = useState<Record<TroopKey, Record<string, number>>>(emptySelection);
   const [message, setMessage] = useState(initial.session.migratedLegacyAt ? "Old World marches were safely settled and migrated." : "");
   const [zoom, setZoom] = useState(1.8);
@@ -890,6 +899,9 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // Warp transition: the home is hidden between being beamed up and the arrival beam landing;
   // the veil nonce replays the hyperspace blink over the map.
   const [warpHidden, setWarpHidden] = useState(false);
+  // Other commanders warping in view: their show, and their city hidden until it lands.
+  const [remoteWarp, setRemoteWarp] = useState<WorldArrival | null>(null);
+  const [warpHiddenRemote, setWarpHiddenRemote] = useState<ReadonlySet<string>>(() => new Set());
   const [warpVeil, setWarpVeil] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchKind, setSearchKind] = useState<SearchTab>("monster");
@@ -1119,6 +1131,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     () => Object.values(world.entities).filter((entity): entity is CityEntity => entity.kind === "city"),
     [world.entities],
   );
+  const visibleRemotePlayers = useMemo(() => warpHiddenRemote.size ? remotePlayers.filter((p) => !warpHiddenRemote.has(p.id)) : remotePlayers, [remotePlayers, warpHiddenRemote]);
   const visualCities = useMemo(() => {
     const live = cityEntities
       .filter((entity) => entity.ownerId === session.playerId || (detailZoom && layers.city))
@@ -1139,7 +1152,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       });
     // Other real commanders (shared map) use the same planet renderer as your own city, so
     // their halo/orbit look identical instead of a tight SVG ring.
-    const remote = !strategicZoom && layers.city ? remotePlayers.map((p): WorldVisualCity => {
+    const remote = !strategicZoom && layers.city ? visibleRemotePlayers.map((p): WorldVisualCity => {
       const cos = (p.cosmetics || {}) as { planetBody?: string; halo?: string; orbit?: string };
       return {
         id: `rp-${p.id}`, position: p.coords,
@@ -1150,7 +1163,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       };
     }) : [];
     return (warpHidden ? live.filter((city) => !city.own) : live).concat(remote, detailZoom ? stressVisuals : []);
-  }, [cityEntities, detailZoom, strategicZoom, layers.city, selectedId, session.playerId, stressVisuals, world.players, equippedCosmetics, remotePlayers, remoteSelectedId, warpHidden]);
+  }, [cityEntities, detailZoom, strategicZoom, layers.city, selectedId, session.playerId, stressVisuals, world.players, equippedCosmetics, visibleRemotePlayers, remoteSelectedId, warpHidden]);
   const monsterPreview = useMemo(() => {
     if (!selected || selected.kind !== "monster" || sentCount <= 0) return null;
     const runtime = { ...(N.runtimeAccountModifiers ?? {}) };
@@ -1326,7 +1339,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
   // Other commanders: the public Core rule or a shield item (roster shieldUntil).
   const shieldDomes = strategicZoom ? null : <>
     {!warpHidden && cityShielded(playerCity, now, N) && <ShieldDome position={playerCity.position} radiusPx={worldVisualBodyRadius(zoom, true, homeSelected, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} own />}
-    {remotePlayers.filter((p) => p.coords.x >= viewX - 40 && p.coords.x <= viewX + viewport.width + 40 && p.coords.y >= viewY - 40 && p.coords.y <= viewY + viewport.height + 40
+    {visibleRemotePlayers.filter((p) => p.coords.x >= viewX - 40 && p.coords.x <= viewX + viewport.width + 40 && p.coords.y >= viewY - 40 && p.coords.y <= viewY + viewport.height + 40
       && shieldActive({ keepLevel: p.keepLevel || 1, shieldUntil: p.shieldUntil }, now, N))
       .map((p) => <ShieldDome key={`dome-${p.id}`} position={p.coords} radiusPx={worldVisualBodyRadius(zoom, false, p.id === remoteSelectedId, CALM_MAP) * 2.55 + 4} worldPerPx={worldPerPx} />)}
   </>;
@@ -1336,7 +1349,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
     const minX = viewX - pad, maxX = viewX + viewport.width + pad, minY = viewY - pad, maxY = viewY + viewport.height + pad;
     const bodyR = detailZoom ? 7.2 : 4.2;
     // Offline cities stay on the map (SLG convention); no online indicator is shown.
-    return remotePlayers.filter((p) => p.coords.x >= minX && p.coords.x <= maxX && p.coords.y >= minY && p.coords.y <= maxY)
+    return visibleRemotePlayers.filter((p) => p.coords.x >= minX && p.coords.x <= maxX && p.coords.y >= minY && p.coords.y <= maxY)
       .map((p) => {
         const sel = remoteSelectedId === p.id;
         const col = REMOTE_FACTION_COLOR[String(p.faction || "")] || "#7cc0ff";
@@ -1366,7 +1379,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           <CityIdentityTag x={cx} y={tagY} level={p.keepLevel || 1} name={`${p.faction ? `[${p.faction}] ` : ""}${p.name || "Commander"}`} signal={cos.chatSignal ?? "clear-channel"} relation="neutral" />
         </g>;
       });
-  }, [strategicZoom, remotePlayers, remoteSelectedId, viewX, viewY, viewport.width, viewport.height, markerScale, detailZoom, gpuFallback, zoom, worldPerPx]);
+  }, [strategicZoom, visibleRemotePlayers, remoteSelectedId, viewX, viewY, viewport.width, viewport.height, markerScale, detailZoom, gpuFallback, zoom, worldPerPx]);
   const remoteSelected = useMemo(() => remotePlayers.find((p) => p.id === remoteSelectedId) || null, [remotePlayers, remoteSelectedId]);
 
   function commit(result: ReturnType<typeof advanceLocalWorldSession>) {
@@ -1651,8 +1664,10 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       // Let the new sector paint under the dark before the beam falls.
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       await sleep(120);
-      setWarpArrival({ key: crypto.randomUUID(), position: destination, kind: "arrive" });
-      await sleep(WARP_LANDING_MS);
+      // The equipped Warp Arrival relic decides the show and when it delivers the city.
+      const arrivalFx = warpSignatureFx(loadCosmeticVault(address).equipped.warpSignature);
+      setWarpArrival({ key: crypto.randomUUID(), position: destination, kind: "arrive", fx: arrivalFx });
+      await sleep(arrivalFx.revealMs);
       setWarpVeil(2); setWarpHidden(false); setHomeSelected(true);
     } catch { setMessage("Warp link failed. Try again."); setWarpHidden(false); }
     finally { setWarpBusy(false); }
@@ -1909,6 +1924,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
         <WorldVisualLayer viewportRef={liveViewportRef} cities={visualCities} wormhole={center} zoom={zoom} onReadyChange={setGpuVisualsReady} calm={CALM_MAP} />
         {warpVeil > 0 && <div className={`world-warp-veil ${warpVeil === 2 ? "out" : "in"}`} aria-hidden="true" onAnimationEnd={() => { if (warpVeil === 2) setWarpVeil(0); }} />}
         <WorldArrivalLayer arrival={warpArrival} viewportRef={liveViewportRef} zoom={zoom} dprCap={quality.dprCap} />
+        <WorldArrivalLayer arrival={remoteWarp} viewportRef={liveViewportRef} zoom={zoom} dprCap={quality.dprCap} />
         <WorldStrikeLayer world={world} viewportRef={liveViewportRef} zoom={zoom} gm={gm} stressCount={strikeStressCount} burstNonce={strikeBurstNonce} dprCap={quality.dprCap} />
         <HomeBeacon viewportRef={liveViewportRef} home={playerCity.position} onHome={() => setCamera({ ...playerCity.position })} />
         <WorldMarchLayer world={world} viewportRef={liveViewportRef} zoom={zoom} viewerId={session.playerId} quality={quality} />
@@ -1968,7 +1984,7 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
           return <WorldAnchor svgRef={svgRef} point={remoteSelected.coords} className="commander-card" data-frame={frame} style={{ "--commander": col } as CSSProperties}>
             <button className="commander-card-close" aria-label="Close commander card" onClick={() => setRemoteSelectedId(null)}>×</button>
             <CommanderCardView id={remoteSelected.id} name={remoteSelected.name || "Commander"} faction={remoteSelected.faction || null} avatar={remoteSelected.avatar}
-              coreLevel={remoteSelected.keepLevel || 1} signal={cosmetics?.chatSignal} recon={intel} now={now} shield={shieldLabel}>
+              coreLevel={remoteSelected.keepLevel || 1} signal={cosmetics?.chatSignal} recon={intel} now={now} shield={shieldLabel} bio={remoteSelected.bio}>
             <div className="commander-card-actions">
               <button className="scout" disabled={launching || !!scoutFlight || !canPayScout}
                 onMouseEnter={() => setCardHint(canPayScout ? `Costs ${scoutCostLabel} · reveals Might, troops and loot · they will see the scout` : `Needs ${scoutCostLabel} to launch a scout`)} onMouseLeave={() => setCardHint(null)}
