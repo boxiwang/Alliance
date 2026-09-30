@@ -14,9 +14,9 @@ import { detectAutoTier, GRAPHICS_TIER_HINT, GRAPHICS_TIER_LABEL, type GraphicsT
 import { bioLooksLikeLink, canRenameForFree, commanderIdOf, normalizeUsername, usernameLength, type Profile } from "./lib/profile";
 import { clearAvatar, loadBackendSession, loadInventory, requestAccountDeletion, updatePlayerName, uploadAvatar } from "./lib/backend";
 import { squareAvatarBlob } from "./lib/avatar-image";
+import { isUnlimitedQuantity } from "./lib/mvp-items";
 import { activeBuffs, buffTimeLeft } from "./lib/buffs";
 import { getN } from "./lib/numbers";
-import { hasLocalGm } from "./lib/gm";
 import { capacity, mightBreakdown, prodPerHour, project, totalTroops, worldMarchSlots } from "./lib/game";
 import { initGame, loadGame } from "./lib/gamestore";
 import { loadLocalWorldSession } from "./lib/world-adapter";
@@ -252,7 +252,7 @@ export default function ProfileScreen({
       return;
     }
     // Free rename on cooldown: a Rename Signal (Warehouse item) renames now instead.
-    const needsSignal = nameChanged && !hasLocalGm(address) && !canRenameForFree(profile);
+    const needsSignal = nameChanged && !canRenameForFree(profile);
     if (needsSignal && renameSignals <= 0) {
       flash("RENAME SIGNAL REQUIRED");
       return;
@@ -262,7 +262,7 @@ export default function ProfileScreen({
     if (nameChanged) {
       try {
         serverRename = await updatePlayerName(address, nextName, needsSignal);
-        if (needsSignal) setRenameSignals((count) => Math.max(0, count - 1));
+        if (needsSignal) setRenameSignals((count) => isUnlimitedQuantity(count) ? count : Math.max(0, count - 1));
       } catch (error) {
         const reason = error instanceof Error ? error.message : "";
         flash(reason === "name_taken" ? "NAME ALREADY CLAIMED" : reason === "rename_signal_required" ? "RENAME SIGNAL REQUIRED" : reason === "insufficient_inventory" ? "RENAME SIGNAL REQUIRED" : reason === "invalid_name" ? "USE LETTERS, NUMBERS, . _ OR -" : "NAME CHANGE FAILED");
@@ -463,9 +463,11 @@ export default function ProfileScreen({
     + GAME_CURSORS.filter((cursor) => ownsGameCursor(vault, cursor.id)).length;
   const socialRecovered = CHAT_SIGNALS.filter((effect) => ownsChatSignal(vault, effect.id)).length
     + TITLE_SEALS.filter((title) => ownsTitleSeal(vault, title.id)).length;
-  const freeRenameReady = canRenameForFree(profile) || hasLocalGm(address);
+  // First change of the system-issued name is free; after that the Rename Signal count shows and
+  // each rename spends one (GM: unlimited, shown as ∞).
+  const freeRenameReady = canRenameForFree(profile);
   const renameLocked = !freeRenameReady && renameSignals <= 0;
-  const renameWindow = freeRenameReady ? "FIRST RENAME FREE" : renameSignals > 0 ? `1 RENAME SIGNAL · ${renameSignals} HELD` : "NEEDS A RENAME SIGNAL";
+  const renameWindow = freeRenameReady ? "FIRST RENAME FREE" : `RENAME SIGNAL ×${isUnlimitedQuantity(renameSignals) ? "∞" : renameSignals}`;
   const socialSignal = previewKind === "chat" ? previewChat : vault.equipped.chatSignal;
   const socialTitle = previewKind === "title" ? selectedTitle.name.toUpperCase() : equippedTitle?.name.toUpperCase() || null;
 

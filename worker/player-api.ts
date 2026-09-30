@@ -675,11 +675,13 @@ async function renamePlayer(request: Request, env: BackendEnv, claims: SessionCl
   if (player.name_key === candidate.key) return response({ displayName: player.display_name, lastRenamedAt: player.last_renamed_at ?? undefined });
   const now = Date.now();
   // The system-issued name is not a rename: the first change is free, every later one spends a
-  // Rename Signal (GM accounts rename freely for testing). The Signal is spent in the same batch.
-  const needsSignal = claims.role !== "gm" && !!player.last_renamed_at;
+  // Rename Signal, spent in the same batch. GM accounts follow the same flow with unlimited
+  // Signals (nothing is debited), so they see exactly what players see.
+  const needsSignal = !!player.last_renamed_at;
+  const unlimitedSignals = claims.role === "gm";
   const useSignal = needsSignal && data?.useItem === true;
   if (needsSignal && !useSignal) return response({ error: "rename_signal_required" }, 409);
-  if (useSignal) {
+  if (useSignal && !unlimitedSignals) {
     const owned = await env.DB.prepare("SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = 'identity.rename'").bind(claims.sub).first<{ quantity: number }>();
     if (!owned || owned.quantity < 1) return response({ error: "insufficient_inventory" }, 409);
   }
@@ -689,7 +691,7 @@ async function renamePlayer(request: Request, env: BackendEnv, claims: SessionCl
         .bind(candidate.name, candidate.key, now, now, claims.sub),
       env.DB.prepare(`INSERT INTO account_audit_log (id, player_id, action, actor_player_id, metadata_json, created_at)
         VALUES (?, ?, 'profile.rename', ?, ?, ?)`).bind(crypto.randomUUID(), claims.sub, claims.sub, JSON.stringify({ from: player.display_name, to: candidate.name, signal: useSignal }), now),
-      ...(useSignal ? [
+      ...(useSignal && !unlimitedSignals ? [
         env.DB.prepare("UPDATE inventory_balances SET quantity = quantity - 1, updated_at = ? WHERE player_id = ? AND item_id = 'identity.rename' AND quantity >= 1").bind(now, claims.sub),
         env.DB.prepare(`INSERT INTO inventory_transactions (id, player_id, item_id, delta, balance_after, reason, idempotency_key, status, metadata_json, created_at, committed_at)
           VALUES (?, ?, 'identity.rename', -1, (SELECT quantity FROM inventory_balances WHERE player_id = ? AND item_id = 'identity.rename'), 'item_used', ?, 'committed', '{}', ?, ?)`)

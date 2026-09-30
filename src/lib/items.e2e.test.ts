@@ -87,6 +87,19 @@ describe.runIf(process.env.E2E_URL && process.env.E2E_AUTH_SECRET)("Warehouse it
     const inventory = (await call("/inventory", token)).data.inventory as any[];
     expect(inventory.find((entry) => entry.itemId === "identity.rename")?.quantity).toBe(98);
   }, 60_000);
+  it("GM renames follow the player flow: first free, then a Rename Signal (unlimited, not debited)", async () => {
+    const { data: auth } = await call("/auth/guest", null, { method: "POST", body: JSON.stringify({ guestId: `guest:${hex(24)}`, playerId: `0x${hex(40)}` }) });
+    const gm = await issueSession(process.env.E2E_AUTH_SECRET!, { sub: auth.player.id, method: "guest", role: "gm" } as any, 600);
+    const rename = (name: string, useItem = false) => call("/profile/name", gm, { method: "POST", body: JSON.stringify({ name, useItem }) });
+    expect((await rename(`gmfirst${hex(5)}`)).status).toBe(200);
+    const refused = await rename(`gmsecond${hex(5)}`);
+    expect(refused.status).toBe(409);
+    expect(refused.data.error).toBe("rename_signal_required");
+    expect((await rename(`gmthird${hex(5)}`, true)).status).toBe(200);
+    const signals = ((await call("/inventory", gm)).data.inventory as any[]).find((entry) => entry.itemId === "identity.rename")?.quantity;
+    expect(signals).toBe(UNLIMITED_ITEM_QUANTITY);
+  }, 60_000);
+
   it("GM accounts hold every item without limit and are never debited", async () => {
     const playerId = `0x${hex(40)}`;
     const { data: auth } = await call("/auth/guest", null, { method: "POST", body: JSON.stringify({ guestId: `guest:${hex(24)}`, playerId }) });
