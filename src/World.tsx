@@ -29,7 +29,7 @@ import CosmicBackdrop from "./CosmicBackdrop";
 import VoidPlanetOverlay from "./VoidPlanet";
 import WorldVisualLayer, { createWorldVisualStress, worldStrategicBlend, worldVisualBodyRadius, worldWormholeRadius, type WorldViewport, type WorldVisualCity } from "./WorldVisualLayer";
 import WorldStrikeLayer from "./WorldStrikeLayer";
-import WorldArrivalLayer, { type WorldArrival } from "./WorldArrivalLayer";
+import WorldArrivalLayer, { WARP_LANDING_MS, type WorldArrival } from "./WorldArrivalLayer";
 import WorldMarchLayer from "./WorldMarchLayer";
 import WorldBackdropLayer from "./WorldBackdropLayer";
 import { markWorldMotion } from "./lib/world-motion";
@@ -1635,26 +1635,25 @@ export default function World({ address, profile, onAlliance = () => {}, onBack,
       if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
         commit(); setCamera(destination); setHomeSelected(true); return;
       }
-      // 1) Beam up at the old home, 2) hyperspace blink (the veil scales, the map zoom stays put so
-      // the renderer never switches mode), cut the camera under it, 3) the arrival beam lands and
-      // the city reappears as it touches down.
+      // 1) Beam up at the old home, 2) the screen goes dark and the camera cuts under it,
+      // 3) the arrival beam falls through the dark; on touchdown the city reappears and the
+      // map lights up outward from the landing point. The map zoom never changes, so the
+      // renderer never switches mode mid-warp.
       const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
       setWarpArrival({ key: crypto.randomUUID(), position: { ...playerCity.position }, kind: "depart" });
       playSelectSfx();
-      await sleep(190);
+      await sleep(200);
       setWarpHidden(true);
-      await sleep(220);
+      await sleep(180);
       setWarpVeil(1);
-      await sleep(340);
+      await sleep(380);
       commit(); setCamera(destination);
-      // Let the new sector paint under the veil before lifting it (two frames + a beat).
+      // Let the new sector paint under the dark before the beam falls.
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      await sleep(90);
-      setWarpVeil(2);
-      await sleep(260);
+      await sleep(120);
       setWarpArrival({ key: crypto.randomUUID(), position: destination, kind: "arrive" });
-      await sleep(240);
-      setWarpHidden(false); setHomeSelected(true);
+      await sleep(WARP_LANDING_MS);
+      setWarpVeil(2); setWarpHidden(false); setHomeSelected(true);
     } catch { setMessage("Warp link failed. Try again."); setWarpHidden(false); }
     finally { setWarpBusy(false); }
   }

@@ -1209,6 +1209,7 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 /* One high-quality compositor for every live impact. It sits above WebGL planets
    but below tactical labels and never participates in pointer hit testing. */
 .world-strike-layer,.world-arrival-layer{position:absolute;z-index:3;inset:0;width:100%;height:100%;pointer-events:none;contain:strict}
+.world-arrival-layer{z-index:6}
 .world-crypto .world-map-tools,.world-crypto .world-map-status,.world-crypto .world-coordinate-jump,.world-crypto .world-coordinate,.world-crypto .world-map-legend,.world-crypto .world-map-hint{z-index:6}
 .world-strike-metrics{position:absolute;z-index:7;left:11px;bottom:38px;display:flex;align-items:center;gap:7px;padding:6px 8px;border:1px solid rgba(79,240,208,.28);border-radius:6px;background:rgba(2,8,15,.86);box-shadow:0 8px 22px rgba(0,0,0,.32);color:#628b90;font:700 6px var(--mono);letter-spacing:.08em;pointer-events:none}
 .world-strike-metrics b{color:#75efd8}.world-strike-metrics span:nth-of-type(2){color:#b7eef7}
@@ -1918,9 +1919,11 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .world-coordinate-jump .world-warp-open:hover{background:rgba(56,217,255,.2);box-shadow:0 0 18px rgba(56,217,255,.28)}
 .world-warp-go{display:flex;align-items:center;justify-content:center;gap:10px}
 .world-warp-count{padding:1px 7px;border:1px solid rgba(230,251,255,.35);border-radius:9px;background:rgba(2,10,22,.55);font:700 9px var(--mono);letter-spacing:.04em}
-.world-warp-veil{position:absolute;z-index:5;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 50%,rgba(210,245,255,.22),rgba(20,60,110,.6) 30%,rgba(2,5,14,.97) 70%),repeating-conic-gradient(from 0deg at 50% 50%,rgba(150,236,255,.1) 0deg .5deg,transparent .9deg 6deg);background-blend-mode:screen}
-.world-warp-veil.in{animation:world-warp-veil-in .33s ease-in both}
-.world-warp-veil.out{animation:world-warp-veil-out .42s ease-out both}
-@keyframes world-warp-veil-in{from{opacity:0;transform:scale(1.25)}to{opacity:1;transform:scale(1)}}
-@keyframes world-warp-veil-out{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.85)}}
+/* Warp blackout: the map dims (no light show); on touchdown it lights up outward from the landing point. */
+@property --warp-reveal{syntax:"<percentage>";inherits:false;initial-value:0%}
+.world-warp-veil{position:absolute;z-index:5;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 50%,rgba(4,10,24,.9),rgba(1,3,10,.97) 70%)}
+.world-warp-veil.in{animation:world-warp-dim .38s cubic-bezier(.4,0,.7,1) both}
+.world-warp-veil.out{-webkit-mask-image:radial-gradient(circle at 50% 50%,transparent var(--warp-reveal),#000 calc(var(--warp-reveal) + 22%));mask-image:radial-gradient(circle at 50% 50%,transparent var(--warp-reveal),#000 calc(var(--warp-reveal) + 22%));animation:world-warp-reveal .9s cubic-bezier(.25,.6,.3,1) both}
+@keyframes world-warp-dim{from{opacity:0}to{opacity:1}}
+@keyframes world-warp-reveal{0%{--warp-reveal:0%;opacity:1}80%{opacity:1}100%{--warp-reveal:130%;opacity:0}}
 @media (prefers-reduced-motion:reduce){.world-warp-veil{display:none}.world-tile-lock,.world-tile-pulse{animation:none}}
