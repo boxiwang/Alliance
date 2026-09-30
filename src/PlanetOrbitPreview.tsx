@@ -181,13 +181,21 @@ void riftCore(inout vec4 col,vec2 p){
   over(col,surf,body); emit(col,vec3(.2,.76,1.15),ring(p,vec2(.49,.49),.012)*.22*uIntensity);
 }
 
+// Event Horizon, in the same proportions as the Star Map renderer: a shadow as large as any
+// Core (so Orbits and Halos wrap it like a planet and the far side of an Orbit passes behind
+// it), a photon ring on its rim, and a tilted accretion disk whose far half is hidden behind
+// the shadow while the near half crosses in front of it.
 void horizonCore(inout vec4 col,vec2 p){
-  float r=length(p); vec2 q=rot(p,-.19); vec2 e=vec2(q.x,q.y*4.6); float er=length(e),a=atan(e.y,e.x);
-  float flow=fbm(vec2(a*1.8-uTime*.34*uMotion,er*8.)); float diskFx=exp(-pow((er-.48)*12.,2.))*(1.-smoothstep(.15,.86,abs(q.y)))*(.28+.95*flow);
-  vec3 diskCol=mix(vec3(.52,.06,.88),vec3(1.25,.58,.12),smoothstep(-.75,.7,q.x)); emit(col,diskCol,diskFx*uIntensity*1.25);
-  emit(col,vec3(.42,.22,.75),ring(p,vec2(.4,.4),.038)*(.4+.6*noise(vec2(a*5.-uTime*.18*uMotion,7.)))*uIntensity);
-  over(col,vec3(.0002,.0004,.001),disc(p,.245,.008)); emit(col,mix(vec3(1.3,.56,.13),vec3(.55,.16,1.2),smoothstep(-.5,.5,p.y)),(ring(p,vec2(.268),.03)+ring(p,vec2(.287),.011)*.7)*uIntensity);
-  emit(col,diskCol,diskFx*smoothstep(-.025,.07,-q.y)*uIntensity*.75);
+  float r=length(p),t=uTime*uMotion; vec2 q=rot(p,.28);
+  float a=atan(q.y/.2,q.x/.77); float flow=.55+.45*fbm(vec2(a*1.6-t*.34,3.));
+  float band=ring(q,vec2(.77,.2),.075)*flow;
+  vec3 farCol=mix(vec3(.55,.1,1.),vec3(1.,.42,.12),smoothstep(-.77,.77,q.x));
+  vec3 nearCol=mix(vec3(.55,.14,1.),vec3(1.,.5,.16),smoothstep(-.77,.77,q.x));
+  emit(col,farCol,band*(1.-smoothstep(-.025,.025,q.y))*.95*uIntensity);
+  emit(col,vec3(.62,.2,1.),exp(-pow((r-.49)*15.6,2.))*.5*uIntensity);
+  over(col,vec3(0.,0.,.004),disc(p,.385,.006));
+  emit(col,mix(vec3(1.3,.56,.13),vec3(.8,.3,1.2),smoothstep(-.4,.4,p.y)),(ring(p,vec2(.456),.028)+ring(p,vec2(.47),.01)*.6)*uIntensity);
+  emit(col,nearCol,band*smoothstep(-.025,.025,q.y)*1.1*uIntensity);
 }
 
 void solarCore(inout vec4 col,vec2 p){
