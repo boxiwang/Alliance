@@ -6,6 +6,8 @@ export interface Profile {
   avatarId?: string;
   /** Backend player id the uploaded portrait ("u<version>" avatarId) belongs to. */
   avatarPlayerId?: string;
+  /** Last uploaded portrait token ("u<version>"): stays selectable after switching to a sigil. */
+  uploadedAvatar?: string;
   title?: string;
   lastRenamedAt?: string;
   faction: string | null; // alliance token contract address (CA), or null = no alliance

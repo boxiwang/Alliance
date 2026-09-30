@@ -12,8 +12,9 @@ import { CursorGlyph } from "./GameCursor";
 import { playSfx, SFX_SUBTAB_SWITCH, SFX_SUBTAB_SWITCH_VOLUME } from "./lib/sfx";
 import { detectAutoTier, GRAPHICS_TIER_HINT, GRAPHICS_TIER_LABEL, type GraphicsTier } from "./lib/graphics-tier";
 import { bioLooksLikeLink, canRenameForFree, commanderIdOf, normalizeUsername, usernameLength, type Profile } from "./lib/profile";
-import { clearAvatar, loadBackendSession, loadInventory, requestAccountDeletion, updatePlayerName, uploadAvatar } from "./lib/backend";
-import { squareAvatarBlob } from "./lib/avatar-image";
+import { loadBackendSession, loadInventory, requestAccountDeletion, updatePlayerName, uploadAvatar } from "./lib/backend";
+import { loadAvatarSource } from "./lib/avatar-image";
+import AvatarCropper from "./AvatarCropper";
 import { isUnlimitedQuantity } from "./lib/mvp-items";
 import { activeBuffs, buffTimeLeft } from "./lib/buffs";
 import { getN } from "./lib/numbers";
@@ -153,6 +154,7 @@ export default function ProfileScreen({
   const [previewTitle, setPreviewTitle] = useState<TitleId>(() => TITLE_SEALS.some((title) => title.id === requestedTitle) ? requestedTitle! : vault.equipped.title || TITLE_SEALS[0].id);
   const [previewCursor, setPreviewCursor] = useState<GameCursorId>(() => GAME_CURSORS.some((cursor) => cursor.id === requestedCursor) ? requestedCursor! : vault.equipped.cursor || GAME_CURSORS[0].id);
   const [portraitBusy, setPortraitBusy] = useState(false);
+  const [cropSource, setCropSource] = useState<HTMLImageElement | null>(null);
   // Delete account: open flow, identity re-verified, typed Commander ID.
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteVerified, setDeleteVerified] = useState(false);
@@ -282,29 +284,40 @@ export default function ProfileScreen({
     flash("DOSSIER SAVED");
   }
 
-  async function pickPortrait(file: File | undefined) {
-    if (!file) return;
-    setPortraitBusy(true);
-    try {
-      const image = await squareAvatarBlob(file);
-      const uploaded = await uploadAvatar(address, image);
-      setAvatarId(uploaded.avatar);
-      onProfileChange({ ...profile, avatarId: uploaded.avatar, avatarPlayerId: uploaded.playerId });
-      flash("PORTRAIT UPDATED");
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : "";
-      flash(reason === "session_required" ? "SIGN IN TO UPLOAD A PORTRAIT" : reason === "avatar_type" ? "USE A PNG, JPG OR WEBP IMAGE" : reason === "avatar_too_large" ? "IMAGE TOO LARGE" : "PORTRAIT UPLOAD FAILED");
-    } finally {
-      setPortraitBusy(false);
-      if (portraitInput.current) portraitInput.current.value = "";
-    }
+  function portraitError(error: unknown) {
+    const reason = error instanceof Error ? error.message : "";
+    flash(reason === "session_required" ? "SIGN IN TO UPLOAD A PORTRAIT" : reason === "avatar_type" ? "USE A PNG, JPG OR WEBP IMAGE" : reason === "avatar_too_large" ? "IMAGE TOO LARGE" : "PORTRAIT UPLOAD FAILED");
   }
 
-  async function chooseSigil(sigil: string) {
-    const hadPhoto = /^u\d+$/.test(profile.avatarId || "");
-    setAvatarId(sigil);
-    onProfileChange({ ...profile, avatarId: sigil });
-    if (hadPhoto) await clearAvatar(address).catch(() => {});
+  /** Pick a file → open the crop & zoom step (nothing is uploaded yet). */
+  async function pickPortrait(file: File | undefined) {
+    if (portraitInput.current) portraitInput.current.value = "";
+    if (!file) return;
+    try { setCropSource(await loadAvatarSource(file)); } catch (error) { portraitError(error); }
+  }
+
+  function closeCropper() {
+    if (cropSource) URL.revokeObjectURL(cropSource.src);
+    setCropSource(null);
+  }
+
+  async function uploadCropped(image: Blob) {
+    setPortraitBusy(true);
+    try {
+      const uploaded = await uploadAvatar(address, image);
+      setAvatarId(uploaded.avatar);
+      onProfileChange({ ...profile, avatarId: uploaded.avatar, uploadedAvatar: uploaded.avatar, avatarPlayerId: uploaded.playerId });
+      closeCropper();
+      flash("PORTRAIT UPDATED");
+    } catch (error) { portraitError(error); }
+    finally { setPortraitBusy(false); }
+  }
+
+  /** Switch between the uploaded photo and the sigils; the photo is kept for switching back. */
+  function chooseAvatar(value: string) {
+    if (value === avatarId) return;
+    setAvatarId(value);
+    onProfileChange({ ...profile, avatarId: value });
     flash("PORTRAIT UPDATED");
   }
 
@@ -473,6 +486,8 @@ export default function ProfileScreen({
 
   const cardPlayerId = loadBackendSession(address)?.player.id ?? profile.avatarPlayerId ?? account.playerId;
   const backendSession = loadBackendSession(address);
+  // The uploaded photo stays a portrait option (older profiles: the photo in use counts too).
+  const uploadedPhoto = profile.uploadedAvatar || (/^u\d+$/.test(profile.avatarId || "") ? profile.avatarId : undefined);
   const commanderId = commanderIdOf(backendSession?.player.id ?? address);
   const signInMethod = backendSession?.player.authMethod ?? (account.loginMethod === "google" ? "google" : "wallet");
   const signInLabel = signInMethod === "google" ? "Google" : signInMethod === "guest" ? "Quick Play" : "Wallet";
@@ -529,13 +544,12 @@ export default function ProfileScreen({
           <div>
             <small>PORTRAIT</small>
             <div className="dossier-portrait-actions">
-              <button type="button" className="profile-action primary" disabled={portraitBusy} onClick={() => portraitInput.current?.click()}>{portraitBusy ? "UPLOADING…" : "UPLOAD PHOTO"}</button>
+              <button type="button" className="profile-action primary" disabled={portraitBusy} onClick={() => portraitInput.current?.click()}>{uploadedPhoto ? "NEW PHOTO" : "UPLOAD PHOTO"}</button>
               <input ref={portraitInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => void pickPortrait(event.target.files?.[0])} />
             </div>
-            <div className="dossier-sigils" role="group" aria-label="Or use a sigil">
-              {["genesis", "orbit"].map((sigil) => <button key={sigil} type="button" className={avatarId === sigil ? "selected" : ""} aria-label={`Use the ${sigil} sigil`} onClick={() => void chooseSigil(sigil)}><span className={`command-sigil command-sigil-${sigil}`}><i /></span></button>)}
+            <div className="dossier-sigils" role="group" aria-label="Choose your portrait">
+              {[...(uploadedPhoto ? [uploadedPhoto] : []), "genesis", "orbit"].map((option) => <button key={option} type="button" className={avatarId === option ? "selected" : ""} aria-label={option === uploadedPhoto ? "Use your photo" : `Use the ${option} sigil`} onClick={() => chooseAvatar(option)}><CommanderAvatar playerId={cardPlayerId} avatar={option} /></button>)}
             </div>
-            <em>Square crop · shown to every commander</em>
           </div>
         </div>
         <label className={`dossier-field${renameLocked ? " locked" : ""}`}><span>NAME <em>{renameWindow}</em></span><input value={callsign} maxLength={24} disabled={renameLocked} title={renameLocked ? "Renaming again uses a Rename Signal" : undefined} onChange={(event) => setCallsign(event.target.value)} /></label>
@@ -688,6 +702,7 @@ export default function ProfileScreen({
         </div>
       </article>
     </div>}
+    {cropSource && <AvatarCropper image={cropSource} busy={portraitBusy} onCancel={closeCropper} onConfirm={(blob) => void uploadCropped(blob)} />}
   </section>;
 }
 

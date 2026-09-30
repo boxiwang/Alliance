@@ -2180,3 +2180,16 @@ body{position:relative;isolation:isolate;min-height:100vh;margin:0;overflow-x:hi
 .delete-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
 .profile-screen .profile-action.danger{border-color:rgba(255,122,138,.55);background:rgba(255,122,138,.1);color:#ffb3bd}
 .profile-screen .profile-action.danger:disabled{opacity:.4;cursor:not-allowed}
+/* Portrait crop & zoom */
+.avatar-cropper-backdrop{position:fixed;z-index:200;inset:0;display:grid;place-items:center;padding:16px;background:rgba(2,5,12,.72);backdrop-filter:blur(6px)}
+.avatar-cropper{display:flex;flex-direction:column;align-items:center;gap:14px;width:min(360px,100%);padding:18px;border:1px solid rgba(56,217,255,.3);border-radius:14px;background:linear-gradient(160deg,rgba(11,22,41,.98),rgba(6,12,24,.98));box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.avatar-cropper header{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center}
+.avatar-cropper header b{color:#eaf6fd;font:800 12px var(--hud);letter-spacing:.16em}
+.avatar-cropper header span{color:#7c95a8;font:500 12px var(--body,system-ui)}
+.avatar-cropper-frame{position:relative;overflow:hidden;border-radius:22%;background:#040a16;box-shadow:0 0 0 1px rgba(56,217,255,.55),0 0 24px rgba(56,217,255,.18);cursor:grab;touch-action:none;user-select:none}
+.avatar-cropper-frame:active{cursor:grabbing}
+.avatar-cropper-frame img{position:absolute;left:0;top:0;max-width:none;pointer-events:none}
+.avatar-cropper-zoom{display:flex;align-items:center;gap:10px;width:100%;color:#8fa9bb;font:700 16px var(--mono)}
+.avatar-cropper-zoom input{flex:1;accent-color:#38d9ff}
+.avatar-cropper-actions{display:flex;gap:10px;width:100%}
+.avatar-cropper-actions .profile-action{flex:1;padding:11px;font:800 11px var(--mono);letter-spacing:.14em}
