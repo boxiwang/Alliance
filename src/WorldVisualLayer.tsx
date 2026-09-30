@@ -416,8 +416,8 @@ void drawPlanet(inout vec4 col,vec2 p){
     float band=smoothstep(.79,.83,rr)*exp(-pow(max(0.0,rr-.84)/.32,1.4));
     float beam=.55+.45*cos(ang-2.1);
     vec3 light=mix(vec3(.55,.68,1.0),vec3(1.05,1.05,1.1),smoothstep(.3,.8,streak));
-    emit(col,light,band*streak*(.35+.9*beam));
-    emit(col,light,exp(-pow((rr-.86)/.1,2.0))*(.25+.35*beam));
+    float gas=band*streak*(.35+.9*beam)+exp(-pow((rr-.86)/.1,2.0))*(.25+.35*beam);
+    over(col,light*.56,clamp(gas*.7,0.0,.82)); emit(col,light,gas*.2);
     over(col,vec3(.0,.0,.004),disk(p,.8));
     emit(col,vec3(1.0,1.02,1.12),ring(p,vec2(.81,.81),.011)*(.65+.5*beam));
   }else{

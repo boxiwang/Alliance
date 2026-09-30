@@ -196,8 +196,10 @@ void horizonCore(inout vec4 col,vec2 p){
   float beam=.55+.45*cos(ang-2.1);
   float dust=fbm(around*1.2+vec2(rr*10.-t*.2,9.));
   vec3 light=mix(mix(vec3(.55,.68,1.),vec3(1.05,1.05,1.1),smoothstep(.3,.8,streak)),vec3(1.,.74,.55),smoothstep(.55,.85,dust)*.45);
-  emit(col,light,band*streak*(.35+.9*beam)*uIntensity);
-  emit(col,light,exp(-pow((rr-.43)/.05,2.))*(.25+.35*beam)*uIntensity);
+  // The streaks are glowing gas: where they are dense they hide the far half of an Orbit
+  // (drawn before the Core); the near half, drawn after, reads on top of them.
+  float gas=band*streak*(.35+.9*beam)+exp(-pow((rr-.43)/.05,2.))*(.25+.35*beam);
+  over(col,light*.56,clamp(gas*.7,0.,.82)); emit(col,light,gas*.2*uIntensity);
   over(col,vec3(0.,0.,.004),disc(p,.40,.005));
   emit(col,light*.35,exp(-pow((rr-.385)/.02,2.))*.5*uIntensity);
   emit(col,vec3(1.,1.02,1.12),ring(p,vec2(.405),.0055)*(.65+.5*beam)*uIntensity);
