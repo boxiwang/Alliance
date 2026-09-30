@@ -406,14 +406,20 @@ void drawPlanet(inout vec4 col,vec2 p){
   }else if(vKind<3.5){
     drawSovereignCore(col,q,time,vSeed,aa,1.0,step(1.5,vLod));
   }else if(vKind<4.5){
-    vec2 q=rot(p,.28);
-    float back=ring(q,vec2(1.6,.42),.07)*(1.0-smoothstep(-.05,.05,q.y));
-    emit(col,mix(vec3(.55,.1,1.0),vec3(1.0,.42,.12),smoothstep(-1.6,1.6,q.x)),back*.78);
-    emit(col,vec3(.62,.2,1.0),exp(-pow((r-1.02)*7.5,2.0))*.52);
-    over(col,vec3(.0,.0,.008),disk(p,.8));
-    emit(col,vec3(.96,.82,1.0),ring(p,vec2(.95,.95),.028)*.82);
-    float front=ring(q,vec2(1.6,.42),.065)*smoothstep(-.05,.05,q.y);
-    emit(col,mix(vec3(.55,.14,1.0),vec3(1.0,.5,.16),smoothstep(-1.6,1.6,q.x)),front*.92);
+    // Event Horizon (same design as the Profile preview, one noise layer for the map): light
+    // strands circle a dark shadow, inner ones faster, drifting inward — round, no disk.
+    float rr=max(r,.001),ang=atan(p.y,p.x),t=uTime*uMotion;
+    float spin=ang+t*.55*pow(.84/rr,1.5)+log(rr)*1.1;
+    vec2 around=vec2(cos(spin),sin(spin));
+    float inflow=rr*26.0+t*1.3;
+    float streak=pow(fbm(around*1.8+vec2(inflow,inflow*.37)),1.7)*2.1;
+    float band=smoothstep(.79,.83,rr)*exp(-pow(max(0.0,rr-.84)/.32,1.4));
+    float beam=.55+.45*cos(ang-2.1);
+    vec3 light=mix(vec3(.55,.68,1.0),vec3(1.05,1.05,1.1),smoothstep(.3,.8,streak));
+    emit(col,light,band*streak*(.35+.9*beam));
+    emit(col,light,exp(-pow((rr-.86)/.1,2.0))*(.25+.35*beam));
+    over(col,vec3(.0,.0,.004),disk(p,.8));
+    emit(col,vec3(1.0,1.02,1.12),ring(p,vec2(.81,.81),.011)*(.65+.5*beam));
   }else{
     float z=sqrt(max(0.0,1.0-r*r));
     vec3 normal=normalize(vec3(p,z));
@@ -437,7 +443,7 @@ void drawPlanet(inout vec4 col,vec2 p){
 }
 
 void drawBeacon(inout vec4 col,vec2 p){
-  vec3 skin=vKind<.5?vec3(.68,.49,.29):vKind<1.5?vec3(.20,.68,1.0):vKind<2.5?vec3(.58,.2,1.0):vKind<3.5?vec3(1.0,.70,.24):vKind<4.5?vec3(.82,.38,1.0):vec3(1.0,.63,.16);
+  vec3 skin=vKind<.5?vec3(.68,.49,.29):vKind<1.5?vec3(.20,.68,1.0):vKind<2.5?vec3(.58,.2,1.0):vKind<3.5?vec3(1.0,.70,.24):vKind<4.5?vec3(.72,.82,1.0):vec3(1.0,.63,.16);
   float pulse=.82+.18*sin(uTime*uMotion*1.15+vSeed*9.0);
   emit(col,skin,exp(-dot(p,p)*1.8)*.18*pulse);
   over(col,mix(skin,vec3(1.0),.42),disk(p,.4));

@@ -181,21 +181,26 @@ void riftCore(inout vec4 col,vec2 p){
   over(col,surf,body); emit(col,vec3(.2,.76,1.15),ring(p,vec2(.49,.49),.012)*.22*uIntensity);
 }
 
-// Event Horizon, in the same proportions as the Star Map renderer: a shadow as large as any
-// Core (so Orbits and Halos wrap it like a planet and the far side of an Orbit passes behind
-// it), a photon ring on its rim, and a tilted accretion disk whose far half is hidden behind
-// the shadow while the near half crosses in front of it.
+// Event Horizon: a dark shadow the size of any Core, circled by thin streaks of light that spin
+// around it (inner strands faster, Keplerian) and drift inward along a shallow spiral — light
+// being pulled into the dark. Round, so Orbits and Halos wrap it without clashing.
 void horizonCore(inout vec4 col,vec2 p){
-  float r=length(p),t=uTime*uMotion; vec2 q=rot(p,.28);
-  float a=atan(q.y/.2,q.x/.77); float flow=.55+.45*fbm(vec2(a*1.6-t*.34,3.));
-  float band=ring(q,vec2(.77,.2),.075)*flow;
-  vec3 farCol=mix(vec3(.55,.1,1.),vec3(1.,.42,.12),smoothstep(-.77,.77,q.x));
-  vec3 nearCol=mix(vec3(.55,.14,1.),vec3(1.,.5,.16),smoothstep(-.77,.77,q.x));
-  emit(col,farCol,band*(1.-smoothstep(-.025,.025,q.y))*.95*uIntensity);
-  emit(col,vec3(.62,.2,1.),exp(-pow((r-.49)*15.6,2.))*.5*uIntensity);
-  over(col,vec3(0.,0.,.004),disc(p,.385,.006));
-  emit(col,mix(vec3(1.3,.56,.13),vec3(.8,.3,1.2),smoothstep(-.4,.4,p.y)),(ring(p,vec2(.456),.028)+ring(p,vec2(.47),.01)*.6)*uIntensity);
-  emit(col,nearCol,band*smoothstep(-.025,.025,q.y)*1.1*uIntensity);
+  float r=length(p),t=uTime*uMotion,ang=atan(p.y,p.x),rr=max(r,.001);
+  float spin=ang+t*.55*pow(.42/rr,1.5)+log(rr)*1.1;
+  // Seamless around the circle: slow along the orbit (long streaks), fast across it (thin strands).
+  vec2 around=vec2(cos(spin),sin(spin));
+  float inflow=rr*52.+t*1.3;
+  float streak=fbm(around*1.8+vec2(inflow,inflow*.37))*.6+fbm(around*3.4+vec2(inflow*2.1+5.,inflow*.8))*.4;
+  streak=pow(streak,1.7)*2.1;
+  float band=smoothstep(.395,.415,rr)*exp(-pow(max(0.,rr-.42)/.16,1.4));
+  float beam=.55+.45*cos(ang-2.1);
+  float dust=fbm(around*1.2+vec2(rr*10.-t*.2,9.));
+  vec3 light=mix(mix(vec3(.55,.68,1.),vec3(1.05,1.05,1.1),smoothstep(.3,.8,streak)),vec3(1.,.74,.55),smoothstep(.55,.85,dust)*.45);
+  emit(col,light,band*streak*(.35+.9*beam)*uIntensity);
+  emit(col,light,exp(-pow((rr-.43)/.05,2.))*(.25+.35*beam)*uIntensity);
+  over(col,vec3(0.,0.,.004),disc(p,.40,.005));
+  emit(col,light*.35,exp(-pow((rr-.385)/.02,2.))*.5*uIntensity);
+  emit(col,vec3(1.,1.02,1.12),ring(p,vec2(.405),.0055)*(.65+.5*beam)*uIntensity);
 }
 
 void solarCore(inout vec4 col,vec2 p){
