@@ -57,6 +57,8 @@ import {
 } from "./lib/player-account";
 
 type ArchiveSection = "dossier" | "vault" | "wallet" | "protocols";
+/** Portrait draft value for a cropped photo that is not uploaded yet. */
+const NEW_PHOTO = "new-photo";
 type RelicPreviewKind = "planet" | "halo" | "orbit" | "march" | "warp" | "strike" | "chat" | "title" | "cursor";
 /** Relic Vault categories = the Dossier's equip slots, grouped by where they show. */
 type RelicCategory = "core" | "halo" | "orbit" | "march" | "warp" | "strike" | "name" | "title" | "cursor";
@@ -153,8 +155,11 @@ export default function ProfileScreen({
   const [previewChat, setPreviewChat] = useState<ChatSignalId>(() => CHAT_SIGNALS.some((signal) => signal.id === requestedChat) ? requestedChat! : vault.equipped.chatSignal || CHAT_SIGNALS[0].id);
   const [previewTitle, setPreviewTitle] = useState<TitleId>(() => TITLE_SEALS.some((title) => title.id === requestedTitle) ? requestedTitle! : vault.equipped.title || TITLE_SEALS[0].id);
   const [previewCursor, setPreviewCursor] = useState<GameCursorId>(() => GAME_CURSORS.some((cursor) => cursor.id === requestedCursor) ? requestedCursor! : vault.equipped.cursor || GAME_CURSORS[0].id);
-  const [portraitBusy, setPortraitBusy] = useState(false);
   const [cropSource, setCropSource] = useState<HTMLImageElement | null>(null);
+  // A cropped photo waiting for SAVE CHANGES (uploaded only when the dossier is saved).
+  const [pendingPhoto, setPendingPhoto] = useState<{ blob: Blob; url: string } | null>(null);
+  const [identityBusy, setIdentityBusy] = useState(false);
+  const [identitySavedAt, setIdentitySavedAt] = useState(0);
   // Delete account: open flow, identity re-verified, typed Commander ID.
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteVerified, setDeleteVerified] = useState(false);
@@ -236,10 +241,10 @@ export default function ProfileScreen({
     window.setTimeout(() => setSignal((current) => current === message ? "" : current), 2200);
   }
 
-  function commitAccount(next: typeof account, announce = true) {
+  // Settings apply instantly and show their own state; no confirmation toast.
+  function commitAccount(next: typeof account) {
     setAccount(next);
     savePlayerAccount(next);
-    if (announce) flash("PROTOCOL WRITTEN");
   }
 
   async function saveIdentity() {
@@ -260,28 +265,46 @@ export default function ProfileScreen({
       return;
     }
     if (needsSignal && !window.confirm(`Use 1 Rename Signal to change your name to "${nextName}" now?`)) return;
-    let serverRename: Awaited<ReturnType<typeof updatePlayerName>> | null = null;
-    if (nameChanged) {
-      try {
-        serverRename = await updatePlayerName(address, nextName, needsSignal);
-        if (needsSignal) setRenameSignals((count) => isUnlimitedQuantity(count) ? count : Math.max(0, count - 1));
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : "";
-        flash(reason === "name_taken" ? "NAME ALREADY CLAIMED" : reason === "rename_signal_required" ? "RENAME SIGNAL REQUIRED" : reason === "insufficient_inventory" ? "RENAME SIGNAL REQUIRED" : reason === "invalid_name" ? "USE LETTERS, NUMBERS, . _ OR -" : "NAME CHANGE FAILED");
-        return;
+    setIdentityBusy(true);
+    try {
+      let serverRename: Awaited<ReturnType<typeof updatePlayerName>> | null = null;
+      if (nameChanged) {
+        try {
+          serverRename = await updatePlayerName(address, nextName, needsSignal);
+          if (needsSignal) setRenameSignals((count) => isUnlimitedQuantity(count) ? count : Math.max(0, count - 1));
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : "";
+          flash(reason === "name_taken" ? "NAME ALREADY CLAIMED" : reason === "rename_signal_required" ? "RENAME SIGNAL REQUIRED" : reason === "insufficient_inventory" ? "RENAME SIGNAL REQUIRED" : reason === "invalid_name" ? "USE LETTERS, NUMBERS, . _ OR -" : "NAME CHANGE FAILED");
+          return;
+        }
       }
-    }
-    const next: Profile = {
-      ...profile,
-      name: serverRename?.displayName || nextName,
-      motto: motto.trim().slice(0, 72),
-      avatarId,
-      title: profile.title,
-      lastRenamedAt: serverRename?.lastRenamedAt ? new Date(serverRename.lastRenamedAt).toISOString() : nameChanged ? new Date(now).toISOString() : profile.lastRenamedAt,
-      renamedOnce: nameChanged ? true : profile.renamedOnce,
-    };
-    onProfileChange(next);
-    flash("DOSSIER SAVED");
+      // A new photo is uploaded only now, with the rest of the dossier.
+      let portrait: Partial<Profile> = { avatarId };
+      if (avatarId === NEW_PHOTO && pendingPhoto) {
+        try {
+          const uploaded = await uploadAvatar(address, pendingPhoto.blob);
+          portrait = { avatarId: uploaded.avatar, uploadedAvatar: uploaded.avatar, avatarPlayerId: uploaded.playerId };
+          setAvatarId(uploaded.avatar);
+          URL.revokeObjectURL(pendingPhoto.url);
+          setPendingPhoto(null);
+        } catch (error) {
+          portraitError(error);
+          portrait = { avatarId: profile.avatarId };
+        }
+      }
+      const next: Profile = {
+        ...profile,
+        ...portrait,
+        name: serverRename?.displayName || nextName,
+        motto: motto.trim().slice(0, 72),
+        title: profile.title,
+        lastRenamedAt: serverRename?.lastRenamedAt ? new Date(serverRename.lastRenamedAt).toISOString() : nameChanged ? new Date(now).toISOString() : profile.lastRenamedAt,
+        renamedOnce: nameChanged ? true : profile.renamedOnce,
+      };
+      onProfileChange(next);
+      setIdentitySavedAt(Date.now());
+      window.setTimeout(() => setIdentitySavedAt(0), 2200);
+    } finally { setIdentityBusy(false); }
   }
 
   function portraitError(error: unknown) {
@@ -301,24 +324,17 @@ export default function ProfileScreen({
     setCropSource(null);
   }
 
-  async function uploadCropped(image: Blob) {
-    setPortraitBusy(true);
-    try {
-      const uploaded = await uploadAvatar(address, image);
-      setAvatarId(uploaded.avatar);
-      onProfileChange({ ...profile, avatarId: uploaded.avatar, uploadedAvatar: uploaded.avatar, avatarPlayerId: uploaded.playerId });
-      closeCropper();
-      flash("PORTRAIT UPDATED");
-    } catch (error) { portraitError(error); }
-    finally { setPortraitBusy(false); }
+  /** Cropped photo → the portrait draft (shown in the editor; uploaded on SAVE CHANGES). */
+  function useCropped(image: Blob) {
+    if (pendingPhoto) URL.revokeObjectURL(pendingPhoto.url);
+    setPendingPhoto({ blob: image, url: URL.createObjectURL(image) });
+    setAvatarId(NEW_PHOTO);
+    closeCropper();
   }
 
-  /** Switch between the uploaded photo and the sigils; the photo is kept for switching back. */
+  /** Switch the portrait draft between the photo and the sigils (saved with SAVE CHANGES). */
   function chooseAvatar(value: string) {
-    if (value === avatarId) return;
     setAvatarId(value);
-    onProfileChange({ ...profile, avatarId: value });
-    flash("PORTRAIT UPDATED");
   }
 
   function equipSkin() {
@@ -494,7 +510,7 @@ export default function ProfileScreen({
   const ownShieldBuff = activeBuffs(address, game.buildings.keep.lvl, now, getN()).find((buff) => buff.id === "shield");
   const ownShield = ownShieldBuff ? buffTimeLeft(ownShieldBuff, now) : null;
   const bioBlocked = bioLooksLikeLink(motto);
-  const identityDirty = normalizeUsername(callsign) !== normalizeUsername(profile.name) || motto.trim() !== (profile.motto || "").trim();
+  const identityDirty = normalizeUsername(callsign) !== normalizeUsername(profile.name) || motto.trim() !== (profile.motto || "").trim() || avatarId !== (profile.avatarId || "genesis");
   const loadoutSlots: { key: RelicCategory; label: string; relic: { name: string; translatedName?: string; tier?: string } | undefined }[] = [
     { key: "core", label: "CORE", relic: equippedSkin },
     { key: "halo", label: "HALO", relic: equippedHalo },
@@ -540,21 +556,21 @@ export default function ProfileScreen({
             coreLevel={game.buildings.keep.lvl} signal={vault.equipped.chatSignal} recon={null} now={now} shield={ownShield} bio={profile.motto || null} />
         </div>
         <div className="dossier-portrait">
-          <CommanderAvatar playerId={cardPlayerId} avatar={avatarId} className="dossier-portrait-face" />
+          <CommanderAvatar playerId={cardPlayerId} avatar={avatarId} previewSrc={avatarId === NEW_PHOTO ? pendingPhoto?.url : null} className="dossier-portrait-face" />
           <div>
             <small>PORTRAIT</small>
             <div className="dossier-portrait-actions">
-              <button type="button" className="profile-action primary" disabled={portraitBusy} onClick={() => portraitInput.current?.click()}>{uploadedPhoto ? "NEW PHOTO" : "UPLOAD PHOTO"}</button>
+              <button type="button" className="profile-action primary" disabled={identityBusy} onClick={() => portraitInput.current?.click()}>{uploadedPhoto ? "NEW PHOTO" : "UPLOAD PHOTO"}</button>
               <input ref={portraitInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => void pickPortrait(event.target.files?.[0])} />
             </div>
             <div className="dossier-sigils" role="group" aria-label="Choose your portrait">
-              {[...(uploadedPhoto ? [uploadedPhoto] : []), "genesis", "orbit"].map((option) => <button key={option} type="button" className={avatarId === option ? "selected" : ""} aria-label={option === uploadedPhoto ? "Use your photo" : `Use the ${option} sigil`} onClick={() => chooseAvatar(option)}><CommanderAvatar playerId={cardPlayerId} avatar={option} /></button>)}
+              {[...(pendingPhoto ? [NEW_PHOTO] : uploadedPhoto ? [uploadedPhoto] : []), "genesis", "orbit"].map((option) => <button key={option} type="button" className={avatarId === option ? "selected" : ""} aria-label={option === NEW_PHOTO || option === uploadedPhoto ? "Use your photo" : `Use the ${option} sigil`} onClick={() => chooseAvatar(option)}><CommanderAvatar playerId={cardPlayerId} avatar={option} previewSrc={option === NEW_PHOTO ? pendingPhoto?.url : null} /></button>)}
             </div>
           </div>
         </div>
         <label className={`dossier-field${renameLocked ? " locked" : ""}`}><span>NAME <em>{renameWindow}</em></span><input value={callsign} maxLength={24} disabled={renameLocked} title={renameLocked ? "Renaming again uses a Rename Signal" : undefined} onChange={(event) => setCallsign(event.target.value)} /></label>
         <label className={`dossier-field${bioBlocked ? " invalid" : ""}`}><span>INTRODUCTION <em>{bioBlocked ? "NO LINKS OR WALLET ADDRESSES" : `${motto.length} / 80`}</em></span><textarea value={motto} maxLength={80} rows={2} placeholder="One line other commanders will see on your card." onChange={(event) => setMotto(event.target.value.replace(/\n/g, " "))} /></label>
-        <button className="profile-action primary full" disabled={!identityDirty || bioBlocked} onClick={() => void saveIdentity()}>SAVE CHANGES</button>
+        <button className="profile-action primary full" disabled={!identityDirty || bioBlocked || identityBusy} onClick={() => void saveIdentity()}>{identityBusy ? "SAVING…" : identitySavedAt && !identityDirty ? "SAVED ✓" : "SAVE CHANGES"}</button>
       </article>
 
       {/* Loadout: the bound assembly, then every slot with the relic and its grade. */}
@@ -675,9 +691,9 @@ export default function ProfileScreen({
       </article>
       <article className="profile-card"><header><small>SOUND</small><span>THIS ACCOUNT</span></header><div className="profile-switch-list">
         <SwitchRow title="Music" detail="BACKGROUND SCORE" checked={account.musicEnabled} onChange={(value) => commitAccount({ ...account, musicEnabled: value })} />
-        <div className={`profile-volume-control ${account.musicEnabled ? "live" : "muted"}`}><span><b>Music volume</b><small>{Math.round(account.musicVolume * 100)}%</small></span><input aria-label="Music volume" type="range" min="0" max="100" step="1" value={Math.round(account.musicVolume * 100)} onChange={(event) => commitAccount({ ...account, musicVolume: Number(event.target.value) / 100 }, false)} onPointerUp={() => flash("MUSIC VOLUME SET")} /></div>
+        <div className={`profile-volume-control ${account.musicEnabled ? "live" : "muted"}`}><span><b>Music volume</b><small>{Math.round(account.musicVolume * 100)}%</small></span><input aria-label="Music volume" type="range" min="0" max="100" step="1" value={Math.round(account.musicVolume * 100)} onChange={(event) => commitAccount({ ...account, musicVolume: Number(event.target.value) / 100 })} /></div>
         <SwitchRow title="Sound effects" detail="CLICKS · FLEETS · ALERTS · COMMS" checked={account.soundEnabled} onChange={(value) => commitAccount({ ...account, soundEnabled: value })} />
-        <div className={`profile-volume-control ${account.soundEnabled ? "live" : "muted"}`}><span><b>Sound effects volume</b><small>{Math.round(account.sfxVolume * 100)}%</small></span><input aria-label="Sound effects volume" type="range" min="0" max="100" step="1" value={Math.round(account.sfxVolume * 100)} onChange={(event) => commitAccount({ ...account, sfxVolume: Number(event.target.value) / 100 }, false)} onPointerUp={() => flash("EFFECTS VOLUME SET")} /></div>
+        <div className={`profile-volume-control ${account.soundEnabled ? "live" : "muted"}`}><span><b>Sound effects volume</b><small>{Math.round(account.sfxVolume * 100)}%</small></span><input aria-label="Sound effects volume" type="range" min="0" max="100" step="1" value={Math.round(account.sfxVolume * 100)} onChange={(event) => commitAccount({ ...account, sfxVolume: Number(event.target.value) / 100 })} /></div>
       </div></article>
       <article className="profile-card profile-wide-card"><header><small>PRIVACY</small><span>THIS ACCOUNT</span></header><div className="profile-switch-list">
         <SwitchRow title="Filter messages from new commanders" detail="ONLY ALLIANCE MEMBERS AND CORE 10+ COMMANDERS CAN START A CHAT WITH YOU" checked={account.filterNewCommanderDms} onChange={(value) => commitAccount({ ...account, filterNewCommanderDms: value })} />
@@ -702,7 +718,7 @@ export default function ProfileScreen({
         </div>
       </article>
     </div>}
-    {cropSource && <AvatarCropper image={cropSource} busy={portraitBusy} onCancel={closeCropper} onConfirm={(blob) => void uploadCropped(blob)} />}
+    {cropSource && <AvatarCropper image={cropSource} busy={false} onCancel={closeCropper} onConfirm={useCropped} />}
   </section>;
 }
 
