@@ -6,32 +6,60 @@ type Viewport = { x: number; y: number; width: number; height: number };
 export type WorldArrival = { key: string; position: Point };
 
 /** Basic warp arrival every civilization gets; styled arrivals are future cosmetics (docs/IDEAS.md). */
-export const WARP_ARRIVAL_MS = 950;
+export const WARP_ARRIVAL_MS = 1500;
 const TAU = Math.PI * 2;
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const outCubic = (value: number) => 1 - Math.pow(1 - value, 3);
 
-/** One frame of the basic arrival: a flash that "switches on" the city, then two expanding rings. */
-export function drawWarpArrival(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, elapsedMs: number) {
+/**
+ * One frame of the basic arrival ("teleport beam"): a beam of light drops onto the new
+ * coordinate, the landing flashes, then a glowing shock ring and a landing halo spread out.
+ */
+export function drawWarpArrival(ctx: CanvasRenderingContext2D, x: number, y: number, bodyRadius: number, elapsedMs: number) {
   const t = elapsedMs / WARP_ARRIVAL_MS;
   if (t < 0 || t > 1) return;
+  const radius = Math.max(16, bodyRadius);
+  const land = .16; // the beam hits at 16% (~240 ms)
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  const flash = 1 - clamp(t / .45);
+  // Beam: drops from above, then thins and fades upward.
+  const drop = outCubic(clamp(t / land)), beamFade = 1 - clamp((t - land) / .38);
+  if (beamFade > 0) {
+    const top = y - radius * 14, bottom = y - radius * 14 + radius * 14 * drop;
+    const halfWidth = radius * (.55 - .35 * clamp((t - land) / .38));
+    const beam = ctx.createLinearGradient(x - halfWidth, 0, x + halfWidth, 0);
+    beam.addColorStop(0, "rgba(56,217,255,0)");
+    beam.addColorStop(.5, `rgba(235,252,255,${.9 * beamFade})`);
+    beam.addColorStop(1, "rgba(56,217,255,0)");
+    ctx.fillStyle = beam;
+    ctx.fillRect(x - halfWidth, top, halfWidth * 2, bottom - top);
+    const core = ctx.createLinearGradient(0, top, 0, bottom);
+    core.addColorStop(0, "rgba(255,255,255,0)"); core.addColorStop(1, `rgba(255,255,255,${beamFade})`);
+    ctx.fillStyle = core;
+    ctx.fillRect(x - halfWidth * .18, top, halfWidth * .36, bottom - top);
+  }
+  // Landing flash.
+  const flash = t < land ? 0 : 1 - clamp((t - land) / .3);
   if (flash > 0) {
-    const size = radius * (1.2 + 1.3 * outCubic(clamp(t / .25)));
-    const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 1.6);
-    glow.addColorStop(0, `rgba(255,255,255,${.95 * flash})`);
-    glow.addColorStop(.35, `rgba(150,232,255,${.6 * flash})`);
+    const size = radius * 3.2;
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, size);
+    glow.addColorStop(0, `rgba(255,255,255,${flash})`);
+    glow.addColorStop(.3, `rgba(160,236,255,${.75 * flash})`);
     glow.addColorStop(1, "rgba(56,217,255,0)");
     ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(x, y, size * 1.6, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, size, 0, TAU); ctx.fill();
   }
-  for (const [start, reach, width, color] of [[0, 4.2, 3, "143,233,255"], [.14, 2.8, 1.6, "210,246,255"]] as const) {
-    const k = clamp((t - start) / (1 - start));
+  // Shock ring (thick, glowing) + a slower landing halo.
+  ctx.shadowColor = "#38d9ff";
+  for (const [start, span, reach, width, color, blur] of [
+    [land, .6, 5.2, 5, "150,236,255", 16],
+    [land + .06, .78, 3.2, 2.2, "230,250,255", 8],
+  ] as const) {
+    const k = clamp((t - start) / span);
     if (k <= 0 || k >= 1) continue;
-    ctx.strokeStyle = `rgba(${color},${(1 - k) * .9})`;
-    ctx.lineWidth = width * (1 - k * .6);
+    ctx.shadowBlur = blur;
+    ctx.strokeStyle = `rgba(${color},${(1 - k) * .95})`;
+    ctx.lineWidth = width * (1 - k * .55);
     ctx.beginPath(); ctx.arc(x, y, radius * (1 + reach * outCubic(k)), 0, TAU); ctx.stroke();
   }
   ctx.restore();
