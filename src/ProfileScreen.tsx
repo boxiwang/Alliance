@@ -480,7 +480,7 @@ export default function ProfileScreen({
   // each rename spends one (GM: unlimited, shown as ∞).
   const freeRenameReady = canRenameForFree(profile);
   const renameLocked = !freeRenameReady && renameSignals <= 0;
-  const renameWindow = freeRenameReady ? "FIRST RENAME FREE" : `RENAME SIGNAL ×${isUnlimitedQuantity(renameSignals) ? "∞" : renameSignals}`;
+  const renameWindow = freeRenameReady ? "FIRST RENAME FREE" : `RENAME SIGNALS: ${isUnlimitedQuantity(renameSignals) ? "∞" : renameSignals}`;
   const socialSignal = previewKind === "chat" ? previewChat : vault.equipped.chatSignal;
   const socialTitle = previewKind === "title" ? selectedTitle.name.toUpperCase() : equippedTitle?.name.toUpperCase() || null;
 
